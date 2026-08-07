@@ -8,6 +8,15 @@ import {
   ListPager,
   LIST_PAGE_SIZE,
 } from "@/components/yi-future/table/list-table";
+// Filter logic is shared with /yi-future/api/delegates/export so an exported
+// Excel/PDF file always matches the rows on screen.
+import {
+  DELEGATE_COLUMNS,
+  applyDelegateFilters,
+  resolveScopeChapterIds,
+  type DelegateFilters,
+  type DelegateRow,
+} from "@/lib/yi-future/delegate-filters";
 
 // Filtering, counting and paging all happen IN THE DATABASE (see getDelegatePage /
 // countDelegates). The previous fetch-everything approach broke at scale — see the
@@ -21,21 +30,6 @@ function waPhone(raw: string): string {
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────
-
-type DelegateRow = {
-  id: string;
-  full_name: string;
-  email: string | null;
-  phone: string | null;
-  access_code: string | null;
-  is_active: boolean | null;
-  course: string | null;
-  chapter_id: string;
-  college_id: string | null;
-  chapters: { name: string } | null;
-  colleges: { name: string } | null;
-  team_members: { teams: { team_name: string } | null }[];
-};
 
 type ChapterRow = {
   id: string;
@@ -57,43 +51,8 @@ const REGIONS = ["ER", "NER", "NR", "SRTKKA", "SRTN", "WR"] as const;
 // numbers stay true for the WHOLE filtered set even though only one page of
 // rows is listed (LIST_PAGE_SIZE).
 
-const DELEGATE_COLUMNS =
-  "id, full_name, email, phone, access_code, is_active, course, chapter_id, college_id, chapters(name), colleges(name), team_members(teams(team_name))";
-
-type DelegateFilters = {
-  scopeChapterIds: string[] | null;
-  college?: string;
-  search?: string;
-};
-
-// PostgREST or() is comma/paren-delimited, so those characters in user input
-// would corrupt the filter — strip them rather than fail the query.
-function safeSearch(raw: string | undefined): string {
-  return (raw ?? "").replace(/[,()*%]/g, " ").trim();
-}
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-function applyFilters(query: any, f: DelegateFilters) {
-  let q = query.eq("is_active", true);
-  if (f.scopeChapterIds) q = q.in("chapter_id", f.scopeChapterIds);
-  if (f.college && f.college !== "all") q = q.eq("college_id", f.college);
-  const s = safeSearch(f.search);
-  if (s) {
-    // Searches the delegate's own columns. Chapter and college are already
-    // first-class dropdown filters, so they are not duplicated here.
-    q = q.or(
-      [
-        `full_name.ilike.%${s}%`,
-        `email.ilike.%${s}%`,
-        `phone.ilike.%${s}%`,
-        `course.ilike.%${s}%`,
-        `access_code.ilike.%${s}%`,
-      ].join(",")
-    );
-  }
-  return q;
-}
-/* eslint-enable @typescript-eslint/no-explicit-any */
+// DELEGATE_COLUMNS, DelegateFilters and the filter builder now live in
+// lib/yi-future/delegate-filters so the export routes reuse them verbatim.
 
 async function getDelegatePage(
   f: DelegateFilters,
@@ -101,7 +60,7 @@ async function getDelegatePage(
 ): Promise<DelegateRow[]> {
   const svc = await createServiceClient();
   const from = Math.max(0, page) * LIST_PAGE_SIZE;
-  const { data } = await applyFilters(
+  const { data } = await applyDelegateFilters(
     svc.schema("future").from("delegates").select(DELEGATE_COLUMNS),
     f
   )
@@ -116,7 +75,7 @@ async function countDelegates(
   opts: { inTeamOnly?: boolean } = {}
 ): Promise<number> {
   const svc = await createServiceClient();
-  const { count } = await applyFilters(
+  const { count } = await applyDelegateFilters(
     svc
       .schema("future")
       .from("delegates")
@@ -184,6 +143,22 @@ function buildQuery(
     : "/yi-future/national/admin/delegates";
 }
 
+/** Export URL carrying the exact filters currently on screen. */
+function buildExportHref(
+  current: { region: string; chapter: string; college: string; q: string },
+  format: "xlsx" | "pdf"
+): string {
+  const parts = [`format=${format}`];
+  if (current.region !== "all")
+    parts.push(`region=${encodeURIComponent(current.region)}`);
+  if (current.chapter !== "all")
+    parts.push(`chapter=${encodeURIComponent(current.chapter)}`);
+  if (current.college !== "all")
+    parts.push(`college=${encodeURIComponent(current.college)}`);
+  if (current.q) parts.push(`q=${encodeURIComponent(current.q)}`);
+  return `/yi-future/api/delegates/export?${parts.join("&")}`;
+}
+
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 export default async function AllDelegatesPage({
@@ -216,13 +191,8 @@ export default async function AllDelegatesPage({
   const chapterById = new Map(chapters.map((c) => [c.id, c]));
 
   // Resolve region/chapter into the set of chapter ids to scope every query by.
-  // null == no chapter scoping (all chapters).
-  const scopeChapterIds: string[] | null =
-    chapter !== "all"
-      ? [chapter]
-      : region !== "all"
-        ? chapters.filter((c) => (c.region ?? "") === region).map((c) => c.id)
-        : null;
+  // null == no chapter scoping (all chapters). Shared with the export routes.
+  const scopeChapterIds = resolveScopeChapterIds(chapters, region, chapter);
 
   const filters: DelegateFilters = { scopeChapterIds, college, search: q };
 
@@ -485,6 +455,35 @@ export default async function AllDelegatesPage({
         placeholder="Search name, email, phone, chapter, college, access code…"
         hidden={searchHidden}
       />
+
+      {/* Export — always reflects the filters currently applied above. */}
+      {totalDelegates > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <span className="text-xs text-navy/50">
+            Export {totalDelegates.toLocaleString("en-IN")}{" "}
+            {totalDelegates === 1 ? "delegate" : "delegates"} matching these
+            filters:
+          </span>
+          <a
+            href={buildExportHref(current, "xlsx")}
+            className="text-xs font-semibold px-3 py-1.5 rounded border border-navy/30 bg-white text-navy hover:bg-navy/5"
+          >
+            ⬇ Excel
+          </a>
+          <a
+            href={buildExportHref(current, "pdf")}
+            className="text-xs font-semibold px-3 py-1.5 rounded border border-navy/30 bg-white text-navy hover:bg-navy/5"
+          >
+            ⬇ PDF
+          </a>
+          {totalDelegates > 2000 && (
+            <span className="text-[11px] text-navy/40">
+              PDF covers the first 2,000 by name — Excel has all{" "}
+              {totalDelegates.toLocaleString("en-IN")}.
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Table */}
       {totalDelegates === 0 ? (

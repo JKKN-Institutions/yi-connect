@@ -242,7 +242,7 @@ export async function submitScore(
   // below INSERTs it; editing an existing turn finds + updates that exact row.
   const { data: existing } = await supabase
     .from("scores")
-    .select("id, criteria_scores, total_score, status")
+    .select("id, criteria_scores, total_score, comments, status")
     .eq("jury_assignment_id", input.juryAssignmentId)
     .eq("participant_id", input.participantId)
     .eq("event_id", input.eventId)
@@ -364,6 +364,34 @@ export async function submitScore(
   let scoreId: string;
 
   if (existing) {
+    // Integrity trail (S2-1): a juror overwriting an already-SUBMITTED score
+    // (allowed when the session's lock_on_submit is false — Zero Hour,
+    // Question Hour) must not erase the prior version. Snapshot the existing
+    // row into yip.score_revisions BEFORE the update replaces it. Best-effort:
+    // a trail failure must never block the score write. score_revisions lags
+    // the generated types → loose cast (house pattern, see lib/yip/ai/
+    // grounding.ts LooseSvc).
+    if (existing.status === "submitted") {
+      try {
+        type LooseSvc = { from: (t: string) => any }; // eslint-disable-line @typescript-eslint/no-explicit-any
+        await (supabase as unknown as LooseSvc).from("score_revisions").insert({
+          score_id: existing.id,
+          event_id: input.eventId,
+          jury_assignment_id: input.juryAssignmentId,
+          participant_id: input.participantId,
+          agenda_item_id: input.agendaItemId,
+          occurrence,
+          criteria_scores: existing.criteria_scores,
+          total_score: existing.total_score,
+          comments: existing.comments,
+          prior_status: existing.status,
+        });
+      } catch {
+        // Swallowed by design — the revision log is an audit convenience; the
+        // live score write below is the operation that must succeed.
+      }
+    }
+
     // Update existing score
     const { error: updateError } = await supabase
       .from("scores")

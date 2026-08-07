@@ -27,11 +27,19 @@ async function getActiveChapters(): Promise<ChapterRow[]> {
   return (data as unknown as ChapterRow[]) ?? [];
 }
 
-// The chapter list now depends on the live registration window (a national
-// admin can close/reopen chapters at any moment), so this page must render
-// per request. As a static prerender it served a build-time snapshot — CFT
-// 2026-07-30 found the closed state never reaching students.
-export const dynamic = "force-dynamic";
+// The chapter list depends on the live registration window (a national admin
+// can close/reopen chapters at any moment), so this page cannot be a build-time
+// prerender — CFT 2026-07-30 found the closed state never reaching students.
+//
+// It must NOT be force-dynamic either: this is the highest-traffic page on the
+// platform (every prospective delegate lands here) and per-request rendering put
+// 3 PostgREST calls on EVERY view, which helped saturate the connection pool at
+// 53k registrations (incident 2026-08-07 — a 65-row chapter query took 81s).
+//
+// ISR is the correct middle ground: served from cache, refreshed at most once a
+// minute, and saveRegistrationWindow() calls revalidatePath("/yi-future/join")
+// so an admin toggling the window still takes effect immediately.
+export const revalidate = 60;
 
 export default async function JoinPage() {
   const allChapters = await getActiveChapters();

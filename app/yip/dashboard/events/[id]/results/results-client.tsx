@@ -25,6 +25,7 @@ import { LeadershipTracker } from "./leadership-tracker";
 import { Badge } from "@/components/yip/ui/badge";
 import { Button } from "@/components/yip/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
+import { SearchablePersonSelect } from "@/components/yip/searchable-person-select";
 import {
   Table,
   TableBody,
@@ -925,21 +926,20 @@ export function ResultsClient({
                 <label className="text-xs font-medium text-gray-500">
                   Winner
                 </label>
-                <select
+                <SearchablePersonSelect
+                  options={results.map((r) => ({
+                    id: r.participant_id,
+                    label: r.participant.full_name,
+                    sublabel:
+                      r.participant.constituency_number != null
+                        ? `#${r.participant.constituency_number}`
+                        : undefined,
+                  }))}
                   value={overrideParticipant}
-                  onChange={(e) => setOverrideParticipant(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
-                >
-                  <option value="">Select a participant…</option>
-                  {results.map((r) => (
-                    <option key={r.participant_id} value={r.participant_id}>
-                      {r.participant.full_name}
-                      {r.participant.constituency_number != null
-                        ? ` — #${r.participant.constituency_number}`
-                        : ""}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setOverrideParticipant}
+                  placeholder="Select a participant…"
+                  className="mt-1"
+                />
               </div>
               <Button
                 disabled={overrideLoading}

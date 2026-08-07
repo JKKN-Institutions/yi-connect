@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { Badge } from "@/components/yip/ui/badge";
 import { Button } from "@/components/yip/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
+import { SearchablePersonSelect } from "@/components/yip/searchable-person-select";
 import {
   Loader2,
   Plus,
@@ -184,19 +185,16 @@ export function YuvaAssignmentsClient({
                   <span className="mb-1 block font-medium text-[#1a1a3e]/70">
                     YUVA volunteer
                   </span>
-                  <select
+                  <SearchablePersonSelect
+                    options={yuvaVolunteers.map((v) => ({
+                      id: v.id,
+                      label: v.full_name,
+                      sublabel: v.phone ?? undefined,
+                    }))}
                     value={volId}
-                    onChange={(e) => setVolId(e.target.value)}
-                    className="h-10 w-full rounded-lg border border-[#1a1a3e]/15 bg-white px-3 text-sm"
-                  >
-                    <option value="">Select a YUVA…</option>
-                    {yuvaVolunteers.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.full_name}
-                        {v.phone ? ` · ${v.phone}` : ""}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setVolId}
+                    placeholder="Select a YUVA…"
+                  />
                 </label>
 
                 <label className="flex-1 text-sm">

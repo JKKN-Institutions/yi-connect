@@ -2,17 +2,16 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import { WhatsAppIconButton } from "@/components/whatsapp";
-import { fetchAllRows } from "@/lib/pagination";
 import { AutoRefresh } from "@/components/yi-future/AutoRefresh";
 import {
   ListSearchForm,
   ListPager,
-  pageSlice,
+  LIST_PAGE_SIZE,
 } from "@/components/yi-future/table/list-table";
 
-// PostgREST caps a single response at ~1000 rows, so this list must page through
-// in full (see getAllDelegates) or it freezes at ~1003 while registrations keep
-// coming in. force-dynamic + <AutoRefresh> keep the installed PWA showing live data.
+// Filtering, counting and paging all happen IN THE DATABASE (see getDelegatePage /
+// countDelegates). The previous fetch-everything approach broke at scale — see the
+// PAGE_SIZE note below. force-dynamic + <AutoRefresh> keep the installed PWA live.
 export const dynamic = "force-dynamic";
 
 // Normalize an Indian mobile number to a country-code-prefixed digit string.
@@ -48,27 +47,101 @@ const REGIONS = ["ER", "NER", "NR", "SRTKKA", "SRTN", "WR"] as const;
 
 // ─── Data fetchers ──────────────────────────────────────────────────────────
 
-async function getAllDelegates(): Promise<DelegateRow[]> {
+// Max rows rendered in one view.
+//
+// This page used to fetchAllRows() every active delegate, filter in JS, and
+// render the lot. At 58,955 delegates that is ~59 sequential PostgREST
+// round-trips, a 15 MB payload and 50,000 table rows — the page died with
+// 504 MIDDLEWARE_INVOCATION_TIMEOUT (2026-08-07). Filtering now happens in the
+// database, the table is capped, and the KPI tiles use exact head-counts so the
+// numbers stay true for the WHOLE filtered set even though only one page of
+// rows is listed (LIST_PAGE_SIZE).
+
+const DELEGATE_COLUMNS =
+  "id, full_name, email, phone, access_code, is_active, course, chapter_id, college_id, chapters(name), colleges(name), team_members(teams(team_name))";
+
+type DelegateFilters = {
+  scopeChapterIds: string[] | null;
+  college?: string;
+  search?: string;
+};
+
+// PostgREST or() is comma/paren-delimited, so those characters in user input
+// would corrupt the filter — strip them rather than fail the query.
+function safeSearch(raw: string | undefined): string {
+  return (raw ?? "").replace(/[,()*%]/g, " ").trim();
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function applyFilters(query: any, f: DelegateFilters) {
+  let q = query.eq("is_active", true);
+  if (f.scopeChapterIds) q = q.in("chapter_id", f.scopeChapterIds);
+  if (f.college && f.college !== "all") q = q.eq("college_id", f.college);
+  const s = safeSearch(f.search);
+  if (s) {
+    // Searches the delegate's own columns. Chapter and college are already
+    // first-class dropdown filters, so they are not duplicated here.
+    q = q.or(
+      [
+        `full_name.ilike.%${s}%`,
+        `email.ilike.%${s}%`,
+        `phone.ilike.%${s}%`,
+        `course.ilike.%${s}%`,
+        `access_code.ilike.%${s}%`,
+      ].join(",")
+    );
+  }
+  return q;
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+async function getDelegatePage(
+  f: DelegateFilters,
+  page: number
+): Promise<DelegateRow[]> {
   const svc = await createServiceClient();
-  // Page through in full — a bare select caps at ~1000 rows and silently drops
-  // newer registrations (this is what froze the count at 1003). Order by id for
-  // stable paging, then sort by name for display.
-  const all = await fetchAllRows<DelegateRow>((from, to) =>
+  const from = Math.max(0, page) * LIST_PAGE_SIZE;
+  const { data } = await applyFilters(
+    svc.schema("future").from("delegates").select(DELEGATE_COLUMNS),
+    f
+  )
+    .order("full_name", { ascending: true })
+    .range(from, from + LIST_PAGE_SIZE - 1);
+  return (data as unknown as DelegateRow[]) ?? [];
+}
+
+/** Exact count with head:true — no row payload crosses the wire. */
+async function countDelegates(
+  f: DelegateFilters,
+  opts: { inTeamOnly?: boolean } = {}
+): Promise<number> {
+  const svc = await createServiceClient();
+  const { count } = await applyFilters(
     svc
       .schema("future")
       .from("delegates")
-      .select(
-        "id, full_name, email, phone, access_code, is_active, course, chapter_id, college_id, chapters(name), colleges(name), team_members(teams(team_name))"
-      )
-      .eq("is_active", true)
-      .order("id", { ascending: true })
-      .range(from, to) as unknown as PromiseLike<{
-      data: DelegateRow[] | null;
-      error: unknown;
-    }>
+      .select(opts.inTeamOnly ? "id, team_members!inner(team_id)" : "id", {
+        count: "exact",
+        head: true,
+      }),
+    f
   );
-  all.sort((a, b) => a.full_name.localeCompare(b.full_name));
-  return all;
+  return count ?? 0;
+}
+
+async function getCollegesForChapters(
+  chapterIds: string[]
+): Promise<{ id: string; name: string }[]> {
+  if (chapterIds.length === 0) return [];
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("colleges")
+    .select("id, name")
+    .in("chapter_id", chapterIds)
+    .order("name", { ascending: true })
+    .limit(1000);
+  return (data as unknown as { id: string; name: string }[]) ?? [];
 }
 
 async function getAllChapters(): Promise<ChapterRow[]> {
@@ -139,55 +212,52 @@ export default async function AllDelegatesPage({
   const pageParam = Math.max(0, parseInt(sp.page ?? "0", 10) || 0);
   const current = { region, chapter, college, q };
 
-  const [allDelegates, chapters] = await Promise.all([
-    getAllDelegates(),
-    getAllChapters(),
-  ]);
-
+  const chapters = await getAllChapters();
   const chapterById = new Map(chapters.map((c) => [c.id, c]));
 
-  // Delegates scoped by region + chapter only — this drives the college
-  // dropdown so it lists just the colleges relevant to the current view.
-  const inRegionChapter = allDelegates.filter((d) => {
-    const ch = chapterById.get(d.chapter_id);
-    if (region !== "all" && (ch?.region ?? "") !== region) return false;
-    if (chapter !== "all" && d.chapter_id !== chapter) return false;
-    return true;
-  });
+  // Resolve region/chapter into the set of chapter ids to scope every query by.
+  // null == no chapter scoping (all chapters).
+  const scopeChapterIds: string[] | null =
+    chapter !== "all"
+      ? [chapter]
+      : region !== "all"
+        ? chapters.filter((c) => (c.region ?? "") === region).map((c) => c.id)
+        : null;
 
-  const collegeOptionsMap = new Map<string, string>();
-  for (const d of inRegionChapter) {
-    if (d.college_id && d.colleges?.name)
-      collegeOptionsMap.set(d.college_id, d.colleges.name);
-  }
-  const collegeOptions = [...collegeOptionsMap.entries()]
-    .map(([id, name]) => ({ id, name }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const filters: DelegateFilters = { scopeChapterIds, college, search: q };
 
-  // Final list — region + chapter + college.
-  const filtered = inRegionChapter.filter((d) => {
-    if (college !== "all" && d.college_id !== college) return false;
-    return true;
-  });
-
-  // Text search across name / email / phone / chapter / college / course / code.
-  const ql = q.toLowerCase();
-  const searched = ql
-    ? filtered.filter((d) => {
-        const chName =
-          (d.chapters ?? chapterById.get(d.chapter_id))?.name ?? "";
-        return `${d.full_name} ${d.email ?? ""} ${d.phone ?? ""} ${chName} ${
-          d.colleges?.name ?? ""
-        } ${d.course ?? ""} ${d.access_code ?? ""}`
-          .toLowerCase()
-          .includes(ql);
+  // College dropdown is only meaningful once the view is narrowed — unscoped it
+  // would be 47k+ options. Sourced from future.colleges (indexed on chapter_id)
+  // rather than from delegate rows, so it costs one small query.
+  const [
+    collegeOptions,
+    totalDelegates,
+    withTeam,
+    pageRows,
+    regionCounts,
+    grandTotal,
+  ] = await Promise.all([
+    scopeChapterIds ? getCollegesForChapters(scopeChapterIds) : Promise.resolve([]),
+    countDelegates(filters),
+    countDelegates(filters, { inTeamOnly: true }),
+    getDelegatePage(filters, pageParam),
+    Promise.all(
+      REGIONS.map(async (r) => {
+        const ids = chapters
+          .filter((c) => (c.region ?? "") === r)
+          .map((c) => c.id);
+        return [r, await countDelegates({ scopeChapterIds: ids })] as const;
       })
-    : filtered;
+    ),
+    countDelegates({ scopeChapterIds: null }),
+  ]);
 
-  const { pageRows, page, pageCount, rangeStart, rangeEnd } = pageSlice(
-    searched,
-    pageParam
-  );
+  // Same shape pageSlice() produced, computed from the exact total instead of a
+  // fully-materialised array.
+  const pageCount = Math.max(1, Math.ceil(totalDelegates / LIST_PAGE_SIZE));
+  const page = Math.min(Math.max(0, pageParam), pageCount - 1);
+  const rangeStart = totalDelegates === 0 ? 0 : page * LIST_PAGE_SIZE + 1;
+  const rangeEnd = Math.min(page * LIST_PAGE_SIZE + LIST_PAGE_SIZE, totalDelegates);
 
   // Hidden inputs to carry the active filters through a search submit.
   const searchHidden = [
@@ -196,23 +266,17 @@ export default async function AllDelegatesPage({
     ...(college !== "all" ? [{ name: "college", value: college }] : []),
   ];
 
-  // Region counts (full set, not double-filtered)
-  const countByRegion = new Map<string, number>();
-  for (const d of allDelegates) {
-    const r = chapterById.get(d.chapter_id)?.region ?? "—";
-    countByRegion.set(r, (countByRegion.get(r) ?? 0) + 1);
-  }
+  const countByRegion = new Map<string, number>(regionCounts);
 
   const anyFiltered =
     region !== "all" || chapter !== "all" || college !== "all" || q !== "";
 
-  // KPIs reflect the currently shown set (filters + search).
-  const totalDelegates = searched.length;
-  const withTeam = searched.filter(
-    (d) => d.team_members && d.team_members.length > 0
-  ).length;
   const withoutTeam = totalDelegates - withTeam;
-  const chaptersRepresented = new Set(searched.map((d) => d.chapter_id)).size;
+  // Chapters covered by the current filter (not "chapters with ≥1 delegate" —
+  // that needs a DISTINCT the REST API can't express without loading every row).
+  const chaptersRepresented = scopeChapterIds
+    ? scopeChapterIds.length
+    : chapters.length;
 
   return (
     <div className="space-y-6">
@@ -300,7 +364,7 @@ export default async function AllDelegatesPage({
                 : "border-navy/15 bg-white text-navy/70 hover:border-navy/40"
             }`}
           >
-            All ({allDelegates.length})
+            All ({grandTotal})
           </Link>
           {REGIONS.map((r) => {
             const count = countByRegion.get(r) ?? 0;
@@ -423,7 +487,7 @@ export default async function AllDelegatesPage({
       />
 
       {/* Table */}
-      {searched.length === 0 ? (
+      {totalDelegates === 0 ? (
         <div className="bg-white border border-navy/10 rounded-lg p-10 text-center">
           <div className="text-lg font-bold text-navy mb-2">
             No delegates found
@@ -573,8 +637,8 @@ export default async function AllDelegatesPage({
             pageCount={pageCount}
             rangeStart={rangeStart}
             rangeEnd={rangeEnd}
-            filteredCount={searched.length}
-            total={allDelegates.length}
+            filteredCount={totalDelegates}
+            total={grandTotal}
             noun="delegates"
           />
         </div>

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/yip/ui/button";
 import { Textarea } from "@/components/yip/ui/textarea";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
+import { criteriaForRole } from "@/lib/yip/rubric";
 import { saveToBuffer, getFromBuffer, removeFromBuffer } from "@/lib/yip/score-buffer";
 import { Save, Send, Loader2, CheckCircle2, MessageSquare } from "lucide-react";
 
@@ -23,6 +24,11 @@ interface Criterion {
   // in a visually distinct group. Undefined on the role-rubric fallback path,
   // which renders as a single ungrouped list (unchanged behaviour).
   kind?: "evaluation" | "participation";
+  // Role-scoped criteria (S2-5): parliament role slugs this criterion applies
+  // to. Absent/null/empty = everyone. Filtered against the participant's role
+  // below so a restricted criterion is never rendered — or required — for a
+  // role it doesn't apply to.
+  roles?: string[] | null;
 }
 
 interface ParticipantInfo {
@@ -78,7 +84,7 @@ interface ScoreFormProps {
 
 export function ScoreForm({
   participant,
-  criteria,
+  criteria: allCriteria,
   rubricId,
   eventId,
   agendaItemId,
@@ -88,6 +94,14 @@ export function ScoreForm({
   flags,
   onSubmit,
 }: ScoreFormProps) {
+  // Role-scoped criteria (S2-5): only the criteria that apply to THIS
+  // participant's parliament role are rendered, totalled, required for submit,
+  // and included in the payload. Unrestricted criteria (no `roles`) apply to
+  // everyone; a null/unknown role sees only the unrestricted set.
+  const criteria = useMemo(
+    () => criteriaForRole(allCriteria, participant.parliament_role),
+    [allCriteria, participant.parliament_role]
+  );
   // Why: form state must be EXACTLY the current rubric's parent keys. Stale localStorage
   // or older DB rows can carry legacy dotted sub-keys (e.g. "delivery.fluency") alongside
   // their flat parents — sanitize here so totals/payloads can't be double-counted.

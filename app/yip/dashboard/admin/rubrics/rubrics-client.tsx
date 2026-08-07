@@ -60,6 +60,9 @@ type DraftCriterion = {
   max_score: string; // string so input stays controlled while typing
   description: string;
   sub_criteria: DraftSubCriterion[];
+  // Role scoping (S2-5): parliament role slugs this criterion applies to.
+  // Empty = applies to everyone (stored as null).
+  roles: string[];
 };
 
 type DraftState = {
@@ -93,6 +96,7 @@ function criterionToDraft(c: RubricCriterion): DraftCriterion {
     sub_criteria: Array.isArray(c.sub_criteria)
       ? c.sub_criteria.map((sc) => subCriterionToDraft(sc, c.key))
       : [],
+    roles: Array.isArray(c.roles) ? [...c.roles] : [],
   };
 }
 
@@ -103,7 +107,14 @@ function emptyDraft(): DraftState {
     target_role: "mp",
     is_default: false,
     criteria: [
-      { key: "", label: "", max_score: "10", description: "", sub_criteria: [] },
+      {
+        key: "",
+        label: "",
+        max_score: "10",
+        description: "",
+        sub_criteria: [],
+        roles: [],
+      },
     ],
   };
 }
@@ -214,6 +225,7 @@ function draftToInput(draft: DraftState) {
               max_score: Math.round(Number(sc.max_score)),
             }))
           : null,
+        roles: row.roles.length > 0 ? row.roles : null,
       };
     }),
   };
@@ -283,7 +295,14 @@ export function RubricsClient({
       ...draft,
       criteria: [
         ...draft.criteria,
-        { key: "", label: "", max_score: "10", description: "", sub_criteria: [] },
+        {
+          key: "",
+          label: "",
+          max_score: "10",
+          description: "",
+          sub_criteria: [],
+          roles: [],
+        },
       ],
     });
   }
@@ -777,6 +796,17 @@ export function RubricsClient({
                           </TableRow>
                           <TableRow className="bg-[#1a1a3e]/[0.015]">
                             <TableCell colSpan={5} className="py-2.5">
+                              <CriterionRolesEditor
+                                roles={row.roles}
+                                onToggle={(slug) =>
+                                  updateCriterion(i, {
+                                    roles: row.roles.includes(slug)
+                                      ? row.roles.filter((r) => r !== slug)
+                                      : [...row.roles, slug],
+                                  })
+                                }
+                                onClear={() => updateCriterion(i, { roles: [] })}
+                              />
                               <SubCriteriaEditor
                                 parentKey={row.key.trim()}
                                 subs={row.sub_criteria}
@@ -1051,6 +1081,14 @@ function RubricCard({
                       </TableCell>
                       <TableCell className="text-sm font-medium text-[#1a1a3e]">
                         {c.label}
+                        {Array.isArray(c.roles) && c.roles.length > 0 && (
+                          <span className="block text-[10px] font-normal text-[#b0561a] mt-0.5">
+                            Only:{" "}
+                            {c.roles
+                              .map((r) => ROLE_LABELS[r] ?? r)
+                              .join(", ")}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="text-sm font-semibold text-[#FF9933]">
                         {c.max_score}
@@ -1091,6 +1129,67 @@ function RubricCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// ─── CriterionRolesEditor ─────────────────────────────────────────
+// "Applies to roles" multi-select (S2-5). Toggle chips over the assignable
+// parliament roles; empty selection = the criterion applies to everyone.
+
+function CriterionRolesEditor({
+  roles,
+  onToggle,
+  onClear,
+}: {
+  roles: string[];
+  onToggle: (slug: string) => void;
+  onClear: () => void;
+}) {
+  const restricted = roles.length > 0;
+  return (
+    <div className="pl-4 mb-2.5">
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="text-[11px] font-semibold text-[#1a1a3e]/70 uppercase tracking-wide">
+          Applies to roles{" "}
+          {restricted ? `(${roles.length} selected)` : "— everyone"}
+        </div>
+        {restricted && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-[11px] text-[#1a1a3e]/60 hover:text-[#1a1a3e] underline"
+          >
+            Clear (everyone)
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {PARLIAMENT_ROLES.map((role) => {
+          const selected = roles.includes(role);
+          return (
+            <button
+              key={role}
+              type="button"
+              onClick={() => onToggle(role)}
+              aria-pressed={selected}
+              className={`text-[11px] px-2.5 py-1 rounded-full border transition-all ${
+                selected
+                  ? "bg-[#1a1a3e] text-white border-[#1a1a3e]"
+                  : "bg-white text-[#1a1a3e]/70 border-[#1a1a3e]/10 hover:border-[#1a1a3e]/30"
+              }`}
+            >
+              {ROLE_LABELS[role]}
+            </button>
+          );
+        })}
+      </div>
+      {restricted && (
+        <p className="text-[10px] text-[#1a1a3e]/50 italic mt-1">
+          Only jurors scoring these roles will see this criterion. Leave empty
+          to apply it to every role.
+        </p>
+      )}
+    </div>
   );
 }
 

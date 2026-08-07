@@ -3,7 +3,11 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { revalidatePath } from "next/cache";
-import type { ParliamentRole } from "@/lib/yip/constants";
+import {
+  PARLIAMENT_ROLES,
+  EX_PARLIAMENT_ROLES,
+  type ParliamentRole,
+} from "@/lib/yip/constants";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -26,6 +30,11 @@ export type RubricCriterion = {
    * When absent (flat), the parent is scored as a single slot (legacy shape).
    */
   sub_criteria?: SubCriterion[] | null;
+  /**
+   * Parliament role slugs this criterion applies to (S2-5).
+   * Absent / null / empty = applies to every role (legacy shape).
+   */
+  roles?: string[] | null;
 };
 
 export type Rubric = {
@@ -49,6 +58,12 @@ export type RubricInput = {
 };
 
 const RUBRICS_PATH = "/dashboard/admin/rubrics";
+// All slugs a criterion may be scoped to — assignable roles plus the
+// system-assigned ex- roles (a participant can hold one at scoring time).
+const KNOWN_ROLE_SLUGS = new Set<string>([
+  ...PARLIAMENT_ROLES,
+  ...EX_PARLIAMENT_ROLES,
+]);
 const KEY_PATTERN = /^[a-z][a-z0-9_]*$/;
 // Sub-criterion keys are dotted: "<parentKey>.<childKey>"
 const SUB_KEY_PATTERN = /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/;
@@ -86,6 +101,27 @@ function normaliseCriteria(
     seenKeys.add(key);
 
     if (!label) return { ok: false, error: `Row ${i + 1}: label is required` };
+
+    // ── Optional role scoping (S2-5) ────────────────────────────
+    // Empty / absent normalises to null = applies to everyone.
+    let cleanRoles: string[] | null = null;
+    if (row.roles != null) {
+      if (!Array.isArray(row.roles)) {
+        return { ok: false, error: `Row ${i + 1}: roles must be an array` };
+      }
+      const seenRoles = new Set<string>();
+      for (const r of row.roles) {
+        const slug = typeof r === "string" ? r.trim() : "";
+        if (!slug || !KNOWN_ROLE_SLUGS.has(slug)) {
+          return {
+            ok: false,
+            error: `Row ${i + 1}: unknown role "${String(r)}" in roles`,
+          };
+        }
+        seenRoles.add(slug);
+      }
+      cleanRoles = seenRoles.size > 0 ? Array.from(seenRoles) : null;
+    }
 
     // ── Optional nested sub_criteria ────────────────────────────
     const rawSubs = Array.isArray(row.sub_criteria) ? row.sub_criteria : null;
@@ -186,6 +222,7 @@ function normaliseCriteria(
       max_score: effectiveMax,
       description: description || null,
       sub_criteria: cleanSubs,
+      roles: cleanRoles,
     });
   }
 
@@ -247,6 +284,10 @@ function rowToRubric(row: {
               max_score: Number(sc.max_score),
             }))
           : null,
+        roles:
+          Array.isArray(c.roles) && c.roles.length > 0
+            ? c.roles.filter((r): r is string => typeof r === "string")
+            : null,
       }))
     : [];
   return {
@@ -449,6 +490,7 @@ export async function cloneRubric(
       sub_criteria: Array.isArray(c.sub_criteria)
         ? c.sub_criteria.map((sc) => ({ ...sc }))
         : null,
+      roles: Array.isArray(c.roles) ? [...c.roles] : null,
     })),
     is_default: false,
     is_active: true,

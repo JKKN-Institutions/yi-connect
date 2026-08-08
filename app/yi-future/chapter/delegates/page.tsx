@@ -8,6 +8,7 @@ import {
   regenerateAccessCode,
 } from "@/app/yi-future/actions/delegates";
 import { WhatsAppIconButton } from "@/components/whatsapp";
+import { ImportDelegatesButton } from "@/components/yi-future/delegates/ImportDelegatesButton";
 
 // Normalize an Indian mobile number to a country-code-prefixed digit string.
 function waPhone(raw: string): string {
@@ -113,6 +114,10 @@ export default async function DelegatesPage({
           >
             <span>↓</span> CSV
           </Link>
+          <ImportDelegatesButton
+            chapterId={ctx.chapterId}
+            editionId={ctx.editionId}
+          />
           <Link
             href="/yi-future/chapter/delegates/new"
             className="px-4 py-2 rounded-md bg-navy text-ivory text-sm font-semibold hover:bg-navy-dark"
@@ -167,14 +172,23 @@ export default async function DelegatesPage({
             {delegates.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-4 py-6 text-center text-navy/40">
-                  No delegates yet.{" "}
-                  <Link
-                    href="/yi-future/chapter/delegates/new"
-                    className="text-yi-gold font-semibold"
-                  >
-                    Register one
-                  </Link>
-                  .
+                  <p>
+                    No delegates yet.{" "}
+                    <Link
+                      href="/yi-future/chapter/delegates/new"
+                      className="text-yi-gold font-semibold"
+                    >
+                      Register one
+                    </Link>
+                    , or bring your whole list in at once.
+                  </p>
+                  <div className="mt-3 flex justify-center">
+                    <ImportDelegatesButton
+                      chapterId={ctx.chapterId}
+                      editionId={ctx.editionId}
+                      variant="empty"
+                    />
+                  </div>
                 </td>
               </tr>
             ) : (

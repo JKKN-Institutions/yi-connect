@@ -33,6 +33,7 @@ import {
   type MotionType,
 } from "@/lib/yip/motions";
 import { MINISTRIES } from "@/lib/yip/constants";
+import { SearchablePersonSelect } from "@/components/yip/searchable-person-select";
 import {
   createMotion,
   admitMotion,
@@ -384,18 +385,16 @@ export function MotionsClient({
               </div>
               <div>
                 <label className="text-xs font-medium text-[#1a1a3e]/70">Raised By</label>
-                <select
+                <SearchablePersonSelect
+                  options={participants.map((p) => ({
+                    id: p.id,
+                    label: p.full_name,
+                    sublabel: p.parliament_role ?? undefined,
+                  }))}
                   value={form.raised_by_id}
-                  onChange={(e) => setForm({ ...form, raised_by_id: e.target.value })}
-                  className="w-full border border-input rounded-md px-3 py-2 text-sm"
-                >
-                  <option value="">— Select participant —</option>
-                  {participants.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.full_name} {p.parliament_role ? `· ${p.parliament_role}` : ""}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(id) => setForm({ ...form, raised_by_id: id })}
+                  placeholder="— Select participant —"
+                />
               </div>
               {(form.motion_type === "calling_attention" ||
                 form.motion_type === "laying_of_papers") && (

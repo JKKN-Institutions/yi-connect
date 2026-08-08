@@ -18,6 +18,27 @@ export interface RubricCriterionShape {
   max_score: number;
   description?: string | null;
   sub_criteria?: SubCriterion[] | null;
+  /**
+   * Parliament role slugs (ROLE_LABELS keys) this criterion applies to.
+   * Absent / null / empty = applies to everyone (the legacy shape).
+   */
+  roles?: string[] | null;
+}
+
+/**
+ * Filter a rubric down to the criteria that apply to one participant's role.
+ * A criterion with no `roles` restriction applies to everyone; an unknown or
+ * null role sees ONLY the unrestricted criteria (fail closed — a restricted
+ * criterion is never shown to a role it wasn't scoped to).
+ */
+export function criteriaForRole<T extends { roles?: string[] | null }>(
+  criteria: T[],
+  roleSlug: string | null | undefined
+): T[] {
+  return criteria.filter((c) => {
+    if (!Array.isArray(c.roles) || c.roles.length === 0) return true;
+    return roleSlug != null && c.roles.includes(roleSlug);
+  });
 }
 
 /** Does this criterion expose sub-criteria? */
@@ -81,12 +102,18 @@ export function computeTotal(
  *   - every value is a non-negative integer ≤ its declared max
  *   - no key exceeds the max of its declared slot
  * Accepts both flat and nested shapes. Returns an error message or null.
+ * When `roleSlug` is provided (a string OR null), only the criteria that apply
+ * to that role are validated (see criteriaForRole); omit it to keep the legacy
+ * validate-everything behaviour.
  */
 export function validateScoresAgainstRubric(
   criteria: RubricCriterionShape[],
-  scores: Record<string, unknown>
+  scores: Record<string, unknown>,
+  roleSlug?: string | null
 ): string | null {
-  for (const parent of criteria) {
+  const applicable =
+    roleSlug === undefined ? criteria : criteriaForRole(criteria, roleSlug);
+  for (const parent of applicable) {
     if (hasSubCriteria(parent)) {
       for (const sc of parent.sub_criteria) {
         const raw = scores[sc.key];
@@ -125,9 +152,18 @@ export function allSubCriteria(criteria: RubricCriterionShape[]): SubCriterion[]
   return out;
 }
 
-/** Count scorable slots — sub-criteria when present, otherwise the parent. */
-export function scorableSlotCount(criteria: RubricCriterionShape[]): number {
-  return criteria.reduce(
+/**
+ * Count scorable slots — sub-criteria when present, otherwise the parent.
+ * When `roleSlug` is provided (a string OR null), only the criteria that apply
+ * to that role are counted; omit it to count everything (legacy behaviour).
+ */
+export function scorableSlotCount(
+  criteria: RubricCriterionShape[],
+  roleSlug?: string | null
+): number {
+  const applicable =
+    roleSlug === undefined ? criteria : criteriaForRole(criteria, roleSlug);
+  return applicable.reduce(
     (n, c) => n + (hasSubCriteria(c) ? c.sub_criteria.length : 1),
     0
   );

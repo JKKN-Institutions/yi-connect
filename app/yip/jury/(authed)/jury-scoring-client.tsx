@@ -21,6 +21,7 @@ import {
   getJuryScreenBootstrap,
   type JuryScreenBootstrap,
 } from "@/app/yip/actions/jury";
+import { BatchCopyPanel } from "./batch-copy-panel";
 import { type ScoreableSession } from "@/app/yip/actions/jury-sessions";
 import {
   type FlagDeltas,
@@ -1259,6 +1260,19 @@ function JuryScoringClientInner({
       }
     }
   }
+  // S2-6: the batch-copy panel applies only to the Bill Presentation session.
+  // session_key wins (exact); agenda_type is the legacy fallback — the same
+  // precedence getSessionScoringParams uses to resolve session config.
+  const selectedSessionRow = assignedSessions.find(
+    (s) => s.id === selectedSessionId
+  );
+  const isBillPresentationSession = Boolean(
+    selectedSessionRow &&
+      (selectedSessionRow.session_key
+        ? selectedSessionRow.session_key === "bill_presentation_voting"
+        : selectedSessionRow.agenda_type === "bill_presentation")
+  );
+
   const UNFINISHED_VISIBLE_CAP = 8;
   const unfinishedVisible = showAllUnfinished
     ? unfinishedRows
@@ -1320,6 +1334,29 @@ function JuryScoringClientInner({
           </p>
         </div>
       )}
+
+      {/* S2-6: Bill Presentation only — copy the saved score to committee
+          team-mates as per-person drafts. Shown once a score exists for the
+          active participant; the panel self-hides when the participant has no
+          committee or no team-mates (the jury roster is committee-blind, so
+          membership is resolved server-side). */}
+      {isBillPresentationSession &&
+        activeParticipant &&
+        rubric &&
+        existingScore &&
+        selectedSessionId &&
+        !eventLocked && (
+          <div className="mx-4">
+            <BatchCopyPanel
+              key={`${activeParticipant.id}|${selectedSessionId}`}
+              juryAssignmentId={juryAssignmentId}
+              eventId={eventId}
+              agendaItemId={selectedSessionId}
+              sourceParticipantId={activeParticipant.id}
+              onCopied={() => void loadScoresMap()}
+            />
+          </div>
+        )}
 
       {/* Current agenda context */}
       {currentSpeaker && !manualParticipant && (

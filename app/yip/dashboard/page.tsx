@@ -5,6 +5,7 @@ import { isCurrentUserSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { getRegionalAdminZones, getYipChapterScopes } from "@/lib/yi/auth/yi-directory-roles";
 import { Plus, CalendarDays } from "lucide-react";
 import { EventsGridClient, type EventCard } from "./events-grid-client";
+import { GlobalSearch } from "./global-search";
 import { OnboardingLauncher } from "@/components/yip/guide/onboarding-launcher";
 import { GUIDES } from "@/lib/yip/guide/content";
 import { getCompletedSteps, logGuideEvent } from "@/lib/yip/guide/actions";
@@ -160,6 +161,9 @@ export default async function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* Global search — members, events and ministries within this user's scope */}
+      <GlobalSearch />
 
       {/* Events list */}
       {hasEvents ? (

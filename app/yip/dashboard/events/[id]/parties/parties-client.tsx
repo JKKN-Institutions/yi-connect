@@ -8,6 +8,7 @@ import { Button } from "@/components/yip/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import { Input } from "@/components/yip/ui/input";
 import { Textarea } from "@/components/yip/ui/textarea";
+import { SearchablePersonSelect } from "@/components/yip/searchable-person-select";
 import {
   Plus,
   Pencil,
@@ -756,27 +757,22 @@ export function PartiesClient({
                         Assign
                       </Button>
                       {members.length > 0 && (!leader || changing === p.id) && (
-                        <select
-                          onChange={(e) => e.target.value && handleElectLeader(p.id, e.target.value)}
-                          defaultValue=""
-                          disabled={pending}
-                          className="text-xs border rounded px-2 py-1 disabled:opacity-50"
-                        >
-                          <option value="">
-                            {leader ? "Change leader…" : "Elect leader…"}
-                          </option>
-                          {members
+                        <SearchablePersonSelect
+                          options={members
                             .filter(
                               (m) =>
                                 m.id !== p.party_leader_id &&
                                 !SENIOR_ROLES.has(m.parliament_role ?? "")
                             )
-                            .map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.full_name}
-                              </option>
-                            ))}
-                        </select>
+                            .map((m) => ({ id: m.id, label: m.full_name }))}
+                          value=""
+                          onChange={(id) => {
+                            if (id) handleElectLeader(p.id, id);
+                          }}
+                          placeholder={leader ? "Change leader…" : "Elect leader…"}
+                          disabled={pending}
+                          className="w-40"
+                        />
                       )}
                       {leader && changing !== p.id && (
                         <Button

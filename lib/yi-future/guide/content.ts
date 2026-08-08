@@ -904,12 +904,13 @@ export const GUIDES: GuideBook = {
           "title": "Sign In and View Your Teams",
           "steps": [
             {
-              "action": "Use your **access code** to sign into Yi Future. You will be redirected to your jury home.",
-              "detail": "Your access code was provided when you were added to the jury panel. If you do not have it, ask your chapter admin.",
+              "action": "Go to the **sign-in page** and enter your 6-character **access code**. You will land straight on your jury home.",
+              "detail": "Your access code was given to you when you were added to the jury panel — it is shown to your chapter admin on screen, so ask them if you do not have it. Codes are case-insensitive and never contain 0, O, 1 or I.",
               "link": {
-                "label": "Jury home",
-                "href": "/yi-future/jury"
-              }
+                "label": "Sign in with your access code",
+                "href": "/yi-future/access"
+              },
+              "tip": "If you see a page saying **\"Registrations are closed\"**, that message is for students signing up — it does not apply to you. Use the **Sign in** button on that page, or the link above, and your code will work."
             },
             {
               "action": "Review the list of **teams assigned to your panel** on your jury home screen.",
@@ -964,13 +965,13 @@ export const GUIDES: GuideBook = {
           "steps": [
             {
               "action": "Click **Save draft** to save your scores and comments without submitting them yet.",
-              "detail": "A draft lets you come back later to review and refine your feedback before making it official.",
-              "tip": "Drafts are stored locally. Save often so you don't lose your work."
+              "detail": "A draft is saved to your account, not to this device — you can close the page, switch to your phone, and pick up exactly where you left off.",
+              "tip": "Nothing is shared with the panel or the chapter until you press Submit, so save a draft freely while a team is still presenting."
             },
             {
               "action": "When you are ready to finalize your evaluation, click **Submit evaluation**.",
-              "detail": "Submitting locks your scores and comments. You will not be able to edit them after submission. Your total score is calculated and displayed.",
-              "tip": "After you submit, a success message will appear. You will be able to see other panelists' scores once they submit theirs too. This protects against bias."
+              "detail": "Submitting locks your scores and comments, and your total is calculated and shown against the team. If you submit by mistake, you cannot edit it yourself — ask a national admin to unlock that evaluation for you.",
+              "tip": "After you submit, a success message appears and the team shows a green **Submitted** tick with your total. You can then see other panellists' scores for that team — they stay hidden until you submit, so nobody is influenced by anyone else."
             }
           ]
         },

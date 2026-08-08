@@ -7,6 +7,11 @@ import {
   approvePendingCollege,
   mergePendingCollege,
 } from "@/app/yi-future/actions/colleges";
+import { mergeCollegeCluster } from "@/app/yi-future/actions/college-dedupe";
+import {
+  groupDuplicateColleges,
+  type DuplicateGroup,
+} from "@/lib/yi-future/college-dedupe";
 import { WhatsAppIconButton } from "@/components/whatsapp";
 
 // Normalize an Indian mobile number to a country-code-prefixed digit string.
@@ -44,21 +49,35 @@ async function getColleges(chapterId: string): Promise<CollegeRow[]> {
   return (data as unknown as CollegeRow[]) ?? [];
 }
 
+// Counts delegates per college, PAGED.
+//
+// The unpaged version of this silently undercounts: PostgREST caps a select
+// at 1,000 rows, so a chapter with more than 1,000 delegates loses every row
+// past the cap and its colleges look emptier than they are. That was harmless
+// while this only ran over the short pending list; the Duplicates tab runs it
+// over every college in the chapter, where the cap is reachable.
 async function getPendingDelegateCounts(
   collegeIds: string[]
 ): Promise<Map<string, number>> {
   if (collegeIds.length === 0) return new Map();
   const svc = await createServiceClient();
-  const { data } = await svc
-    .schema("future")
-    .from("delegates")
-    .select("college_id")
-    .in("college_id", collegeIds);
-  const rows = (data as { college_id: string | null }[] | null) ?? [];
   const counts = new Map<string, number>();
-  for (const r of rows) {
-    if (!r.college_id) continue;
-    counts.set(r.college_id, (counts.get(r.college_id) ?? 0) + 1);
+  const PAGE = 1000;
+
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await svc
+      .schema("future")
+      .from("delegates")
+      .select("college_id")
+      .in("college_id", collegeIds)
+      .range(from, from + PAGE - 1);
+    if (error) break;
+    const rows = (data as { college_id: string | null }[] | null) ?? [];
+    for (const r of rows) {
+      if (!r.college_id) continue;
+      counts.set(r.college_id, (counts.get(r.college_id) ?? 0) + 1);
+    }
+    if (rows.length < PAGE) break; // short page → that was the last one
   }
   return counts;
 }
@@ -123,32 +142,90 @@ async function mergeAction(formData: FormData) {
   );
 }
 
+// Folds one cluster of duplicate spellings into its target. The chapter id
+// rides on the form and is re-checked server-side against the caller's own
+// chapters — the posted value is never trusted on its own.
+async function mergeClusterAction(formData: FormData) {
+  "use server";
+  const res = await mergeCollegeCluster({
+    chapterId: String(formData.get("chapter_id") ?? ""),
+    targetId: String(formData.get("target_id") ?? ""),
+    sourceIds: String(formData.get("source_ids") ?? "")
+      .split(",")
+      .filter(Boolean),
+  });
+
+  const back = "/yi-future/chapter/colleges?tab=duplicates";
+  if (!res.ok) {
+    redirect(`${back}&error=${encodeURIComponent(res.error)}`);
+  }
+  const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
+  const parts = [
+    `Merged ${plural(res.merged, "spelling")}`,
+    `${plural(res.delegatesMoved, "student")} moved`,
+  ];
+  if (res.failures.length > 0) {
+    parts.push(`${plural(res.failures.length, "problem")}: ${res.failures[0]}`);
+  }
+  redirect(`${back}&msg=${encodeURIComponent(parts.join(" · "))}`);
+}
+
 export default async function CollegesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; msg?: string; error?: string }>;
 }) {
   const ctx = await getChapterContext();
   if (!ctx) redirect("/yi-future/chapter");
 
-  const tab = (await searchParams).tab === "pending" ? "pending" : "approved";
+  const sp = await searchParams;
+  const rawTab = sp.tab;
+  const tab =
+    rawTab === "pending"
+      ? "pending"
+      : rawTab === "duplicates"
+        ? "duplicates"
+        : "approved";
 
   const all = await getColleges(ctx.chapterId);
   const approved = all.filter((c) => c.is_approved);
   const pendingRaw = all.filter((c) => !c.is_approved);
-  const pendingCounts = await getPendingDelegateCounts(
-    pendingRaw.map((c) => c.id)
-  );
+
+  // Counted over EVERY college, not just the pending ones: the Duplicates tab
+  // ranks variants by how many students each holds, and the biggest offenders
+  // are usually long-approved rows.
+  const counts = await getPendingDelegateCounts(all.map((c) => c.id));
+
   const pending: PendingRow[] = pendingRaw.map((p) => ({
     ...p,
-    delegate_count: pendingCounts.get(p.id) ?? 0,
+    delegate_count: counts.get(p.id) ?? 0,
     suggestion: suggestMerge(p, approved),
   }));
+
+  const duplicates = groupDuplicateColleges(
+    all.map((c) => ({
+      id: c.id,
+      name: c.name,
+      city: c.city,
+      is_approved: c.is_approved,
+      delegate_count: counts.get(c.id) ?? 0,
+    }))
+  );
 
   const yuvaCount = approved.filter((c) => c.is_yuva).length;
 
   return (
     <div className="space-y-6">
+      {sp.error && (
+        <div className="p-3 rounded-md bg-red-50 border border-red-200 text-sm text-red-700">
+          {sp.error}
+        </div>
+      )}
+      {sp.msg && (
+        <div className="p-3 rounded-md bg-yi-green/10 border border-yi-green/30 text-sm text-yi-green">
+          {sp.msg}
+        </div>
+      )}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-navy">Colleges</h2>
@@ -195,16 +272,37 @@ export default async function CollegesPage({
             </span>
           )}
         </Link>
+        <Link
+          href="/yi-future/chapter/colleges?tab=duplicates"
+          className={`min-h-[44px] inline-flex items-center px-4 text-sm font-semibold border-b-2 -mb-px ${
+            tab === "duplicates"
+              ? "border-navy text-navy"
+              : "border-transparent text-navy/50 hover:text-navy"
+          }`}
+        >
+          Duplicates
+          {duplicates.length > 0 && (
+            <span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-yi-saffron text-white text-[10px] font-bold">
+              {duplicates.length}
+            </span>
+          )}
+        </Link>
       </div>
 
       {tab === "approved" ? (
         <ApprovedList rows={approved} removeAction={removeCollege} />
-      ) : (
+      ) : tab === "pending" ? (
         <PendingList
           rows={pending}
           approved={approved}
           approveAction={approveAction}
           mergeAction={mergeAction}
+        />
+      ) : (
+        <DuplicatesList
+          groups={duplicates}
+          chapterId={ctx.chapterId}
+          mergeClusterAction={mergeClusterAction}
         />
       )}
     </div>
@@ -429,6 +527,140 @@ function PendingList({
               </Link>
             </div>
           </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── DUPLICATES ─────────────────────────────────────────────────────
+// Every spelling of the same college, grouped, with the consequence of
+// merging spelled out before the chair commits to it. Nothing merges until
+// this button is pressed — the grouping is a suggestion, not an action.
+function DuplicatesList({
+  groups,
+  chapterId,
+  mergeClusterAction,
+}: {
+  groups: DuplicateGroup[];
+  chapterId: string;
+  mergeClusterAction: (formData: FormData) => Promise<void>;
+}) {
+  if (groups.length === 0) {
+    return (
+      <div className="bg-white border border-navy/10 rounded-lg p-8 text-center">
+        <p className="text-sm text-navy/60">
+          No duplicate college names found in your chapter.
+        </p>
+        <p className="mt-1 text-xs text-navy/40">
+          Names are compared ignoring capitals, spaces and punctuation — so
+          “K.S.Rangasamy” and “K S Rangasamy” count as the same college, but a
+          different spelling of the name itself does not.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="p-4 rounded-lg bg-navy/5 border border-navy/10">
+        <p className="text-sm text-navy/80">
+          These colleges are stored under more than one spelling. Merging keeps
+          one name and moves every student onto it — nothing is deleted, and
+          the old spellings stay on record.
+        </p>
+        <p className="mt-1 text-xs text-navy/50">
+          Worth doing before you place students into teams: students under two
+          spellings of one college look like they are from different colleges.
+        </p>
+      </div>
+
+      {groups.map((g) => (
+        <div
+          key={g.key}
+          className="bg-white border border-navy/10 rounded-lg overflow-hidden"
+        >
+          <div className="px-4 py-3 border-b border-navy/10 flex items-start justify-between gap-4">
+            <div>
+              <div className="font-semibold text-navy">{g.target.name}</div>
+              <div className="text-xs text-navy/50 mt-0.5">
+                {g.sources.length + 1} spellings · {g.totalDelegates} student
+                {g.totalDelegates === 1 ? "" : "s"} in total
+              </div>
+            </div>
+            <form action={mergeClusterAction}>
+              <input type="hidden" name="chapter_id" value={chapterId} />
+              <input type="hidden" name="target_id" value={g.target.id} />
+              <input
+                type="hidden"
+                name="source_ids"
+                value={g.sources.map((s) => s.id).join(",")}
+              />
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-md bg-navy text-ivory text-xs font-semibold hover:bg-navy-dark whitespace-nowrap"
+              >
+                Merge into “{g.target.name.slice(0, 28)}
+                {g.target.name.length > 28 ? "…" : ""}”
+              </button>
+            </form>
+          </div>
+
+          <table className="w-full text-sm">
+            <tbody>
+              <tr className="border-b border-navy/5 bg-yi-green/5">
+                <td className="px-4 py-2.5">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-yi-green">
+                      Keep
+                    </span>
+                    <span className="font-medium text-navy">
+                      {g.target.name}
+                    </span>
+                  </span>
+                  {g.target.city && (
+                    <span className="ml-2 text-xs text-navy/40">
+                      {g.target.city}
+                    </span>
+                  )}
+                  {!g.target.is_approved && (
+                    <span className="ml-2 text-xs text-yi-saffron">
+                      (will be approved)
+                    </span>
+                  )}
+                </td>
+                <td className="px-4 py-2.5 text-right text-xs text-navy/60 whitespace-nowrap">
+                  {g.target.delegate_count} student
+                  {g.target.delegate_count === 1 ? "" : "s"}
+                </td>
+              </tr>
+              {g.sources.map((s) => (
+                <tr key={s.id} className="border-b border-navy/5 last:border-0">
+                  <td className="px-4 py-2.5">
+                    <span className="inline-flex items-center gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-navy/30">
+                        Merge
+                      </span>
+                      <span className="text-navy/70">{s.name}</span>
+                    </span>
+                    {s.city && (
+                      <span className="ml-2 text-xs text-navy/40">{s.city}</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5 text-right text-xs text-navy/60 whitespace-nowrap">
+                    {s.delegate_count > 0 ? (
+                      <>
+                        {s.delegate_count} student
+                        {s.delegate_count === 1 ? "" : "s"} move
+                      </>
+                    ) : (
+                      <span className="text-navy/30">no students</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ))}
     </div>

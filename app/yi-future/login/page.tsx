@@ -117,6 +117,7 @@ function LoginInner() {
 
     return () => {
       cancelled = true;
+      clearTimeout(watchdog);
     };
     // Mount only: the code in the URL is consumed exactly once.
   }, [router, returningFromGoogle]);

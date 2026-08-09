@@ -60,7 +60,8 @@ export async function createCollege(
   chapterId: string,
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  const denied = await denyUnlessChapterScoped(chapterId);
+  if (denied) return denied;
   const name = String(formData.get("name") ?? "").trim();
   const city = String(formData.get("city") ?? "").trim() || null;
   const state = String(formData.get("state") ?? "").trim() || null;

@@ -6,6 +6,7 @@ import { createClient, createServiceClient } from "@/lib/yi-future/supabase/serv
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
 import { CORE_TEAM_ROLES } from "@/lib/yi-future/constants";
+import { generateAccessCode } from "@/lib/yi-future/access-code";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 
 type CoreTeamRole = Database["future"]["Enums"]["user_role"];
@@ -58,12 +59,56 @@ export async function addCoreTeamMember(
 
   const svc = await createServiceClient();
 
-  // Optional: link to auth user if email matches
+  // ─── Resolve (or create) the sign-in account ──────────────────────────
+  //
+  // This used to call svc.auth.admin.listUsers() and scan the result for a
+  // matching email. listUsers() returns PAGE ONE — 50 users — and this project
+  // has 51,993, so the match essentially never succeeded and the row went in
+  // with user_id NULL. getChapterContext() matches core-team rows BY user_id,
+  // so that person could never open a single chapter screen — while the chair
+  // saw "Core team member added." and a row in the list.
+  //
+  // Measured before this fix: 74 of 147 active core-team members across 33 of
+  // 65 chapters could not sign in. 12 of them had an account that was simply
+  // never linked; the rest never had one created, because adding a member
+  // never created one.
   let user_id: string | null = null;
+  let issuedPassword: string | null = null;
+
   if (email) {
-    const { data: existing } = await svc.auth.admin.listUsers();
-    const match = existing.users.find((u) => u.email === email);
-    user_id = match?.id ?? null;
+    // Targeted lookup instead of a paged scan.
+    const { data: foundId } = await svc.rpc(
+      "yi_directory_auth_user_id_by_email" as never,
+      { p_email: email } as never
+    );
+    user_id = (foundId as string | null) ?? null;
+
+    if (!user_id) {
+      // No account exists. Create one, rather than inserting a row that looks
+      // fine and silently cannot log in.
+      //
+      // The credential is RETURNED to the chair rather than emailed: Resend is
+      // over quota and ~98% of Yi-Future mail is failing, so an invite email
+      // would simply never arrive. This mirrors how the platform already hands
+      // out delegate and jury access codes — shown on screen, passed on by
+      // WhatsApp. email_confirm is set because there is no working inbox to
+      // confirm through.
+      const temp = generateAccessCode() + generateAccessCode();
+      const { data: created, error: authErr } = await svc.auth.admin.createUser({
+        email,
+        password: temp,
+        email_confirm: true,
+        user_metadata: { full_name, role },
+      });
+      if (authErr) {
+        return {
+          ok: false,
+          error: `Could not create a sign-in account for ${email}: ${authErr.message}`,
+        };
+      }
+      user_id = created?.user?.id ?? null;
+      issuedPassword = temp;
+    }
   }
 
   const { error } = await svc
@@ -82,7 +127,22 @@ export async function addCoreTeamMember(
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/yi-future/chapter/setup");
-  return { ok: true, message: "Core team member added." };
+
+  // Say plainly whether this person can actually sign in. The old blanket
+  // "Core team member added." was true about the row and wrong about the human.
+  if (issuedPassword) {
+    return {
+      ok: true,
+      message: `${full_name} added. Sign-in: ${email} · temporary password ${issuedPassword} — send it to them (email delivery is down) and ask them to change it after first sign-in. This is shown once.`,
+    };
+  }
+  if (user_id) {
+    return { ok: true, message: `${full_name} added and linked to their existing ${email} sign-in.` };
+  }
+  return {
+    ok: true,
+    message: `${full_name} added, but with no email they cannot be given a sign-in. Add an email to let them use the platform.`,
+  };
 }
 
 // ─── UPDATE MEMBER ──────────────────────────────────────────────────

@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import * as XLSX from "xlsx";
 import { importParticipants } from "@/app/yip/actions/participants";
+import { cleanParticipantName } from "@/lib/yip/name-clean";
 import { Button } from "@/components/yip/ui/button";
 import {
   Dialog,
@@ -217,7 +218,9 @@ function normalizeXlsxRow(
   const committeeNumberRaw = pick(COL_ALIASES.committee_number);
   const committeeNameRaw = pick(COL_ALIASES.committee_name);
 
-  const name = nameRaw !== undefined ? String(nameRaw).trim() : "";
+  // Honorifics ("Mr. Arun") are stripped here too, so the preview shows the
+  // exact name the server will store.
+  const name = nameRaw !== undefined ? cleanParticipantName(String(nameRaw)) : "";
   const school = schoolRaw !== undefined ? String(schoolRaw).trim() : "";
   const classNum = classRaw !== undefined ? Number(classRaw) : 0;
   const phone = normalizePhone(phoneRaw);
@@ -517,7 +520,8 @@ export function CsvImport({
             const cols = parseCSVLine(lines[i]);
             const errors: string[] = [];
 
-            const name = cols[nameIdx]?.trim() || "";
+            // Same honorific stripping as the Excel path / server.
+            const name = cleanParticipantName(cols[nameIdx] ?? "");
             const school = cols[schoolIdx]?.trim() || "";
             const classVal =
               classIdx >= 0 ? parseInt(cols[classIdx]?.trim() || "0") : 0;

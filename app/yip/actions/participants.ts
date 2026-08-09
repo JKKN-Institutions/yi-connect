@@ -7,6 +7,7 @@ import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
 import { COMMITTEES } from "@/lib/yip/constants";
 import { getCommitteeNumbering } from "@/lib/yip/committee-number";
+import { cleanParticipantName } from "@/lib/yip/name-clean";
 import {
   isGoIndependentClosed,
   BILL_DRAFTING_SESSION_KEY,
@@ -223,7 +224,8 @@ export async function addParticipant(
       .from("participants")
       .insert({
         event_id: eventId,
-        full_name: data.full_name.trim(),
+        // Google-Form rosters arrive with honorifics ("Mr. Arun") — strip them.
+        full_name: cleanParticipantName(data.full_name),
         school_name: data.school_name || "",
         class: data.class ?? 9,
         phone: data.phone || null,
@@ -625,7 +627,8 @@ export async function quickAddWalkIn(
       .from("participants")
       .insert({
         event_id: eventId,
-        full_name: data.full_name.trim(),
+        // Strip honorific prefixes ("Mr. / Dr. …") — same rule as import.
+        full_name: cleanParticipantName(data.full_name),
         school_name: data.school_name?.trim() || "",
         class: data.class ?? 9,
         phone: data.phone?.trim() || null,
@@ -893,7 +896,8 @@ export async function importParticipants(
       const code = await generateUniqueCode(supabase, eventId, existingCodes);
       inserts.push({
         event_id: eventId,
-        full_name: row.name.trim(),
+        // Google-Form rosters arrive with honorifics ("Mr. Arun") — strip them.
+        full_name: cleanParticipantName(row.name),
         school_name: row.school.trim(),
         class: row.class,
         phone: row.phone?.trim() || null,

@@ -61,23 +61,26 @@ async function getPendingDelegateCounts(
 ): Promise<Map<string, number>> {
   if (collegeIds.length === 0) return new Map();
   const svc = await createServiceClient();
-  const counts = new Map<string, number>();
-  const PAGE = 1000;
 
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await svc
+  // Paged via the shared helper. The unpaged version silently undercounted
+  // past PostgREST's 1,000-row cap — harmless while this only ran over the
+  // short pending list, reachable now that it runs over every college in a
+  // chapter (Visakhapatnam alone has 1,923 delegates). The .order() is not
+  // decoration: without a stable total order, pages overlap and double-count.
+  const rows = await fetchAllRows<{ college_id: string | null }>((from, to) =>
+    svc
       .schema("future")
       .from("delegates")
       .select("college_id")
       .in("college_id", collegeIds)
-      .range(from, from + PAGE - 1);
-    if (error) break;
-    const rows = (data as { college_id: string | null }[] | null) ?? [];
-    for (const r of rows) {
-      if (!r.college_id) continue;
-      counts.set(r.college_id, (counts.get(r.college_id) ?? 0) + 1);
-    }
-    if (rows.length < PAGE) break; // short page → that was the last one
+      .order("id", { ascending: true })
+      .range(from, to)
+  );
+
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    if (!r.college_id) continue;
+    counts.set(r.college_id, (counts.get(r.college_id) ?? 0) + 1);
   }
   return counts;
 }

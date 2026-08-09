@@ -114,8 +114,15 @@ export default async function JuryLayout({
         {children}
       </main>
 
-      {/* Floating Help — jury lane */}
-      <GuideLauncher guide={GUIDES.jury} variant="fab" />
+      {/* Floating Help — jury lane. Hidden while the scoring screen's fixed
+          quick-jump bar is up (body flag set by jury-scoring-client): the FAB
+          sat exactly on the digit pad's "1" key and the first match/Unfinished
+          chips on phones. Help stays reachable via the header Guide button. */}
+      <GuideLauncher
+        guide={GUIDES.jury}
+        variant="fab"
+        className="[[data-yip-jury-jumpbar]_&]:hidden"
+      />
     </div>
   );
 }

@@ -304,6 +304,14 @@ function GoogleLoginTab() {
     });
   }
 
+  if (finishing) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-sm text-navy/60">Finishing sign-in…</p>
+      </div>
+    );
+  }
+
   if (step === "start") {
     return (
       <div className="text-center space-y-4">

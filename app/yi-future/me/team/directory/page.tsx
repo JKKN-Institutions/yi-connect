@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import { fetchAllRows } from "@/lib/pagination";
 import { readSession } from "@/app/yi-future/actions/auth";
 import { sendInvite } from "@/app/yi-future/actions/team-invites";
 import { TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
@@ -48,15 +49,24 @@ async function loadChapterDelegates(
   editionId: string
 ): Promise<ChapterDelegate[]> {
   const svc = await createServiceClient();
-  const { data } = await svc
-    .schema("future")
-    .from("delegates")
-    .select("id, full_name, email, team_members(team_id)")
-    .eq("chapter_id", chapterId)
-    .eq("edition_id", editionId)
-    .eq("is_active", true)
-    .order("full_name", { ascending: true });
-  return (data as unknown as ChapterDelegate[]) ?? [];
+  // Was losing every delegate past PostgREST's ~1000-row cap, so the "N other
+  // delegates in your chapter" count was wrong and delegates past the cap were
+  // invisible in the directory and could never be invited to a team.
+  return await fetchAllRows<ChapterDelegate>((from, to) =>
+    svc
+      .schema("future")
+      .from("delegates")
+      .select("id, full_name, email, team_members(team_id)")
+      .eq("chapter_id", chapterId)
+      .eq("edition_id", editionId)
+      .eq("is_active", true)
+      .order("full_name", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: ChapterDelegate[] | null;
+      error: unknown;
+    }>
+  );
 }
 
 async function loadAlumniEmails(
@@ -66,15 +76,30 @@ async function loadAlumniEmails(
   const emails = delegates.map((d) => d.email).filter(Boolean) as string[];
   if (emails.length === 0) return new Set();
   const svc = await createServiceClient();
-  const { data } = await svc
-    .schema("future")
-    .from("delegates")
-    .select("email")
-    .in("email", emails)
-    .neq("edition_id", editionId);
-  const alumniEmails = new Set(
-    ((data ?? []) as { email: string }[]).map((r) => r.email)
-  );
+  // This list is now the chapter's FULL roster (1900+ in the largest chapter).
+  // One .in() over that many emails builds a request URL tens of KB long, which
+  // the server rejects — the read then failed silently and every Alumni badge
+  // disappeared. Query in bounded chunks, and page each chunk.
+  const CHUNK = 200;
+  const alumniEmails = new Set<string>();
+  for (let i = 0; i < emails.length; i += CHUNK) {
+    const slice = emails.slice(i, i + CHUNK);
+    const rows = await fetchAllRows<{ email: string }>((from, to) =>
+      svc
+        .schema("future")
+        .from("delegates")
+        .select("email")
+        .in("email", slice)
+        .neq("edition_id", editionId)
+        .order("email", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: { email: string }[] | null;
+        error: unknown;
+      }>
+    );
+    for (const r of rows) alumniEmails.add(r.email);
+  }
   return alumniEmails;
 }
 

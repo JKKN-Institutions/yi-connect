@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createAdminSupabaseClient } from '@/lib/supabase/server';
+import { fetchAllRows } from '@/lib/pagination';
 import { getCurrentUser } from '@/lib/data/auth';
 import type { EventFilters } from '@/types/event';
 
@@ -36,11 +37,21 @@ export async function GET(request: NextRequest) {
       start_date_to: searchParams.get('start_date_to') || undefined
     };
 
+    // Builds ONE page of the filtered query.
+    //
+    // Row-cap fix: PostgREST caps a single response at ~1000 rows no matter
+    // what `.limit()` asks for — a request limit can only LOWER the server's
+    // ceiling, never raise it. The old `.limit(10000)` therefore did nothing
+    // and this export silently stopped at ~1000 events. Page through with
+    // fetchAllRows instead.
+    //
     // Phase E fix 2026-05-23 (Agent O): drop `organizer:members!organizer_id`
     // embed — events.organizer_id FK targets auth.users, not members, so
     // PostgREST returns PGRST200. Two-step resolution below mirrors getEvents.
-    let query = supabase.schema('yi_connect').from('events').select(
-      `
+    type EventExportRow = Record<string, unknown>;
+    const buildPage = (from: number, to: number) => {
+      let query = supabase.schema('yi_connect').from('events').select(
+        `
       id,
       title,
       description,
@@ -61,50 +72,62 @@ export async function GET(request: NextRequest) {
         city
       )
     `,
-      { count: 'exact' }
-    );
-
-    // Apply filters
-    if (filters.search) {
-      query = query.or(
-        `title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`
+        { count: 'exact' }
       );
-    }
 
-    if (filters.status && filters.status.length > 0) {
-      if (filters.status.length === 1) {
-        query = query.eq('status', filters.status[0]);
-      } else {
-        query = query.in('status', filters.status);
+      // Apply filters
+      if (filters.search) {
+        query = query.or(
+          `title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`
+        );
       }
-    }
 
-    if (filters.category && filters.category.length > 0) {
-      if (filters.category.length === 1) {
-        query = query.eq('category', filters.category[0]);
-      } else {
-        query = query.in('category', filters.category);
+      if (filters.status && filters.status.length > 0) {
+        if (filters.status.length === 1) {
+          query = query.eq('status', filters.status[0]);
+        } else {
+          query = query.in('status', filters.status);
+        }
       }
-    }
 
-    if (filters.start_date_from) {
-      query = query.gte('start_date', filters.start_date_from);
-    }
+      if (filters.category && filters.category.length > 0) {
+        if (filters.category.length === 1) {
+          query = query.eq('category', filters.category[0]);
+        } else {
+          query = query.in('category', filters.category);
+        }
+      }
 
-    if (filters.start_date_to) {
-      query = query.lte('start_date', filters.start_date_to);
-    }
+      if (filters.start_date_from) {
+        query = query.gte('start_date', filters.start_date_from);
+      }
 
-    // Sort by start date
-    query = query.order('start_date', { ascending: false });
+      if (filters.start_date_to) {
+        query = query.lte('start_date', filters.start_date_to);
+      }
 
-    // Fetch all results (with a reasonable limit)
-    query = query.limit(10000);
+      // Sort by start date, then id — the id tiebreaker is REQUIRED so pages
+      // neither overlap nor skip rows that share a start_date.
+      return query
+        .order('start_date', { ascending: false })
+        .order('id', { ascending: true })
+        .range(from, to);
+    };
 
-    const { data, error } = await query;
+    // fetchAllRows stops quietly on error, so collect any page error and keep
+    // returning the 500 this route returned before.
+    const pageErrors: unknown[] = [];
+    const data = await fetchAllRows<EventExportRow>(async (from, to) => {
+      const res = (await buildPage(from, to)) as unknown as {
+        data: EventExportRow[] | null;
+        error: unknown;
+      };
+      if (res.error) pageErrors.push(res.error);
+      return res;
+    });
 
-    if (error) {
-      console.error('Error fetching events for export:', error);
+    if (pageErrors.length > 0) {
+      console.error('Error fetching events for export:', pageErrors[0]);
       return NextResponse.json(
         { success: false, error: 'Failed to fetch events' },
         { status: 500 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import { fetchAllRows } from "@/lib/pagination";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
 import { PHASES } from "@/lib/yi-future/constants";
 import {
@@ -54,15 +55,25 @@ async function getEvaluations(
   editionId: string
 ): Promise<Evaluation[]> {
   const svc = await createServiceClient();
-  const { data } = await svc
-    .schema("future")
-    .from("evaluations")
-    .select(
-      "team_id, jury_id, criteria_scores, total_score, status, teams!inner(chapter_id, edition_id), jury_assignments(jury_name, archetype)"
-    )
-    .eq("teams.chapter_id", chapterId)
-    .eq("teams.edition_id", editionId);
-  return (data as unknown as Evaluation[]) ?? [];
+  // Would lose evaluations past PostgREST's ~1000-row cap once scoring runs at
+  // scale (a chapter can have 231 teams × several jurors), dropping jurors from
+  // the average and therefore mis-ranking teams against the national threshold.
+  return await fetchAllRows<Evaluation>((from, to) =>
+    svc
+      .schema("future")
+      .from("evaluations")
+      .select(
+        "team_id, jury_id, criteria_scores, total_score, status, teams!inner(chapter_id, edition_id), jury_assignments(jury_name, archetype)"
+      )
+      .eq("teams.chapter_id", chapterId)
+      .eq("teams.edition_id", editionId)
+      .order("team_id", { ascending: true })
+      .order("jury_id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: Evaluation[] | null;
+      error: unknown;
+    }>
+  );
 }
 
 async function getDefaultRubric(editionId: string): Promise<RubricRow | null> {
@@ -103,26 +114,48 @@ async function getTeamMembers(
   editionId: string
 ): Promise<TeamMember[]> {
   const svc = await createServiceClient();
-  const { data } = await svc
-    .schema("future")
-    .from("team_members")
-    .select("team_id, delegate_id, teams!inner(chapter_id, edition_id)")
-    .eq("teams.chapter_id", chapterId)
-    .eq("teams.edition_id", editionId);
-  return (data as unknown as TeamMember[]) ?? [];
+  // Was losing team members past PostgREST's ~1000-row cap. Dropped members
+  // both shrank the per-team roster the journey average divides by AND short-
+  // changed the delegate-id list this feeds downstream.
+  return await fetchAllRows<TeamMember>((from, to) =>
+    svc
+      .schema("future")
+      .from("team_members")
+      .select("team_id, delegate_id, teams!inner(chapter_id, edition_id)")
+      .eq("teams.chapter_id", chapterId)
+      .eq("teams.edition_id", editionId)
+      .order("team_id", { ascending: true })
+      .order("delegate_id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: TeamMember[] | null;
+      error: unknown;
+    }>
+  );
 }
 
 async function getAllAttendance(
-  delegateIds: string[]
+  phaseEventIds: string[]
 ): Promise<AttendanceRow[]> {
-  if (delegateIds.length === 0) return [];
+  if (phaseEventIds.length === 0) return [];
   const svc = await createServiceClient();
-  const { data } = await svc
-    .schema("future")
-    .from("phase_event_attendance")
-    .select("delegate_id, phase_event_id, attended")
-    .in("delegate_id", delegateIds);
-  return (data as unknown as AttendanceRow[]) ?? [];
+  // Was .in("delegate_id", <every team member id>): that id list came out of a
+  // capped read so it was already short, and 600+ UUIDs build a request URL
+  // tens of KB long that the server rejects. Scope by the chapter's handful of
+  // phase events and page the rows instead — a truncated read under-counted
+  // attendance and silently deflated every team's journey score.
+  return await fetchAllRows<AttendanceRow>((from, to) =>
+    svc
+      .schema("future")
+      .from("phase_event_attendance")
+      .select("delegate_id, phase_event_id, attended")
+      .in("phase_event_id", phaseEventIds)
+      .order("phase_event_id", { ascending: true })
+      .order("delegate_id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: AttendanceRow[] | null;
+      error: unknown;
+    }>
+  );
 }
 
 function computeTeamJourneyScores(
@@ -188,9 +221,11 @@ export default async function ScoringPage() {
     getTeamMembers(ctx.chapterId, ctx.editionId),
   ]);
 
-  // Journey score computation
-  const allDelegateIds = Array.from(new Set(teamMembers.map((tm) => tm.delegate_id)));
-  const allAttendance = await getAllAttendance(allDelegateIds);
+  // Journey score computation. Fetch attendance by phase event (a handful per
+  // chapter) rather than by a huge delegate-id list; computeTeamJourneyScores
+  // only ever reads the delegates that are actually on a team, so any extra
+  // rows are ignored.
+  const allAttendance = await getAllAttendance(phaseEvents.map((e) => e.id));
   const journeyByTeam = computeTeamJourneyScores(
     teamMembers,
     phaseEvents,

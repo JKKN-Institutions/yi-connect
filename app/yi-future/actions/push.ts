@@ -3,6 +3,7 @@
 import webpush from "web-push";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import { readSession } from "@/app/yi-future/actions/auth";
+import { fetchAllRows } from "@/lib/pagination";
 import {
   getVapidPublicKey,
   getVapidPrivateKey,
@@ -459,19 +460,24 @@ export async function broadcastPush(
   // shape so callers don't break later.
   void filter;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: subs } = await (svc as any)
-    .schema("yi")
-    .from("push_subscriptions")
-    .select("id, user_id, endpoint, p256dh, auth");
-
-  const rows: Array<{
+  // Paged: PostgREST caps a plain .select() at ~1000 rows with no error, so a
+  // broadcast past 1000 subscriptions silently skipped every subscriber beyond
+  // the cap — they were never sent the notification at all.
+  const rows = await fetchAllRows<{
     id: string;
     user_id: string;
     endpoint: string;
     p256dh: string;
     auth: string;
-  }> = Array.isArray(subs) ? subs : [];
+  }>((from, to) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (svc as any)
+      .schema("yi")
+      .from("push_subscriptions")
+      .select("id, user_id, endpoint, p256dh, auth")
+      .order("id", { ascending: true })
+      .range(from, to)
+  );
 
   if (rows.length === 0) {
     return { ok: true, sent: 0, failed: 0, removed: 0 };

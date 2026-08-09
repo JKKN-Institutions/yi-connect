@@ -131,18 +131,28 @@ async function mentorNamesByTeam(
   svc: Awaited<ReturnType<typeof createServiceClient>>,
   filter: { chapterId?: string; editionId?: string }
 ): Promise<Map<string, string[]>> {
-  let q = svc
-    .schema("future")
-    .from("mentor_team_assignments" as never)
-    .select("team_id, mentors!inner(full_name, chapter_id, edition_id)");
-  if (filter.chapterId) q = q.eq("mentors.chapter_id", filter.chapterId);
-  if (filter.editionId) q = q.eq("mentors.edition_id", filter.editionId);
-  const { data } = await q;
+  type MTARow = { team_id: string; mentors: { full_name: string } | null };
+
+  // An edition-wide assignment set exceeds the ~1000-row PostgREST cap, which
+  // would silently drop mentor names from the CSV — page through. The table's
+  // composite PK (team_id, mentor_id) is the stable ordering key.
+  const data = await fetchAllRows<MTARow>((from, to) => {
+    let q = svc
+      .schema("future")
+      .from("mentor_team_assignments" as never)
+      .select("team_id, mentors!inner(full_name, chapter_id, edition_id)");
+    if (filter.chapterId) q = q.eq("mentors.chapter_id", filter.chapterId);
+    if (filter.editionId) q = q.eq("mentors.edition_id", filter.editionId);
+    return q
+      .order("team_id", { ascending: true })
+      .order("mentor_id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: MTARow[] | null;
+      error: unknown;
+    }>;
+  });
   const map = new Map<string, string[]>();
-  for (const r of ((data as unknown as {
-    team_id: string;
-    mentors: { full_name: string } | null;
-  }[]) ?? [])) {
+  for (const r of data) {
     if (!r.mentors?.full_name) continue;
     const list = map.get(r.team_id) ?? [];
     list.push(r.mentors.full_name);
@@ -327,16 +337,26 @@ export async function GET(
         }[];
       };
 
-      const { data } = await svc
-        .schema("future")
-        .from("delegates")
-        .select(
-          "id, full_name, email, phone, course, year_of_study, home_state, access_code, registered_at, profile_completion_pct, points, team_members(role_in_team, teams(team_name, problem_statements(title)))"
-        )
-        .eq("chapter_id", legacyChapterId)
-        .order("full_name", { ascending: true });
+      // A large chapter passes the ~1000-row PostgREST cap, which would
+      // silently truncate this CSV — page through (id is the stable tiebreaker).
+      const chapterId = legacyChapterId;
+      const data = await fetchAllRows<Row>((from, to) =>
+        svc
+          .schema("future")
+          .from("delegates")
+          .select(
+            "id, full_name, email, phone, course, year_of_study, home_state, access_code, registered_at, profile_completion_pct, points, team_members(role_in_team, teams(team_name, problem_statements(title)))"
+          )
+          .eq("chapter_id", chapterId)
+          .order("full_name", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to) as unknown as PromiseLike<{
+          data: Row[] | null;
+          error: unknown;
+        }>
+      );
 
-      const rows = ((data as unknown as Row[]) ?? []).map((d) => {
+      const rows = data.map((d) => {
         const tm = d.team_members?.[0];
         return {
           id: d.id,
@@ -522,27 +542,37 @@ export async function GET(
         }[];
       };
 
-      const { data } = await svc
-        .schema("future")
-        .from("teams")
-        .select(
-          // Phase E fix 2026-05-23: the FK constraint is named
-          // `teams_leader_delegate_id_fkey` (column is leader_delegate_id),
-          // not `teams_leader_id_fkey`. Using the wrong constraint name
-          // makes PostgREST drop the leader column silently.
-          "id, team_name, is_frozen, frozen_at, status, leader:delegates!teams_leader_delegate_id_fkey(full_name), captain:delegates!teams_captain_id_fkey(full_name), problem_statements(title), team_members(delegate_id, delegates(full_name))"
-        )
-        .eq("chapter_id", legacyChapterId)
-        .order("team_name", { ascending: true });
+      // Paged: a large chapter can pass the ~1000-row PostgREST cap, which
+      // would silently truncate this CSV (id breaks team-name ties).
+      const chapterId = legacyChapterId;
+      const data = await fetchAllRows<Row>((from, to) =>
+        svc
+          .schema("future")
+          .from("teams")
+          .select(
+            // Phase E fix 2026-05-23: the FK constraint is named
+            // `teams_leader_delegate_id_fkey` (column is leader_delegate_id),
+            // not `teams_leader_id_fkey`. Using the wrong constraint name
+            // makes PostgREST drop the leader column silently.
+            "id, team_name, is_frozen, frozen_at, status, leader:delegates!teams_leader_delegate_id_fkey(full_name), captain:delegates!teams_captain_id_fkey(full_name), problem_statements(title), team_members(delegate_id, delegates(full_name))"
+          )
+          .eq("chapter_id", chapterId)
+          .order("team_name", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to) as unknown as PromiseLike<{
+          data: Row[] | null;
+          error: unknown;
+        }>
+      );
 
       // Mentor names per team (chapter-scoped). Yi Puducherry field request
       // 2026-07-17: admins need member NAMES and mentor status in this CSV,
       // not just a member count.
       const mentorsByTeam = await mentorNamesByTeam(svc, {
-        chapterId: legacyChapterId,
+        chapterId,
       });
 
-      const rows = ((data as unknown as Row[]) ?? []).map((t) => ({
+      const rows = data.map((t) => ({
         id: t.id,
         team_name: t.team_name,
         leader_name: t.leader?.full_name ?? "",
@@ -604,34 +634,45 @@ export async function GET(
       }[];
     };
 
-    let q = svc
-      .schema("future")
-      .from("teams")
-      .select(
-        "id, team_name, status, created_at, chapter_id, captain:delegates!teams_captain_id_fkey(full_name), problem_statements(title, tracks(name)), team_members(delegate_id, delegates(full_name))"
-      )
-      .eq("edition_id", edition.id)
-      .order("team_name", { ascending: true });
-
-    if (chapterFilter) q = q.eq("chapter_id", chapterFilter);
+    // Resolve the region filter up front so the chapter-id list stays identical
+    // across pages (same shape as the national delegates branch above).
+    let regionChapterIds: string[] | null = null;
     if (regionFilter) {
-      const ids = (await chapterIdsForRegion(svc, regionFilter)) ?? [];
-      if (ids.length === 0) {
+      regionChapterIds = (await chapterIdsForRegion(svc, regionFilter)) ?? [];
+      if (regionChapterIds.length === 0) {
         return csvResponse(
           `teams-${todayStamp()}.csv`,
           toCSV([], [{ key: "id", label: "ID" }])
         );
       }
-      q = q.in("chapter_id", ids);
     }
 
-    const { data } = await q;
+    // A national team list exceeds the ~1000-row PostgREST cap, which would
+    // silently truncate this CSV — page through (id is the stable tiebreaker).
+    const data = await fetchAllRows<Row>((from, to) => {
+      let q = svc
+        .schema("future")
+        .from("teams")
+        .select(
+          "id, team_name, status, created_at, chapter_id, captain:delegates!teams_captain_id_fkey(full_name), problem_statements(title, tracks(name)), team_members(delegate_id, delegates(full_name))"
+        )
+        .eq("edition_id", edition.id);
+      if (chapterFilter) q = q.eq("chapter_id", chapterFilter);
+      if (regionChapterIds) q = q.in("chapter_id", regionChapterIds);
+      return q
+        .order("team_name", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: Row[] | null;
+        error: unknown;
+      }>;
+    });
     const chMap = await chapterDisplayMap(svc);
     const mentorsByTeam = await mentorNamesByTeam(svc, {
       editionId: edition.id,
     });
 
-    const rows = ((data as unknown as Row[]) ?? []).map((t) => {
+    const rows = data.map((t) => {
       const ch = chMap.get(t.chapter_id);
       return {
         id: t.id,
@@ -691,26 +732,41 @@ export async function GET(
       teams: { chapter_id: string } | null;
     };
 
-    const { data: teamsRaw } = await svc
-      .schema("future")
-      .from("teams")
-      .select("id, team_name")
-      .eq("chapter_id", legacyChapterId)
-      .order("team_name", { ascending: true });
+    // Both reads below feed the per-team aggregate; either passing the
+    // ~1000-row PostgREST cap would silently drop teams / jury scores from the
+    // CSV — page through (id is the stable tiebreaker on each table).
+    const chapterId = legacyChapterId;
 
-    const teams = (teamsRaw as unknown as TeamRow[]) ?? [];
-
-    const { data: evalsRaw } = await svc
-      .schema("future")
-      .from("evaluations")
-      .select(
-        "team_id, jury_id, criteria_scores, total_score, status, teams!inner(chapter_id)"
-      )
-      .eq("teams.chapter_id", legacyChapterId);
-
-    const evals = ((evalsRaw as unknown as EvalRow[]) ?? []).filter(
-      (e) => e.status === "submitted"
+    const teams = await fetchAllRows<TeamRow>((from, to) =>
+      svc
+        .schema("future")
+        .from("teams")
+        .select("id, team_name")
+        .eq("chapter_id", chapterId)
+        .order("team_name", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: TeamRow[] | null;
+        error: unknown;
+      }>
     );
+
+    const evalsRaw = await fetchAllRows<EvalRow>((from, to) =>
+      svc
+        .schema("future")
+        .from("evaluations")
+        .select(
+          "team_id, jury_id, criteria_scores, total_score, status, teams!inner(chapter_id)"
+        )
+        .eq("teams.chapter_id", chapterId)
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: EvalRow[] | null;
+        error: unknown;
+      }>
+    );
+
+    const evals = evalsRaw.filter((e) => e.status === "submitted");
 
     const byTeam = new Map<string, EvalRow[]>();
     for (const e of evals) {
@@ -869,15 +925,22 @@ export async function GET(
 
     type Row = { email: string; created_at: string };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (svc as any)
-      .schema("future")
-      .from("registration_waitlist")
-      .select("email, created_at")
-      .eq("edition_id", edition.id)
-      .order("created_at", { ascending: true });
+    // The waitlist accumulates every /join arrival made while registrations
+    // were closed and passes the ~1000-row PostgREST cap, which would silently
+    // truncate this CSV — page through (email breaks timestamp ties).
+    const data = await fetchAllRows<Row>((from, to) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (svc as any)
+        .schema("future")
+        .from("registration_waitlist")
+        .select("email, created_at")
+        .eq("edition_id", edition.id)
+        .order("created_at", { ascending: true })
+        .order("email", { ascending: true })
+        .range(from, to)
+    );
 
-    const rows = ((data as Row[] | null) ?? []).map((r) => ({
+    const rows = data.map((r) => ({
       email: r.email,
       signed_up_at: r.created_at,
     }));
@@ -910,30 +973,41 @@ export async function GET(
       created_at: string | null;
     };
 
-    let q = svc
-      .schema("future")
-      .from("colleges")
-      .select(
-        "id, name, city, state, chapter_id, is_approved, is_yuva, website_url, primary_contact_name, primary_contact_email, primary_contact_phone, created_at"
-      )
-      .order("name", { ascending: true });
-
-    if (chapterFilter) q = q.eq("chapter_id", chapterFilter);
+    // Resolve the region filter up front so the chapter-id list stays identical
+    // across pages.
+    let regionChapterIds: string[] | null = null;
     if (regionFilter) {
-      const ids = (await chapterIdsForRegion(svc, regionFilter)) ?? [];
-      if (ids.length === 0) {
+      regionChapterIds = (await chapterIdsForRegion(svc, regionFilter)) ?? [];
+      if (regionChapterIds.length === 0) {
         return csvResponse(
           `colleges-${todayStamp()}.csv`,
           toCSV([], [{ key: "id", label: "ID" }])
         );
       }
-      q = q.in("chapter_id", ids);
     }
 
-    const { data } = await q;
+    // The national college list passes the ~1000-row PostgREST cap, which would
+    // silently truncate this CSV — page through (id is the stable tiebreaker).
+    const data = await fetchAllRows<Row>((from, to) => {
+      let q = svc
+        .schema("future")
+        .from("colleges")
+        .select(
+          "id, name, city, state, chapter_id, is_approved, is_yuva, website_url, primary_contact_name, primary_contact_email, primary_contact_phone, created_at"
+        );
+      if (chapterFilter) q = q.eq("chapter_id", chapterFilter);
+      if (regionChapterIds) q = q.in("chapter_id", regionChapterIds);
+      return q
+        .order("name", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: Row[] | null;
+        error: unknown;
+      }>;
+    });
     const chMap = await chapterDisplayMap(svc);
 
-    const rows = ((data as unknown as Row[]) ?? []).map((c) => {
+    const rows = data.map((c) => {
       const ch = c.chapter_id ? chMap.get(c.chapter_id) : undefined;
       return {
         id: c.id,
@@ -995,31 +1069,42 @@ export async function GET(
       created_at: string | null;
     };
 
-    let q = svc
-      .schema("future")
-      .from("mentors")
-      .select(
-        "id, full_name, email, phone, expertise, organization, title, access_code, is_active, chapter_id, created_at"
-      )
-      .eq("edition_id", edition.id)
-      .order("full_name", { ascending: true });
-
-    if (chapterFilter) q = q.eq("chapter_id", chapterFilter);
+    // Resolve the region filter up front so the chapter-id list stays identical
+    // across pages.
+    let regionChapterIds: string[] | null = null;
     if (regionFilter) {
-      const ids = (await chapterIdsForRegion(svc, regionFilter)) ?? [];
-      if (ids.length === 0) {
+      regionChapterIds = (await chapterIdsForRegion(svc, regionFilter)) ?? [];
+      if (regionChapterIds.length === 0) {
         return csvResponse(
           `mentors-${todayStamp()}.csv`,
           toCSV([], [{ key: "id", label: "ID" }])
         );
       }
-      q = q.in("chapter_id", ids);
     }
 
-    const { data } = await q;
+    // The national mentor roster passes the ~1000-row PostgREST cap, which
+    // would silently truncate this CSV — page through (id breaks name ties).
+    const data = await fetchAllRows<Row>((from, to) => {
+      let q = svc
+        .schema("future")
+        .from("mentors")
+        .select(
+          "id, full_name, email, phone, expertise, organization, title, access_code, is_active, chapter_id, created_at"
+        )
+        .eq("edition_id", edition.id);
+      if (chapterFilter) q = q.eq("chapter_id", chapterFilter);
+      if (regionChapterIds) q = q.in("chapter_id", regionChapterIds);
+      return q
+        .order("full_name", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: Row[] | null;
+        error: unknown;
+      }>;
+    });
     const chMap = await chapterDisplayMap(svc);
 
-    const rows = ((data as unknown as Row[]) ?? []).map((m) => {
+    const rows = data.map((m) => {
       const ch = m.chapter_id ? chMap.get(m.chapter_id) : undefined;
       return {
         id: m.id,
@@ -1085,16 +1170,26 @@ export async function GET(
       created_at: string | null;
     };
 
-    const { data } = await svc
-      .schema("future")
-      .from("jury_assignments")
-      .select(
-        "id, jury_name, jury_title, organization, archetype, scope, access_code, phone, email, is_active, event_id, created_at"
-      )
-      .eq("edition_id", edition.id)
-      .order("jury_name", { ascending: true });
+    // An edition-wide jury roster (one panel per chapter event) passes the
+    // ~1000-row PostgREST cap, which would silently truncate this CSV — page
+    // through (id breaks name ties).
+    const data = await fetchAllRows<Row>((from, to) =>
+      svc
+        .schema("future")
+        .from("jury_assignments")
+        .select(
+          "id, jury_name, jury_title, organization, archetype, scope, access_code, phone, email, is_active, event_id, created_at"
+        )
+        .eq("edition_id", edition.id)
+        .order("jury_name", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: Row[] | null;
+        error: unknown;
+      }>
+    );
 
-    const rows = ((data as unknown as Row[]) ?? []).map((j) => ({
+    const rows = data.map((j) => ({
       id: j.id,
       jury_name: j.jury_name,
       jury_title: j.jury_title ?? "",
@@ -1138,15 +1233,21 @@ export async function GET(
     const edition = await resolveEdition(svc, editionSlug);
     if (!edition) return jsonError(404, "No edition found");
 
-    // Pull event IDs for this edition first so we can filter partners.
-    const { data: eventRows } = await svc
-      .schema("future")
-      .from("events")
-      .select("id")
-      .eq("edition_id", edition.id);
-    const eventIds = ((eventRows as { id: string }[] | null) ?? []).map(
-      (e) => e.id
-    );
+    // Pull event IDs for this edition first so we can filter partners. Paged:
+    // a capped id list would silently narrow the partner export below. The
+    // list stays small (a handful of events per chapter) so the `.in()` filter
+    // it feeds does not risk overflowing the request URL.
+    const eventIds = (
+      await fetchAllRows<{ id: string }>((from, to) =>
+        svc
+          .schema("future")
+          .from("events")
+          .select("id")
+          .eq("edition_id", edition.id)
+          .order("id", { ascending: true })
+          .range(from, to)
+      )
+    ).map((e) => e.id);
 
     type Row = {
       id: string;
@@ -1166,15 +1267,23 @@ export async function GET(
 
     let rows: Row[] = [];
     if (eventIds.length > 0) {
-      const { data } = await svc
-        .schema("future")
-        .from("corporate_partners")
-        .select(
-          "id, organization, contact_name, contact_email, contact_phone, website_url, access_code, is_jury, is_sponsor, is_internship_provider, notes, event_id, created_at"
-        )
-        .in("event_id", eventIds)
-        .order("organization", { ascending: true });
-      rows = (data as unknown as Row[]) ?? [];
+      // Paged: a national partner list can pass the ~1000-row PostgREST cap,
+      // which would silently truncate this CSV (id breaks organization ties).
+      rows = await fetchAllRows<Row>((from, to) =>
+        svc
+          .schema("future")
+          .from("corporate_partners")
+          .select(
+            "id, organization, contact_name, contact_email, contact_phone, website_url, access_code, is_jury, is_sponsor, is_internship_provider, notes, event_id, created_at"
+          )
+          .in("event_id", eventIds)
+          .order("organization", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to) as unknown as PromiseLike<{
+          data: Row[] | null;
+          error: unknown;
+        }>
+      );
     }
 
     const mapped = rows.map((p) => ({
@@ -1222,15 +1331,21 @@ export async function GET(
     const edition = await resolveEdition(svc, editionSlug);
     if (!edition) return jsonError(404, "No edition found");
 
-    // Resolve event IDs in this edition (to scope evaluations).
-    const { data: eventRows } = await svc
-      .schema("future")
-      .from("events")
-      .select("id")
-      .eq("edition_id", edition.id);
-    const eventIds = ((eventRows as { id: string }[] | null) ?? []).map(
-      (e) => e.id
-    );
+    // Resolve event IDs in this edition (to scope evaluations). Paged: a
+    // capped id list would silently narrow the evaluation dump below. The list
+    // stays small (a handful of events per chapter) so the `.in()` filter it
+    // feeds does not risk overflowing the request URL.
+    const eventIds = (
+      await fetchAllRows<{ id: string }>((from, to) =>
+        svc
+          .schema("future")
+          .from("events")
+          .select("id")
+          .eq("edition_id", edition.id)
+          .order("id", { ascending: true })
+          .range(from, to)
+      )
+    ).map((e) => e.id);
 
     // Discover criteria keys by reading the default chapter rubric for this
     // edition (HPB §4 Day 2 B — 5 criteria × 20 = 100). If unavailable,
@@ -1273,15 +1388,24 @@ export async function GET(
 
     let rows: Row[] = [];
     if (eventIds.length > 0) {
-      const { data } = await svc
-        .schema("future")
-        .from("evaluations")
-        .select(
-          "id, total_score, status, submitted_at, criteria_scores, team_id, jury_id, event_id, teams(team_name, chapter_id, problem_statements(title)), jury_assignments(jury_name, archetype)"
-        )
-        .in("event_id", eventIds)
-        .order("submitted_at", { ascending: false });
-      rows = (data as unknown as Row[]) ?? [];
+      // Paged: a cross-chapter evaluation dump is several rows per team and
+      // far exceeds the ~1000-row PostgREST cap, which would silently truncate
+      // this CSV (id is the stable tiebreaker under the submitted_at sort).
+      rows = await fetchAllRows<Row>((from, to) =>
+        svc
+          .schema("future")
+          .from("evaluations")
+          .select(
+            "id, total_score, status, submitted_at, criteria_scores, team_id, jury_id, event_id, teams(team_name, chapter_id, problem_statements(title)), jury_assignments(jury_name, archetype)"
+          )
+          .in("event_id", eventIds)
+          .order("submitted_at", { ascending: false })
+          .order("id", { ascending: true })
+          .range(from, to) as unknown as PromiseLike<{
+          data: Row[] | null;
+          error: unknown;
+        }>
+      );
     }
 
     const chMap = await chapterDisplayMap(svc);

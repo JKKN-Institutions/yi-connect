@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import { fetchAllRows } from "@/lib/pagination";
 import {
   computeTeamJourneyScore,
   JOURNEY_MAX,
@@ -171,29 +172,54 @@ export async function getCompositeLeaderboard(
 ): Promise<LeaderboardRow[]> {
   const svc = await createServiceClient();
 
-  // 1. Get all teams for this edition with their chapter
-  const { data: teams, error: teamsErr } = await svc
-    .schema("future")
-    .from("teams")
-    .select("id, team_name, chapter_id, chapters(name)")
-    .eq("edition_id", editionId);
+  // 1. Get all teams for this edition with their chapter.
+  // Row-cap fix: a bare select stopped at ~1000 teams, so every team past the
+  // cap vanished from the composite board entirely.
+  type CompositeTeam = {
+    id: string;
+    team_name: string;
+    chapter_id: string;
+    chapters: { name: string } | null;
+  };
+  const teams = await fetchAllRows<CompositeTeam>((from, to) =>
+    svc
+      .schema("future")
+      .from("teams")
+      .select("id, team_name, chapter_id, chapters(name)")
+      .eq("edition_id", editionId)
+      .order("id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: CompositeTeam[] | null;
+      error: unknown;
+    }>
+  );
 
-  if (teamsErr) throw teamsErr;
-  if (!teams || teams.length === 0) return [];
+  if (teams.length === 0) return [];
 
-  // 2. Get all evaluations for this edition's teams in one query
-  const teamIds = (teams as { id: string }[]).map((t) => t.id);
-  const { data: evaluations, error: evalErr } = await svc
-    .schema("future")
-    .from("evaluations")
-    .select("team_id, total_score")
-    .in("team_id", teamIds);
-
-  if (evalErr) throw evalErr;
+  // 2. Get all evaluations, then keep the ones belonging to this edition's teams.
+  // Row-cap fix (double): the evaluations select truncated at ~1000 AND the old
+  // .in("team_id", teamIds) list would blow the request URL once the edition had
+  // >1000 teams. Page the child table whole and intersect in JS instead.
+  const teamIdSet = new Set(teams.map((t) => t.id));
+  const evaluations = await fetchAllRows<{
+    team_id: string;
+    total_score: number;
+  }>((from, to) =>
+    svc
+      .schema("future")
+      .from("evaluations")
+      .select("team_id, total_score")
+      .order("id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: { team_id: string; total_score: number }[] | null;
+      error: unknown;
+    }>
+  );
 
   // Build jury avg map: team_id → average total_score
   const juryMap = new Map<string, { sum: number; count: number }>();
-  for (const ev of (evaluations ?? []) as { team_id: string; total_score: number }[]) {
+  for (const ev of evaluations) {
+    if (!teamIdSet.has(ev.team_id)) continue;
     const entry = juryMap.get(ev.team_id) ?? { sum: 0, count: 0 };
     entry.sum += ev.total_score;
     entry.count += 1;
@@ -203,12 +229,7 @@ export async function getCompositeLeaderboard(
   // 3. Compute composite for each team
   const rows: LeaderboardRow[] = [];
 
-  for (const t of teams as unknown as {
-    id: string;
-    team_name: string;
-    chapter_id: string;
-    chapters: { name: string } | null;
-  }[]) {
+  for (const t of teams) {
     const juryEntry = juryMap.get(t.id);
     const juryAvg = juryEntry && juryEntry.count > 0
       ? juryEntry.sum / juryEntry.count

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
+import { fetchAllRows } from "@/lib/pagination";
 import {
   requireChapterAdmin,
   requireFutureNationalAdmin,
@@ -98,28 +99,39 @@ async function resolveRecipientIds(
       .eq("region", a.zone);
     const chapterIds = ((chRows ?? []) as { id: string }[]).map((c) => c.id);
     if (chapterIds.length === 0) return [];
-    const { data } = await svc
+    // Paged: a zone holds far more than PostgREST's ~1000-row cap of active
+    // delegates, so the unpaged read silently dropped every delegate past 1000
+    // from the push fan-out below — they never received the announcement.
+    const zoneRows = await fetchAllRows<{ id: string }>((from, to) =>
+      svc
+        .schema("future")
+        .from("delegates")
+        .select("id")
+        .eq("edition_id", a.edition_id)
+        .eq("is_active", true)
+        .in("chapter_id", chapterIds)
+        .order("id", { ascending: true })
+        .range(from, to)
+    );
+    return zoneRows.map((r) => r.id);
+  }
+
+  // 'chapter' or 'everyone' → active delegates scoped by edition (+ chapter).
+  // Paged: 'everyone' spans ~16.7k delegates today; the unpaged read returned
+  // only the first ~1000, so 15k+ delegates were silently dropped from delivery.
+  const rows = await fetchAllRows<{ id: string }>((from, to) => {
+    let q = svc
       .schema("future")
       .from("delegates")
       .select("id")
       .eq("edition_id", a.edition_id)
-      .eq("is_active", true)
-      .in("chapter_id", chapterIds);
-    return ((data ?? []) as { id: string }[]).map((r) => r.id);
-  }
-
-  // 'chapter' or 'everyone' → active delegates scoped by edition (+ chapter).
-  let q = svc
-    .schema("future")
-    .from("delegates")
-    .select("id")
-    .eq("edition_id", a.edition_id)
-    .eq("is_active", true);
-  if (a.audience === "chapter" && a.chapter_id) {
-    q = q.eq("chapter_id", a.chapter_id);
-  }
-  const { data } = await q;
-  return ((data ?? []) as { id: string }[]).map((r) => r.id);
+      .eq("is_active", true);
+    if (a.audience === "chapter" && a.chapter_id) {
+      q = q.eq("chapter_id", a.chapter_id);
+    }
+    return q.order("id", { ascending: true }).range(from, to);
+  });
+  return rows.map((r) => r.id);
 }
 
 // ─── CREATE (chapter admin → own delegates) ─────────────────────────

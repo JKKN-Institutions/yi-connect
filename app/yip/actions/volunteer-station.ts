@@ -5,6 +5,7 @@ import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { getScoreableSessions } from "@/app/yip/actions/jury-sessions";
 import { revalidatePath } from "next/cache";
 import { requireVolunteerStation } from "@/lib/yip/auth/volunteer-station";
+import { fetchAllRows } from "@/lib/pagination";
 
 /**
  * Per-STATION volunteer tools ("Tool B").
@@ -149,16 +150,29 @@ export async function getJurySupportData(
 
   // Per-session progress: distinct jurors who have entered ≥1 score for the
   // session's agenda item. One light read of (jury_assignment_id, agenda_item_id).
-  // Explicit high limit so the distinct count isn't silently truncated at the
-  // ~1000-row PostgREST default (the documented row-cap gotcha).
-  const { data: scoreRows } = await gate.supabase
-    .from("scores")
-    .select("jury_assignment_id, agenda_item_id")
-    .eq("event_id", eventId)
-    .limit(50000);
+  // Row-cap fix: the old .limit(50000) did NOT bypass the ~1000-row PostgREST
+  // ceiling — a request limit can only LOWER the server cap, never raise it, so
+  // the distinct count was silently truncated. Page through instead.
+  const scoreRows = await fetchAllRows<{
+    jury_assignment_id: string | null;
+    agenda_item_id: string | null;
+  }>((from, to) =>
+    gate.supabase
+      .from("scores")
+      .select("jury_assignment_id, agenda_item_id")
+      .eq("event_id", eventId)
+      .order("id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: {
+        jury_assignment_id: string | null;
+        agenda_item_id: string | null;
+      }[] | null;
+      error: unknown;
+    }>
+  );
 
   const scoredBySession = new Map<string, Set<string>>();
-  for (const r of scoreRows ?? []) {
+  for (const r of scoreRows) {
     const aid = (r as { agenda_item_id: string | null }).agenda_item_id;
     const jid = (r as { jury_assignment_id: string | null }).jury_assignment_id;
     if (!aid || !jid) continue;

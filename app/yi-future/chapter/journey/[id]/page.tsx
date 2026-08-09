@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import { fetchAllRows } from "@/lib/pagination";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
 import {
   setEventComplete,
@@ -57,25 +58,43 @@ async function getDelegates(
   editionId: string
 ): Promise<Delegate[]> {
   const svc = await createServiceClient();
-  const { data } = await svc
-    .schema("future")
-    .from("delegates")
-    .select("id, full_name, email")
-    .eq("chapter_id", chapterId)
-    .eq("edition_id", editionId)
-    .eq("is_active", true)
-    .order("full_name", { ascending: true });
-  return (data as unknown as Delegate[]) ?? [];
+  // Was losing every delegate past PostgREST's ~1000-row cap. Any delegate past
+  // the cap got no attendance checkbox at all, so they could never be marked
+  // present — and saveAttAction only writes the ids it rendered.
+  return await fetchAllRows<Delegate>((from, to) =>
+    svc
+      .schema("future")
+      .from("delegates")
+      .select("id, full_name, email")
+      .eq("chapter_id", chapterId)
+      .eq("edition_id", editionId)
+      .eq("is_active", true)
+      .order("full_name", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: Delegate[] | null;
+      error: unknown;
+    }>
+  );
 }
 
 async function getAttendance(eventId: string): Promise<AttendanceRow[]> {
   const svc = await createServiceClient();
-  const { data } = await svc
-    .schema("future")
-    .from("phase_event_attendance")
-    .select("delegate_id, attended")
-    .eq("phase_event_id", eventId);
-  return (data as unknown as AttendanceRow[]) ?? [];
+  // Was losing attendance rows past PostgREST's ~1000-row cap. A dropped row
+  // rendered its delegate's checkbox unticked, so an already-present delegate
+  // looked absent — and saving the form would then write them absent for real.
+  return await fetchAllRows<AttendanceRow>((from, to) =>
+    svc
+      .schema("future")
+      .from("phase_event_attendance")
+      .select("delegate_id, attended")
+      .eq("phase_event_id", eventId)
+      .order("delegate_id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: AttendanceRow[] | null;
+      error: unknown;
+    }>
+  );
 }
 
 function fmt(iso: string): string {

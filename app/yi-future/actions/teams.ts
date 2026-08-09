@@ -4,10 +4,25 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { ActionResult } from "./editions";
-import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 
-async function requireAuth(): Promise<void> {
-  await requireFutureAdmin();
+/**
+ * Chapter-scoped gate for team mutations — a chair of chapter A must not
+ * rename, re-allocate or delete chapter B's team. Looks up the target team's
+ * chapter, then requires admin of THAT chapter (or national). Fails closed:
+ * an unknown team resolves to null → denied.
+ */
+async function requireTeamChapterAdmin(teamId: string): Promise<void> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("teams")
+    .select("chapter_id")
+    .eq("id", teamId)
+    .maybeSingle();
+  await requireChapterAdmin(
+    (data as { chapter_id: string | null } | null)?.chapter_id ?? null
+  );
 }
 
 // ─── CREATE TEAM ────────────────────────────────────────────────────
@@ -15,7 +30,9 @@ export async function createTeam(
   input: { chapterId: string; editionId: string },
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  // Scope to the chapter the team is created in — a chair of chapter A must
+  // not create teams under chapter B.
+  await requireChapterAdmin(input.chapterId);
   const team_name = String(formData.get("team_name") ?? "").trim();
   if (!team_name) return { ok: false, error: "Team name is required." };
   if (team_name.length > 80) {
@@ -66,7 +83,7 @@ export async function updateTeamName(
   editionId: string,
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireTeamChapterAdmin(id);
   const team_name = String(formData.get("team_name") ?? "").trim();
   if (!team_name) return { ok: false, error: "Team name is required." };
 
@@ -100,7 +117,7 @@ export async function setTeamCaptain(
   teamId: string,
   delegateId: string
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireTeamChapterAdmin(teamId);
   const svc = await createServiceClient();
 
   // Verify delegate is on the team
@@ -147,7 +164,7 @@ export async function pickProblemStatement(
   teamId: string,
   problemId: string
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireTeamChapterAdmin(teamId);
   const svc = await createServiceClient();
 
   const { error } = await svc
@@ -168,7 +185,7 @@ export async function pickProblemStatement(
 
 // ─── CLEAR PROBLEM (let them re-pick) ───────────────────────────────
 export async function clearProblem(teamId: string): Promise<ActionResult> {
-  await requireAuth();
+  await requireTeamChapterAdmin(teamId);
   const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")
@@ -187,7 +204,7 @@ export async function clearProblem(teamId: string): Promise<ActionResult> {
 
 // ─── DELETE TEAM ────────────────────────────────────────────────────
 export async function deleteTeam(id: string): Promise<ActionResult> {
-  await requireAuth();
+  await requireTeamChapterAdmin(id);
   const svc = await createServiceClient();
   // team_members cascade; submissions etc. will FK-block if present
   const { error } = await svc

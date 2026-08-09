@@ -6,13 +6,13 @@ import { createClient, createServiceClient } from "@/lib/yi-future/supabase/serv
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
 import { sendPushToSubject } from "@/app/yi-future/actions/push";
-import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import {
+  requireChapterAdmin,
+  resolveFutureAccessOrNull,
+} from "@/lib/yi-future/auth/require-access";
+import { readSession } from "@/app/yi-future/actions/auth";
 
 type Phase = Database["future"]["Enums"]["phase"];
-
-async function requireAuth(): Promise<void> {
-  await requireFutureAdmin();
-}
 
 /**
  * Mentor uses their session (access code) to write feedback for a team.
@@ -45,6 +45,69 @@ export async function createFeedback(
   }
 
   const svc = await createServiceClient();
+
+  // SECURITY: this writes with the service client (RLS-bypassing) and used to
+  // have NO gate at all — input.mentorId alone let anyone post feedback as any
+  // mentor, for any team. Prove the caller is EITHER that mentor (access-code
+  // session) OR an admin of the team's own chapter.
+  const { data: teamRow } = await svc
+    .schema("future")
+    .from("teams")
+    .select("id, chapter_id, edition_id")
+    .eq("id", input.teamId)
+    .maybeSingle();
+  const team = teamRow as unknown as {
+    id: string;
+    chapter_id: string;
+    edition_id: string;
+  } | null;
+  if (!team) return { ok: false, error: "Team not found." };
+
+  const { data: mentorRow } = await svc
+    .schema("future")
+    .from("mentors")
+    .select("id, is_active, edition_id")
+    .eq("id", input.mentorId)
+    .maybeSingle();
+  const mentor = mentorRow as unknown as {
+    id: string;
+    is_active: boolean | null;
+    edition_id: string;
+  } | null;
+  if (!mentor || mentor.is_active === false) {
+    return { ok: false, error: "Mentor not found or inactive." };
+  }
+
+  const session = await readSession();
+  let authorized = false;
+  if (session?.type === "mentor" && session.id === input.mentorId) {
+    // Mirrors saveMentorEvaluation: edition must match, and once the team has
+    // any mentor assignments the mentor must be one of them.
+    if (mentor.edition_id === team.edition_id) {
+      const { data: assigns } = await svc
+        .schema("future")
+        .from("mentor_team_assignments")
+        .select("mentor_id")
+        .eq("team_id", input.teamId);
+      const list = (assigns ?? []) as { mentor_id: string }[];
+      authorized =
+        list.length === 0 || list.some((a) => a.mentor_id === input.mentorId);
+    }
+  }
+  if (!authorized) {
+    // Second documented path: a chapter admin writing on a mentor's behalf.
+    const access = await resolveFutureAccessOrNull();
+    authorized =
+      !!access &&
+      (access.isNational || access.chapterIds.includes(team.chapter_id));
+  }
+  if (!authorized) {
+    return {
+      ok: false,
+      error: "You are not allowed to write feedback for this team.",
+    };
+  }
+
   const { error } = await svc
     .schema("future")
     .from("mentor_feedback")
@@ -108,24 +171,50 @@ export async function mentorSubmitFeedback(
   teamId: string,
   formData: FormData
 ): Promise<ActionResult> {
-  // Mentors use access-code session; no auth user required. We validate the
-  // mentor exists and is active.
-  const svc = await createServiceClient();
-  const { data: mentor } = await svc
-    .schema("future")
-    .from("mentors")
-    .select("id, is_active")
-    .eq("id", mentorSessionId)
-    .maybeSingle();
-  if (!mentor || (mentor as { is_active: boolean | null }).is_active === false) {
-    return { ok: false, error: "Mentor not found or inactive." };
+  // Mentors use an access-code session; no Supabase Auth user is required.
+  // SECURITY: checking only that the mentor row EXISTS and is active proved
+  // nothing about the caller — anyone could post as any mentor by passing that
+  // mentor's id. Assert the session IS this mentor. createFeedback re-verifies
+  // the mentor row, the edition match and the team assignment.
+  const session = await readSession();
+  if (!session || session.type !== "mentor") {
+    return { ok: false, error: "Sign in as a mentor first." };
+  }
+  if (session.id !== mentorSessionId) {
+    return { ok: false, error: "Mentor session does not match mentor id." };
   }
   return createFeedback({ teamId, mentorId: mentorSessionId }, formData);
 }
 
 export async function deleteFeedback(id: string): Promise<ActionResult> {
-  await requireAuth();
   const svc = await createServiceClient();
+
+  // Scope the admin gate to the feedback's OWN chapter — requireFutureAdmin
+  // let a chair of chapter A delete chapter B's mentor feedback. Fails CLOSED
+  // (unknown id → null chapter → denied unless national), and the gate runs
+  // before the not-found return so this is not an id oracle.
+  const { data: fbRow } = await svc
+    .schema("future")
+    .from("mentor_feedback")
+    .select("id, team_id")
+    .eq("id", id)
+    .maybeSingle();
+  const fb = fbRow as unknown as { id: string; team_id: string } | null;
+
+  let chapterId: string | null = null;
+  if (fb) {
+    const { data: teamRow } = await svc
+      .schema("future")
+      .from("teams")
+      .select("chapter_id")
+      .eq("id", fb.team_id)
+      .maybeSingle();
+    chapterId =
+      (teamRow as unknown as { chapter_id: string } | null)?.chapter_id ?? null;
+  }
+  await requireChapterAdmin(chapterId);
+  if (!fb) return { ok: false, error: "Feedback not found." };
+
   const { error } = await svc
     .schema("future")
     .from("mentor_feedback")
@@ -137,7 +226,9 @@ export async function deleteFeedback(id: string): Promise<ActionResult> {
 }
 
 export async function autoAllocateMentors(editionId: string, chapterId: string): Promise<ActionResult> {
-  await requireAuth();
+  // chapterId is caller-supplied and drives every write below — gate on THAT
+  // chapter, not on "is any kind of Future admin".
+  await requireChapterAdmin(chapterId);
   // Simple round-robin allocation: all teams with no mentor, all active mentors.
   const svc = await createServiceClient();
   const [{ data: teams }, { data: mentors }] = await Promise.all([

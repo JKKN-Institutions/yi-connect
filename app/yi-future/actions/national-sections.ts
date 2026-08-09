@@ -10,10 +10,12 @@ import {
   NATIONAL_DAY2_SECTIONS,
   NATIONAL_DAY2_SECTION_LABELS,
 } from "@/lib/yi-future/constants";
-import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import { requireFutureNationalAdmin } from "@/lib/yi-future/auth/require-access";
 
+// NATIONAL scope: the national event run-of-show (which section is live) is
+// shared state for the whole finale, not per-chapter content.
 async function requireAuth(): Promise<string> {
-  const access = await requireFutureAdmin();
+  const access = await requireFutureNationalAdmin();
   return access.userId;
 }
 

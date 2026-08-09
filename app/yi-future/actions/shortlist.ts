@@ -9,12 +9,7 @@ import {
   rankTeams,
   type CriteriaScores,
 } from "@/lib/yi-future/rubric";
-import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
-
-async function requireAuth(): Promise<string> {
-  const access = await requireFutureAdmin();
-  return access.userId;
-}
+import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 
 /**
  * Compute ranked team results for a chapter final event.
@@ -219,7 +214,9 @@ export async function publishShortlist(input: {
   threshold: number | null;
   maxAdvancements: number | null;
 }): Promise<ActionResult> {
-  const userId = await requireAuth();
+  // input.chapterId is caller-supplied and decides whose teams advance —
+  // validate the caller administers that chapter (or is national).
+  const { userId } = await requireChapterAdmin(input.chapterId);
   const svc = await createServiceClient();
 
   const results = await computeChapterResults(

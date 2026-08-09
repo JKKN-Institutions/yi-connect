@@ -13,14 +13,31 @@ import {
   NATIONAL_DAY2_SECTIONS,
   NATIONAL_DAY2_SECTION_LABELS,
 } from "@/lib/yi-future/constants";
-import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import {
+  requireChapterAdmin,
+  requireFutureNationalAdmin,
+} from "@/lib/yi-future/auth/require-access";
 
 type EventType = Database["future"]["Enums"]["event_type"];
 type ChapterFinalSection =
   Database["future"]["Enums"]["chapter_final_section"];
 
-async function requireAuth(): Promise<string> {
-  const access = await requireFutureAdmin();
+/**
+ * Chapter-scoped gate for actions targeting an EXISTING event row. Resolves the
+ * event's own chapter first so a chair of chapter A cannot mutate chapter B's
+ * event. Fails closed: an unresolvable chapter denies every non-national caller.
+ */
+async function requireEventChapterAdmin(eventId: string): Promise<string> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("events")
+    .select("chapter_id")
+    .eq("id", eventId)
+    .maybeSingle();
+  const access = await requireChapterAdmin(
+    (data as { chapter_id: string | null } | null)?.chapter_id ?? null
+  );
   return access.userId;
 }
 
@@ -29,7 +46,9 @@ export async function createChapterFinal(
   input: { chapterId: string; editionId: string },
   formData: FormData
 ): Promise<ActionResult> {
-  const userId = await requireAuth();
+  // Scope to the chapter the event is being created under — a chair of
+  // chapter A must not create an event under chapter B.
+  const { userId } = await requireChapterAdmin(input.chapterId);
   const name = String(formData.get("name") ?? "").trim();
   const tagline = String(formData.get("tagline") ?? "").trim() || null;
   const start_date = String(formData.get("start_date") ?? "").trim() || null;
@@ -90,7 +109,8 @@ export async function createRegionalFinale(
   input: { chapterId: string; editionId: string },
   formData: FormData
 ): Promise<ActionResult> {
-  const userId = await requireAuth();
+  // Scope to the host chapter this finale is being created under.
+  const { userId } = await requireChapterAdmin(input.chapterId);
   const name = String(formData.get("name") ?? "").trim();
   const tagline = String(formData.get("tagline") ?? "").trim() || null;
   const start_date = String(formData.get("start_date") ?? "").trim() || null;
@@ -140,7 +160,8 @@ export async function createNationalFinals(
   input: { editionId: string },
   formData: FormData
 ): Promise<ActionResult> {
-  const userId = await requireAuth();
+  // Creates a NATIONAL row (chapter_id null) — national admins only.
+  const { userId } = await requireFutureNationalAdmin();
   const name = String(formData.get("name") ?? "").trim();
   const tagline = String(formData.get("tagline") ?? "").trim() || null;
   const start_date = String(formData.get("start_date") ?? "").trim() || null;
@@ -204,7 +225,7 @@ export async function updateEvent(
   id: string,
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireEventChapterAdmin(id);
   const name = String(formData.get("name") ?? "").trim();
   const tagline = String(formData.get("tagline") ?? "").trim() || null;
   const start_date = String(formData.get("start_date") ?? "").trim() || null;
@@ -243,7 +264,7 @@ export async function setEventPublished(
   id: string,
   publish: boolean
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireEventChapterAdmin(id);
   const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")
@@ -260,7 +281,7 @@ export async function activateSection(
   eventId: string,
   section: ChapterFinalSection
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireEventChapterAdmin(eventId);
   const svc = await createServiceClient();
 
   const now = new Date().toISOString();
@@ -295,7 +316,7 @@ export async function activateSection(
 export async function endAllSections(
   eventId: string
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireEventChapterAdmin(eventId);
   const svc = await createServiceClient();
   const now = new Date().toISOString();
   const { error } = await svc
@@ -317,7 +338,7 @@ export async function updateSectionNotes(
   section: ChapterFinalSection,
   notes: string | null
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireEventChapterAdmin(eventId);
   const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")

@@ -6,19 +6,51 @@ import { createClient, createServiceClient } from "@/lib/yi-future/supabase/serv
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
 import { sendPushToSubject } from "@/app/yi-future/actions/push";
-import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 
 type InterviewOutcome = Database["future"]["Enums"]["interview_outcome"];
 
-async function requireAuth(): Promise<void> {
-  await requireFutureAdmin();
+/**
+ * Interview slots hang off a finale event → resolve THAT event's chapter so a
+ * chair of chapter A cannot schedule or edit chapter B's interviews. Fails
+ * closed: an unresolvable chapter denies every non-national caller.
+ */
+async function requireEventChapterAdmin(eventId: string): Promise<void> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("events")
+    .select("chapter_id")
+    .eq("id", eventId)
+    .maybeSingle();
+  await requireChapterAdmin(
+    (data as { chapter_id: string | null } | null)?.chapter_id ?? null
+  );
+}
+
+/** Interview slot row → its event → that event's chapter. */
+async function requireInterviewChapterAdmin(slotId: string): Promise<void> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("interview_slots")
+    .select("event_id")
+    .eq("id", slotId)
+    .maybeSingle();
+  const eventId =
+    (data as { event_id: string | null } | null)?.event_id ?? null;
+  if (!eventId) {
+    await requireChapterAdmin(null);
+    return;
+  }
+  await requireEventChapterAdmin(eventId);
 }
 
 export async function scheduleInterview(
   input: { eventId: string },
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireEventChapterAdmin(input.eventId);
   const delegate_id = String(formData.get("delegate_id") ?? "").trim();
   const partner_id = String(formData.get("partner_id") ?? "").trim();
   const internship_slot_id =
@@ -110,7 +142,7 @@ export async function setInterviewOutcome(
   outcome: InterviewOutcome | null,
   partnerNotes: string | null
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireInterviewChapterAdmin(id);
   const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")
@@ -128,7 +160,7 @@ export async function setInterviewOutcome(
 }
 
 export async function deleteInterview(id: string): Promise<ActionResult> {
-  await requireAuth();
+  await requireInterviewChapterAdmin(id);
   const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")

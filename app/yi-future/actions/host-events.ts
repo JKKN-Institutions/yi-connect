@@ -5,12 +5,27 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
-import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 
 type EventType = Database["future"]["Enums"]["event_type"];
 
-async function requireAuth(): Promise<string> {
-  const access = await requireFutureAdmin();
+/**
+ * Chapter-scoped gate for host events. `events.chapter_id` is the HOST chapter
+ * — a chair of chapter A must not edit or publish chapter B's event. Looks up
+ * the target event's chapter, then requires admin of THAT chapter (or
+ * national). Fails closed: an event with no chapter resolves to null → deny.
+ */
+async function requireEventChapterAdmin(id: string): Promise<string> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("events")
+    .select("chapter_id")
+    .eq("id", id)
+    .maybeSingle();
+  const access = await requireChapterAdmin(
+    (data as { chapter_id: string | null } | null)?.chapter_id ?? null
+  );
   return access.userId;
 }
 
@@ -19,7 +34,8 @@ export async function createNationalEvent(
   input: { chapterId: string; editionId: string },
   formData: FormData
 ): Promise<ActionResult> {
-  const userId = await requireAuth();
+  // Scope to the host chapter the event is being created under.
+  const { userId } = await requireChapterAdmin(input.chapterId);
   const name = String(formData.get("name") ?? "").trim();
   const tagline = String(formData.get("tagline") ?? "").trim() || null;
   const start_date = String(formData.get("start_date") ?? "").trim() || null;
@@ -60,7 +76,7 @@ export async function updateNationalEvent(
   id: string,
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireEventChapterAdmin(id);
   const name = String(formData.get("name") ?? "").trim();
   const tagline = String(formData.get("tagline") ?? "").trim() || null;
   const start_date = String(formData.get("start_date") ?? "").trim() || null;
@@ -95,7 +111,7 @@ export async function publishNationalEvent(
   id: string,
   publish: boolean
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireEventChapterAdmin(id);
   const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")

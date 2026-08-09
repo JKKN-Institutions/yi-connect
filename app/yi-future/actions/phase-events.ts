@@ -9,12 +9,27 @@ import {
   PHASE_EVENT_TYPES_BY_PHASE,
   type Phase,
 } from "@/lib/yi-future/constants";
-import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 
 type PhaseEventType = Database["future"]["Enums"]["phase_event_type"];
 
-async function requireAuth(): Promise<string> {
-  const access = await requireFutureAdmin();
+/**
+ * Chapter-scoped gate for actions targeting an EXISTING phase_event row.
+ * Resolves that session's own chapter so a chair of chapter A cannot mutate
+ * chapter B's session. Fails closed: an unresolvable chapter denies every
+ * non-national caller.
+ */
+async function requirePhaseEventChapterAdmin(id: string): Promise<string> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("phase_events")
+    .select("chapter_id")
+    .eq("id", id)
+    .maybeSingle();
+  const access = await requireChapterAdmin(
+    (data as { chapter_id: string | null } | null)?.chapter_id ?? null
+  );
   return access.userId;
 }
 
@@ -29,7 +44,8 @@ export async function createPhaseEvent(
   input: { chapterId: string; editionId: string },
   formData: FormData
 ): Promise<ActionResult> {
-  const userId = await requireAuth();
+  // Scope to the chapter this session is being created under.
+  const { userId } = await requireChapterAdmin(input.chapterId);
   const phase = String(formData.get("phase") ?? "").trim() as Phase;
   const type = String(formData.get("type") ?? "").trim() as PhaseEventType;
   const title = String(formData.get("title") ?? "").trim();
@@ -96,7 +112,7 @@ export async function updatePhaseEvent(
   id: string,
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requirePhaseEventChapterAdmin(id);
   const title = String(formData.get("title") ?? "").trim();
   const description =
     String(formData.get("description") ?? "").trim() || null;
@@ -139,7 +155,7 @@ export async function setEventComplete(
   id: string,
   complete: boolean
 ): Promise<ActionResult> {
-  const userId = await requireAuth();
+  const userId = await requirePhaseEventChapterAdmin(id);
   const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")
@@ -162,7 +178,7 @@ export async function setEventComplete(
 
 // ─── DELETE ─────────────────────────────────────────────────────────
 export async function deletePhaseEvent(id: string): Promise<ActionResult> {
-  await requireAuth();
+  await requirePhaseEventChapterAdmin(id);
   const svc = await createServiceClient();
   // Also clear attendance
   await svc

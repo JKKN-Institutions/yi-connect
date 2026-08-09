@@ -6,13 +6,29 @@ import { createClient, createServiceClient } from "@/lib/yi-future/supabase/serv
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
 import { CORE_TEAM_ROLES } from "@/lib/yi-future/constants";
-import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 
 type CoreTeamRole = Database["future"]["Enums"]["user_role"];
 
-async function requireAuth(): Promise<string> {
-  const access = await requireFutureAdmin();
-  return access.userId;
+/**
+ * Chapter-scoped gate for core-team membership — the highest-privilege table in
+ * Yi Future, because a row here IS what makes someone a chapter admin. Without
+ * this, a chair of chapter A could grant themselves core-team on chapter B, or
+ * remove chapter B's chair. Looks up the target row's chapter, then requires
+ * admin of THAT chapter (or national). Fails closed: a row with no chapter
+ * resolves to null → deny.
+ */
+async function requireCoreTeamChapterAdmin(id: string): Promise<void> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("chapter_core_team")
+    .select("chapter_id")
+    .eq("id", id)
+    .maybeSingle();
+  await requireChapterAdmin(
+    (data as { chapter_id: string | null } | null)?.chapter_id ?? null
+  );
 }
 
 function isCoreRole(x: string): x is CoreTeamRole {
@@ -24,7 +40,9 @@ export async function addCoreTeamMember(
   input: { chapterId: string; editionId: string },
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  // Scope to the chapter the member is being added to — granting core-team is
+  // granting chapter-admin rights, so a chair of chapter A must not do it on B.
+  await requireChapterAdmin(input.chapterId);
   const full_name = String(formData.get("full_name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim() || null;
   const phone = String(formData.get("phone") ?? "").trim() || null;
@@ -72,7 +90,9 @@ export async function updateCoreTeamMember(
   id: string,
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  // Scope to the member's OWN chapter — protects chapter B's roster from edits
+  // (incl. role escalation) by chapter A's chair.
+  await requireCoreTeamChapterAdmin(id);
   const full_name = String(formData.get("full_name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim() || null;
   const phone = String(formData.get("phone") ?? "").trim() || null;
@@ -99,7 +119,9 @@ export async function updateCoreTeamMember(
 export async function removeCoreTeamMember(
   id: string
 ): Promise<ActionResult> {
-  await requireAuth();
+  // Scope to the member's OWN chapter — stops a chair of chapter A removing
+  // chapter B's core team (the chair-removal guard below is a second layer).
+  await requireCoreTeamChapterAdmin(id);
   const svc = await createServiceClient();
 
   // GUARD (2026-06-20, ref #500): a chapter_chair / chapter_co_chair is a

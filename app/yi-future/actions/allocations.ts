@@ -36,8 +36,12 @@ export type AllocationMatrix = {
   >;
 };
 
-// ─── ADMIN GUARD ────────────────────────────────────────────────────
-async function requireChapterAdmin(): Promise<{ userId: string }> {
+// ─── SIGNED-IN GUARD ────────────────────────────────────────────────
+// NOT a chapter-scope gate — it only proves the caller is logged in. It was
+// previously named `requireChapterAdmin`, shadowing the real chapter gate in
+// lib/yi-future/auth/require-access. Every caller MUST additionally scope with
+// verifyAdminOnChapter (or requireChapterAdmin from the lib) before mutating.
+async function requireSignedInUser(): Promise<{ userId: string }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -191,7 +195,7 @@ export async function allocateProblem(
   teamId: string,
   problemStatementId: string
 ): Promise<ActionResult> {
-  const { userId } = await requireChapterAdmin();
+  const { userId } = await requireSignedInUser();
   const svc = await createServiceClient();
 
   // Get team's chapter/edition + members + their captain email for notification
@@ -294,7 +298,7 @@ export async function autoAllocate(
   chapterId: string,
   editionId: string
 ): Promise<ActionResult> {
-  const { userId } = await requireChapterAdmin();
+  const { userId } = await requireSignedInUser();
 
   const adminOk = await verifyAdminOnChapter(userId, chapterId, editionId);
   if (!adminOk) {

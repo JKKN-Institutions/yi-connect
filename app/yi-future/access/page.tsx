@@ -256,7 +256,6 @@ function GoogleLoginTab() {
       cancelled = true;
     };
     // Mount only: the code in the URL is consumed exactly once.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleGoogleSignIn() {

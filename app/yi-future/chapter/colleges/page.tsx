@@ -12,6 +12,7 @@ import {
   groupDuplicateColleges,
   type DuplicateGroup,
 } from "@/lib/yi-future/college-dedupe";
+import { fetchAllRows } from "@/lib/pagination";
 import { WhatsAppIconButton } from "@/components/whatsapp";
 
 // Normalize an Indian mobile number to a country-code-prefixed digit string.
@@ -50,12 +51,6 @@ async function getColleges(chapterId: string): Promise<CollegeRow[]> {
 }
 
 // Counts delegates per college, PAGED.
-//
-// The unpaged version of this silently undercounts: PostgREST caps a select
-// at 1,000 rows, so a chapter with more than 1,000 delegates loses every row
-// past the cap and its colleges look emptier than they are. That was harmless
-// while this only ran over the short pending list; the Duplicates tab runs it
-// over every college in the chapter, where the cap is reachable.
 async function getPendingDelegateCounts(
   collegeIds: string[]
 ): Promise<Map<string, number>> {

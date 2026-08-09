@@ -58,9 +58,8 @@ function LoginInner() {
   // second exchange of a spent code, which always fails — that mistake shipped
   // once already and reported "link expired" over a working session.
   useEffect(() => {
-    if (!new URLSearchParams(window.location.search).has("code")) return;
+    if (!returningFromGoogle) return;
     let cancelled = false;
-    setFinishingGoogle(true);
 
     (async () => {
       const supabase = createClient();
@@ -98,7 +97,7 @@ function LoginInner() {
       cancelled = true;
     };
     // Mount only: the code in the URL is consumed exactly once.
-  }, [router]);
+  }, [router, returningFromGoogle]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

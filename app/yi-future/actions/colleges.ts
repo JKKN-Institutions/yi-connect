@@ -6,10 +6,6 @@ import { createClient, createServiceClient } from "@/lib/yi-future/supabase/serv
 import type { ActionResult } from "./editions";
 import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
 
-async function requireAuth(): Promise<void> {
-  await requireFutureAdmin();
-}
-
 // ═══════════════════════════════════════════════════════════════════════
 // Chapter scoping.
 //

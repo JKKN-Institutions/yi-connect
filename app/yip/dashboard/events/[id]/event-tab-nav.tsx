@@ -13,6 +13,7 @@ import {
   Radio,
   Mic,
   Star,
+  Grid3x3,
   Trophy,
   Award,
   Medal,
@@ -84,6 +85,10 @@ const GROUPS: TabGroup[] = [
       // Scoring tab. (The old "Committee Scores" sub-tab was retired 2026-06-25 —
       // committee work is now scored inside the regular jury sessions.)
       { label: "Scoring", href: "/scoring", icon: Star },
+      // Score Grid — organiser coverage matrix (who has scored whom, by seat
+      // number only). NOT score-gated: any event viewer sees coverage; numeric
+      // score values are masked inside the page for roles without canViewScores.
+      { label: "Score Grid", href: "/scoring-grid", icon: Grid3x3 },
       { label: "Media", href: "/media", icon: Images },
     ],
   },

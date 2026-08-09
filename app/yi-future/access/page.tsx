@@ -239,24 +239,51 @@ function GoogleLoginTab() {
     let cancelled = false;
 
     (async () => {
+      // createBrowserClient runs with detectSessionInUrl defaulting to TRUE, so
+      // simply constructing it here ALREADY consumes the ?code= in the URL.
+      //
+      // Do not call exchangeCodeForSession() on top of that. A PKCE code is
+      // single-use: the explicit call becomes a SECOND exchange of a code the
+      // auto-detect just spent, which always errors — and the first version of
+      // this fix therefore showed "that link expired" over a session that had
+      // in fact been established successfully. Worse than the bug it replaced.
+      //
+      // So: let the auto-detect do the work, and only exchange by hand if no
+      // session materialises (auto-detect disabled, or it genuinely failed).
       const supabase = createClient();
-      if (code) {
+
+      let user = (await supabase.auth.getUser()).data.user;
+
+      if (!user && code) {
+        // The auto-detect is asynchronous — give it a moment before deciding
+        // it did not happen, or we race it and burn the code ourselves.
+        for (let i = 0; i < 10 && !user; i++) {
+          await new Promise((r) => setTimeout(r, 150));
+          user = (await supabase.auth.getUser()).data.user;
+        }
+      }
+
+      if (!user && code) {
         const { error: exErr } = await supabase.auth.exchangeCodeForSession(code);
         if (exErr) {
           if (!cancelled) {
-            setError("That Google sign-in link expired. Please try again.");
+            setError(
+              "That Google sign-in did not complete. Please try again, or use your access code."
+            );
             setFinishing(false);
           }
           return;
         }
+        user = (await supabase.auth.getUser()).data.user;
+      }
+
+      if (code) {
         // Drop ?code= so a refresh cannot replay a now-spent code.
         window.history.replaceState({}, "", "/yi-future/access?tab=google");
       }
       // Same work as loadChapters(), inlined so this effect does not depend on
-      // a function declared further down the component.
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      // a function declared further down the component. `user` is already
+      // resolved above — no second getUser() round trip.
       if (cancelled) return;
       if (user?.email) setGoogleEmail(user.email);
 

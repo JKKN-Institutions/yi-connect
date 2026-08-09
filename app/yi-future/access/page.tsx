@@ -282,10 +282,8 @@ function GoogleLoginTab() {
         window.history.replaceState({}, "", "/yi-future/access?tab=google");
       }
       // Same work as loadChapters(), inlined so this effect does not depend on
-      // a function declared further down the component.
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      // a function declared further down the component. `user` is already
+      // resolved above — no second getUser() round trip.
       if (cancelled) return;
       if (user?.email) setGoogleEmail(user.email);
 

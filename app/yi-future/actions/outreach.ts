@@ -4,11 +4,24 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { ActionResult } from "./editions";
-import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 
-async function requireAuth(): Promise<string> {
-  const access = await requireFutureAdmin();
-  return access.userId;
+/**
+ * Chapter-scoped gate for an existing outreach entry — a chair of chapter A
+ * must not delete chapter B's log. Fails closed: an entry with no chapter
+ * resolves to null → deny.
+ */
+async function requireOutreachChapterAdmin(id: string): Promise<void> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("outreach_log")
+    .select("chapter_id")
+    .eq("id", id)
+    .maybeSingle();
+  await requireChapterAdmin(
+    (data as { chapter_id: string | null } | null)?.chapter_id ?? null
+  );
 }
 
 // ─── LOG ACTIVITY ───────────────────────────────────────────────────
@@ -16,7 +29,9 @@ export async function logOutreachActivity(
   input: { chapterId: string; editionId: string },
   formData: FormData
 ): Promise<ActionResult> {
-  const userId = await requireAuth();
+  // Validate the caller-supplied chapter — this value is written straight to
+  // chapter_id, so an unchecked id lets a chair log against any chapter.
+  const { userId } = await requireChapterAdmin(input.chapterId);
   const activity_type = String(formData.get("activity_type") ?? "").trim();
   const activity_date =
     String(formData.get("activity_date") ?? "").trim() || null;
@@ -51,7 +66,7 @@ export async function logOutreachActivity(
 
 // ─── DELETE LOG ENTRY ───────────────────────────────────────────────
 export async function deleteOutreachEntry(id: string): Promise<ActionResult> {
-  await requireAuth();
+  await requireOutreachChapterAdmin(id);
   const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")

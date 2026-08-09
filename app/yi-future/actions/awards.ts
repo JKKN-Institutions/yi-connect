@@ -7,13 +7,46 @@ import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
 import { AWARD_CATEGORIES } from "@/lib/yi-future/constants";
 import { sendPushToSubject } from "@/app/yi-future/actions/push";
-import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 
 type AwardCategory = Database["future"]["Enums"]["award_category"];
 
-async function requireAuth(): Promise<string> {
-  const access = await requireFutureAdmin();
+/**
+ * Awards hang off a chapter-final / regional-finale event → resolve THAT
+ * event's chapter so a chair of chapter A cannot announce or delete chapter B's
+ * awards. Fails closed: an unresolvable chapter denies every non-national
+ * caller.
+ */
+async function requireEventChapterAdmin(eventId: string): Promise<string> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("events")
+    .select("chapter_id")
+    .eq("id", eventId)
+    .maybeSingle();
+  const access = await requireChapterAdmin(
+    (data as { chapter_id: string | null } | null)?.chapter_id ?? null
+  );
   return access.userId;
+}
+
+/** Award row → its event → that event's chapter. */
+async function requireAwardChapterAdmin(awardId: string): Promise<void> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("awards")
+    .select("event_id")
+    .eq("id", awardId)
+    .maybeSingle();
+  const eventId =
+    (data as { event_id: string | null } | null)?.event_id ?? null;
+  if (!eventId) {
+    await requireChapterAdmin(null);
+    return;
+  }
+  await requireEventChapterAdmin(eventId);
 }
 
 function isValidCategory(x: string): x is AwardCategory {
@@ -24,7 +57,7 @@ export async function announceAward(
   eventId: string,
   formData: FormData
 ): Promise<ActionResult> {
-  const userId = await requireAuth();
+  const userId = await requireEventChapterAdmin(eventId);
   const team_id = String(formData.get("team_id") ?? "").trim();
   const category = String(formData.get("category") ?? "").trim();
   const citation = String(formData.get("citation") ?? "").trim() || null;
@@ -91,7 +124,7 @@ export async function announceAward(
 }
 
 export async function deleteAward(id: string): Promise<ActionResult> {
-  await requireAuth();
+  await requireAwardChapterAdmin(id);
   const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")

@@ -4,10 +4,26 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { ActionResult } from "./editions";
-import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 
-async function requireAuth(): Promise<string> {
-  const access = await requireFutureAdmin();
+/**
+ * Attendance hangs off a phase_event → resolve THAT session's chapter so a
+ * chair of chapter A cannot mark attendance on chapter B's session. Fails
+ * closed: an unresolvable chapter denies every non-national caller.
+ */
+async function requirePhaseEventChapterAdmin(
+  phaseEventId: string
+): Promise<string> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("phase_events")
+    .select("chapter_id")
+    .eq("id", phaseEventId)
+    .maybeSingle();
+  const access = await requireChapterAdmin(
+    (data as { chapter_id: string | null } | null)?.chapter_id ?? null
+  );
   return access.userId;
 }
 
@@ -16,7 +32,7 @@ export async function saveAttendance(
   eventId: string,
   attended: Record<string, boolean>
 ): Promise<ActionResult> {
-  const userId = await requireAuth();
+  const userId = await requirePhaseEventChapterAdmin(eventId);
   const svc = await createServiceClient();
 
   const markedAt = new Date().toISOString();

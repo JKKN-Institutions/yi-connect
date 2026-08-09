@@ -4,10 +4,26 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { ActionResult } from "./editions";
-import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 
-async function requireAuth(): Promise<void> {
-  await requireFutureAdmin();
+/**
+ * Chapter-scoped gate. `whitepapers.host_chapter_id` is the owning host chapter
+ * — a chair of chapter A must not edit, publish or delete chapter B's
+ * whitepaper. Looks up the target row's host chapter, then requires admin of
+ * THAT chapter (or national). Fails closed: a whitepaper with no host chapter
+ * (a national one) resolves to null → only national admins pass.
+ */
+async function requireWhitepaperChapterAdmin(id: string): Promise<void> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("whitepapers")
+    .select("host_chapter_id")
+    .eq("id", id)
+    .maybeSingle();
+  await requireChapterAdmin(
+    (data as { host_chapter_id: string | null } | null)?.host_chapter_id ?? null
+  );
 }
 
 type Section = {
@@ -34,7 +50,9 @@ export async function createWhitepaper(
   input: { editionId: string; trackId: string; hostChapterId: string | null },
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  // Validate the caller-supplied host chapter — this value is written straight
+  // to host_chapter_id, so an unchecked id lets a chair file under any chapter.
+  await requireChapterAdmin(input.hostChapterId);
   const title = String(formData.get("title") ?? "").trim();
   const executive_summary =
     String(formData.get("executive_summary") ?? "").trim() || null;
@@ -72,7 +90,7 @@ export async function updateWhitepaper(
   id: string,
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireWhitepaperChapterAdmin(id);
   const title = String(formData.get("title") ?? "").trim();
   const executive_summary =
     String(formData.get("executive_summary") ?? "").trim() || null;
@@ -105,7 +123,7 @@ export async function updateWhitepaper(
 
 // ─── PUBLISH ───────────────────────────────────────────────────────
 export async function publishWhitepaper(id: string): Promise<ActionResult> {
-  await requireAuth();
+  await requireWhitepaperChapterAdmin(id);
   const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")
@@ -122,7 +140,7 @@ export async function publishWhitepaper(id: string): Promise<ActionResult> {
 }
 
 export async function unpublishWhitepaper(id: string): Promise<ActionResult> {
-  await requireAuth();
+  await requireWhitepaperChapterAdmin(id);
   const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")
@@ -136,7 +154,7 @@ export async function unpublishWhitepaper(id: string): Promise<ActionResult> {
 }
 
 export async function deleteWhitepaper(id: string): Promise<ActionResult> {
-  await requireAuth();
+  await requireWhitepaperChapterAdmin(id);
   const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")

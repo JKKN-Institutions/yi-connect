@@ -112,8 +112,42 @@ export async function getOrCreateThread(
 ): Promise<ActionResult<Thread>> {
   const session = await readSession();
   if (!session) return { ok: false, error: "Not signed in." };
+  if (session.type !== "delegate" && session.type !== "mentor") {
+    return { ok: false, error: "Not authorized to open this thread." };
+  }
 
   const svc = await createServiceClient();
+
+  // Ownership: same rule as callerCanAccessThread, applied BEFORE the thread
+  // exists — a delegate must be on this team, and a mentor must be this mentor
+  // AND assigned to this team. Otherwise one team's delegate could open (and
+  // then post on) a thread against another team.
+  if (session.type === "mentor") {
+    if (session.id !== mentorId) {
+      return { ok: false, error: "Not authorized to open this thread." };
+    }
+    const { data: assignment } = (await svc
+      .schema("future")
+      .from("mentor_team_assignments")
+      .select("mentor_id")
+      .eq("team_id", teamId)
+      .eq("mentor_id", mentorId)
+      .maybeSingle()) as unknown as { data: { mentor_id: string } | null };
+    if (!assignment) {
+      return { ok: false, error: "You are not assigned to this team." };
+    }
+  } else {
+    const { data: member } = (await svc
+      .schema("future")
+      .from("team_members")
+      .select("delegate_id")
+      .eq("team_id", teamId)
+      .eq("delegate_id", session.id)
+      .maybeSingle()) as unknown as { data: { delegate_id: string } | null };
+    if (!member) {
+      return { ok: false, error: "You are not on this team." };
+    }
+  }
 
   // Look up existing
   const { data: existing } = (await svc

@@ -4,10 +4,42 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { ActionResult } from "./editions";
-import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 
-async function requireAuth(): Promise<void> {
-  await requireFutureAdmin();
+/**
+ * Chapter-scoped gate. A government engagement hangs off an event, whose
+ * `chapter_id` is the host chapter — a chair of chapter A must not touch
+ * chapter B's engagements. Fails closed: an event with no chapter (or a
+ * missing event) resolves to null → deny.
+ */
+async function requireEventChapterAdmin(eventId: string): Promise<void> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("events")
+    .select("chapter_id")
+    .eq("id", eventId)
+    .maybeSingle();
+  await requireChapterAdmin(
+    (data as { chapter_id: string | null } | null)?.chapter_id ?? null
+  );
+}
+
+/** Same gate, entered from an existing engagement id. */
+async function requireGovChapterAdmin(id: string): Promise<void> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("government_engagements")
+    .select("event_id")
+    .eq("id", id)
+    .maybeSingle();
+  const eventId = (data as { event_id: string | null } | null)?.event_id ?? null;
+  if (!eventId) {
+    await requireChapterAdmin(null); // fail closed — orphan row
+    return;
+  }
+  await requireEventChapterAdmin(eventId);
 }
 
 function parseUrls(raw: string): string[] | null {
@@ -22,7 +54,7 @@ export async function createGovEngagement(
   eventId: string,
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireEventChapterAdmin(eventId);
   const official_name =
     String(formData.get("official_name") ?? "").trim();
   const official_designation =
@@ -70,7 +102,7 @@ export async function updateGovEngagement(
   id: string,
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireGovChapterAdmin(id);
   const official_name =
     String(formData.get("official_name") ?? "").trim();
   const official_designation =
@@ -115,7 +147,7 @@ export async function updateGovEngagement(
 }
 
 export async function deleteGovEngagement(id: string): Promise<ActionResult> {
-  await requireAuth();
+  await requireGovChapterAdmin(id);
   const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")

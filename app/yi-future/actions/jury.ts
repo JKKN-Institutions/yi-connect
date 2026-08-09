@@ -7,12 +7,92 @@ import { generateAccessCode } from "@/lib/yi-future/access-code";
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
 import { JURY_ARCHETYPES } from "@/lib/yi-future/constants";
-import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import {
+  requireFutureAdmin,
+  requireChapterAdmin,
+} from "@/lib/yi-future/auth/require-access";
 
 type JuryArchetype = Database["future"]["Enums"]["jury_archetype"];
 
 async function requireAuth(): Promise<void> {
   await requireFutureAdmin();
+}
+
+/**
+ * Resolve the chapter a jury row belongs to. future.jury_assignments has no
+ * chapter_id column, so the chapter comes from the parent chain: event_id →
+ * events.chapter_id, else the chapter of a team this jury is assigned to.
+ * Returns null when the jury is not bound to any chapter yet.
+ */
+async function juryChapterId(id: string): Promise<string | null> {
+  const svc = await createServiceClient();
+  const { data: jury } = await svc
+    .schema("future")
+    .from("jury_assignments")
+    .select("event_id")
+    .eq("id", id)
+    .maybeSingle();
+  const eventId =
+    (jury as { event_id: string | null } | null)?.event_id ?? null;
+  if (eventId) {
+    const chapterId = await eventChapterId(eventId);
+    if (chapterId) return chapterId;
+  }
+  const { data: jta } = await svc
+    .schema("future")
+    .from("jury_team_assignments")
+    .select("teams!inner(chapter_id)")
+    .eq("jury_id", id)
+    .limit(1)
+    .maybeSingle();
+  return (
+    (jta as unknown as { teams: { chapter_id: string | null } | null } | null)
+      ?.teams?.chapter_id ?? null
+  );
+}
+
+async function eventChapterId(eventId: string): Promise<string | null> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("events")
+    .select("chapter_id")
+    .eq("id", eventId)
+    .maybeSingle();
+  return (data as { chapter_id: string | null } | null)?.chapter_id ?? null;
+}
+
+/**
+ * Chapter-scoped gate for jury rows — a chair of chapter A must not edit,
+ * regenerate the access code of, or delete chapter B's jury. A jury with no
+ * chapter binding yet (no event, no team assignment) keeps the previous
+ * any-Future-admin gate: there is no chapter to compare against, and its
+ * access code grants access to no team.
+ */
+async function requireJuryChapterAdmin(id: string): Promise<void> {
+  const chapterId = await juryChapterId(id);
+  if (!chapterId) {
+    await requireFutureAdmin();
+    return;
+  }
+  await requireChapterAdmin(chapterId);
+}
+
+/**
+ * Chapter-scoped gate keyed on a TEAM (same shape as assignMentorToTeam) —
+ * fails closed when the team is missing or has no chapter.
+ */
+async function requireTeamChapterAdmin(teamId: string): Promise<void> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("teams")
+    .select("chapter_id")
+    .eq("id", teamId)
+    .maybeSingle();
+  await requireChapterAdmin(
+    (data as { chapter_id: string | null } | null)?.chapter_id ?? null
+  );
 }
 
 function isArchetype(x: string): x is JuryArchetype {
@@ -40,7 +120,14 @@ export async function createJury(
   input: { editionId: string; scope: string; eventId: string | null },
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  // Scope to the event's chapter when the jury is created against an event.
+  // A chapter-scoped jury with no event carries no chapter binding until it is
+  // assigned to a team — and that assignment is itself chapter-gated.
+  if (input.eventId) {
+    await requireChapterAdmin(await eventChapterId(input.eventId));
+  } else {
+    await requireAuth();
+  }
   const jury_name = String(formData.get("jury_name") ?? "").trim();
   const jury_title = String(formData.get("jury_title") ?? "").trim() || null;
   const organization =
@@ -101,7 +188,7 @@ export async function updateJury(
   id: string,
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireJuryChapterAdmin(id);
   const jury_name = String(formData.get("jury_name") ?? "").trim();
   const jury_title = String(formData.get("jury_title") ?? "").trim() || null;
   const organization =
@@ -137,7 +224,8 @@ export async function updateJury(
 }
 
 export async function regenerateJuryCode(id: string): Promise<ActionResult> {
-  await requireAuth();
+  // Credential takeover guard: a new access code for another chapter's jury.
+  await requireJuryChapterAdmin(id);
   const svc = await createServiceClient();
   const access_code = await uniqueAccessCode(svc);
   const { error } = await svc
@@ -151,7 +239,7 @@ export async function regenerateJuryCode(id: string): Promise<ActionResult> {
 }
 
 export async function deleteJury(id: string): Promise<ActionResult> {
-  await requireAuth();
+  await requireJuryChapterAdmin(id);
   const svc = await createServiceClient();
   // Remove team assignments first
   await svc
@@ -174,7 +262,8 @@ export async function assignJuryToTeam(
   juryId: string,
   teamId: string
 ): Promise<ActionResult> {
-  await requireAuth();
+  // Scope by the TEAM's chapter — the chapter whose data actually changes.
+  await requireTeamChapterAdmin(teamId);
   const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")
@@ -192,7 +281,8 @@ export async function unassignJuryFromTeam(
   juryId: string,
   teamId: string
 ): Promise<ActionResult> {
-  await requireAuth();
+  // Scope by the TEAM's chapter — the chapter whose data actually changes.
+  await requireTeamChapterAdmin(teamId);
   const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")
@@ -216,7 +306,7 @@ export async function assignJuryToTrack(
   juryId: string,
   trackId: string
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireJuryChapterAdmin(juryId);
   if (!juryId || !trackId) {
     return { ok: false, error: "Missing jury or track." };
   }
@@ -283,7 +373,7 @@ export async function unassignJuryFromTrack(
   juryId: string,
   trackId: string
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireJuryChapterAdmin(juryId);
   if (!juryId || !trackId) {
     return { ok: false, error: "Missing jury or track." };
   }
@@ -309,7 +399,8 @@ export async function autoAssignJuryToTeams(
   chapterId: string,
   editionId: string
 ): Promise<ActionResult> {
-  await requireAuth();
+  // chapterId is caller-supplied — validate the caller administers it.
+  await requireChapterAdmin(chapterId);
   const svc = await createServiceClient();
 
   // 1. Fetch all (jury, track) memberships for active jury of this edition
@@ -397,7 +488,8 @@ export async function autoAllocateJury(
   chapterId: string,
   editionId: string
 ): Promise<ActionResult> {
-  await requireAuth();
+  // chapterId is caller-supplied — validate the caller administers it.
+  await requireChapterAdmin(chapterId);
   const svc = await createServiceClient();
 
   const [{ data: teams }, { data: jury }] = await Promise.all([

@@ -5,15 +5,30 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { ActionResult } from "./editions";
 import { TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
-import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 import { isInviteExpired } from "@/lib/yi-future/invite-expiry";
 
 // team_invitations isn't in the generated types yet — untyped at the call site.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyClient = any;
 
-async function requireAuth(): Promise<void> {
-  await requireFutureAdmin();
+/**
+ * Chapter-scoped gate for team-roster mutations — a chair of chapter A must not
+ * invite, remove or re-role members on chapter B's team. Looks up the team's
+ * chapter, then requires admin of THAT chapter (or national). Fails closed: a
+ * team with no chapter resolves to null → deny.
+ */
+async function requireTeamChapterAdmin(teamId: string): Promise<void> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("teams")
+    .select("chapter_id")
+    .eq("id", teamId)
+    .maybeSingle();
+  await requireChapterAdmin(
+    (data as { chapter_id: string | null } | null)?.chapter_id ?? null
+  );
 }
 
 // ─── INVITE MEMBER (admin) ──────────────────────────────────────────
@@ -26,7 +41,7 @@ export async function inviteMember(
   teamId: string,
   delegateId: string
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireTeamChapterAdmin(teamId);
   const svc = await createServiceClient();
 
   // Load the team — invited_by is NOT NULL (use the captain) and we must not
@@ -147,7 +162,7 @@ export async function removeMember(
   teamId: string,
   delegateId: string
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireTeamChapterAdmin(teamId);
   const svc = await createServiceClient();
 
   // If captain, clear captain_id on the team
@@ -185,7 +200,7 @@ export async function setMemberRole(
   delegateId: string,
   role: string
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireTeamChapterAdmin(teamId);
   const allowed = ["member", "captain", "researcher", "presenter"];
   if (!allowed.includes(role)) {
     return { ok: false, error: "Invalid role." };

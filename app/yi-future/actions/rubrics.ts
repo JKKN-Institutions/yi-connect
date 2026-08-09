@@ -5,10 +5,11 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import { requirePlatformAdmin } from "./national-admins";
 import type { ActionResult } from "./editions";
-import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import { requireFutureNationalAdmin } from "@/lib/yi-future/auth/require-access";
 
+// NATIONAL scope: rubrics are the scoring config every chapter is judged by.
 async function requireAuth(): Promise<void> {
-  await requireFutureAdmin();
+  await requireFutureNationalAdmin();
 }
 
 type CriterionInput = {

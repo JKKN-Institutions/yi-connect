@@ -11,10 +11,12 @@ import {
   type EditionStage,
 } from "@/lib/yi-future/stage-machine";
 import { TEAM_SIZE_MIN } from "@/lib/yi-future/constants";
-import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import { requireFutureNationalAdmin } from "@/lib/yi-future/auth/require-access";
 
+// NATIONAL scope: advancing an edition's stage moves ALL 65 chapters at once,
+// so a single chapter chair must not be able to do it.
 async function requireAuth(): Promise<string> {
-  const access = await requireFutureAdmin();
+  const access = await requireFutureNationalAdmin();
   return access.userId;
 }
 

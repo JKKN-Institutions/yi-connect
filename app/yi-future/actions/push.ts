@@ -98,12 +98,22 @@ export async function savePushSubscription(
 }
 
 /**
- * Remove a subscription by endpoint.
+ * Remove the CURRENT subject's subscription for an endpoint.
+ *
+ * SECURITY: this used to delete any row matching `endpoint` with no auth at
+ * all, so anyone who learned (or brute-forced) an endpoint could silently
+ * unsubscribe another user's device. Bind it to the caller the same way
+ * savePushSubscription binds the insert — the endpoint alone is not identity.
  */
 export async function removePushSubscription(
   endpoint: string
 ): Promise<SaveResult> {
   if (!endpoint) return { ok: false, error: "Missing endpoint." };
+
+  const subject = await resolveCurrentSubject();
+  if (!subject) {
+    return { ok: false, error: "Not signed in." };
+  }
 
   const svc = await createServiceClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -111,6 +121,8 @@ export async function removePushSubscription(
     .schema("future")
     .from("push_subscriptions")
     .delete()
+    .eq("subject_type", subject.type)
+    .eq("subject_id", subject.id)
     .eq("endpoint", endpoint);
 
   if (error) return { ok: false, error: error.message };

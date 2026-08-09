@@ -7,6 +7,7 @@ import { generateAccessCode } from "@/lib/yi-future/access-code";
 import type { ActionResult } from "./editions";
 import {
   requireFutureAdmin,
+  requireFutureNationalAdmin,
   requireChapterAdmin,
 } from "@/lib/yi-future/auth/require-access";
 
@@ -16,8 +17,38 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type LooseClient = any;
 
-async function requireAuth(): Promise<void> {
+/**
+ * Experts are an EDITION-WIDE shared pool: future.experts carries only
+ * edition_id — no chapter column and no chapter-bearing parent — so there is
+ * genuinely no chapter to scope to. Chapter-scoping is impossible here without
+ * a schema change (a chapter_id column, or a chapter↔expert join table).
+ *
+ * Rather than lock the whole pool to national and take away a workflow chapter
+ * chairs use today (/yi-future/chapter/experts has add/edit/delete pages, and
+ * there are live experts in the pool), the gate is split by blast radius:
+ *
+ *   ADDITIVE  (create, update) — any Future admin, as before. Adding an expert
+ *   or fixing their title cannot take anything away from another chapter, and
+ *   chapter chairs need this in the run-up to their own final.
+ *
+ *   DESTRUCTIVE (delete, regenerate access code) — NATIONAL only. Deleting a
+ *   shared expert removes them from every chapter's sessions, and regenerating
+ *   their code invalidates the one they are already holding. Neither is
+ *   recoverable by the chapter that loses out, and neither is urgent enough to
+ *   justify leaving takeover-grade power with 73 chapter admins.
+ *
+ * Wiring an expert INTO a specific session stays chapter-scoped — see
+ * assignExpertToPhaseEvent below.
+ *
+ * PROPER FIX (needs a migration, not a gate change): give future.experts a
+ * chapter_id, then scope all four with requireChapterAdmin.
+ */
+async function requireExpertEditor(): Promise<void> {
   await requireFutureAdmin();
+}
+
+async function requireExpertAdmin(): Promise<void> {
+  await requireFutureNationalAdmin();
 }
 
 function parseExpertise(raw: string): string[] {
@@ -46,7 +77,7 @@ export async function createExpert(
   editionId: string,
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireExpertEditor();
   const full_name = String(formData.get("full_name") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim() || null;
   const organization =
@@ -86,7 +117,7 @@ export async function updateExpert(
   id: string,
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireExpertEditor();
   const full_name = String(formData.get("full_name") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim() || null;
   const organization =
@@ -120,7 +151,7 @@ export async function updateExpert(
 }
 
 export async function deleteExpert(id: string): Promise<ActionResult> {
-  await requireAuth();
+  await requireExpertAdmin();
   const svc = (await createServiceClient()) as LooseClient;
 
   // Experts are an edition-wide shared pool; a single chapter admin must not be
@@ -155,7 +186,7 @@ export async function deleteExpert(id: string): Promise<ActionResult> {
 export async function regenerateExpertAccessCode(
   id: string
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireExpertAdmin();
   const svc = (await createServiceClient()) as LooseClient;
   const access_code = await uniqueExpertCode(svc);
   const { error } = await svc

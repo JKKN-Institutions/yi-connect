@@ -3,14 +3,18 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
-import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import { requireFutureNationalAdmin } from "@/lib/yi-future/auth/require-access";
 
 export type SpeakerActionResult =
   | { ok: true; message?: string }
   | { ok: false; error: string };
 
+// NATIONAL scope by schema: `future.experts` carries only `edition_id` — there
+// is no chapter column to scope against, so the row is edition-wide and every
+// chapter would otherwise be able to edit/delete another's speakers. Gated
+// national rather than inventing a chapter linkage the schema doesn't have.
 async function requireAuth(): Promise<void> {
-  await requireFutureAdmin();
+  await requireFutureNationalAdmin();
 }
 
 function parseExpertise(raw: string): string[] {

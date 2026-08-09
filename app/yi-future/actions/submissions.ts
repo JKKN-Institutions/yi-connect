@@ -5,13 +5,58 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
-import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
+import { readSession } from "@/app/yi-future/actions/auth";
 
 type DeliverablePhase = Database["future"]["Enums"]["deliverable_phase"];
 type SubmissionStatus = Database["future"]["Enums"]["submission_status"];
 
-async function requireAuth(): Promise<void> {
-  await requireFutureAdmin();
+/**
+ * SECURITY: submission writes are STUDENT-facing and go through the service
+ * client (RLS-bypassing), so the delegate identity MUST come from the signed
+ * session cookie — a caller-supplied delegateId is attacker-controlled and is
+ * ignored. Proves the session delegate actually belongs to `teamId` (a
+ * team_members row, or the team's captain/leader for legacy rows).
+ */
+async function resolveTeamMemberSession(
+  teamId: string
+): Promise<{ delegateId: string } | { error: string }> {
+  const session = await readSession();
+  if (!session || session.type !== "delegate") {
+    return { error: "Sign in as a delegate first." };
+  }
+
+  const svc = await createServiceClient();
+  const { data: teamRow } = await svc
+    .schema("future")
+    .from("teams")
+    .select("id, captain_id, leader_delegate_id")
+    .eq("id", teamId)
+    .maybeSingle();
+  const team = teamRow as unknown as {
+    id: string;
+    captain_id: string | null;
+    leader_delegate_id: string | null;
+  } | null;
+  if (!team) return { error: "Team not found." };
+
+  if (
+    team.captain_id !== session.id &&
+    team.leader_delegate_id !== session.id
+  ) {
+    const { data: member } = await svc
+      .schema("future")
+      .from("team_members")
+      .select("delegate_id")
+      .eq("team_id", teamId)
+      .eq("delegate_id", session.id)
+      .maybeSingle();
+    if (!member) {
+      return { error: "You must be on this team to submit deliverables." };
+    }
+  }
+
+  return { delegateId: session.id };
 }
 
 const PHASE_A_FIELDS = ["problem_definition_url"] as const;
@@ -68,8 +113,9 @@ function collectUrls(
 
 // ─── SAVE DRAFT ─────────────────────────────────────────────────────
 /**
- * Captain-callable: saves (or creates) a draft submission for a team+phase.
- * Does NOT require admin auth — uses service role plus the delegate_id passed in.
+ * Team-member callable: saves (or creates) a draft submission for a team+phase.
+ * NOT an admin action — the writer is the delegate SESSION, and `input.delegateId`
+ * is accepted for call-site compatibility but deliberately never trusted.
  */
 export async function saveSubmissionDraft(input: {
   teamId: string;
@@ -77,6 +123,9 @@ export async function saveSubmissionDraft(input: {
   delegateId: string | null;
   formData: FormData;
 }): Promise<ActionResult> {
+  const auth = await resolveTeamMemberSession(input.teamId);
+  if ("error" in auth) return { ok: false, error: auth.error };
+
   const { values, errors } = collectUrls(input.phase, input.formData);
   if (errors.length) return { ok: false, error: errors.join(" · ") };
 
@@ -96,7 +145,7 @@ export async function saveSubmissionDraft(input: {
         ...values,
         summary,
         status: "draft",
-        submitted_by_delegate_id: input.delegateId,
+        submitted_by_delegate_id: auth.delegateId,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "team_id,phase" }
@@ -115,6 +164,11 @@ export async function submitSubmission(input: {
   delegateId: string;
   formData: FormData;
 }): Promise<ActionResult> {
+  // Same rule as saveSubmissionDraft: identity comes from the session, not
+  // from the caller-supplied delegateId.
+  const auth = await resolveTeamMemberSession(input.teamId);
+  if ("error" in auth) return { ok: false, error: auth.error };
+
   const { values, errors } = collectUrls(input.phase, input.formData);
   if (errors.length) return { ok: false, error: errors.join(" · ") };
 
@@ -152,7 +206,7 @@ export async function submitSubmission(input: {
         ...values,
         summary,
         status: "submitted" as SubmissionStatus,
-        submitted_by_delegate_id: input.delegateId,
+        submitted_by_delegate_id: auth.delegateId,
         submitted_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       },
@@ -171,13 +225,40 @@ export async function reviewSubmission(
   decision: "approved" | "rejected",
   feedback: string | null
 ): Promise<ActionResult> {
-  await requireAuth();
+  const svc = await createServiceClient();
+
+  // Resolve the submission's OWN chapter and gate on it, so a chair of chapter
+  // A cannot approve/reject chapter B's work. Fails CLOSED: an unknown
+  // submission yields a null chapter, which requireChapterAdmin denies (unless
+  // the caller is national). The gate runs before the not-found return so an
+  // anonymous caller can never use this as an id oracle.
+  const { data: subRow } = await svc
+    .schema("future")
+    .from("submissions")
+    .select("id, team_id")
+    .eq("id", submissionId)
+    .maybeSingle();
+  const sub = subRow as unknown as { id: string; team_id: string } | null;
+
+  let chapterId: string | null = null;
+  if (sub) {
+    const { data: teamRow } = await svc
+      .schema("future")
+      .from("teams")
+      .select("chapter_id")
+      .eq("id", sub.team_id)
+      .maybeSingle();
+    chapterId =
+      (teamRow as unknown as { chapter_id: string } | null)?.chapter_id ?? null;
+  }
+  await requireChapterAdmin(chapterId);
+  if (!sub) return { ok: false, error: "Submission not found." };
+
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")
     .from("submissions")

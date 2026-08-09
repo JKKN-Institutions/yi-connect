@@ -4,17 +4,49 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { ActionResult } from "./editions";
-import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 
-async function requireAuth(): Promise<void> {
-  await requireFutureAdmin();
+/**
+ * Chapter-scoped gate. Media coverage hangs off an event, whose `chapter_id`
+ * is the host chapter — a chair of chapter A must not log or delete coverage
+ * against chapter B's event. Fails closed: an event with no chapter (or a
+ * missing event) resolves to null → deny.
+ */
+async function requireEventChapterAdmin(eventId: string): Promise<void> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("events")
+    .select("chapter_id")
+    .eq("id", eventId)
+    .maybeSingle();
+  await requireChapterAdmin(
+    (data as { chapter_id: string | null } | null)?.chapter_id ?? null
+  );
+}
+
+/** Same gate, entered from an existing coverage row id. */
+async function requireCoverageChapterAdmin(id: string): Promise<void> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("media_coverage")
+    .select("event_id")
+    .eq("id", id)
+    .maybeSingle();
+  const eventId = (data as { event_id: string | null } | null)?.event_id ?? null;
+  if (!eventId) {
+    await requireChapterAdmin(null); // fail closed — orphan row
+    return;
+  }
+  await requireEventChapterAdmin(eventId);
 }
 
 export async function createMediaCoverage(
   eventId: string,
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  await requireEventChapterAdmin(eventId);
   const outlet = String(formData.get("outlet") ?? "").trim() || null;
   const headline = String(formData.get("headline") ?? "").trim() || null;
   const url = String(formData.get("url") ?? "").trim() || null;
@@ -53,7 +85,7 @@ export async function createMediaCoverage(
 }
 
 export async function deleteMediaCoverage(id: string): Promise<ActionResult> {
-  await requireAuth();
+  await requireCoverageChapterAdmin(id);
   const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")

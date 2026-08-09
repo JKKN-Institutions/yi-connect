@@ -16,6 +16,7 @@ const NAV: NavItem[] = [
   { label: "Teams", href: "/yi-future/chapter/teams" },
   { label: "Problem Statements", href: "/yi-future/chapter/problems" },
   { label: "Journey", href: "/yi-future/chapter/journey" },
+  { label: "Volunteers", href: "/yi-future/chapter/volunteers" },
   { label: "Messages", href: "/yi-future/chapter/messages" },
   { label: "Announcements", href: "/yi-future/chapter/announcements" },
   { label: "Mentors", href: "/yi-future/chapter/mentors" },

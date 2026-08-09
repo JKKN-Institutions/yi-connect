@@ -14,7 +14,15 @@ import {
 import { resolveFutureAccessOrNull } from "@/lib/yi-future/auth/require-access";
 
 // ─── SHARED ─────────────────────────────────────────────────────────
-type AccessCodeRole = "delegate" | "mentor" | "jury" | "partner" | "expert";
+// "volunteer" = check-in desk staff (future.volunteers). They hold a 6-char
+// code like a delegate does but have NO auth account and NO delegate row.
+type AccessCodeRole =
+  | "delegate"
+  | "mentor"
+  | "jury"
+  | "partner"
+  | "expert"
+  | "volunteer";
 
 type SessionPayload = {
   type: AccessCodeRole;
@@ -71,6 +79,40 @@ export type AccessCodeResult =
   | { ok: true; redirect: string }
   | { ok: false; error: string };
 
+/**
+ * Is this code held by any NON-volunteer code-holder? Used only to detect an
+ * ambiguous volunteer code (BLOCKER B). These five tables are exactly the
+ * code-holding tables in the `future` schema (verified against live schema:
+ * delegates, mentors, jury_assignments, corporate_partners, experts).
+ */
+async function codeHeldByNonVolunteer(
+  // Loose client: `future.volunteers` post-dates the last `supabase gen types`
+  // run, so the whole helper works off an untyped handle (same pattern the
+  // experts branch below already uses).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  svc: any,
+  code: string
+): Promise<boolean> {
+  const tables = [
+    "delegates",
+    "mentors",
+    "jury_assignments",
+    "corporate_partners",
+    "experts",
+  ] as const;
+  for (const table of tables) {
+    const { data } = await svc
+      .schema("future")
+      .from(table)
+      .select("id")
+      .eq("access_code", code)
+      .limit(1)
+      .maybeSingle();
+    if (data) return true;
+  }
+  return false;
+}
+
 export async function validateAccessCode(
   codeRaw: string
 ): Promise<AccessCodeResult> {
@@ -80,6 +122,108 @@ export async function validateAccessCode(
   }
 
   const svc = await createServiceClient();
+
+  // 0. VOLUNTEER — resolved FIRST, on purpose.
+  //
+  // BLOCKER B. Access-code uniqueness in this schema is PER TABLE only; there
+  // is no global uniqueness across code-holders. The order below therefore
+  // decides who wins a collision, and both naive orders are wrong:
+  //   • volunteer LAST  → a colliding volunteer code signs a staff member in
+  //     as a STUDENT. Silent impersonation: they see that delegate's team and
+  //     submissions, and the desk simply does not work.
+  //   • volunteer FIRST → a colliding delegate code would gain staff powers
+  //     (marking a whole chapter present). Silent privilege escalation.
+  // So: volunteer first, but a code that matches a volunteer AND any other
+  // code-holder is DENIED OUTRIGHT as ambiguous. That never escalates and
+  // never impersonates; it fails loudly and the chair regenerates. Collisions
+  // are prevented at birth anyway (uniqueVolunteerAccessCode checks all six
+  // tables; a DB trigger rejects a colliding code) — this is the third layer.
+  //
+  // future.volunteers is new and not in the generated types → loose client.
+  //
+  // Wrapped in try/catch on purpose: this query now runs before EVERY
+  // access-code sign-in in the app. Until the migration is applied the table
+  // does not exist, and PostgREST answers with an error body (data: null) —
+  // but a genuine throw here (network, client change) must degrade to "no
+  // volunteer matched" and let the delegate/mentor/jury chain run, never take
+  // student sign-in down with it.
+  type VolunteerRow = {
+    id: string;
+    edition_id: string;
+    full_name: string | null;
+    is_active: boolean | null;
+    arrived: boolean | null;
+  };
+  let volunteer: VolunteerRow | null = null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (svc as any)
+      .schema("future")
+      .from("volunteers")
+      .select("id, edition_id, full_name, is_active, arrived")
+      .eq("access_code", code)
+      .maybeSingle();
+    volunteer = (data as VolunteerRow | null) ?? null;
+  } catch {
+    volunteer = null;
+  }
+
+  if (volunteer) {
+    // Explicit denial — the code holder is legitimate, so say what happened
+    // rather than "not recognized" (which would send them hunting for typos).
+    if (volunteer.is_active === false) {
+      return {
+        ok: false,
+        error:
+          "This volunteer code has been switched off. Ask your chapter chair to turn it back on.",
+      };
+    }
+    // Fail CLOSED: if we cannot prove the code is unambiguous, do not sign
+    // anybody in on it.
+    let ambiguous: boolean;
+    try {
+      ambiguous = await codeHeldByNonVolunteer(svc, code);
+    } catch {
+      return {
+        ok: false,
+        error:
+          "Could not verify your code just now. Wait a few seconds and tap Unlock again.",
+      };
+    }
+    if (ambiguous) {
+      return {
+        ok: false,
+        error:
+          "This code is registered to two people. Ask your chapter chair to regenerate your volunteer code — do not share it in the meantime.",
+      };
+    }
+
+    await writeSession({
+      type: "volunteer",
+      id: volunteer.id,
+      edition_id: volunteer.edition_id,
+      name: volunteer.full_name ?? undefined,
+    });
+
+    // First sign-in stamps arrival so the chair can see the desk is staffed.
+    // Best-effort and SWALLOWED: the cookie is already written above, so a
+    // throw here would report "sign-in failed" to somebody who is in fact
+    // signed in — the worst possible message at a desk.
+    if (!volunteer.arrived) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (svc as any)
+          .schema("future")
+          .from("volunteers")
+          .update({ arrived: true, arrived_at: new Date().toISOString() })
+          .eq("id", volunteer.id);
+      } catch {
+        /* non-fatal — arrival stamp only */
+      }
+    }
+
+    return { ok: true, redirect: "/yi-future/volunteer" };
+  }
 
   // 1. Delegate
   const { data: delegate } = (await svc

@@ -211,7 +211,14 @@ function GoogleLoginTab() {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [googleEmail, setGoogleEmail] = useState<string | null>(null);
-  const [finishing, setFinishing] = useState(false);
+
+  // Seed "finishing" at first render rather than flipping it inside the effect,
+  // so the returning user never sees the Google button flash before the
+  // spinner — and so no setState happens synchronously inside an effect.
+  const returnParams = useSearchParams();
+  const isReturningFromGoogle =
+    !!returnParams.get("code") || returnParams.get("step") === "pick-chapter";
+  const [finishing, setFinishing] = useState(isReturningFromGoogle);
 
   // ─── Finish the Google round trip ────────────────────────────────────
   // Supabase sends the user back here with ?code=… (PKCE). Nothing was

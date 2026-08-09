@@ -6,49 +6,8 @@ import { createClient, createServiceClient } from "@/lib/yi-future/supabase/serv
 import type { ActionResult } from "./editions";
 import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
 
-// ═══════════════════════════════════════════════════════════════════════
-// Chapter scoping.
-//
-// requireFutureAdmin() only proves the caller is SOME Yi-Future admin —
-// national, or core team of ANY chapter. Every mutation below used to stop
-// there, so a chair of chapter A could rename, delete, approve or merge
-// chapter B's colleges. These helpers add the missing half.
-//
-// They fail CLOSED: an unknown or null chapter denies rather than allows,
-// because the interesting failure here is a college row whose chapter_id is
-// NULL matching nobody's chapterIds and silently passing an `!==` test.
-// ═══════════════════════════════════════════════════════════════════════
-
-const OUT_OF_SCOPE: ActionResult = {
-  ok: false,
-  error: "You can only manage colleges in your own chapter.",
-};
-
-/** Null when the caller may act on `chapterId`, an error result otherwise. */
-async function denyUnlessChapterScoped(
-  chapterId: string | null | undefined
-): Promise<ActionResult | null> {
-  const access = await requireFutureAdmin();
-  if (access.isNational) return null;
-  if (chapterId && access.chapterIds.includes(chapterId)) return null;
-  return OUT_OF_SCOPE;
-}
-
-/** Same check, with the chapter resolved from a college row. */
-async function denyUnlessCollegeScoped(
-  collegeId: string
-): Promise<ActionResult | null> {
-  if (!collegeId) return OUT_OF_SCOPE;
-  const svc = await createServiceClient();
-  const { data } = await svc
-    .schema("future")
-    .from("colleges")
-    .select("chapter_id")
-    .eq("id", collegeId)
-    .maybeSingle();
-  const row = data as { chapter_id: string | null } | null;
-  if (!row) return { ok: false, error: "College not found." };
-  return denyUnlessChapterScoped(row.chapter_id);
+async function requireAuth(): Promise<void> {
+  await requireFutureAdmin();
 }
 
 // ─── CREATE ─────────────────────────────────────────────────────────
@@ -56,8 +15,7 @@ export async function createCollege(
   chapterId: string,
   formData: FormData
 ): Promise<ActionResult> {
-  const denied = await denyUnlessChapterScoped(chapterId);
-  if (denied) return denied;
+  await requireAuth();
   const name = String(formData.get("name") ?? "").trim();
   const city = String(formData.get("city") ?? "").trim() || null;
   const state = String(formData.get("state") ?? "").trim() || null;
@@ -98,8 +56,7 @@ export async function updateCollege(
   id: string,
   formData: FormData
 ): Promise<ActionResult> {
-  const denied = await denyUnlessCollegeScoped(id);
-  if (denied) return denied;
+  await requireAuth();
   const name = String(formData.get("name") ?? "").trim();
   const city = String(formData.get("city") ?? "").trim() || null;
   const state = String(formData.get("state") ?? "").trim() || null;
@@ -142,8 +99,7 @@ export async function updateCollege(
 
 // ─── DELETE ─────────────────────────────────────────────────────────
 export async function deleteCollege(id: string): Promise<ActionResult> {
-  const denied = await denyUnlessCollegeScoped(id);
-  if (denied) return denied;
+  await requireAuth();
   const svc = await createServiceClient();
 
   // Guard: if any delegates are linked, block
@@ -172,8 +128,7 @@ export async function deleteCollege(id: string): Promise<ActionResult> {
 
 // ─── APPROVE PENDING (from registration) ────────────────────────────
 export async function approvePendingCollege(id: string): Promise<ActionResult> {
-  const denied = await denyUnlessCollegeScoped(id);
-  if (denied) return denied;
+  await requireAuth();
   const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")
@@ -193,6 +148,7 @@ export async function mergePendingCollege(
   sourceId: string,
   targetId: string
 ): Promise<ActionResult> {
+  await requireAuth();
   if (sourceId === targetId) {
     return { ok: false, error: "Source and target must differ." };
   }
@@ -212,10 +168,6 @@ export async function mergePendingCollege(
   if (source.chapter_id !== target.chapter_id) {
     return { ok: false, error: "Cross-chapter merges not allowed." };
   }
-  // Both rows agree on a chapter — now check the CALLER owns that chapter.
-  // Without this, any chapter admin could merge any other chapter's colleges.
-  const denied = await denyUnlessChapterScoped(source.chapter_id);
-  if (denied) return denied;
   if (target.is_approved !== true) {
     return { ok: false, error: "Target college must be approved first." };
   }
@@ -246,8 +198,7 @@ export async function editAndApprovePendingCollege(
   newName: string,
   newCity: string | null
 ): Promise<ActionResult> {
-  const denied = await denyUnlessCollegeScoped(id);
-  if (denied) return denied;
+  await requireAuth();
   const cleanName = newName.trim();
   if (!cleanName) return { ok: false, error: "Name is required." };
   const svc = await createServiceClient();

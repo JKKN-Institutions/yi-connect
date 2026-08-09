@@ -216,6 +216,10 @@ export async function mergePendingCollege(
   if (source.chapter_id !== target.chapter_id) {
     return { ok: false, error: "Cross-chapter merges not allowed." };
   }
+  // Both rows agree on a chapter — now check the CALLER owns that chapter.
+  // Without this, any chapter admin could merge any other chapter's colleges.
+  const denied = await denyUnlessChapterScoped(source.chapter_id);
+  if (denied) return denied;
   if (target.is_approved !== true) {
     return { ok: false, error: "Target college must be approved first." };
   }

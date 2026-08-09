@@ -176,7 +176,8 @@ export async function deleteCollege(id: string): Promise<ActionResult> {
 
 // ─── APPROVE PENDING (from registration) ────────────────────────────
 export async function approvePendingCollege(id: string): Promise<ActionResult> {
-  await requireAuth();
+  const denied = await denyUnlessCollegeScoped(id);
+  if (denied) return denied;
   const svc = await createServiceClient();
   const { error } = await svc
     .schema("future")

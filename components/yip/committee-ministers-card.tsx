@@ -22,7 +22,7 @@ import { toast } from "sonner";
 import { setParliamentRole } from "@/app/yip/actions/participants";
 import {
   setCabinetPortfolio,
-  clearCabinetPortfolio,
+  removeCabinetPortfolio,
 } from "@/app/yip/actions/positions";
 import type {
   CommitteeMinistersData,
@@ -82,8 +82,14 @@ export function CommitteeMinistersCard({ data, eventId }: Props) {
 
   function handleRemove(p: PositionParticipant, committee: string, seat: Seat) {
     startTransition(async () => {
+      // Portfolio mode removes ONLY this row's ministry from the member's set
+      // (multi-ministry) — their other ministries, if any, are kept.
       const result = portfolio
-        ? await clearCabinetPortfolio({ eventId, participantId: p.id })
+        ? await removeCabinetPortfolio({
+            eventId,
+            participantId: p.id,
+            ministry: committee,
+          })
         : await setParliamentRole(p.id, null);
       if (result.success) {
         toast.success(
@@ -136,12 +142,18 @@ export function CommitteeMinistersCard({ data, eventId }: Props) {
           </div>
         ) : (
           <ul className="mb-1.5 space-y-1">
-            {holders.map((p) => (
+            {holders.map((p) => {
+              // Multi-ministry: badge the OTHER ministries this member holds so
+              // the organiser sees the full set from any row.
+              const others = portfolio
+                ? (p.portfolios ?? []).filter((l) => l !== row.committee)
+                : [];
+              return (
               <li
                 key={p.id}
                 className="flex items-center justify-between gap-2 rounded bg-card px-2 py-1 text-xs"
               >
-                <span className="flex min-w-0 items-center gap-2">
+                <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
                   <span
                     className={cn(
                       "inline-block size-1.5 shrink-0 rounded-full",
@@ -149,6 +161,15 @@ export function CommitteeMinistersCard({ data, eventId }: Props) {
                     )}
                   />
                   <span className="truncate">{p.full_name}</span>
+                  {others.map((l) => (
+                    <Badge
+                      key={l}
+                      variant="secondary"
+                      className="bg-[#FF9933]/10 px-1.5 py-0 text-[9px] font-medium text-[#b45309]"
+                    >
+                      also {l}
+                    </Badge>
+                  ))}
                 </span>
                 <button
                   type="button"
@@ -160,7 +181,8 @@ export function CommitteeMinistersCard({ data, eventId }: Props) {
                   <X className="size-3.5" />
                 </button>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
 
@@ -183,6 +205,9 @@ export function CommitteeMinistersCard({ data, eventId }: Props) {
               {candidates.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.full_name}
+                  {portfolio && p.portfolios && p.portfolios.length > 0
+                    ? ` — holds ${p.portfolios.join(", ")}`
+                    : ""}
                 </option>
               ))}
             </select>
@@ -237,8 +262,9 @@ export function CommitteeMinistersCard({ data, eventId }: Props) {
           Cabinet &amp; Shadow Ministers
           <span className="ml-auto text-xs font-normal text-muted-foreground">
             One Cabinet Minister (ruling) and one Shadow Minister (opposition) per{" "}
-            {portfolio ? "ministry" : "committee"}. Jury adds the role bonus to
-            their scores.
+            {portfolio ? "ministry" : "committee"}.{" "}
+            {portfolio ? "A member may hold more than one ministry. " : ""}
+            Jury adds the role bonus to their scores.
           </span>
         </CardTitle>
       </CardHeader>

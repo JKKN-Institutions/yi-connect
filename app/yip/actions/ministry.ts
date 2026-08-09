@@ -2,6 +2,7 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireLeadershipRole } from "@/lib/yip/auth/leadership";
+import { fetchParticipantMinistryKeys } from "@/lib/yip/ministries-server";
 import { revalidatePath } from "next/cache";
 import type { Database } from "@/types/yip/database";
 
@@ -58,7 +59,10 @@ export type MinistryMotion = {
 };
 export type MinistryDesk = {
   scope: "own" | "all";
+  /** PRIMARY ministry key (legacy single — first element of `ministries`). */
   ministry: string | null;
+  /** ALL ministry keys held (multi-ministry model). Empty for scope 'all'. */
+  ministries: string[];
   canAnswer: boolean;
   roleLabel: string;
   questions: MinistryQuestion[];
@@ -74,24 +78,30 @@ export async function getMinistryDesk(
 
   const role = gate.participant.parliament_role ?? "";
   const all = isAllMinistries(role);
-  const ministry = gate.participant.ministry;
   const canAnswer = role !== "shadow_minister";
 
+  const supabase = await createServiceClient();
+
+  // MULTI-MINISTRY: a minister may hold several ministries — desk items match
+  // ANY of them. Falls back to the single `ministry` column pre-migration.
+  const ministryKeys = all
+    ? []
+    : await fetchParticipantMinistryKeys(supabase, participantId, eventId);
+  const ministry = all ? null : gate.participant.ministry ?? ministryKeys[0] ?? null;
+
   // A cabinet/shadow minister with no ministry assigned sees nothing (fail closed).
-  if (!all && !ministry) {
+  if (!all && ministryKeys.length === 0) {
     return {
       success: true,
-      data: { scope: "own", ministry: null, canAnswer, roleLabel: role, questions: [], motions: [] },
+      data: { scope: "own", ministry: null, ministries: [], canAnswer, roleLabel: role, questions: [], motions: [] },
     };
   }
-
-  const supabase = await createServiceClient();
 
   let qQuery = supabase
     .from("questions")
     .select("id, question_text, directed_to_ministry, status, answer_summary")
     .eq("event_id", eventId);
-  if (!all) qQuery = qQuery.eq("directed_to_ministry", ministry as MinistryType);
+  if (!all) qQuery = qQuery.in("directed_to_ministry", ministryKeys as MinistryType[]);
   // Only organiser-vetted questions are answerable — never surface 'submitted'
   // (un-approved) or 'rejected' questions to the minister (moderation bypass).
   qQuery = qQuery.in("status", ["approved", "asked", "answered"]);
@@ -102,14 +112,15 @@ export async function getMinistryDesk(
     .select("id, subject, details, motion_type, directed_to_ministry, minister_response, status")
     .eq("event_id", eventId)
     .not("directed_to_ministry", "is", null);
-  if (!all) mQuery = mQuery.eq("directed_to_ministry", ministry as MinistryType);
+  if (!all) mQuery = mQuery.in("directed_to_ministry", ministryKeys as MinistryType[]);
   const { data: motions } = await mQuery.order("raised_at", { ascending: false });
 
   return {
     success: true,
     data: {
       scope: all ? "all" : "own",
-      ministry: all ? null : ministry,
+      ministry,
+      ministries: ministryKeys,
       canAnswer,
       roleLabel: role,
       questions: (questions ?? []) as MinistryQuestion[],
@@ -133,10 +144,17 @@ async function assertMinistryMatch(
     return { ok: false, error: "This item is not directed to a ministry." };
   }
   const role = gate.participant.parliament_role ?? "";
-  if (!isAllMinistries(role) && itemMinistry !== gate.participant.ministry) {
-    return { ok: false, error: "That item is not directed to your ministry." };
+  const supabase = await createServiceClient();
+  if (!isAllMinistries(role)) {
+    // MULTI-MINISTRY: a minister may answer for ANY ministry in their set
+    // (falls back to the single `ministry` column pre-migration). An empty set
+    // matches nothing — fail closed.
+    const keys = await fetchParticipantMinistryKeys(supabase, participantId, eventId);
+    if (!keys.includes(itemMinistry)) {
+      return { ok: false, error: "That item is not directed to your ministry." };
+    }
   }
-  return { ok: true, supabase: await createServiceClient() };
+  return { ok: true, supabase };
 }
 
 export async function ministerAnswerQuestion(

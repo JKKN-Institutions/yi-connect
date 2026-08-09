@@ -2,6 +2,7 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireLeadershipRole } from "@/lib/yip/auth/leadership";
+import { fetchParticipantMinistryKeys } from "@/lib/yip/ministries-server";
 import { revalidatePath } from "next/cache";
 import type { Database } from "@/types/yip/database";
 
@@ -55,16 +56,21 @@ export type ShadowMotion = {
 };
 
 export type ShadowDesk = {
+  /** PRIMARY shadowed ministry key (legacy single — first of `ministries`). */
   ministry: string | null;
+  /** ALL shadowed ministry keys (multi-ministry model). */
+  ministries: string[];
   questions: ShadowQuestion[];
   motions: ShadowMotion[];
 };
 
 /**
- * Read the shadow minister's counterpart-ministry desk: that ministry's
- * questions + the minister's answers, and motions directed to it + the
- * minister's responses. A shadow minister with NO ministry assigned sees
- * nothing (fail closed).
+ * Read the shadow minister's counterpart-ministry desk: the shadowed
+ * ministries' questions + the minister's answers, and motions directed to them
+ * + the minister's responses. MULTI-MINISTRY: items match ANY ministry in the
+ * shadow minister's set (falls back to the single `ministry` column
+ * pre-migration). A shadow minister with NO ministry assigned sees nothing
+ * (fail closed).
  */
 export async function getShadowDesk(
   eventId: string,
@@ -73,37 +79,46 @@ export async function getShadowDesk(
   const gate = await requireLeadershipRole(participantId, eventId, SHADOW_ROLES);
   if (!gate.ok) return { success: false, error: gate.error };
 
-  const ministry = gate.participant.ministry;
+  const supabase = await createServiceClient();
+  const ministryKeys = await fetchParticipantMinistryKeys(
+    supabase,
+    participantId,
+    eventId
+  );
+  const ministry = gate.participant.ministry ?? ministryKeys[0] ?? null;
+
   // Fail closed: a shadow minister without a counterpart ministry sees nothing.
-  if (!ministry) {
-    return { success: true, data: { ministry: null, questions: [], motions: [] } };
+  if (ministryKeys.length === 0) {
+    return {
+      success: true,
+      data: { ministry: null, ministries: [], questions: [], motions: [] },
+    };
   }
 
-  const supabase = await createServiceClient();
-
-  // Questions directed to the shadowed ministry. Only organiser-vetted questions
-  // are surfaced — never 'submitted' (un-approved) or 'rejected' — to mirror the
-  // minister's own read scope and avoid leaking the moderation queue.
+  // Questions directed to the shadowed ministries. Only organiser-vetted
+  // questions are surfaced — never 'submitted' (un-approved) or 'rejected' — to
+  // mirror the minister's own read scope and avoid leaking the moderation queue.
   const { data: questions } = await supabase
     .from("questions")
     .select("id, question_text, directed_to_ministry, status, answer_summary")
     .eq("event_id", eventId)
-    .eq("directed_to_ministry", ministry as MinistryType)
+    .in("directed_to_ministry", ministryKeys as MinistryType[])
     .in("status", ["approved", "asked", "answered"])
     .order("created_at", { ascending: false });
 
-  // Motions directed to the shadowed ministry + the minister's recorded response.
+  // Motions directed to the shadowed ministries + the minister's recorded response.
   const { data: motions } = await supabase
     .from("motions")
     .select("id, subject, details, motion_type, directed_to_ministry, minister_response, status")
     .eq("event_id", eventId)
-    .eq("directed_to_ministry", ministry as MinistryType)
+    .in("directed_to_ministry", ministryKeys as MinistryType[])
     .order("raised_at", { ascending: false });
 
   return {
     success: true,
     data: {
       ministry,
+      ministries: ministryKeys,
       questions: (questions ?? []) as ShadowQuestion[],
       motions: (motions ?? []) as ShadowMotion[],
     },

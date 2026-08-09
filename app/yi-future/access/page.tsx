@@ -246,10 +246,21 @@ function GoogleLoginTab() {
         // Drop ?code= so a refresh cannot replay a now-spent code.
         window.history.replaceState({}, "", "/yi-future/access?tab=google");
       }
-      if (!cancelled) {
-        await loadChapters();
-        setFinishing(false);
+      // Same work as loadChapters(), inlined so this effect does not depend on
+      // a function declared further down the component.
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (cancelled) return;
+      if (user?.email) setGoogleEmail(user.email);
+
+      const res = await fetch("/api/yi-future/chapters");
+      if (cancelled) return;
+      if (res.ok) {
+        setChapters(await res.json());
+        setStep("pick-chapter");
       }
+      setFinishing(false);
     })();
 
     return () => {

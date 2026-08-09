@@ -7,7 +7,7 @@ import {
   setEventComplete,
   deletePhaseEvent,
 } from "@/app/yi-future/actions/phase-events";
-import { saveAttendance } from "@/app/yi-future/actions/attendance";
+import { AttendanceCheckIn } from "./attendance-check-in";
 import {
   PHASE_LABELS,
   PHASE_EVENT_LABELS,
@@ -122,19 +122,9 @@ export default async function EventDetailPage({
     getAttendance(event.id),
   ]);
 
-  const attendedSet = new Set(
-    attendance.filter((a) => a.attended).map((a) => a.delegate_id)
-  );
-  const attendedCount = attendedSet.size;
-
-  async function saveAttAction(formData: FormData) {
-    "use server";
-    const map: Record<string, boolean> = {};
-    for (const d of delegates) {
-      map[d.id] = formData.get(`att_${d.id}`) === "on";
-    }
-    await saveAttendance(event!.id, map);
-  }
+  const attendedIds = attendance
+    .filter((a) => a.attended)
+    .map((a) => a.delegate_id);
 
   async function toggleCompleteAction() {
     "use server";
@@ -210,47 +200,12 @@ export default async function EventDetailPage({
         </div>
       )}
 
-      {/* Attendance */}
-      <section className="bg-white border border-navy/10 rounded-lg p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-bold text-navy">Attendance</h3>
-          <div className="text-xs font-semibold">
-            {attendedCount}/{delegates.length} present
-          </div>
-        </div>
-        {delegates.length === 0 ? (
-          <p className="text-sm text-navy/50 italic">
-            No active delegates in your chapter yet.
-          </p>
-        ) : (
-          <form action={saveAttAction} className="space-y-1">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {delegates.map((d) => (
-                <label
-                  key={d.id}
-                  className="flex items-center gap-2 p-2 border border-navy/10 rounded hover:bg-navy/5 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    name={`att_${d.id}`}
-                    defaultChecked={attendedSet.has(d.id)}
-                    className="h-4 w-4 accent-yi-gold"
-                  />
-                  <span className="text-sm text-navy">{d.full_name}</span>
-                </label>
-              ))}
-            </div>
-            <div className="flex justify-end pt-3">
-              <button
-                type="submit"
-                className="px-4 py-2 rounded-md bg-navy text-ivory text-sm font-semibold hover:bg-navy-dark"
-              >
-                Save attendance
-              </button>
-            </div>
-          </form>
-        )}
-      </section>
+      {/* Attendance — one row written per tap, see attendance-check-in.tsx */}
+      <AttendanceCheckIn
+        phaseEventId={event.id}
+        delegates={delegates}
+        initialAttendedIds={attendedIds}
+      />
 
       <section className="bg-white border border-red-200 rounded-lg p-5">
         <h3 className="text-sm font-bold text-red-600 mb-2">Danger zone</h3>

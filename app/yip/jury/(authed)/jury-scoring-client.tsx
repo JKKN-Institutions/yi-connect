@@ -1796,8 +1796,8 @@ function JuryScoringClientInner({
                   autoFocus
                   value={pickerSearch}
                   onChange={(e) => setPickerSearch(e.target.value)}
-                  placeholder="Search by number, constituency, or name"
-                  aria-label="Search participants by number, constituency, or name"
+                  placeholder="Search by number or constituency"
+                  aria-label="Search participants by number or constituency"
                   // text-base (16px): anything smaller makes iOS Safari
                   // auto-zoom on focus, cropping the right edge of the screen.
                   className="w-full rounded-lg border-2 border-gray-200 px-3 py-2 text-base focus:border-blue-400 focus:outline-none"

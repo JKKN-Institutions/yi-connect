@@ -237,7 +237,6 @@ function GoogleLoginTab() {
     if (!code && !wantsPickChapter) return;
 
     let cancelled = false;
-    setFinishing(true);
 
     (async () => {
       const supabase = createClient();

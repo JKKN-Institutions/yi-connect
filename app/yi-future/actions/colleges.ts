@@ -10,6 +10,51 @@ async function requireAuth(): Promise<void> {
   await requireFutureAdmin();
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// Chapter scoping.
+//
+// requireFutureAdmin() only proves the caller is SOME Yi-Future admin —
+// national, or core team of ANY chapter. Every mutation below used to stop
+// there, so a chair of chapter A could rename, delete, approve or merge
+// chapter B's colleges. These helpers add the missing half.
+//
+// They fail CLOSED: an unknown or null chapter denies rather than allows,
+// because the interesting failure here is a college row whose chapter_id is
+// NULL matching nobody's chapterIds and silently passing an `!==` test.
+// ═══════════════════════════════════════════════════════════════════════
+
+const OUT_OF_SCOPE: ActionResult = {
+  ok: false,
+  error: "You can only manage colleges in your own chapter.",
+};
+
+/** Null when the caller may act on `chapterId`, an error result otherwise. */
+async function denyUnlessChapterScoped(
+  chapterId: string | null | undefined
+): Promise<ActionResult | null> {
+  const access = await requireFutureAdmin();
+  if (access.isNational) return null;
+  if (chapterId && access.chapterIds.includes(chapterId)) return null;
+  return OUT_OF_SCOPE;
+}
+
+/** Same check, with the chapter resolved from a college row. */
+async function denyUnlessCollegeScoped(
+  collegeId: string
+): Promise<ActionResult | null> {
+  if (!collegeId) return OUT_OF_SCOPE;
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("colleges")
+    .select("chapter_id")
+    .eq("id", collegeId)
+    .maybeSingle();
+  const row = data as { chapter_id: string | null } | null;
+  if (!row) return { ok: false, error: "College not found." };
+  return denyUnlessChapterScoped(row.chapter_id);
+}
+
 // ─── CREATE ─────────────────────────────────────────────────────────
 export async function createCollege(
   chapterId: string,

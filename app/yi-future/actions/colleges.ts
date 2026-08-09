@@ -250,7 +250,8 @@ export async function editAndApprovePendingCollege(
   newName: string,
   newCity: string | null
 ): Promise<ActionResult> {
-  await requireAuth();
+  const denied = await denyUnlessCollegeScoped(id);
+  if (denied) return denied;
   const cleanName = newName.trim();
   if (!cleanName) return { ok: false, error: "Name is required." };
   const svc = await createServiceClient();

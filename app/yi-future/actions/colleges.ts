@@ -146,7 +146,8 @@ export async function updateCollege(
 
 // ─── DELETE ─────────────────────────────────────────────────────────
 export async function deleteCollege(id: string): Promise<ActionResult> {
-  await requireAuth();
+  const denied = await denyUnlessCollegeScoped(id);
+  if (denied) return denied;
   const svc = await createServiceClient();
 
   // Guard: if any delegates are linked, block

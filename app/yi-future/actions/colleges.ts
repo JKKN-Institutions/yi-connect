@@ -102,7 +102,8 @@ export async function updateCollege(
   id: string,
   formData: FormData
 ): Promise<ActionResult> {
-  await requireAuth();
+  const denied = await denyUnlessCollegeScoped(id);
+  if (denied) return denied;
   const name = String(formData.get("name") ?? "").trim();
   const city = String(formData.get("city") ?? "").trim() || null;
   const state = String(formData.get("state") ?? "").trim() || null;

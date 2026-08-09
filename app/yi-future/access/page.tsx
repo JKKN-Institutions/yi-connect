@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useTransition, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ProgramWordmark } from "@/components/yi-future/brand/BrandHeader";
 import { CodeEntryStep } from "@/app/yi-future/join/steps/code-entry";
@@ -15,9 +15,26 @@ import {
 
 type Tab = "code" | "google" | "email";
 
+// useSearchParams() forces this subtree to render on the client, so it needs a
+// Suspense boundary or the production build refuses to prerender the route.
 export default function AccessCodePage() {
+  return (
+    <Suspense fallback={null}>
+      <AccessCodeInner />
+    </Suspense>
+  );
+}
+
+function AccessCodeInner() {
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>("code");
+  // Honour ?tab= on arrival. This is not cosmetic: the Google button sends the
+  // user to Google with a redirectTo of ?tab=google, so without it the whole
+  // round trip lands back on the ACCESS CODE tab and the Google tab — where
+  // the session actually gets finished — is never mounted.
+  const requestedTab = useSearchParams().get("tab");
+  const [tab, setTab] = useState<Tab>(
+    requestedTab === "google" || requestedTab === "email" ? requestedTab : "code"
+  );
 
   return (
     <main className="min-h-screen bg-ivory flex flex-col">
@@ -195,6 +212,69 @@ function GoogleLoginTab() {
   const [pending, startTransition] = useTransition();
   const [googleEmail, setGoogleEmail] = useState<string | null>(null);
 
+  // Seed "finishing" at first render rather than flipping it inside the effect,
+  // so the returning user never sees the Google button flash before the
+  // spinner — and so no setState happens synchronously inside an effect.
+  const returnParams = useSearchParams();
+  const isReturningFromGoogle =
+    !!returnParams.get("code") || returnParams.get("step") === "pick-chapter";
+  const [finishing, setFinishing] = useState(isReturningFromGoogle);
+
+  // ─── Finish the Google round trip ────────────────────────────────────
+  // Supabase sends the user back here with ?code=… (PKCE). Nothing was
+  // exchanging it: the browser client is only constructed inside the click
+  // handlers below, so on the return trip no client existed, detectSessionInUrl
+  // never ran, and the session was never stored. The user landed on the same
+  // "Continue with Google" button they had just pressed, still signed out —
+  // while Supabase's own records showed a successful sign-in.
+  //
+  // Telltale of the old behaviour: a sb-<ref>-auth-token-code-verifier cookie
+  // with no sb-<ref>-auth-token beside it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const wantsPickChapter = params.get("step") === "pick-chapter";
+    if (!code && !wantsPickChapter) return;
+
+    let cancelled = false;
+
+    (async () => {
+      const supabase = createClient();
+      if (code) {
+        const { error: exErr } = await supabase.auth.exchangeCodeForSession(code);
+        if (exErr) {
+          if (!cancelled) {
+            setError("That Google sign-in link expired. Please try again.");
+            setFinishing(false);
+          }
+          return;
+        }
+        // Drop ?code= so a refresh cannot replay a now-spent code.
+        window.history.replaceState({}, "", "/yi-future/access?tab=google");
+      }
+      // Same work as loadChapters(), inlined so this effect does not depend on
+      // a function declared further down the component.
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (cancelled) return;
+      if (user?.email) setGoogleEmail(user.email);
+
+      const res = await fetch("/api/yi-future/chapters");
+      if (cancelled) return;
+      if (res.ok) {
+        setChapters(await res.json());
+        setStep("pick-chapter");
+      }
+      setFinishing(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // Mount only: the code in the URL is consumed exactly once.
+  }, []);
+
   async function handleGoogleSignIn() {
     setError(null);
     const supabase = createClient();
@@ -243,6 +323,14 @@ function GoogleLoginTab() {
         setError(res.error);
       }
     });
+  }
+
+  if (finishing) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-sm text-navy/60">Finishing sign-in…</p>
+      </div>
+    );
   }
 
   if (step === "start") {

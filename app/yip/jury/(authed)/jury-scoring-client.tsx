@@ -1730,8 +1730,8 @@ function JuryScoringClientInner({
                   autoFocus
                   value={pickerSearch}
                   onChange={(e) => setPickerSearch(e.target.value)}
-                  placeholder="Search by number, constituency, or name"
-                  aria-label="Search participants by number, constituency, or name"
+                  placeholder="Search by number or constituency"
+                  aria-label="Search participants by number or constituency"
                   className="w-full rounded-lg border-2 border-gray-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
                 />
               </div>

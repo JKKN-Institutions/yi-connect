@@ -61,6 +61,17 @@ function LoginInner() {
     if (!returningFromGoogle) return;
     let cancelled = false;
 
+    // Watchdog. The catch below covers a throw; this covers a HANG — a server
+    // action that never settles would otherwise leave the spinner up forever
+    // with no error and no way forward.
+    const watchdog = setTimeout(() => {
+      if (cancelled) return;
+      setError(
+        "That took too long. You may already be signed in — try /yi-future/chapter or /yi-future/national, or reload and try again."
+      );
+      setFinishingGoogle(false);
+    }, 15000);
+
     (async () => {
       const supabase = createClient();
       let user = (await supabase.auth.getUser()).data.user;
@@ -91,10 +102,22 @@ function LoginInner() {
       }
       router.push(home.path);
       router.refresh();
-    })();
+    })().catch(() => {
+      // Any throw in the block above — a failing server action, a network
+      // blip — used to kill it silently, leaving "Finishing sign-in…" spinning
+      // forever AFTER the session had already been established. The user was
+      // signed in and being shown a spinner. Never let the async work end
+      // without releasing the UI.
+      if (cancelled) return;
+      setError(
+        "Signed in, but we could not work out where to send you. Try /yi-future/chapter or /yi-future/national directly, or reload this page."
+      );
+      setFinishingGoogle(false);
+    });
 
     return () => {
       cancelled = true;
+      clearTimeout(watchdog);
     };
     // Mount only: the code in the URL is consumed exactly once.
   }, [router, returningFromGoogle]);

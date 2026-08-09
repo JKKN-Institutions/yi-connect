@@ -294,7 +294,14 @@ function GoogleLoginTab() {
         setStep("pick-chapter");
       }
       setFinishing(false);
-    })();
+    })().catch(() => {
+      // Same guard as the admin login: an unhandled throw here used to leave
+      // "Finishing sign-in…" spinning forever AFTER the session had already
+      // been established.
+      if (cancelled) return;
+      setError("Signed in, but the next step failed. Please reload and try again.");
+      setFinishing(false);
+    });
 
     return () => {
       cancelled = true;

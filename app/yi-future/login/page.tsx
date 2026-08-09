@@ -10,13 +10,28 @@ import {
   adminHomeForCurrentUser,
 } from "@/app/yi-future/actions/auth";
 
+// useSearchParams() forces this subtree to render on the client, so it needs a
+// Suspense boundary or the production build refuses to prerender the route.
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginInner />
+    </Suspense>
+  );
+}
+
+function LoginInner() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [finishingGoogle, setFinishingGoogle] = useState(false);
+
+  // Seeded at first render rather than flipped inside the effect, so the
+  // returning admin never sees the form flash before the spinner — and so no
+  // setState happens synchronously inside an effect.
+  const returningFromGoogle = useSearchParams().has("code");
+  const [finishingGoogle, setFinishingGoogle] = useState(returningFromGoogle);
 
   // ─── Google sign-in for admins ────────────────────────────────────────
   // This form was password-only, so an admin whose account is Google-backed

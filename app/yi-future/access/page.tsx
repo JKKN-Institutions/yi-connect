@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useTransition, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ProgramWordmark } from "@/components/yi-future/brand/BrandHeader";
 import { CodeEntryStep } from "@/app/yi-future/join/steps/code-entry";

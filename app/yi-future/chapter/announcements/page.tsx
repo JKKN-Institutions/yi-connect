@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import { fetchAllRows } from "@/lib/pagination";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
 import {
   createChapterAnnouncement,
@@ -36,15 +37,24 @@ async function getDelegates(
   editionId: string
 ): Promise<Delegate[]> {
   const svc = await createServiceClient();
-  const { data } = await svc
-    .schema("future")
-    .from("delegates")
-    .select("id, full_name")
-    .eq("chapter_id", chapterId)
-    .eq("edition_id", editionId)
-    .eq("is_active", true)
-    .order("full_name", { ascending: true });
-  return (data as unknown as Delegate[]) ?? [];
+  // Was losing every delegate past PostgREST's ~1000-row cap, so delegates in a
+  // large chapter simply never appeared in the "One delegate" target picker and
+  // could not be sent an announcement.
+  return await fetchAllRows<Delegate>((from, to) =>
+    svc
+      .schema("future")
+      .from("delegates")
+      .select("id, full_name")
+      .eq("chapter_id", chapterId)
+      .eq("edition_id", editionId)
+      .eq("is_active", true)
+      .order("full_name", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: Delegate[] | null;
+      error: unknown;
+    }>
+  );
 }
 
 const AUDIENCE_LABEL: Record<string, string> = {

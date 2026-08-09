@@ -95,10 +95,10 @@ export default async function NationalMetricsPage() {
     juryRes,
     collegesApprovedRes,
     collegesPendingRes,
-    teamsRes,
-    teamMembersRes,
-    submissionsRes,
-    evaluationsRes,
+    teams,
+    teamMembers,
+    submissions,
+    evaluations,
   ] = await Promise.all([
     svc
       .schema("yi")
@@ -126,27 +126,62 @@ export default async function NationalMetricsPage() {
       .from("colleges")
       .select("id", { count: "exact", head: true })
       .eq("is_approved", false),
-    svc
-      .schema("future")
-      .from("teams")
-      .select("id, problem_statement_id")
-      .eq("edition_id", edition.id),
-    svc.schema("future").from("team_members").select("delegate_id, team_id"),
-    svc
-      .schema("future")
-      .from("submissions")
-      .select("team_id, phase, status"),
-    svc.schema("future").from("evaluations").select("team_id"),
+    // Row-cap fix: every set below is aggregated in JS, so a bare select stops
+    // at ~1000 rows with no error and silently under-reports the funnel.
+    fetchAllRows<TeamRow>((from, to) =>
+      svc
+        .schema("future")
+        .from("teams")
+        .select("id, problem_statement_id")
+        .eq("edition_id", edition.id)
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: TeamRow[] | null;
+        error: unknown;
+      }>
+    ),
+    // future.team_members has no edition_id column, so the whole table is paged
+    // and scoped in JS via this edition's delegate ids (unchanged behaviour).
+    // Composite key → order on both columns for a stable, total page order.
+    fetchAllRows<{ delegate_id: string; team_id: string }>((from, to) =>
+      svc
+        .schema("future")
+        .from("team_members")
+        .select("delegate_id, team_id")
+        .order("team_id", { ascending: true })
+        .order("delegate_id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: { delegate_id: string; team_id: string }[] | null;
+        error: unknown;
+      }>
+    ),
+    // No edition_id on submissions either — paged whole, scoped in JS below.
+    fetchAllRows<SubmissionRow>((from, to) =>
+      svc
+        .schema("future")
+        .from("submissions")
+        .select("team_id, phase, status")
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: SubmissionRow[] | null;
+        error: unknown;
+      }>
+    ),
+    // No edition_id on evaluations either — paged whole, scoped in JS below.
+    fetchAllRows<EvaluationRow>((from, to) =>
+      svc
+        .schema("future")
+        .from("evaluations")
+        .select("team_id")
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: EvaluationRow[] | null;
+        error: unknown;
+      }>
+    ),
   ]);
 
   const chapters: ChapterRow[] = (chaptersRes.data as ChapterRow[]) ?? [];
-  const teams: TeamRow[] = (teamsRes.data as TeamRow[]) ?? [];
-  const teamMembers: { delegate_id: string; team_id: string }[] =
-    (teamMembersRes.data as { delegate_id: string; team_id: string }[]) ?? [];
-  const submissions: SubmissionRow[] =
-    (submissionsRes.data as SubmissionRow[]) ?? [];
-  const evaluations: EvaluationRow[] =
-    (evaluationsRes.data as EvaluationRow[]) ?? [];
 
   const totalDelegates = delegates.length;
   const totalChapters = chapters.length;

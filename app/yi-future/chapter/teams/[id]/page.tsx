@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import { fetchAllRows } from "@/lib/pagination";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
 import {
   updateTeamName,
@@ -66,15 +67,24 @@ async function getAvailableDelegates(
   editionId: string
 ): Promise<Delegate[]> {
   const svc = await createServiceClient();
-  const { data } = await svc
-    .schema("future")
-    .from("delegates")
-    .select("id, full_name, email, team_members(team_id)")
-    .eq("chapter_id", chapterId)
-    .eq("edition_id", editionId)
-    .eq("is_active", true)
-    .order("full_name", { ascending: true });
-  return (data as unknown as Delegate[]) ?? [];
+  // Was losing every delegate past PostgREST's ~1000-row cap, so unteamed
+  // delegates in a large chapter never showed up in the "pick a delegate"
+  // dropdown and could not be added to a team from here.
+  return await fetchAllRows<Delegate>((from, to) =>
+    svc
+      .schema("future")
+      .from("delegates")
+      .select("id, full_name, email, team_members(team_id)")
+      .eq("chapter_id", chapterId)
+      .eq("edition_id", editionId)
+      .eq("is_active", true)
+      .order("full_name", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: Delegate[] | null;
+      error: unknown;
+    }>
+  );
 }
 
 async function getChapterProblems(editionId: string): Promise<Problem[]> {

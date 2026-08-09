@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import { fetchAllRows } from "@/lib/pagination";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
 import {
   deleteDelegate,
@@ -35,16 +36,25 @@ async function getDelegates(
   editionId: string
 ): Promise<Delegate[]> {
   const svc = await createServiceClient();
-  const { data } = await svc
-    .schema("future")
-    .from("delegates")
-    .select(
-      "id, full_name, email, phone, access_code, course, year_of_study, college_id, is_active, colleges(name), team_members(team_id, teams(team_name))"
-    )
-    .eq("chapter_id", chapterId)
-    .eq("edition_id", editionId)
-    .order("full_name", { ascending: true });
-  return (data as unknown as Delegate[]) ?? [];
+  // Was losing every delegate past PostgREST's ~1000-row cap: the largest
+  // chapter has 1900+, so the "registered / on teams / without a team" totals,
+  // the filter chips and the table itself were all silently short.
+  return await fetchAllRows<Delegate>((from, to) =>
+    svc
+      .schema("future")
+      .from("delegates")
+      .select(
+        "id, full_name, email, phone, access_code, course, year_of_study, college_id, is_active, colleges(name), team_members(team_id, teams(team_name))"
+      )
+      .eq("chapter_id", chapterId)
+      .eq("edition_id", editionId)
+      .order("full_name", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: Delegate[] | null;
+      error: unknown;
+    }>
+  );
 }
 
 async function removeDelegate(formData: FormData) {

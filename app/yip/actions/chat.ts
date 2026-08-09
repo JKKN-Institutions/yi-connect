@@ -37,6 +37,7 @@ import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
 import { CHAT_ENABLED } from "@/lib/yip/chat-config";
 import { isAllowedReaction } from "@/lib/yip/chat-reactions";
 import { sendYipPushToParticipants } from "@/lib/yip/push";
+import { fetchAllRows } from "@/lib/pagination";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -118,6 +119,7 @@ type AnyTable = {
   not: (col: string, op: string, val: unknown) => AnyTable;
   order: (col: string, opts?: Record<string, unknown>) => AnyTable;
   limit: (n: number) => AnyTable;
+  range: (from: number, to: number) => AnyTable;
   single: () => Promise<{ data: RawAny | null; error: PgError | null }>;
   maybeSingle: () => Promise<{ data: RawAny | null; error: PgError | null }>;
   then: Promise<{
@@ -1185,18 +1187,29 @@ export async function modListChannels(
           .select("id", { count: "exact", head: true })
           .eq("channel_id", ch.id)
           .not("reported_at", "is", null),
-        // Recent window → last activity + distinct active students.
-        table(sb, "chat_messages")
-          .select("sender_participant_id, created_at")
-          .eq("channel_id", ch.id)
-          .order("created_at", { ascending: false })
-          .limit(1000),
+        // Last activity + distinct active students.
+        // Row-cap fix: .limit(1000) sat exactly ON the PostgREST ceiling, so on
+        // any busy channel activeParticipants silently counted only the newest
+        // 1000 messages. Paged newest-first, so recent[0] is still the latest.
+        fetchAllRows<{
+          sender_participant_id: string | null;
+          created_at: string;
+        }>((from, to) =>
+          table(sb, "chat_messages")
+            .select("sender_participant_id, created_at")
+            .eq("channel_id", ch.id)
+            .order("created_at", { ascending: false })
+            .order("id", { ascending: false })
+            .range(from, to) as unknown as PromiseLike<{
+            data:
+              | { sender_participant_id: string | null; created_at: string }[]
+              | null;
+            error: unknown;
+          }>
+        ),
       ]);
 
-      const recent = (recentRes.data ?? []) as {
-        sender_participant_id: string | null;
-        created_at: string;
-      }[];
+      const recent = recentRes;
       const senders = new Set<string>();
       for (const r of recent) {
         if (r.sender_participant_id) senders.add(r.sender_participant_id);
@@ -1242,27 +1255,41 @@ export async function modListMessages(
       return { success: false, error: "Channel not found." };
     }
 
-    const { data, error } = (await table(sb, "chat_messages")
-      .select(MOD_MSG_COLS)
-      .eq("event_id", eventId)
-      .eq("channel_id", args.channelId)
-      .order("created_at", { ascending: true })
-      .limit(1000)) as { data: RawAny[] | null; error: PgError | null };
-    if (error) return { success: false, error: error.message };
-    rows = data ?? [];
+    // Row-cap fix: .limit(1000) sat exactly ON the PostgREST ceiling, so a
+    // thread past 1000 messages was silently cut off mid-moderation with no
+    // error. Page it whole; (created_at, id) keeps the order stable.
+    const errBox: { e: PgError | null } = { e: null };
+    rows = await fetchAllRows<RawAny>(async (from, to) => {
+      const res = (await table(sb, "chat_messages")
+        .select(MOD_MSG_COLS)
+        .eq("event_id", eventId)
+        .eq("channel_id", args.channelId)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to)) as { data: RawAny[] | null; error: PgError | null };
+      if (res.error) errBox.e = res.error;
+      return res;
+    });
+    if (errBox.e) return { success: false, error: errBox.e.message };
   } else {
     if (!args.participantId || !args.volunteerId) {
       return { success: false, error: "Missing DM thread parameters." };
     }
-    const { data, error } = (await table(sb, "chat_messages")
-      .select(MOD_MSG_COLS)
-      .eq("event_id", eventId)
-      .eq("sender_participant_id", args.participantId)
-      .eq("dm_to_volunteer_id", args.volunteerId)
-      .order("created_at", { ascending: true })
-      .limit(1000)) as { data: RawAny[] | null; error: PgError | null };
-    if (error) return { success: false, error: error.message };
-    rows = data ?? [];
+    // Same row-cap fix for the student↔YUVA DM thread.
+    const errBox: { e: PgError | null } = { e: null };
+    rows = await fetchAllRows<RawAny>(async (from, to) => {
+      const res = (await table(sb, "chat_messages")
+        .select(MOD_MSG_COLS)
+        .eq("event_id", eventId)
+        .eq("sender_participant_id", args.participantId)
+        .eq("dm_to_volunteer_id", args.volunteerId)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to)) as { data: RawAny[] | null; error: PgError | null };
+      if (res.error) errBox.e = res.error;
+      return res;
+    });
+    if (errBox.e) return { success: false, error: errBox.e.message };
   }
 
   return { success: true, data: await hydrateModMessages(sb, eventId, rows) };
@@ -1279,13 +1306,24 @@ export async function modListDmThreads(
   if (!gate.ok) return { success: false, error: gate.error };
 
   const sb = await createServiceClient();
-  const { data, error } = (await table(sb, "chat_messages")
-    .select("sender_participant_id, dm_to_volunteer_id, created_at")
-    .eq("event_id", eventId)
-    .not("dm_to_volunteer_id", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(2000)) as { data: RawAny[] | null; error: PgError | null };
-  if (error) return { success: false, error: error.message };
+  // Row-cap fix: .limit(2000) was ABOVE the ~1000-row PostgREST ceiling and a
+  // request limit can only LOWER the server cap, never raise it — so the read
+  // silently stopped at 1000, dropping whole DM pairs and undercounting
+  // messageCount. Page it; newest-first is preserved so the first row per pair
+  // is still that pair's last message.
+  const errBox: { e: PgError | null } = { e: null };
+  const data = await fetchAllRows<RawAny>(async (from, to) => {
+    const res = (await table(sb, "chat_messages")
+      .select("id, sender_participant_id, dm_to_volunteer_id, created_at")
+      .eq("event_id", eventId)
+      .not("dm_to_volunteer_id", "is", null)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to)) as { data: RawAny[] | null; error: PgError | null };
+    if (res.error) errBox.e = res.error;
+    return res;
+  });
+  if (errBox.e) return { success: false, error: errBox.e.message };
 
   type Pair = {
     participantId: string;

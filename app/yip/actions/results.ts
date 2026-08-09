@@ -11,6 +11,7 @@ import { listSessionParameters } from "./session-parameters";
 import { listScoringBuckets } from "./scoring-buckets";
 import { getScoringFlagsConfig } from "./scoring-flags";
 import { getSessionScoringParams } from "./scoring";
+import { fetchAllRows } from "@/lib/pagination";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -1742,7 +1743,7 @@ export async function getResultsFreshness(eventId: string): Promise<{
   const [
     { count: participantCount },
     { count: totalJudges },
-    { data: submitted },
+    submittedRows,
     { data: latestResult },
   ] = await Promise.all([
     supabase
@@ -1754,14 +1755,29 @@ export async function getResultsFreshness(eventId: string): Promise<{
       .select("id", { count: "exact", head: true })
       .eq("event_id", eventId)
       .eq("is_active", true),
-    // Only the two columns we need; capped well above any real event so the read
-    // stays cheap (distinct-jury + max-time are folded in JS below).
-    supabase
-      .from("scores")
-      .select("jury_assignment_id, submitted_at")
-      .eq("event_id", eventId)
-      .eq("status", "submitted")
-      .limit(50000),
+    // Only the two columns we need (distinct-jury + max-time are folded in JS).
+    // Row-cap fix: the old .limit(50000) did NOT lift the ~1000-row PostgREST
+    // ceiling — a request limit can only LOWER the server cap, never raise it,
+    // so judgesScored and latestScoreAt were both computed from a truncated set
+    // (and a stale-results banner could be missed). Page through instead.
+    fetchAllRows<{
+      jury_assignment_id: string | null;
+      submitted_at: string | null;
+    }>((from, to) =>
+      supabase
+        .from("scores")
+        .select("jury_assignment_id, submitted_at")
+        .eq("event_id", eventId)
+        .eq("status", "submitted")
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: {
+          jury_assignment_id: string | null;
+          submitted_at: string | null;
+        }[] | null;
+        error: unknown;
+      }>
+    ),
     supabase
       .from("results")
       .select("computed_at")
@@ -1771,7 +1787,6 @@ export async function getResultsFreshness(eventId: string): Promise<{
       .maybeSingle(),
   ]);
 
-  const submittedRows = submitted ?? [];
   const judgesScored = new Set(
     submittedRows.map((s) => s.jury_assignment_id).filter(Boolean)
   ).size;

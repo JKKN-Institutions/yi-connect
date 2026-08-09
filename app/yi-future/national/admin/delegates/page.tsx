@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import { WhatsAppIconButton } from "@/components/whatsapp";
 import { AutoRefresh } from "@/components/yi-future/AutoRefresh";
+import { fetchAllRows } from "@/lib/pagination";
 import {
   ListSearchForm,
   ListPager,
@@ -93,14 +94,23 @@ async function getCollegesForChapters(
 ): Promise<{ id: string; name: string }[]> {
   if (chapterIds.length === 0) return [];
   const svc = await createServiceClient();
-  const { data } = await svc
-    .schema("future")
-    .from("colleges")
-    .select("id, name")
-    .in("chapter_id", chapterIds)
-    .order("name", { ascending: true })
-    .limit(1000);
-  return (data as unknown as { id: string; name: string }[]) ?? [];
+  // Row-cap fix: .limit(1000) sat exactly ON the PostgREST ceiling, so a chapter
+  // scope with 1000+ colleges silently lost the tail from the filter dropdown.
+  // A request limit can only LOWER the server cap, never raise it — page instead.
+  // (name, id) keeps the alphabetical order stable across page boundaries.
+  return await fetchAllRows<{ id: string; name: string }>((from, to) =>
+    svc
+      .schema("future")
+      .from("colleges")
+      .select("id, name")
+      .in("chapter_id", chapterIds)
+      .order("name", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: { id: string; name: string }[] | null;
+      error: unknown;
+    }>
+  );
 }
 
 async function getAllChapters(): Promise<ChapterRow[]> {

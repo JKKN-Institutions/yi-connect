@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import { fetchAllRows } from "@/lib/pagination";
 import { readSession } from "./auth";
 
 // ─── LIVE COUNTERS (safe for public SSR/client) ────────────────────
@@ -37,7 +38,7 @@ export async function getLiveCounts(editionSlug = "2026"): Promise<LiveCounts> {
   const [
     { count: delegatesTotal },
     { count: delegatesThisWeek },
-    chaptersRes,
+    chapterRows,
     { count: teamsCount },
     { count: problemsPicked },
   ] = await Promise.all([
@@ -52,12 +53,22 @@ export async function getLiveCounts(editionSlug = "2026"): Promise<LiveCounts> {
       .select("id", { count: "exact", head: true })
       .eq("edition_id", editionId)
       .gte("created_at", sevenDaysAgo),
-    svc
-      .schema("future")
-      .from("delegates")
-      .select("chapter_id")
-      .eq("edition_id", editionId)
-      .not("chapter_id", "is", null),
+    // Row-cap fix: this edition has tens of thousands of delegates, so the bare
+    // select stopped at ~1000 rows and chaptersActive froze at whatever handful
+    // of chapters happened to land in that first page. Page through in full.
+    fetchAllRows<{ chapter_id: string | null }>((from, to) =>
+      svc
+        .schema("future")
+        .from("delegates")
+        .select("chapter_id")
+        .eq("edition_id", editionId)
+        .not("chapter_id", "is", null)
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: { chapter_id: string | null }[] | null;
+        error: unknown;
+      }>
+    ),
     svc
       .schema("future")
       .from("teams")
@@ -72,7 +83,7 @@ export async function getLiveCounts(editionSlug = "2026"): Promise<LiveCounts> {
   ]);
 
   const chapterIds = new Set(
-    (chaptersRes.data ?? []).map((r: { chapter_id: string | null }) => r.chapter_id)
+    chapterRows.map((r: { chapter_id: string | null }) => r.chapter_id)
   );
 
   return {

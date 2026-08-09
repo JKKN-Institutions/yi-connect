@@ -8,6 +8,7 @@
 
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
+import { fetchAllRows } from '@/lib/pagination'
 import { revalidateTag } from 'next/cache'
 import {
   validateBulkMemberRow,
@@ -62,22 +63,39 @@ export async function processBulkMemberUpload(
     chapterNameToId.set(chapter.name.toLowerCase(), chapter.id)
   })
 
-  // Get all existing emails for quick lookup
-  const { data: existingEmails } = await adminClient
-    .schema('yi_connect').from('approved_emails')
-    .select('email')
-
-  const existingEmailSet = new Set(
-    existingEmails?.map(e => e.email.toLowerCase()) || []
+  // Get all existing emails for quick lookup.
+  // Row-cap fix: this is the dedupe guard for the whole import and a bare select
+  // silently stops at ~1000 rows — past that, already-registered people looked
+  // "new" and were RE-ADDED as duplicate members. Page through the full set.
+  const existingEmails = await fetchAllRows<{ email: string }>((from, to) =>
+    adminClient
+      .schema('yi_connect').from('approved_emails')
+      .select('email')
+      .order('id', { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: { email: string }[] | null
+      error: unknown
+    }>
   )
 
-  // Get all existing profiles
-  const { data: existingProfiles } = await adminClient
-    .schema('yi_connect').from('profiles')
-    .select('email')
+  const existingEmailSet = new Set(
+    existingEmails.map(e => e.email.toLowerCase())
+  )
+
+  // Get all existing profiles (same dedupe guard, same row-cap fix)
+  const existingProfiles = await fetchAllRows<{ email: string }>((from, to) =>
+    adminClient
+      .schema('yi_connect').from('profiles')
+      .select('email')
+      .order('id', { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: { email: string }[] | null
+      error: unknown
+    }>
+  )
 
   const existingProfileSet = new Set(
-    existingProfiles?.map(p => p.email.toLowerCase()) || []
+    existingProfiles.map(p => p.email.toLowerCase())
   )
 
   // Process each member

@@ -17,19 +17,14 @@ type Tab = "code" | "google" | "email";
 
 export default function AccessCodePage() {
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>("code");
-
-  // Honour ?tab= on arrival. This is not cosmetic: the Google button sends
-  // the user to Google with a redirectTo of ?tab=google, so without this the
-  // whole round trip lands back on the ACCESS CODE tab and the Google tab —
-  // where the session actually gets finished — is never mounted.
-  //
-  // Read after mount from window.location rather than useSearchParams() so
-  // the page needs no Suspense boundary and cannot hydrate-mismatch.
-  useEffect(() => {
-    const t = new URLSearchParams(window.location.search).get("tab");
-    if (t === "google" || t === "email") setTab(t);
-  }, []);
+  // Honour ?tab= on arrival. This is not cosmetic: the Google button sends the
+  // user to Google with a redirectTo of ?tab=google, so without it the whole
+  // round trip lands back on the ACCESS CODE tab and the Google tab — where
+  // the session actually gets finished — is never mounted.
+  const requestedTab = useSearchParams().get("tab");
+  const [tab, setTab] = useState<Tab>(
+    requestedTab === "google" || requestedTab === "email" ? requestedTab : "code"
+  );
 
   return (
     <main className="min-h-screen bg-ivory flex flex-col">

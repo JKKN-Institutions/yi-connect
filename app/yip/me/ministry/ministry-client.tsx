@@ -62,7 +62,21 @@ export function MinistryClient({
     );
   }
 
-  const heading = desk.scope === "all" ? "All Ministries" : ml(desk.ministry);
+  // Multi-ministry: a minister may hold several ministries — list them all in
+  // the heading and tag each item with its ministry when there is more than one.
+  const heldKeys =
+    desk.ministries && desk.ministries.length > 0
+      ? desk.ministries
+      : desk.ministry
+        ? [desk.ministry]
+        : [];
+  const multi = desk.scope === "all" || heldKeys.length > 1;
+  const heading =
+    desk.scope === "all"
+      ? "All Ministries"
+      : heldKeys.length > 0
+        ? heldKeys.map((k) => ml(k)).join(", ")
+        : ml(desk.ministry);
 
   return (
     <div className="mx-auto w-full max-w-md space-y-5 px-4 py-5 pb-24">
@@ -89,7 +103,7 @@ export function MinistryClient({
           const answered = q.status === "answered" || !!q.answer_summary;
           const key = `q-${q.id}`;
           return (
-            <Item key={key} title={q.question_text} tag={desk.scope === "all" ? ml(q.directed_to_ministry) : undefined} status={q.status}>
+            <Item key={key} title={q.question_text} tag={multi ? ml(q.directed_to_ministry) : undefined} status={q.status}>
               {q.answer_summary && (
                 <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
                   <span className="font-semibold">Answer: </span>{q.answer_summary}
@@ -120,7 +134,7 @@ export function MinistryClient({
         {desk.motions.map((m) => {
           const key = `m-${m.id}`;
           return (
-            <Item key={key} title={m.subject} subtitle={m.details ?? undefined} tag={desk.scope === "all" ? ml(m.directed_to_ministry) : undefined} status={m.status}>
+            <Item key={key} title={m.subject} subtitle={m.details ?? undefined} tag={multi ? ml(m.directed_to_ministry) : undefined} status={m.status}>
               {m.minister_response && (
                 <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
                   <span className="font-semibold">Response: </span>{m.minister_response}

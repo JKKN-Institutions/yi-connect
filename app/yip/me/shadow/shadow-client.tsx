@@ -43,14 +43,24 @@ export function ShadowClient({
     );
   }
 
-  const hasMinistry = !!desk.ministry;
+  // Multi-ministry: a shadow minister may shadow several ministries — list
+  // them all, and tag each item with its ministry when there is more than one.
+  const heldKeys =
+    desk.ministries && desk.ministries.length > 0
+      ? desk.ministries
+      : desk.ministry
+        ? [desk.ministry]
+        : [];
+  const multi = heldKeys.length > 1;
+  const heldLabels = heldKeys.map((k) => ml(k)).join(", ");
+  const hasMinistry = heldKeys.length > 0;
 
   return (
     <div className="mx-auto w-full max-w-md space-y-5 px-4 py-5 pb-24">
       <header>
         <h1 className="text-lg font-bold text-[#1a1a3e]">Shadow Minister&apos;s Desk</h1>
         <p className="text-sm text-[#1a1a3e]/55">
-          Shadowing {ml(desk.ministry)}
+          Shadowing {hasMinistry ? heldLabels : ml(desk.ministry)}
         </p>
       </header>
 
@@ -76,13 +86,13 @@ export function ShadowClient({
 
           <section className="space-y-2">
             <h2 className="text-xs font-bold uppercase tracking-wide text-[#FF9933]">
-              Questions to {ml(desk.ministry)} ({desk.questions.length})
+              Questions to {heldLabels} ({desk.questions.length})
             </h2>
             {desk.questions.length === 0 && (
               <Empty>No questions to your counterpart ministry yet.</Empty>
             )}
             {desk.questions.map((q) => (
-              <Item key={q.id} title={q.question_text} status={q.status}>
+              <Item key={q.id} title={q.question_text} tag={multi ? ml(q.directed_to_ministry) : undefined} status={q.status}>
                 {q.answer_summary ? (
                   <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
                     <span className="font-semibold">Minister&apos;s answer: </span>
@@ -97,13 +107,13 @@ export function ShadowClient({
 
           <section className="space-y-2">
             <h2 className="text-xs font-bold uppercase tracking-wide text-[#FF9933]">
-              Motions to {ml(desk.ministry)} ({desk.motions.length})
+              Motions to {heldLabels} ({desk.motions.length})
             </h2>
             {desk.motions.length === 0 && (
               <Empty>No motions directed to your counterpart ministry yet.</Empty>
             )}
             {desk.motions.map((m) => (
-              <Item key={m.id} title={m.subject} subtitle={m.details ?? undefined} status={m.status}>
+              <Item key={m.id} title={m.subject} subtitle={m.details ?? undefined} tag={multi ? ml(m.directed_to_ministry) : undefined} status={m.status}>
                 {m.minister_response ? (
                   <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
                     <span className="font-semibold">Minister&apos;s response: </span>
@@ -293,11 +303,13 @@ function Empty({ children }: { children: React.ReactNode }) {
 function Item({
   title,
   subtitle,
+  tag,
   status,
   children,
 }: {
   title: string;
   subtitle?: string;
+  tag?: string;
   status: string;
   children: React.ReactNode;
 }) {
@@ -310,6 +322,7 @@ function Item({
         </span>
       </div>
       {subtitle && <p className="mt-1 text-sm text-[#1a1a3e]/70">{subtitle}</p>}
+      {tag && <p className="mt-1 text-xs font-medium text-[#FF9933]">{tag}</p>}
       <div className="mt-2 space-y-2">{children}</div>
     </div>
   );

@@ -16,6 +16,11 @@ import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { effectiveMinistries } from "@/lib/yip/cabinet";
+import {
+  isMissingMinistryArraysError,
+  participantPortfolios,
+} from "@/lib/yip/ministries";
+import { fetchParticipantMinistryState } from "@/lib/yip/ministries-server";
 import { revalidatePath } from "next/cache";
 import type { Database } from "@/types/yip/database";
 
@@ -31,6 +36,11 @@ export interface PositionParticipant {
   id: string;
   full_name: string;
   party_side: string | null;
+  /**
+   * ALL ministry LABELS this member currently holds (multi-ministry model).
+   * Only populated by getCommitteeMinisters; other cards omit it.
+   */
+  portfolios?: string[];
 }
 
 export interface PositionRoleGroup {
@@ -438,14 +448,26 @@ export async function getCommitteeMinisters(
     getPositionBonusConfigAdmin(),
     // No committee_name filter — portfolio-mode pools span the whole bench, so we
     // need every participant; committee-mode grouping skips null committees below.
-    // cabinet_portfolio is a newer column not yet in the generated types, hence
-    // the loose builder cast (the read is plain text).
-    (supabase.from("participants") as ReturnType<typeof supabase.from>)
-      .select(
-        "id, full_name, party_side, parliament_role, committee_name, cabinet_portfolio"
-      )
-      .eq("event_id", eventId)
-      .order("full_name"),
+    // cabinet_portfolio + the multi-ministry arrays are newer columns not in the
+    // generated types, hence the loose builder cast (the reads are plain text).
+    // GRACEFUL DEGRADATION: the array columns may not exist yet (migration not
+    // applied) — on that specific failure retry without them.
+    (async () => {
+      const select = (cols: string) =>
+        (supabase.from("participants") as ReturnType<typeof supabase.from>)
+          .select(cols)
+          .eq("event_id", eventId)
+          .order("full_name");
+      let res = await select(
+        "id, full_name, party_side, parliament_role, committee_name, cabinet_portfolio, cabinet_portfolios"
+      );
+      if (res.error && isMissingMinistryArraysError(res.error)) {
+        res = await select(
+          "id, full_name, party_side, parliament_role, committee_name, cabinet_portfolio"
+        );
+      }
+      return res;
+    })(),
     supabase
       .from("events")
       .select("cabinet_ministries")
@@ -463,13 +485,15 @@ export async function getCommitteeMinisters(
     parliament_role: ParliamentRole | null;
     committee_name: string | null;
     cabinet_portfolio: string | null;
+    cabinet_portfolios?: (string | null)[] | null;
   };
   const all = (participantsRes.data ?? []) as unknown as Member[];
 
-  const strip = ({ id, full_name, party_side }: Member): PositionParticipant => ({
-    id,
-    full_name,
-    party_side,
+  const strip = (m: Member): PositionParticipant => ({
+    id: m.id,
+    full_name: m.full_name,
+    party_side: m.party_side,
+    portfolios: participantPortfolios(m),
   });
 
   const cabinetJson = eventRes.data?.cabinet_ministries ?? null;
@@ -478,38 +502,28 @@ export async function getCommitteeMinisters(
   let committees: CommitteeMinisterRow[];
 
   if (portfolioMode) {
-    // One row per chosen ministry (in the chapter's chosen order). Pools are the
-    // whole ruling/opposition bench, minus anyone who already holds a DIFFERENT
-    // ministry post (so they can't be double-booked). The holder of THIS row is
-    // matched by parliament_role + cabinet_portfolio === ministry label.
+    // One row per chosen ministry (in the chapter's chosen order). MULTI-
+    // MINISTRY model: a member may hold SEVERAL portfolios, so a minister is
+    // listed under EVERY ministry label in their set (cabinet_portfolios array,
+    // falling back to the single cabinet_portfolio pre-migration). Pools are
+    // the whole ruling/opposition bench — a sitting minister may be given an
+    // ADDITIONAL ministry (the card excludes this row's current holders).
     const labels = effectiveMinistries(cabinetJson).map((m) => m.label.trim());
-    const isMinister = (m: Member) =>
-      m.parliament_role === "cabinet_minister" ||
-      m.parliament_role === "shadow_minister";
 
     committees = labels.map((label) => {
       const cabinet = all.filter(
         (m) =>
           m.parliament_role === "cabinet_minister" &&
-          (m.cabinet_portfolio ?? "").trim() === label
+          participantPortfolios(m).includes(label)
       );
       const shadow = all.filter(
         (m) =>
           m.parliament_role === "shadow_minister" &&
-          (m.cabinet_portfolio ?? "").trim() === label
+          participantPortfolios(m).includes(label)
       );
-      const cabinetIds = new Set(cabinet.map((m) => m.id));
-      const shadowIds = new Set(shadow.map((m) => m.id));
-      // Eligible = bench member who is NOT already a minister elsewhere, OR is the
-      // current holder of this exact seat (so they show as removable).
-      const rulingMembers = all.filter(
-        (m) =>
-          m.party_side === "ruling" && (!isMinister(m) || cabinetIds.has(m.id))
-      );
+      const rulingMembers = all.filter((m) => m.party_side === "ruling");
       const oppositionMembers = all.filter(
-        (m) =>
-          m.party_side === "opposition" &&
-          (!isMinister(m) || shadowIds.has(m.id))
+        (m) => m.party_side === "opposition"
       );
       return {
         committee: label,
@@ -553,11 +567,17 @@ export async function getCommitteeMinisters(
 }
 
 /**
- * Assign a participant to a ministry portfolio (Cabinet or Shadow Minister) in
- * the portfolio-based cabinet model. Sets BOTH parliament_role and
- * participants.cabinet_portfolio (the ministry label), decoupled from committee.
+ * Assign a participant a ministry portfolio (Cabinet or Shadow Minister) in the
+ * portfolio-based cabinet model. MULTI-MINISTRY: this is ADD-TO-SET — the
+ * ministry key+label are APPENDED to participants.ministries /
+ * cabinet_portfolios (no-op if already held); the FIRST ministry also fills the
+ * legacy single columns (ministry / cabinet_portfolio = the PRIMARY), which
+ * legacy readers keep using. parliament_role is set to the seat's role.
  * Bench is enforced: Cabinet Minister must be ruling, Shadow Minister opposition.
  * Organiser-gated (canManage).
+ *
+ * GRACEFUL DEGRADATION: before the migration lands the array columns don't
+ * exist — the write falls back to the legacy single-column overwrite.
  */
 export async function setCabinetPortfolio(input: {
   eventId: string;
@@ -595,12 +615,12 @@ export async function setCabinetPortfolio(input: {
   const role = input.seat === "cabinet" ? "cabinet_minister" : "shadow_minister";
 
   // Resolve the chosen ministry LABEL to its per-event cabinet KEY and store it
-  // in participants.ministry too. The Minister + Shadow desks (ministry.ts /
-  // shadow.ts) route Question-Hour questions by participants.ministry == the
-  // cabinet KEY a question is directed to — so without this, a portfolio-assigned
-  // minister would never see their questions. The label comes straight from the
-  // cabinet config (getCommitteeMinisters builds the rows from effectiveMinistries),
-  // so a match is expected; fall back to null defensively.
+  // in participants.ministry/ministries too. The Minister + Shadow desks
+  // (ministry.ts / shadow.ts) route Question-Hour questions by the cabinet KEY a
+  // question is directed to — so without this, a portfolio-assigned minister
+  // would never see their questions. FAIL CLOSED: an unresolvable label is
+  // rejected (a keyless entry can't route AND would break the index alignment
+  // between the ministries/cabinet_portfolios arrays).
   const { data: eventRow } = await supabase
     .from("events")
     .select("cabinet_ministries")
@@ -610,16 +630,60 @@ export async function setCabinetPortfolio(input: {
     effectiveMinistries(eventRow?.cabinet_ministries ?? null).find(
       (m) => m.label.trim() === ministry
     )?.key ?? null;
+  if (!ministryKey) {
+    return {
+      success: false,
+      error: "That ministry isn't part of this event's cabinet.",
+    };
+  }
 
-  const { error } = await (
-    supabase.from("participants") as ReturnType<typeof supabase.from>
-  )
-    .update({
-      parliament_role: role,
-      cabinet_portfolio: ministry,
-      ministry: ministryKey,
-    })
-    .eq("id", input.participantId);
+  // Legacy single-column overwrite — the pre-migration behaviour and the
+  // fallback when the array columns don't exist yet.
+  const legacyUpdate = () =>
+    (supabase.from("participants") as ReturnType<typeof supabase.from>)
+      .update({
+        parliament_role: role,
+        cabinet_portfolio: ministry,
+        ministry: ministryKey,
+      })
+      .eq("id", input.participantId);
+
+  const state = await fetchParticipantMinistryState(
+    supabase,
+    input.participantId,
+    input.eventId
+  );
+
+  let error: { message: string } | null = null;
+  if (!state || state.degraded) {
+    ({ error } = await legacyUpdate());
+  } else {
+    const keys = [...state.keys];
+    const labels = [...state.labels];
+    const idx = keys.indexOf(ministryKey);
+    if (idx >= 0) {
+      labels[idx] = ministry; // already held — just refresh the label slot
+    } else {
+      keys.push(ministryKey);
+      labels.push(ministry);
+    }
+    const res = await (
+      supabase.from("participants") as ReturnType<typeof supabase.from>
+    )
+      .update({
+        parliament_role: role,
+        // Single columns always mirror the PRIMARY (first array element).
+        ministry: keys[0],
+        cabinet_portfolio: labels[0],
+        ministries: keys,
+        cabinet_portfolios: labels,
+      })
+      .eq("id", input.participantId);
+    error = res.error;
+    if (error && isMissingMinistryArraysError(error)) {
+      ({ error } = await legacyUpdate());
+    }
+  }
   if (error) return { success: false, error: error.message };
 
   revalidatePath(`/yip/dashboard/events/${input.eventId}/positions`);
@@ -627,8 +691,111 @@ export async function setCabinetPortfolio(input: {
 }
 
 /**
- * Remove a participant from their ministry portfolio: clears cabinet_portfolio
- * and resets parliament_role to plain MP. Organiser-gated (canManage).
+ * Remove ONE ministry from a participant's set (by its label — the Positions
+ * grid row). If the removed ministry was the PRIMARY, the next array element is
+ * promoted into the single columns; removing the LAST ministry resets
+ * parliament_role to plain MP. Organiser-gated (canManage).
+ *
+ * GRACEFUL DEGRADATION: pre-migration there is only the single ministry, so a
+ * matching remove behaves exactly like clearCabinetPortfolio.
+ */
+export async function removeCabinetPortfolio(input: {
+  eventId: string;
+  participantId: string;
+  /** Ministry LABEL to remove (a KEY is also accepted). */
+  ministry: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const access = await getYipEventAccess(input.eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  const target = input.ministry.trim();
+  if (!target) return { success: false, error: "Missing ministry" };
+
+  const supabase = await createServiceClient();
+  const state = await fetchParticipantMinistryState(
+    supabase,
+    input.participantId,
+    input.eventId
+  );
+  if (!state) return { success: false, error: "Participant not found" };
+
+  // Full clear — also the degraded-mode path (single-ministry world).
+  const legacyClear = () =>
+    (supabase.from("participants") as ReturnType<typeof supabase.from>)
+      .update({ parliament_role: "mp", cabinet_portfolio: null, ministry: null })
+      .eq("id", input.participantId)
+      .eq("event_id", input.eventId);
+
+  let error: { message: string } | null = null;
+
+  if (state.degraded) {
+    const holds =
+      (state.cabinet_portfolio ?? "").trim() === target ||
+      state.ministry === target;
+    if (!holds) {
+      return {
+        success: false,
+        error: "This participant doesn't hold that ministry.",
+      };
+    }
+    ({ error } = await legacyClear());
+  } else {
+    const idx = state.labels.findIndex((l) => (l ?? "").trim() === target);
+    const at = idx >= 0 ? idx : state.keys.indexOf(target);
+    if (at < 0) {
+      return {
+        success: false,
+        error: "This participant doesn't hold that ministry.",
+      };
+    }
+    const keys = [...state.keys];
+    const labels = [...state.labels];
+    keys.splice(at, 1);
+    labels.splice(at, 1);
+
+    const res = await (
+      supabase.from("participants") as ReturnType<typeof supabase.from>
+    )
+      .update(
+        keys.length === 0
+          ? {
+              // Last ministry removed — back to plain MP, clear the routing key
+              // so the Minister/Shadow desks stop surfacing their questions.
+              parliament_role: "mp",
+              ministry: null,
+              cabinet_portfolio: null,
+              ministries: [],
+              cabinet_portfolios: [],
+            }
+          : {
+              // Promote the next element into the PRIMARY single columns
+              // (no-op when a non-primary was removed). Role is kept — they
+              // are still a minister of the remaining ministries.
+              ministry: keys[0],
+              cabinet_portfolio: labels[0],
+              ministries: keys,
+              cabinet_portfolios: labels,
+            }
+      )
+      .eq("id", input.participantId)
+      .eq("event_id", input.eventId);
+    error = res.error;
+    if (error && isMissingMinistryArraysError(error)) {
+      // Migration state changed under us — fall back to the single-column world.
+      ({ error } = await legacyClear());
+    }
+  }
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${input.eventId}/positions`);
+  return { success: true };
+}
+
+/**
+ * Remove a participant from ALL ministry portfolios: clears the single columns
+ * AND the multi-ministry arrays, and resets parliament_role to plain MP.
+ * Organiser-gated (canManage).
  */
 export async function clearCabinetPortfolio(input: {
   eventId: string;
@@ -639,14 +806,29 @@ export async function clearCabinetPortfolio(input: {
     return { success: false, error: "Not authorized to manage this event" };
   }
   const supabase = await createServiceClient();
-  const { error } = await (
+  // Clear the routing key(s) too, so the Minister/Shadow desks stop surfacing
+  // this (now-removed) minister's questions. Array columns may not exist yet
+  // (migration not applied) — retry without them on that specific failure.
+  let { error } = await (
     supabase.from("participants") as ReturnType<typeof supabase.from>
   )
-    // Clear the routing key too, so the Minister/Shadow desks stop surfacing
-    // this (now-removed) minister's questions.
-    .update({ parliament_role: "mp", cabinet_portfolio: null, ministry: null })
+    .update({
+      parliament_role: "mp",
+      cabinet_portfolio: null,
+      ministry: null,
+      ministries: [],
+      cabinet_portfolios: [],
+    })
     .eq("id", input.participantId)
     .eq("event_id", input.eventId);
+  if (error && isMissingMinistryArraysError(error)) {
+    ({ error } = await (
+      supabase.from("participants") as ReturnType<typeof supabase.from>
+    )
+      .update({ parliament_role: "mp", cabinet_portfolio: null, ministry: null })
+      .eq("id", input.participantId)
+      .eq("event_id", input.eventId));
+  }
   if (error) return { success: false, error: error.message };
 
   revalidatePath(`/yip/dashboard/events/${input.eventId}/positions`);

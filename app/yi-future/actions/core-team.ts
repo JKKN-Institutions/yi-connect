@@ -126,7 +126,22 @@ export async function addCoreTeamMember(
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/yi-future/chapter/setup");
-  return { ok: true, message: "Core team member added." };
+
+  // Say plainly whether this person can actually sign in. The old blanket
+  // "Core team member added." was true about the row and wrong about the human.
+  if (issuedPassword) {
+    return {
+      ok: true,
+      message: `${full_name} added. Sign-in: ${email} · temporary password ${issuedPassword} — send it to them (email delivery is down) and ask them to change it after first sign-in. This is shown once.`,
+    };
+  }
+  if (user_id) {
+    return { ok: true, message: `${full_name} added and linked to their existing ${email} sign-in.` };
+  }
+  return {
+    ok: true,
+    message: `${full_name} added, but with no email they cannot be given a sign-in. Add an email to let them use the platform.`,
+  };
 }
 
 // ─── UPDATE MEMBER ──────────────────────────────────────────────────

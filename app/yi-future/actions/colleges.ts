@@ -197,7 +197,6 @@ export async function mergePendingCollege(
   sourceId: string,
   targetId: string
 ): Promise<ActionResult> {
-  await requireAuth();
   if (sourceId === targetId) {
     return { ok: false, error: "Source and target must differ." };
   }

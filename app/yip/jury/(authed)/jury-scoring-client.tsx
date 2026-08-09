@@ -272,6 +272,34 @@ function JuryScoringClientInner({
   // Quick-jump bar (Piece 2) + Unfinished strip (Piece 3) state.
   const [quickJump, setQuickJump] = useState("");
   const [showAllUnfinished, setShowAllUnfinished] = useState(false);
+  // Phone UX: the digit pad auto-collapses after a successful jump so it stops
+  // hiding the bottom criterion row + comments box; the jump FIELD stays
+  // visible and the pad reopens from the toggle beside it (or input focus).
+  const [jumpPadOpen, setJumpPadOpen] = useState(true);
+  // Phone UX: measured height of the fixed quick-jump bar → real bottom
+  // clearance on the page content (its height varies with the pad/matches/
+  // Unfinished strips, so a static pb under-shoots and the bar swallows taps).
+  // Callback ref so it fires exactly on the bar's mount/unmount. Also flags
+  // the bar's presence on <body> so the jury layout's floating Help FAB
+  // (bottom-left — it sat exactly on the pad's "1" key) hides itself.
+  const [jumpBarHeight, setJumpBarHeight] = useState(0);
+  const jumpBarObserverRef = useRef<ResizeObserver | null>(null);
+  const jumpBarRef = useCallback((el: HTMLDivElement | null) => {
+    jumpBarObserverRef.current?.disconnect();
+    jumpBarObserverRef.current = null;
+    if (!el) {
+      setJumpBarHeight(0);
+      document.body.removeAttribute("data-yip-jury-jumpbar");
+      return;
+    }
+    document.body.setAttribute("data-yip-jury-jumpbar", "1");
+    const observer = new ResizeObserver(() =>
+      setJumpBarHeight(el.offsetHeight)
+    );
+    observer.observe(el);
+    setJumpBarHeight(el.offsetHeight);
+    jumpBarObserverRef.current = observer;
+  }, []);
 
   // Special Remarks (Phase 18 / F4) — flag checkboxes + delta config
   const [flagDeltas, setFlagDeltas] = useState<FlagDeltas | null>(null);
@@ -988,6 +1016,32 @@ function JuryScoringClientInner({
     };
   }, [loadScoresMap]);
 
+  // A juror assigned mid-event stayed stuck on "No sessions assigned" until a
+  // full re-navigation — while that empty state is showing, re-pull the
+  // bootstrap whenever the tab/app regains focus.
+  const stuckWithNoSessions = sessionsLoaded && assignedSessions.length === 0;
+  useEffect(() => {
+    if (!stuckWithNoSessions) return;
+    const recheck = () => {
+      if (document.visibilityState === "hidden") return;
+      void getJuryScreenBootstrap(juryAssignmentId, eventId)
+        .then((res) => {
+          if (res.success && res.data.sessions.length > 0) {
+            applyBootstrap(res.data);
+          }
+        })
+        .catch(() => {
+          // Offline — keep the empty state; the next focus retries.
+        });
+    };
+    window.addEventListener("focus", recheck);
+    document.addEventListener("visibilitychange", recheck);
+    return () => {
+      window.removeEventListener("focus", recheck);
+      document.removeEventListener("visibilitychange", recheck);
+    };
+  }, [stuckWithNoSessions, juryAssignmentId, eventId, applyBootstrap]);
+
   // ─── Load all participants for manual picker ────────────────────
 
   const loadAllParticipants = async () => {
@@ -1014,6 +1068,9 @@ function JuryScoringClientInner({
     setManualParticipant(p);
     setShowPicker(false);
     setPickerSearch(""); // clear search after picking a participant
+    // Collapse the digit pad once a participant is opened (jump chip, picker
+    // row or Unfinished chip) so it stops covering the form's bottom rows.
+    setJumpPadOpen(false);
     // Rapid scoring: loadParticipantScore resolves synchronously (no spinner
     // flash) whenever the caches are warm — setLoading(true) below is a no-op
     // in that common case since setLoading(false) follows on the same tick.
@@ -1280,7 +1337,16 @@ function JuryScoringClientInner({
   const unfinishedHiddenCount = unfinishedRows.length - unfinishedVisible.length;
 
   return (
-    <div className="space-y-4 pb-56">
+    <div
+      className="space-y-4 pb-56"
+      // Real clearance under the fixed quick-jump bar (measured, since its
+      // height varies) so its overlay never swallows taps on page content —
+      // e.g. the "Score a specific participant" header. pb-56 is the fallback
+      // until the first measure lands.
+      style={
+        jumpBarHeight > 0 ? { paddingBottom: jumpBarHeight + 28 } : undefined
+      }
+    >
       {eventLocked && (
         <div
           role="alert"
@@ -1732,7 +1798,9 @@ function JuryScoringClientInner({
                   onChange={(e) => setPickerSearch(e.target.value)}
                   placeholder="Search by number, constituency, or name"
                   aria-label="Search participants by number, constituency, or name"
-                  className="w-full rounded-lg border-2 border-gray-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
+                  // text-base (16px): anything smaller makes iOS Safari
+                  // auto-zoom on focus, cropping the right edge of the screen.
+                  className="w-full rounded-lg border-2 border-gray-200 px-3 py-2 text-base focus:border-blue-400 focus:outline-none"
                 />
               </div>
               <div
@@ -1820,6 +1888,7 @@ function JuryScoringClientInner({
           once a session is selected (matching + status dots need one). */}
       {selectedSessionId && (
         <div
+          ref={jumpBarRef}
           className="fixed inset-x-0 bottom-0 z-30 mx-auto mb-3 max-w-md rounded-xl border-2 border-gray-200 bg-white/95 px-3 py-2.5 backdrop-blur"
           style={{ boxShadow: "0 -2px 10px rgba(0,0,0,0.07)", width: "calc(100% - 2rem)" }}
         >
@@ -1830,68 +1899,94 @@ function JuryScoringClientInner({
           >
             Jump to participant #
           </label>
-          <input
-            id="quick-jump-input"
-            type="text"
-            inputMode="numeric"
-            autoComplete="off"
-            value={quickJump}
-            onChange={(e) => setQuickJump(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && quickJumpMatches.length === 1) {
-                void selectManualParticipant(quickJumpMatches[0]);
-                setQuickJump("");
-              }
-            }}
-            placeholder="e.g. 42"
-            aria-label="Jump to participant by number"
-            className="mt-1 w-full rounded-lg border-2 border-gray-200 px-3 py-2 text-base font-semibold text-gray-900 focus:border-blue-400 focus:outline-none"
-            style={{ minHeight: "44px" }}
-          />
+          <div className="mt-1 flex items-stretch gap-1.5">
+            <input
+              id="quick-jump-input"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              value={quickJump}
+              onChange={(e) => setQuickJump(e.target.value)}
+              onFocus={() => setJumpPadOpen(true)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && quickJumpMatches.length === 1) {
+                  void selectManualParticipant(quickJumpMatches[0]);
+                  setQuickJump("");
+                }
+              }}
+              placeholder="e.g. 42"
+              aria-label="Jump to participant by number"
+              className="w-full min-w-0 flex-1 rounded-lg border-2 border-gray-200 px-3 py-2 text-base font-semibold text-gray-900 focus:border-blue-400 focus:outline-none"
+              style={{ minHeight: "44px" }}
+            />
+            {/* Reopens the pad without focusing the input (which would summon
+                the OS keyboard the pad exists to avoid, #780). */}
+            <button
+              type="button"
+              onClick={() => setJumpPadOpen((o) => !o)}
+              aria-label={jumpPadOpen ? "Hide digit pad" : "Show digit pad"}
+              aria-expanded={jumpPadOpen}
+              aria-controls="quick-jump-pad"
+              className="flex shrink-0 touch-manipulation items-center justify-center rounded-lg border-2 border-gray-200 px-3 text-gray-700 hover:bg-gray-50 active:bg-gray-100"
+              style={{ minHeight: "44px", minWidth: "44px" }}
+            >
+              {jumpPadOpen ? (
+                <ChevronUp className="size-5" />
+              ) : (
+                <ChevronDown className="size-5" />
+              )}
+            </button>
+          </div>
 
           {/* On-screen digit pad — avoids summoning the OS keyboard for
               rapid-fire numeric jumps during live debate (#780). Appends
-              straight into the SAME quickJump state; no focus() calls. */}
-          <div
-            className="mt-2 flex gap-1"
-            role="group"
-            aria-label="Digit pad for participant number"
-          >
-            {["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map((d) => (
+              straight into the SAME quickJump state; no focus() calls.
+              6-col grid, 2 rows: a single 12-button flex row squeezed every
+              key to ~24px on a phone — too small to hit (the ✕ took two
+              missed precise taps on a real iPhone). Every key is now ≥44px. */}
+          {jumpPadOpen && (
+            <div
+              id="quick-jump-pad"
+              className="mt-2 grid grid-cols-6 gap-1"
+              role="group"
+              aria-label="Digit pad for participant number"
+            >
+              {["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setQuickJump((q) => q + d)}
+                  className="rounded-md border-2 text-sm font-bold active:scale-95"
+                  style={{
+                    minHeight: "44px",
+                    borderColor: `${GOLD}66`,
+                    color: INK,
+                    background: `${GOLD}14`,
+                  }}
+                >
+                  {d}
+                </button>
+              ))}
               <button
-                key={d}
                 type="button"
-                onClick={() => setQuickJump((q) => q + d)}
-                className="flex-1 rounded-md border-2 text-sm font-bold active:scale-95"
-                style={{
-                  minHeight: "40px",
-                  borderColor: `${GOLD}66`,
-                  color: INK,
-                  background: `${GOLD}14`,
-                }}
+                onClick={() => setQuickJump((q) => q.slice(0, -1))}
+                aria-label="Backspace"
+                className="rounded-md border-2 border-gray-200 text-sm font-bold text-gray-700 active:scale-95"
+                style={{ minHeight: "44px" }}
               >
-                {d}
+                ⌫
               </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setQuickJump((q) => q.slice(0, -1))}
-              aria-label="Backspace"
-              className="flex-1 rounded-md border-2 border-gray-200 text-sm font-bold text-gray-700 active:scale-95"
-              style={{ minHeight: "40px" }}
-            >
-              ⌫
-            </button>
-            <button
-              type="button"
-              onClick={() => setQuickJump("")}
-              aria-label="Clear"
-              className="flex-1 rounded-md border-2 border-gray-200 text-sm font-bold text-gray-700 active:scale-95"
-              style={{ minHeight: "40px" }}
-            >
-              ×
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => setQuickJump("")}
+                aria-label="Clear"
+                className="rounded-md border-2 border-gray-200 text-sm font-bold text-gray-700 active:scale-95"
+                style={{ minHeight: "44px" }}
+              >
+                ×
+              </button>
+            </div>
+          )}
 
           {quickJump.trim() && (
             <div

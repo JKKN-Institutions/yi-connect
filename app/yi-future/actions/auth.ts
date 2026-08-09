@@ -11,6 +11,7 @@ import {
   sendBrandedPasswordReset,
   appBaseUrl,
 } from "@/lib/auth/branded-password-reset";
+import { resolveFutureAccessOrNull } from "@/lib/yi-future/auth/require-access";
 
 // ─── SHARED ─────────────────────────────────────────────────────────
 type AccessCodeRole = "delegate" | "mentor" | "jury" | "partner" | "expert";
@@ -455,4 +456,44 @@ export async function readSession(): Promise<SessionPayload | null> {
     return null; // malformed signed cookie
   }
   return null; // signature mismatch — forged / corrupted / wrong secret
+}
+
+/**
+ * Where should the CURRENTLY signed-in Supabase user land after an admin
+ * Google sign-in?
+ *
+ * The admin door (/yi-future/login) is password-only, so an admin whose
+ * account is Google-backed has no supported way in: their only route is the
+ * STUDENT door at /yi-future/access, which after Google pushes them into
+ * "pick your chapter → pick your name" — a delegate flow their name is not in.
+ * It works today only by accident, because resolveFutureAccess() reads the
+ * Supabase session no matter which door created it, so an admin who happens to
+ * type an admin URL afterwards is let through. Nothing tells them to.
+ *
+ * Six chapter admins currently have a Google identity and NO password, so the
+ * password form is unusable for them — and with Resend over quota, password
+ * reset cannot reach them either.
+ *
+ * Returns null when the signed-in Google account is not an admin at all, so
+ * the caller can say so plainly instead of bouncing them somewhere confusing.
+ */
+export async function adminHomeForCurrentUser(): Promise<{
+  ok: boolean;
+  path: string | null;
+  email: string | null;
+}> {
+  const access = await resolveFutureAccessOrNull();
+  if (!access) return { ok: false, path: null, email: null };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const email = user?.email ?? null;
+
+  if (access.isNational) return { ok: true, path: "/yi-future/national", email };
+  if (access.chapterIds.length > 0) {
+    return { ok: true, path: "/yi-future/chapter", email };
+  }
+  return { ok: false, path: null, email };
 }

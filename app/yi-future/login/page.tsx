@@ -1,10 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { BrandStrip, ProgramWordmark } from "@/components/yi-future/brand/BrandHeader";
-import { loginAdmin } from "@/app/yi-future/actions/auth";
+import { createClient } from "@/lib/yi-future/supabase/client";
+import {
+  loginAdmin,
+  adminHomeForCurrentUser,
+} from "@/app/yi-future/actions/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,6 +16,74 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [finishingGoogle, setFinishingGoogle] = useState(false);
+
+  // ─── Google sign-in for admins ────────────────────────────────────────
+  // This form was password-only, so an admin whose account is Google-backed
+  // had no supported way in — their only route was the STUDENT door, which
+  // after Google pushes them into "pick your chapter → pick your name", a
+  // delegate flow their name is not in. Six chapter admins have a Google
+  // identity and no password at all, and with email delivery down, password
+  // reset cannot reach them either.
+  async function handleGoogle() {
+    setError(null);
+    const supabase = createClient();
+    const { error: oauthErr } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/yi-future/login` },
+    });
+    if (oauthErr) setError("Google sign-in could not start. Try again.");
+  }
+
+  // Finish the Google round trip.
+  //
+  // Do NOT call exchangeCodeForSession here. createBrowserClient runs with
+  // detectSessionInUrl defaulting to true, so constructing the client above
+  // already spends the single-use ?code=. Calling exchange on top of it is a
+  // second exchange of a spent code, which always fails — that mistake shipped
+  // once already and reported "link expired" over a working session.
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has("code")) return;
+    let cancelled = false;
+    setFinishingGoogle(true);
+
+    (async () => {
+      const supabase = createClient();
+      let user = (await supabase.auth.getUser()).data.user;
+      // The auto-detect is asynchronous — wait for it rather than racing it.
+      for (let i = 0; i < 10 && !user; i++) {
+        await new Promise((r) => setTimeout(r, 150));
+        user = (await supabase.auth.getUser()).data.user;
+      }
+      if (cancelled) return;
+
+      if (!user) {
+        setError("That Google sign-in did not complete. Please try again.");
+        setFinishingGoogle(false);
+        return;
+      }
+
+      // Route by ROLE, so a national admin lands on the national dashboard and
+      // a chapter admin on their chapter — rather than a fixed path that is
+      // wrong for one of them.
+      const home = await adminHomeForCurrentUser();
+      if (cancelled) return;
+      if (!home.ok || !home.path) {
+        setError(
+          `${home.email ?? "That Google account"} is not a Yi-Future admin. If you are a student, mentor or jury member, sign in with your access code instead.`
+        );
+        setFinishingGoogle(false);
+        return;
+      }
+      router.push(home.path);
+      router.refresh();
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // Mount only: the code in the URL is consumed exactly once.
+  }, [router]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

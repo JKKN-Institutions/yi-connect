@@ -206,6 +206,53 @@ function GoogleLoginTab() {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [googleEmail, setGoogleEmail] = useState<string | null>(null);
+  const [finishing, setFinishing] = useState(false);
+
+  // ─── Finish the Google round trip ────────────────────────────────────
+  // Supabase sends the user back here with ?code=… (PKCE). Nothing was
+  // exchanging it: the browser client is only constructed inside the click
+  // handlers below, so on the return trip no client existed, detectSessionInUrl
+  // never ran, and the session was never stored. The user landed on the same
+  // "Continue with Google" button they had just pressed, still signed out —
+  // while Supabase's own records showed a successful sign-in.
+  //
+  // Telltale of the old behaviour: a sb-<ref>-auth-token-code-verifier cookie
+  // with no sb-<ref>-auth-token beside it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const wantsPickChapter = params.get("step") === "pick-chapter";
+    if (!code && !wantsPickChapter) return;
+
+    let cancelled = false;
+    setFinishing(true);
+
+    (async () => {
+      const supabase = createClient();
+      if (code) {
+        const { error: exErr } = await supabase.auth.exchangeCodeForSession(code);
+        if (exErr) {
+          if (!cancelled) {
+            setError("That Google sign-in link expired. Please try again.");
+            setFinishing(false);
+          }
+          return;
+        }
+        // Drop ?code= so a refresh cannot replay a now-spent code.
+        window.history.replaceState({}, "", "/yi-future/access?tab=google");
+      }
+      if (!cancelled) {
+        await loadChapters();
+        setFinishing(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // Mount only: the code in the URL is consumed exactly once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleGoogleSignIn() {
     setError(null);

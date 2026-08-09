@@ -15,7 +15,17 @@ import {
 
 type Tab = "code" | "google" | "email";
 
+// useSearchParams() forces this subtree to render on the client, so it needs a
+// Suspense boundary or the production build refuses to prerender the route.
 export default function AccessCodePage() {
+  return (
+    <Suspense fallback={null}>
+      <AccessCodeInner />
+    </Suspense>
+  );
+}
+
+function AccessCodeInner() {
   const router = useRouter();
   // Honour ?tab= on arrival. This is not cosmetic: the Google button sends the
   // user to Google with a redirectTo of ?tab=google, so without it the whole

@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
 import { TEAM_SIZE_MIN, TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
 import { UnlockAllTeamsButton } from "@/components/yi-future/UnlockAllTeamsButton";
+import { LockedTeamsPanel } from "@/components/yi-future/LockedTeamsPanel";
 
 type Team = {
   id: string;
@@ -118,6 +119,11 @@ export default async function TeamsPage({
   // Locked teams across the WHOLE chapter, not the current track filter — the
   // bulk unlock is chapter-wide, so a filtered count would understate it.
   const frozenCount = allTeams.filter((t) => t.is_frozen).length;
+  // Chapter-wide, like the count above: the panel unlocks by team id, so the
+  // current track filter must not hide a locked team from it.
+  const lockedTeams = allTeams
+    .filter((t) => t.is_frozen)
+    .map((t) => ({ id: t.id, team_name: t.team_name }));
 
   // Track chips — derived from teams' problem→track joins
   const tracksInChapter = Array.from(
@@ -204,6 +210,8 @@ export default async function TeamsPage({
         </div>
       )}
 
+      <LockedTeamsPanel teams={lockedTeams} />
+
       {/* Track filter chips (Future 6.0: every chapter runs all 4 tracks) */}
       <div className="flex flex-wrap gap-2">
         <Link
@@ -263,6 +271,11 @@ export default async function TeamsPage({
                     </div>
                     <div className="text-xs text-navy/50 mt-0.5">
                       {t.status ?? "registered"}
+                      {t.is_frozen && (
+                        <span className="ml-1.5 text-yi-gold font-semibold">
+                          🔒 locked
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div

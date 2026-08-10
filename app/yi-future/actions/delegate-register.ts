@@ -67,20 +67,37 @@ export type PreviousProfile = {
   edition_slug: string | null;
 };
 
+/**
+ * Pre-fill helper for a returning delegate on the PUBLIC join form.
+ *
+ * SECURITY (tightened 2026-08-10): this is an unauthenticated action that
+ * returns a full personal profile — name, phone, WhatsApp, gender, college,
+ * course, age. It previously matched on email OR phone, so anyone could type
+ * a single email address and receive that student's phone number back. With
+ * 16,708 delegates on file, all with phone numbers, that was a bulk personal-
+ * data lookup open to the internet.
+ *
+ * Both identifiers are now required AND must belong to the SAME delegate row.
+ * That makes enumeration useless: knowing only an email returns nothing, and
+ * guessing the matching 10-digit mobile is a 10^10 search. Anyone who can
+ * satisfy the check already holds both pieces of data it returns.
+ *
+ * This costs genuine users nothing — the form only calls this after section 1
+ * validates, and section 1 requires both email and mobile.
+ */
 export async function lookupReturningDelegate(
   email: string,
   phone: string
 ): Promise<PreviousProfile | null> {
-  const cleanEmail = email?.trim().toLowerCase();
-  const cleanPhone = phone?.replace(/[^\d]/g, "").replace(/^91(?=\d{10}$)/, "");
-  if (!cleanEmail && !cleanPhone) return null;
+  const cleanEmail = email?.trim().toLowerCase() ?? "";
+  const cleanPhone = normalizeMobile(phone ?? "");
+
+  // Fail closed: a missing or malformed half means no lookup at all.
+  if (!EMAIL_RE.test(cleanEmail) || !INDIA_MOBILE_RE.test(cleanPhone)) {
+    return null;
+  }
 
   const svc = await createServiceClient();
-
-  const conditions: string[] = [];
-  if (cleanEmail) conditions.push(`email.eq.${cleanEmail}`);
-  if (cleanPhone && cleanPhone.length === 10) conditions.push(`phone.eq.${cleanPhone}`);
-  if (conditions.length === 0) return null;
 
   const { data } = await svc
     .schema("future")
@@ -88,7 +105,8 @@ export async function lookupReturningDelegate(
     .select(
       "full_name, email, phone, whatsapp, gender, is_yi_yuva_member, chapter_id, chapters(name), course, specialization, year_of_study, age, college_id, colleges(name, city), editions(slug)"
     )
-    .or(conditions.join(","))
+    .eq("email", cleanEmail)
+    .eq("phone", cleanPhone)
     .order("registered_at", { ascending: false })
     .limit(1)
     .maybeSingle();

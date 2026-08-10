@@ -209,6 +209,7 @@ export async function PendingInviteAlert() {
                 <PendingInviteActions
                   inviteId={inv.id}
                   canAccept={canAccept}
+                  teamName={team.team_name}
                 />
               </li>
             );

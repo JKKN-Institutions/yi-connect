@@ -28,17 +28,9 @@ export type FutureAccess = {
   userId: string;
   /** future_admin / future_super_admin / platform_super_admin. */
   isNational: boolean;
-  /** Platform-level admin (app='platform'). A STRICTER set than isNational:
-   *  the Yi-Future national roles are held by 12 chapter-facing people, while
-   *  platform roles are the platform operators. Used to gate cross-chapter
-   *  impersonation (the chapter switch), which is deliberately narrower than
-   *  ordinary national access. */
-  isPlatform: boolean;
   /** chapter_ids where the user is on an active core team. */
   chapterIds: string[];
 };
-
-const PLATFORM_ROLES = new Set(["platform_admin", "platform_super_admin"]);
 
 const FUTURE_NATIONAL_ROLES = new Set([
   "future_admin",
@@ -113,7 +105,6 @@ async function resolveFutureAccess(): Promise<FutureAccess | null> {
   }
 
   let isNational = false;
-  let isPlatform = false;
   const chapterIds = new Set<string>();
 
   if (personId) {
@@ -135,10 +126,6 @@ async function resolveFutureAccess(): Promise<FutureAccess | null> {
 
     isNational = roles.some(
       (r) => r.is_active && FUTURE_NATIONAL_ROLES.has(r.role)
-    );
-
-    isPlatform = roles.some(
-      (r) => r.is_active && r.app === "platform" && PLATFORM_ROLES.has(r.role)
     );
 
     // Chapter-level roles → resolve the chapter by NAME (yi_directory stores the
@@ -179,7 +166,7 @@ async function resolveFutureAccess(): Promise<FutureAccess | null> {
     if (r.chapter_id) chapterIds.add(r.chapter_id);
   }
 
-  return { userId: user.id, isNational, isPlatform, chapterIds: [...chapterIds] };
+  return { userId: user.id, isNational, chapterIds: [...chapterIds] };
 }
 
 /**

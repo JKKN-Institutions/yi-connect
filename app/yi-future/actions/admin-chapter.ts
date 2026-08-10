@@ -7,19 +7,23 @@
 // chapter (requireChapterAdmin lets national through) but could not OPEN it.
 // This stores the chapter they picked; getChapterContext honours it.
 //
-// Gated on isPlatform, NOT isNational: Yi-Future's national roles are held by
-// 12 chapter-facing people, while standing in any chapter as its admin is a
-// platform-operator capability. Only platform admins get the switch.
+// Gated on the PLATFORM tier (3 accounts: director, piyush.garg, vedant), not
+// on isNational (13 accounts). Standing inside another chapter as its admin is
+// a platform-operator capability, not something the whole Yi national team
+// needs. The gate reads the same column the Platform badge and the
+// Promote/Demote platform buttons use, so demoting someone there removes this
+// immediately.
 //
-// The cookie is a hint, never a grant: getChapterContext re-checks isPlatform
-// against yi_directory on every read, so a hand-set cookie gives nothing.
+// The cookie is a hint, never a grant: getChapterContext re-checks the tier on
+// every read, so a hand-set cookie gives nothing.
 // Setting it here is gated as well, so the cookie is not even written for
 // someone who could not use it.
 
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
-import { resolveFutureAccessOrNull } from "@/lib/yi-future/auth/require-access";
+import { createClient } from "@/lib/yi-future/supabase/server";
+import { isPlatformAdminEmail } from "@/lib/yi-future/auth/platform-admin";
 import { ADMIN_CHAPTER_COOKIE } from "@/lib/yi-future/chapter-context";
 
 export type ActionResult =
@@ -28,11 +32,19 @@ export type ActionResult =
 
 export type SwitchableChapter = { id: string; name: string; city: string | null };
 
+/** The signed-in user, checked against the platform tier. */
+async function callerIsPlatformAdmin(): Promise<boolean> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return isPlatformAdminEmail(user?.email);
+}
+
 /** Active chapters a platform admin may switch into. Returns [] for everyone
  *  else, so the picker simply does not render for them. */
 export async function listSwitchableChapters(): Promise<SwitchableChapter[]> {
-  const access = await resolveFutureAccessOrNull();
-  if (!access?.isPlatform) return [];
+  if (!(await callerIsPlatformAdmin())) return [];
 
   const svc = await createServiceClient();
   const { data } = await svc
@@ -48,8 +60,7 @@ export async function listSwitchableChapters(): Promise<SwitchableChapter[]> {
 export async function setAdminChapter(
   chapterId: string | null
 ): Promise<ActionResult> {
-  const access = await resolveFutureAccessOrNull();
-  if (!access?.isPlatform) {
+  if (!(await callerIsPlatformAdmin())) {
     return { ok: false, error: "Only platform admins can switch chapters." };
   }
 

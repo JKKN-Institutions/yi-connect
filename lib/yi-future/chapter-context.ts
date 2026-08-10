@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
-import { resolveFutureAccessOrNull } from "@/lib/yi-future/auth/require-access";
+import { isPlatformAdminEmail } from "@/lib/yi-future/auth/platform-admin";
 import type { Database } from "@/types/yi-future/database";
 
 type CoreTeamRole = Database["future"]["Enums"]["user_role"];
@@ -31,7 +31,7 @@ export type ChapterContext = {
 };
 
 /** Build a chapter context for a national admin who has switched into a
- *  chapter. Callers MUST have confirmed isNational first. */
+ *  chapter. Callers MUST have confirmed the platform tier first. */
 async function buildNationalContext(
   user: { id: string; email?: string | null },
   chapterId: string
@@ -119,17 +119,16 @@ export async function getChapterContext(): Promise<ChapterContext | null> {
   // (requireChapterAdmin lets national through) but could not OPEN it — the
   // page had no chapter to render. This is the switch that closes that gap.
   //
-  // Gated on isPlatform, NOT isNational. Yi-Future's national roles are held
-  // by 12 chapter-facing people; standing in any chapter as its admin is a
-  // platform-operator capability, so it is deliberately the narrower set.
+  // Gated on the PLATFORM tier (3 accounts), not on isNational (13). Standing
+  // inside another chapter as its admin is a platform-operator capability, not
+  // something the whole Yi national team needs.
   //
-  // FAIL CLOSED: the cookie is only a hint. isPlatform is re-checked from
-  // yi_directory on EVERY read, so setting the cookie by hand grants nothing —
-  // anyone else simply falls through to their own membership below.
+  // FAIL CLOSED: the cookie is only a hint. The platform tier is re-checked on
+  // EVERY read, so setting the cookie by hand grants nothing — anyone else
+  // simply falls through to their own membership below.
   const picked = (await cookies()).get(ADMIN_CHAPTER_COOKIE)?.value;
   if (picked) {
-    const access = await resolveFutureAccessOrNull();
-    if (access?.isPlatform) {
+    if (await isPlatformAdminEmail(user.email)) {
       const asChapter = await buildNationalContext(user, picked);
       if (asChapter) return asChapter;
       // Chapter or active edition has gone away — fall through rather than

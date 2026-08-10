@@ -8,6 +8,7 @@ import PushSubscribeButton from "@/components/yi-future/push/PushSubscribeButton
 import { ModuleWelcome } from "@/components/yi-future/guide";
 import { logGuideEvent } from "@/lib/yi-future/guide/actions";
 import { DelegateAnnouncementsPanel } from "@/components/yi-future/announcements/DelegateAnnouncementsPanel";
+import { PendingInviteAlert } from "@/components/yi-future/team/PendingInviteAlert";
 
 type DelegateView = {
   id: string;
@@ -99,6 +100,11 @@ export default async function DelegateHome() {
 
   return (
     <div className="space-y-6">
+      {/* Pending team invitations — first thing on the page, above the welcome
+          card, because invitation emails never got delivered (Resend quota) and
+          this banner is now the only way a student learns they were invited.
+          Renders nothing when there is nothing pending. */}
+      <PendingInviteAlert />
       <ModuleWelcome
         moduleKey="delegate-home"
         persona="delegate"

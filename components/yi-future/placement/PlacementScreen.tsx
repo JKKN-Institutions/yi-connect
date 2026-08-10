@@ -18,7 +18,10 @@ import {
   getTeamsForPlacement,
   getUnteamedForPlacement,
 } from "@/lib/yi-future/placement-data";
-import { buildPlacementPlan } from "@/lib/yi-future/placement";
+import {
+  buildPlacementPlan,
+  buildStrategyOptions,
+} from "@/lib/yi-future/placement";
 import { TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
 import { PlacementBoard } from "@/components/yi-future/placement/PlacementBoard";
 
@@ -59,7 +62,10 @@ export async function PlacementScreen({
     getUnteamedForPlacement(chapterId, edition.id),
     getTeamsForPlacement(chapterId, edition.id),
   ]);
+  // Both are pure functions over the SAME roster read, so the four strategy
+  // cards and the suggestion list can never disagree about this chapter.
   const plan = buildPlacementPlan({ unteamed, teams });
+  const strategies = buildStrategyOptions({ unteamed, teams });
 
   return (
     <div className="space-y-6">
@@ -85,6 +91,7 @@ export async function PlacementScreen({
         chapterId={chapterId}
         chapterName={chapter.name}
         plan={plan}
+        strategies={strategies}
       />
     </div>
   );

@@ -8,6 +8,10 @@
 // second confirm click, sends invitations for exactly the ticked rows — and an
 // invitation still has to be accepted by the student before they join a team.
 //
+// When a chapter has more students than chairs, the four ways out are laid out
+// by <StrategyPanel/> above the list and one must be CHOSEN before the approve
+// button unlocks — the seat decision is never allowed to happen by default.
+//
 // FAILURE PATHS (all visible, none of them "a spinner forever"):
 //   • request rejects            → red panel with the reason + Retry.
 //   • request never answers      → a 2-minute watchdog releases the button and
@@ -19,47 +23,41 @@
 //   • plan went stale mid-review → rows come back "skipped: joined a team since
 //                                  this page loaded", which is the correct
 //                                  outcome, not an error.
+//   • no strategy chosen         → approve is disabled with the reason spelled
+//                                  out, not silently inert.
 // ═══════════════════════════════════════════════════════════════════════
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { approvePlacements } from "@/app/yi-future/actions/placement";
 import { PLACEMENT_BATCH_MAX } from "@/lib/yi-future/placement";
+import {
+  describeCallFailure,
+  WATCHDOG_APPROVE_MS,
+  withWatchdog,
+} from "@/lib/yi-future/placement-watchdog";
+import { StrategyPanel } from "@/components/yi-future/placement/StrategyPanel";
 import type {
   PlacementPlan,
   PlacementBatchResult,
+  PlacementStrategyId,
+  PlacementStrategyOption,
 } from "@/lib/yi-future/placement";
 
 /** Rows rendered at once. The send cap is 50, so working from the top is the
  *  intended flow; the rest reappear on the next reload. */
 const RENDER_LIMIT = 200;
-const WATCHDOG_MS = 120_000;
-
-/**
- * Reject the wait (not the request) if the server never answers, so the button
- * is always released and the reviewer is told the truth: the send may or may
- * not have happened.
- */
-async function withWatchdog<T>(p: Promise<T>): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const bell = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error("__WATCHDOG__")), WATCHDOG_MS);
-  });
-  try {
-    return await Promise.race([p, bell]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
 
 export function PlacementBoard({
   chapterId,
   chapterName,
   plan,
+  strategies,
 }: {
   chapterId: string;
   chapterName: string;
   plan: PlacementPlan;
+  strategies: PlacementStrategyOption[];
 }) {
   const router = useRouter();
   const visible = plan.suggestions.slice(0, RENDER_LIMIT);
@@ -73,6 +71,10 @@ export function PlacementBoard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PlacementBatchResult | null>(null);
+  // No default. The chapter must make the seat decision explicitly — a
+  // pre-selected strategy would be the platform choosing for them, which is the
+  // exact thing the Director refused.
+  const [strategy, setStrategy] = useState<PlacementStrategyId | null>(null);
 
   const chosen = useMemo(
     () => visible.filter((s) => selected.has(s.key)),
@@ -91,6 +93,13 @@ export function PlacementBoard({
   }
 
   async function send() {
+    // Belt-and-braces: the button is disabled without a strategy, and the server
+    // refuses the call without one too.
+    if (!strategy) {
+      setError("Choose one of the four options above before sending anything.");
+      setConfirming(false);
+      return;
+    }
     setBusy(true);
     setError(null);
     setResult(null);
@@ -98,8 +107,10 @@ export function PlacementBoard({
       const res = await withWatchdog(
         approvePlacements(
           chapterId,
-          chosen.map((s) => ({ delegateId: s.delegateId, teamId: s.teamId }))
-        )
+          chosen.map((s) => ({ delegateId: s.delegateId, teamId: s.teamId })),
+          strategy
+        ),
+        WATCHDOG_APPROVE_MS
       );
       setResult(res);
       if (res.ok) {
@@ -110,11 +121,7 @@ export function PlacementBoard({
       }
     } catch (e) {
       setError(
-        e instanceof Error && e.message === "__WATCHDOG__"
-          ? "No response after 2 minutes. Some invitations may already have been sent — reload this page and check before trying again."
-          : e instanceof Error
-            ? `Could not send: ${e.message}`
-            : "Could not send the invitations. Nothing is confirmed — reload this page and check before trying again."
+        describeCallFailure(e, "Some invitations may already have been sent")
       );
     } finally {
       // Always releases the UI, on success, failure, or watchdog.
@@ -131,25 +138,25 @@ export function PlacementBoard({
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Tile label="Without a team" value={s.unteamed} note={chapterName} />
         <Tile
-          label="Free seats now"
+          label="Free chairs"
+          value={s.openSeatsPhysical}
+          note={`${s.teamSizeMax} per team, unlocked teams`}
+        />
+        <Tile
+          label="Can invite now"
           value={s.openSeats}
-          note={`in ${s.openTeams} open team${s.openTeams === 1 ? "" : "s"}`}
+          note={
+            s.pendingInvites > 0
+              ? `after ${s.pendingInvites} unanswered invitation${s.pendingInvites === 1 ? "" : "s"}`
+              : `in ${s.openTeams} open team${s.openTeams === 1 ? "" : "s"}`
+          }
+          alert={s.openSeats === 0 && s.unteamed > 0}
         />
         <Tile label="Suggested below" value={s.suggested} note="each needs your approval" />
         <Tile
           label="Invitation pending"
           value={s.awaitingResponse}
           note="waiting on the student"
-        />
-        <Tile
-          label="No seat available"
-          value={s.seatShortfall}
-          note={
-            s.seatShortfall > 0
-              ? `create ${s.newTeamsNeeded} more team${s.newTeamsNeeded === 1 ? "" : "s"}`
-              : "everyone has a seat"
-          }
-          alert={s.seatShortfall > 0}
         />
       </div>
 
@@ -170,41 +177,32 @@ export function PlacementBoard({
             the same decision. Chase those acceptances first; the list at the
             bottom names every one of them and the team they were invited to.
           </p>
+          {/* The arithmetic that makes this chapter's real problem visible.
+              Erode: 149 unanswered invitations for 72 chairs, so most of those
+              invitations cannot be honoured even if every student says yes —
+              which is why opening seats now looks like it changes nothing. */}
+          {s.pendingInvites > s.openSeatsPhysical && (
+            <p className="mt-2 font-semibold text-navy">
+              Note: there are {s.pendingInvites} unanswered invitations for only{" "}
+              {s.openSeatsPhysical} free chair
+              {s.openSeatsPhysical === 1 ? "" : "s"}. Even if every student
+              accepted, {s.pendingInvites - s.openSeatsPhysical} of those
+              invitations would be refused when they tap Accept. Whichever option
+              you choose below, seats you open now stay empty until those answers
+              come in or expire.
+            </p>
+          )}
         </div>
       )}
 
-      {s.seatShortfall > 0 && (
-        <div className="bg-[#F5A623]/10 border-2 border-[#F5A623]/40 rounded-lg p-4 text-sm text-navy/80">
-          <p className="font-bold text-navy">
-            {s.seatShortfall} student{s.seatShortfall === 1 ? "" : "s"} cannot be
-            placed into an existing team.
-          </p>
-          <p className="mt-1">
-            Open teams hold {s.openSeats} free seat
-            {s.openSeats === 1 ? "" : "s"}.
-            {s.frozenTeams > 0 && (
-              <>
-                {" "}
-                Another {s.frozenSeats} seat{s.frozenSeats === 1 ? "" : "s"} sit
-                inside {s.frozenTeams} locked team
-                {s.frozenTeams === 1 ? "" : "s"} — unlocking a team releases
-                them.
-              </>
-            )}
-            {s.leaderlessTeams > 0 && (
-              <>
-                {" "}
-                {s.leaderlessSeats} seat{s.leaderlessSeats === 1 ? "" : "s"} are
-                in {s.leaderlessTeams} team
-                {s.leaderlessTeams === 1 ? "" : "s"} with no captain — an
-                invitation cannot be sent from a team without a captain.
-              </>
-            )}{" "}
-            Otherwise create {s.newTeamsNeeded} new team
-            {s.newTeamsNeeded === 1 ? "" : "s"}.
-          </p>
-        </div>
-      )}
+      {/* ─── All four ways out, side by side ──────────────────────────── */}
+      <StrategyPanel
+        chapterId={chapterId}
+        strategies={strategies}
+        stats={s}
+        selected={strategy}
+        onSelect={setStrategy}
+      />
 
       {/* ─── How this works ──────────────────────────────────────────── */}
       <div className="bg-white border border-navy/10 rounded-lg p-4 text-sm text-navy/70">
@@ -285,8 +283,8 @@ export function PlacementBoard({
             {s.unteamed === 0
               ? "Every active delegate in this chapter is already on a team."
               : s.awaitingResponse === s.unteamed
-                ? "Every unteamed student already has an invitation waiting for their answer."
-                : "There is no open team with a free seat and a captain. Create a team, or unlock one, then reload."}
+                ? "Every student without a team already has an invitation waiting for their answer, so there is nothing new to suggest. The options above still show what this chapter's seats look like."
+                : "No unlocked team can take another invitation right now. Use one of the four options above to open seats, then this list fills in."}
           </p>
         </div>
       ) : (
@@ -413,6 +411,13 @@ export function PlacementBoard({
                 {chosen.length} selected — untick down to {PLACEMENT_BATCH_MAX}{" "}
                 or use “Select first {PLACEMENT_BATCH_MAX}”.
               </p>
+            ) : !strategy ? (
+              /* Disabled buttons with no explanation are the bug this codebase
+                 keeps re-learning: say WHY, and where to go. */
+              <p className="text-xs font-semibold text-navy/70">
+                Choose one of the four options above first — that decision has to
+                be made before any invitation goes out.
+              </p>
             ) : confirming ? (
               <>
                 <p className="text-xs font-semibold text-navy">
@@ -423,7 +428,7 @@ export function PlacementBoard({
                 <button
                   type="button"
                   onClick={send}
-                  disabled={busy}
+                  disabled={busy || !strategy}
                   className="px-4 py-2 rounded-md bg-navy text-ivory text-sm font-semibold hover:bg-navy-dark disabled:opacity-50"
                 >
                   {busy
@@ -449,6 +454,12 @@ export function PlacementBoard({
                 Approve {chosen.length} placement
                 {chosen.length === 1 ? "" : "s"}
               </button>
+            )}
+            {!overCap && strategy && (
+              <span className="text-[11px] text-navy/50">
+                Option chosen:{" "}
+                {strategies.find((x) => x.id === strategy)?.title ?? strategy}
+              </span>
             )}
           </div>
         </div>

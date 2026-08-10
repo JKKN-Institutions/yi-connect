@@ -160,14 +160,6 @@ export default function JoinPage() {
               Sign in here
             </Link>
           </p>
-          <p className="mt-2 text-center text-xs text-[#1a1a3e]/40">
-            <Link
-              href="/yip/test-login"
-              className="underline hover:text-[#FF9933]"
-            >
-              One-click demo accounts
-            </Link>
-          </p>
         </div>
       </div>
     </div>

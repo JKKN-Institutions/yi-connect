@@ -12,6 +12,10 @@
     {
       "path": "/youth-academy/api/cron/drain-emails",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/yi-future/api/cron/lock-teams",
+      "schedule": "*/5 * * * *"
     }
   ],
   "headers": [

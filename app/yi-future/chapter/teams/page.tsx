@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
 import { TEAM_SIZE_MIN, TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
 import { UnlockAllTeamsButton } from "@/components/yi-future/UnlockAllTeamsButton";
+import { TeamLockControls } from "@/components/yi-future/TeamLockControls";
 import { LockedTeamsPanel } from "@/components/yi-future/LockedTeamsPanel";
 
 type Team = {
@@ -63,6 +64,29 @@ async function getOpenUnlockRequests(
   return (data as unknown as UnlockRequest[]) ?? [];
 }
 
+type LockSchedule = {
+  lock_at: string;
+  applied_at: string | null;
+  locked_count: number | null;
+};
+
+// This chapter's automatic-lock deadline, if one is set.
+async function getLockSchedule(
+  chapterId: string,
+  editionId: string
+): Promise<LockSchedule | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const svc = (await createServiceClient()) as any;
+  const { data } = await svc
+    .schema("future")
+    .from("team_lock_schedule")
+    .select("lock_at, applied_at, locked_count")
+    .eq("chapter_id", chapterId)
+    .eq("edition_id", editionId)
+    .maybeSingle();
+  return (data as LockSchedule) ?? null;
+}
+
 // teamId -> mentor names for this chapter (field request 2026-07-17:
 // admins need to see which teams still have no mentor assigned).
 async function getMentorsByTeam(
@@ -100,6 +124,7 @@ export default async function TeamsPage({
   const allTeams = await getTeams(ctx.chapterId, ctx.editionId);
   const mentorsByTeam = await getMentorsByTeam(ctx.chapterId);
   const unlockRequests = await getOpenUnlockRequests(ctx.chapterId, ctx.editionId);
+  const lockSchedule = await getLockSchedule(ctx.chapterId, ctx.editionId);
   const withMentor = allTeams.filter(
     (t) => (mentorsByTeam.get(t.id) ?? []).length > 0
   ).length;
@@ -119,6 +144,7 @@ export default async function TeamsPage({
   // Locked teams across the WHOLE chapter, not the current track filter — the
   // bulk unlock is chapter-wide, so a filtered count would understate it.
   const frozenCount = allTeams.filter((t) => t.is_frozen).length;
+  const unlockedCount = allTeams.length - frozenCount;
   // Chapter-wide, like the count above: the panel unlocks by team id, so the
   // current track filter must not hide a locked team from it.
   const lockedTeams = allTeams
@@ -209,6 +235,13 @@ export default async function TeamsPage({
           </p>
         </div>
       )}
+
+      <TeamLockControls
+        unlockedCount={unlockedCount}
+        lockAt={lockSchedule?.lock_at ?? null}
+        appliedAt={lockSchedule?.applied_at ?? null}
+        lockedCount={lockSchedule?.locked_count ?? null}
+      />
 
       <LockedTeamsPanel teams={lockedTeams} />
 

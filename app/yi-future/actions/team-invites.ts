@@ -412,6 +412,109 @@ export async function freezeTeam(teamId: string): Promise<ActionResult> {
 // freezeTeam gates by team ownership (leader/captain); the chapter-admin
 // equivalent of that ownership check is getChapterContext + the same
 // chapter ownership check the team-detail page enforces.
+// ─── LOCK EVERY TEAM IN THE CHAPTER (chapter-admin auth) ────────────
+// Field request 2026-08-10. Locking was previously CAPTAIN-only, from their
+// own team page — an admin could undo a lock but never apply one, so a chapter
+// had no way to enforce a cut-off.
+//
+// Incomplete teams lock too (director's call): a deadline that only applies to
+// teams which happen to be complete is not a deadline, and an admin can still
+// unlock an individual team if there is a genuine reason.
+//
+// Chapter-scoped exactly like unfreezeAllTeams: chapter and edition come from
+// getChapterContext, never from an argument.
+export async function freezeAllTeams(): Promise<ActionResult> {
+  const ctx = await getChapterContext();
+  if (!ctx) {
+    return { ok: false, error: "Sign in as a chapter admin first." };
+  }
+
+  const svc = await createServiceClient();
+  const nowIso = new Date().toISOString();
+
+  const { count: openCount } = await svc
+    .schema("future")
+    .from("teams")
+    .select("id", { count: "exact", head: true })
+    .eq("chapter_id", ctx.chapterId)
+    .eq("edition_id", ctx.editionId)
+    .eq("is_frozen", false);
+
+  if (!openCount) {
+    return { ok: true, message: "Every team is already locked." };
+  }
+
+  const { error } = await svc
+    .schema("future")
+    .from("teams")
+    .update({ is_frozen: true, frozen_at: nowIso, updated_at: nowIso } as never)
+    .eq("chapter_id", ctx.chapterId)
+    .eq("edition_id", ctx.editionId)
+    .eq("is_frozen", false);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/yi-future/chapter/teams");
+  revalidatePath("/yi-future/me/team");
+  return {
+    ok: true,
+    message: `Locked ${openCount} team${openCount === 1 ? "" : "s"}.`,
+  };
+}
+
+// ─── SCHEDULE THE LOCK (chapter-admin auth) ─────────────────────────
+// Stores a per-chapter deadline; the sweep in
+// /yi-future/api/cron/lock-teams applies it. Passing null clears it.
+//
+// Setting a NEW deadline clears applied_at so the sweep fires again — without
+// that, re-scheduling after a deadline had already run would silently never
+// take effect.
+export async function setTeamLockDeadline(
+  lockAtIso: string | null
+): Promise<ActionResult> {
+  const ctx = await getChapterContext();
+  if (!ctx) {
+    return { ok: false, error: "Sign in as a chapter admin first." };
+  }
+
+  const svc = await createServiceClient();
+
+  if (!lockAtIso) {
+    const { error } = await (svc as AnyClient)
+      .schema("future")
+      .from("team_lock_schedule")
+      .delete()
+      .eq("chapter_id", ctx.chapterId)
+      .eq("edition_id", ctx.editionId);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/yi-future/chapter/teams");
+    return { ok: true, message: "Automatic lock removed." };
+  }
+
+  const when = new Date(lockAtIso);
+  if (Number.isNaN(when.getTime())) {
+    return { ok: false, error: "That date and time could not be read." };
+  }
+
+  const { error } = await (svc as AnyClient)
+    .schema("future")
+    .from("team_lock_schedule")
+    .upsert(
+      {
+        chapter_id: ctx.chapterId,
+        edition_id: ctx.editionId,
+        lock_at: when.toISOString(),
+        applied_at: null,
+        locked_count: null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "chapter_id,edition_id" }
+    );
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/yi-future/chapter/teams");
+  return { ok: true, message: "Automatic lock scheduled." };
+}
+
 // ─── UNFREEZE EVERY LOCKED TEAM IN THE CHAPTER (chapter-admin auth) ──
 // Field request 2026-08-10. Freezing is something a CAPTAIN does to declare
 // their team final, so this reverses every captain's declaration at once —

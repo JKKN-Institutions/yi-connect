@@ -60,7 +60,20 @@ async function getJury(
   editionId: string,
   chapterId: string
 ): Promise<Jury[]> {
-  const svc = await createServiceClient();
+  // Scope on the jury's OWN chapter_id column.
+  //
+  // This used to scope with `.eq("jury_team_assignments.teams.chapter_id", …)`
+  // alone. In PostgREST a filter on an embedded resource that is not !inner
+  // trims the EMBEDDED rows, never the parent — so every jury in the edition
+  // came back with an empty assignments array and the page listed all of them.
+  // On 2026-08-10 the Erode co-chair could read all 9 of Sivakasi's jury,
+  // including the access codes they sign in and score with.
+  //
+  // The nested filter below is KEPT, but only for what it actually does: trim
+  // the displayed team list to this chapter's teams. The parent scoping is the
+  // .eq("chapter_id") above it.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const svc = (await createServiceClient()) as any;
   const { data } = await svc
     .schema("future")
     .from("jury_assignments")
@@ -68,6 +81,7 @@ async function getJury(
       "id, jury_name, jury_title, organization, email, phone, archetype, access_code, is_active, jury_team_assignments(team_id, teams!inner(team_name, chapter_id))"
     )
     .eq("edition_id", editionId)
+    .eq("chapter_id", chapterId)
     .eq("jury_team_assignments.teams.chapter_id", chapterId)
     .order("jury_name", { ascending: true });
   return (data as unknown as Jury[]) ?? [];

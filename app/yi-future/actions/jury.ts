@@ -14,26 +14,31 @@ import {
 
 type JuryArchetype = Database["future"]["Enums"]["jury_archetype"];
 
-async function requireAuth(): Promise<void> {
-  await requireFutureAdmin();
-}
-
 /**
- * Resolve the chapter a jury row belongs to. future.jury_assignments has no
- * chapter_id column, so the chapter comes from the parent chain: event_id →
- * events.chapter_id, else the chapter of a team this jury is assigned to.
+ * Resolve the chapter a jury row belongs to.
+ *
+ * jury_assignments.chapter_id is now the authoritative binding (added
+ * 2026-08-10). This parent-chain walk is retained for rows created before that
+ * migration whose chapter could not be inferred — event_id → events.chapter_id,
+ * else the chapter of a team this jury is assigned to.
  * Returns null when the jury is not bound to any chapter yet.
  */
 async function juryChapterId(id: string): Promise<string | null> {
-  const svc = await createServiceClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const svc = (await createServiceClient()) as any;
   const { data: jury } = await svc
     .schema("future")
     .from("jury_assignments")
-    .select("event_id")
+    .select("event_id, chapter_id")
     .eq("id", id)
     .maybeSingle();
-  const eventId =
-    (jury as { event_id: string | null } | null)?.event_id ?? null;
+  const row = jury as {
+    event_id: string | null;
+    chapter_id: string | null;
+  } | null;
+  // The column wins when set; the walk below only serves pre-migration rows.
+  if (row?.chapter_id) return row.chapter_id;
+  const eventId = row?.event_id ?? null;
   if (eventId) {
     const chapterId = await eventChapterId(eventId);
     if (chapterId) return chapterId;
@@ -117,17 +122,29 @@ async function uniqueAccessCode(
 
 // ─── CREATE JURY ────────────────────────────────────────────────────
 export async function createJury(
-  input: { editionId: string; scope: string; eventId: string | null },
+  input: {
+    editionId: string;
+    scope: string;
+    eventId: string | null;
+    chapterId?: string | null;
+  },
   formData: FormData
 ): Promise<ActionResult> {
-  // Scope to the event's chapter when the jury is created against an event.
-  // A chapter-scoped jury with no event carries no chapter binding until it is
-  // assigned to a team — and that assignment is itself chapter-gated.
-  if (input.eventId) {
-    await requireChapterAdmin(await eventChapterId(input.eventId));
-  } else {
-    await requireAuth();
+  // Every jury is stamped with a chapter at creation.
+  //
+  // This used to fall through to a bare requireAuth() whenever eventId was
+  // null — which is the ONLY way the chapter "Add jury" page calls it — so any
+  // signed-in account could mint a jury, with a working access code, on any
+  // edition. The row also carried no chapter binding until someone assigned it
+  // to a team, which is why the listing could not scope reliably (see
+  // future_jury_expert_chapter_scope.sql).
+  const chapterId = input.eventId
+    ? await eventChapterId(input.eventId)
+    : (input.chapterId ?? null);
+  if (!chapterId) {
+    return { ok: false, error: "Could not determine which chapter this jury belongs to." };
   }
+  await requireChapterAdmin(chapterId);
   const jury_name = String(formData.get("jury_name") ?? "").trim();
   const jury_title = String(formData.get("jury_title") ?? "").trim() || null;
   const organization =
@@ -151,6 +168,7 @@ export async function createJury(
     .insert({
       edition_id: input.editionId,
       event_id: input.eventId,
+      chapter_id: chapterId,
       scope: input.scope,
       archetype: archetype as JuryArchetype,
       jury_name,

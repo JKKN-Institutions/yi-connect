@@ -9,13 +9,13 @@ export default async function NewExpertPage() {
 
   async function action(formData: FormData) {
     "use server";
-    await createExpert(ctx!.editionId, formData);
+    await createExpert(ctx!.editionId, formData, ctx!.chapterId);
   }
 
   return (
     <FormLayout
       title="Add expert"
-      subtitle={`Subject-matter expert for ${ctx.editionName}. Visible across chapters for expert talks and panels.`}
+      subtitle={`Subject-matter expert for ${ctx.editionName}. Visible to your chapter — their access code is not shown to other chapters.`}
       backHref="/yi-future/chapter/experts"
     >
       <form action={action} className="space-y-5">

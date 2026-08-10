@@ -1,5 +1,7 @@
 import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
+import { listSwitchableChapters } from "@/app/yi-future/actions/admin-chapter";
+import { ChapterSwitcher } from "@/components/yi-future/ChapterSwitcher";
 import { roleShortLabel } from "@/lib/yi-future/auth/chapter-permissions";
 import { AdminShell, type NavItem } from "@/components/yi-future/admin/AdminShell";
 import { GuideLauncher, OnboardingLauncher } from "@/components/yi-future/guide";
@@ -44,10 +46,19 @@ export default async function ChapterLayout({
   const roleLabel = ctx ? roleShortLabel(ctx.role) : "Chapter";
 
   const completed = await getCompletedSteps("chapter");
+  // Empty for anyone who is not a national admin, so the strip does not render
+  // for chapter core-team members.
+  const switchable = await listSwitchableChapters();
 
   return (
     <>
       <AdminShell title="Chapter Admin" roleLabel={roleLabel} items={NAV}>
+        <ChapterSwitcher
+          chapters={switchable}
+          currentChapterId={ctx?.chapterId ?? null}
+          currentChapterName={ctx?.chapterName ?? null}
+          viewingAsNational={ctx?.viewingAsNational ?? false}
+        />
         <div className="mb-6">
           <OnboardingLauncher
             guide={GUIDES.lanes.chapter}

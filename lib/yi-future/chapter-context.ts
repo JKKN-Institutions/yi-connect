@@ -119,13 +119,17 @@ export async function getChapterContext(): Promise<ChapterContext | null> {
   // (requireChapterAdmin lets national through) but could not OPEN it — the
   // page had no chapter to render. This is the switch that closes that gap.
   //
-  // FAIL CLOSED: the cookie is only a hint. isNational is re-checked from
+  // Gated on isPlatform, NOT isNational. Yi-Future's national roles are held
+  // by 12 chapter-facing people; standing in any chapter as its admin is a
+  // platform-operator capability, so it is deliberately the narrower set.
+  //
+  // FAIL CLOSED: the cookie is only a hint. isPlatform is re-checked from
   // yi_directory on EVERY read, so setting the cookie by hand grants nothing —
-  // a non-national simply falls through to their own membership below.
+  // anyone else simply falls through to their own membership below.
   const picked = (await cookies()).get(ADMIN_CHAPTER_COOKIE)?.value;
   if (picked) {
     const access = await resolveFutureAccessOrNull();
-    if (access?.isNational) {
+    if (access?.isPlatform) {
       const asChapter = await buildNationalContext(user, picked);
       if (asChapter) return asChapter;
       // Chapter or active edition has gone away — fall through rather than

@@ -7,10 +7,14 @@
 // chapter (requireChapterAdmin lets national through) but could not OPEN it.
 // This stores the chapter they picked; getChapterContext honours it.
 //
-// The cookie is a hint, never a grant: getChapterContext re-checks isNational
-// against yi_directory on every read, so a hand-set cookie gives a non-national
-// nothing. Setting it here is gated as well, so the cookie is not even written
-// for someone who could not use it.
+// Gated on isPlatform, NOT isNational: Yi-Future's national roles are held by
+// 12 chapter-facing people, while standing in any chapter as its admin is a
+// platform-operator capability. Only platform admins get the switch.
+//
+// The cookie is a hint, never a grant: getChapterContext re-checks isPlatform
+// against yi_directory on every read, so a hand-set cookie gives nothing.
+// Setting it here is gated as well, so the cookie is not even written for
+// someone who could not use it.
 
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -24,11 +28,11 @@ export type ActionResult =
 
 export type SwitchableChapter = { id: string; name: string; city: string | null };
 
-/** Active chapters a national admin may switch into. Returns [] for anyone
- *  who is not national, so the picker simply does not render for them. */
+/** Active chapters a platform admin may switch into. Returns [] for everyone
+ *  else, so the picker simply does not render for them. */
 export async function listSwitchableChapters(): Promise<SwitchableChapter[]> {
   const access = await resolveFutureAccessOrNull();
-  if (!access?.isNational) return [];
+  if (!access?.isPlatform) return [];
 
   const svc = await createServiceClient();
   const { data } = await svc
@@ -45,8 +49,8 @@ export async function setAdminChapter(
   chapterId: string | null
 ): Promise<ActionResult> {
   const access = await resolveFutureAccessOrNull();
-  if (!access?.isNational) {
-    return { ok: false, error: "Only national admins can switch chapters." };
+  if (!access?.isPlatform) {
+    return { ok: false, error: "Only platform admins can switch chapters." };
   }
 
   const jar = await cookies();

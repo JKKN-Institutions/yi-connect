@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
 import { TrackIcon } from "@/components/yi-future/TrackIcon";
+import { JuryLoginLink } from "@/components/yi-future/JuryLoginLink";
 import {
   deleteJury,
   regenerateJuryCode,
@@ -301,6 +302,8 @@ export default async function JuryPage({
           </Link>
         </div>
       </div>
+
+      <JuryLoginLink />
 
       {/* Archetype spread */}
       <div className="grid grid-cols-4 gap-3">

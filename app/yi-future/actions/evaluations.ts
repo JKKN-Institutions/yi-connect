@@ -10,6 +10,11 @@ import {
   type CriteriaScores,
   type Rubric,
 } from "@/lib/yi-future/rubric";
+import {
+  computeMemberTotal,
+  isMemberUnscored,
+  type MemberScores,
+} from "@/lib/yi-future/member-rubric";
 import { sendPushToSubject } from "@/app/yi-future/actions/push";
 import { readSession } from "./auth";
 import { resolveFutureAccessOrNull } from "@/lib/yi-future/auth/require-access";
@@ -114,6 +119,99 @@ export async function getOtherJurorEvalsForTeam(input: {
  * Uses the mentor/jury access-code session — no Supabase Auth required.
  * Scope must be validated by the caller (jury must be assigned to this team).
  */
+// ─── PER-MEMBER SCORES (individual recognition) ─────────────────────
+// Field request 2026-08-10. Saved from the same jury screen as the team
+// evaluation, but kept in future.member_evaluations and NOT folded into the
+// team total — nothing here can move a team's rank.
+//
+// Identity is bound exactly as saveEvaluation does it: the caller must BE that
+// jury (their own access-code session) or a NATIONAL admin, and must be
+// assigned to the team. A chapter admin must not be able to inject scores.
+export async function saveMemberEvaluations(input: {
+  juryId: string;
+  teamId: string;
+  eventId: string;
+  members: { delegateId: string; scores: MemberScores }[];
+}): Promise<ActionResult> {
+  const session = await readSession();
+  const isThatJury = session?.type === "jury" && session.id === input.juryId;
+  if (!isThatJury) {
+    const adminAccess = await resolveFutureAccessOrNull();
+    if (!adminAccess?.isNational) {
+      return {
+        ok: false,
+        error: "You are not authorized to score as this jury member.",
+      };
+    }
+  }
+
+  const svc = await createServiceClient();
+
+  const { data: assign } = await svc
+    .schema("future")
+    .from("jury_team_assignments")
+    .select("team_id")
+    .eq("jury_id", input.juryId)
+    .eq("team_id", input.teamId)
+    .maybeSingle();
+  if (!assign) {
+    return { ok: false, error: "You are not assigned to this team." };
+  }
+
+  // Only delegates actually on this team may be scored — the delegate ids
+  // arrive from a form and must not be taken on trust.
+  const { data: memberRows } = await svc
+    .schema("future")
+    .from("team_members")
+    .select("delegate_id")
+    .eq("team_id", input.teamId);
+  const onTeam = new Set(
+    ((memberRows as { delegate_id: string }[] | null) ?? []).map(
+      (m) => m.delegate_id
+    )
+  );
+
+  for (const m of input.members) {
+    if (!onTeam.has(m.delegateId)) continue;
+    // An untouched member is left absent rather than written as a row of
+    // zeros, so "not scored" stays distinguishable from "scored zero".
+    if (isMemberUnscored(m.scores)) continue;
+
+    let total: number;
+    try {
+      total = computeMemberTotal(m.scores);
+    } catch (e) {
+      return { ok: false, error: (e as Error).message };
+    }
+
+    const { error } = await (svc as unknown as {
+      schema: (s: string) => {
+        from: (t: string) => {
+          upsert: (v: unknown, o: unknown) => Promise<{ error: { message: string } | null }>;
+        };
+      };
+    })
+      .schema("future")
+      .from("member_evaluations")
+      .upsert(
+        {
+          jury_id: input.juryId,
+          team_id: input.teamId,
+          delegate_id: m.delegateId,
+          event_id: input.eventId,
+          scores: m.scores,
+          total_score: total,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "jury_id,team_id,delegate_id,event_id" }
+      );
+    if (error) return { ok: false, error: error.message };
+  }
+
+  revalidatePath(`/yi-future/jury/${input.teamId}`);
+  return { ok: true };
+}
+
 export async function saveEvaluation(input: {
   juryId: string;
   teamId: string;

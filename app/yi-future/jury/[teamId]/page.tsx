@@ -4,9 +4,16 @@ import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { readSession } from "@/app/yi-future/actions/auth";
 import {
   saveEvaluation,
+  saveMemberEvaluations,
   getOtherJurorEvalsForTeam,
 } from "@/app/yi-future/actions/evaluations";
 import type { Rubric, CriteriaScores } from "@/lib/yi-future/rubric";
+import {
+  MEMBER_CRITERIA,
+  MEMBER_TOTAL_MAX,
+  type MemberScores,
+} from "@/lib/yi-future/member-rubric";
+import { ScoreSlider } from "@/components/yi-future/jury/ScoreSlider";
 import { SubmitButtons } from "./submit-buttons";
 
 type Team = {
@@ -56,6 +63,44 @@ async function getTeam(id: string): Promise<Team | null> {
     .eq("id", id)
     .maybeSingle();
   return (data as unknown as Team) ?? null;
+}
+
+type TeamMemberRow = {
+  delegate_id: string;
+  delegates: { full_name: string } | null;
+};
+
+// Members of the team, for the per-delegate recognition scores.
+async function getTeamMembers(teamId: string): Promise<TeamMemberRow[]> {
+  const svc = await createServiceClient();
+  const { data } = await svc
+    .schema("future")
+    .from("team_members")
+    .select("delegate_id, delegates(full_name)")
+    .eq("team_id", teamId);
+  return (data as unknown as TeamMemberRow[]) ?? [];
+}
+
+// This juror's existing per-member scores, keyed by delegate id.
+async function getMemberEvals(
+  juryId: string,
+  teamId: string,
+  eventId: string
+): Promise<Map<string, MemberScores>> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const svc = (await createServiceClient()) as any;
+  const { data } = await svc
+    .schema("future")
+    .from("member_evaluations")
+    .select("delegate_id, scores")
+    .eq("jury_id", juryId)
+    .eq("team_id", teamId)
+    .eq("event_id", eventId);
+  const map = new Map<string, MemberScores>();
+  for (const r of ((data as { delegate_id: string; scores: MemberScores }[] | null) ?? [])) {
+    map.set(r.delegate_id, r.scores ?? {});
+  }
+  return map;
 }
 
 async function getRubric(
@@ -188,6 +233,9 @@ export default async function JuryEvaluationPage({
       })
     : [];
 
+  const teamMembers = await getTeamMembers(team.id);
+  const memberEvals = await getMemberEvals(session.id, team.id, event.id);
+
   async function save(formData: FormData) {
     "use server";
     const scores: CriteriaScores = {};
@@ -232,6 +280,26 @@ export default async function JuryEvaluationPage({
       policyRelevance,
       recommendation,
       submit,
+    });
+
+    // Per-member recognition scores. Saved after the team evaluation and kept
+    // separate from it: a failure here must not lose the team score, and an
+    // untouched member is skipped rather than written as zeros.
+    const memberPayload = teamMembers.map((m) => {
+      const ms: MemberScores = {};
+      for (const c of MEMBER_CRITERIA) {
+        const raw = String(
+          formData.get(`member_${m.delegate_id}_${c.key}`) ?? ""
+        ).trim();
+        if (raw !== "") ms[c.key] = Number(raw);
+      }
+      return { delegateId: m.delegate_id, scores: ms };
+    });
+    await saveMemberEvaluations({
+      juryId: session!.id,
+      teamId: team!.id,
+      eventId: event!.id,
+      members: memberPayload,
     });
   }
 
@@ -280,38 +348,71 @@ export default async function JuryEvaluationPage({
             const existingScore = existing?.criteria_scores?.[c.key];
             return (
               <div key={c.key}>
-                <div className="flex items-baseline justify-between mb-1">
-                  <label
-                    htmlFor={`score_${c.key}`}
-                    className="text-sm font-bold text-navy"
-                  >
-                    {c.label}
-                  </label>
-                  <span className="text-[10px] font-mono text-navy/40">
-                    max {c.max}
-                  </span>
-                </div>
-                {c.description && (
-                  <p className="text-xs text-navy/50 mb-2">{c.description}</p>
-                )}
-                <input
+                <ScoreSlider
                   id={`score_${c.key}`}
                   name={`score_${c.key}`}
-                  type="number"
-                  min={0}
+                  label={c.label}
+                  description={c.description}
                   max={c.max}
-                  step="0.5"
-                  required
-                  disabled={submitted}
                   defaultValue={
-                    existingScore !== undefined ? String(existingScore) : ""
+                    existingScore !== undefined ? Number(existingScore) : null
                   }
-                  className="w-full px-3 py-2 border border-navy/20 rounded-md text-sm text-right font-mono font-bold disabled:bg-navy/5"
+                  disabled={submitted}
+                  required
                 />
               </div>
             );
           })}
         </div>
+
+        {/* Per-member recognition scores (field request 2026-08-10).
+            Separate card, and the copy says plainly that these do not change
+            the team score — a juror must not think they are double-scoring
+            the pitch. Optional: leave a member blank and nothing is written
+            for them. */}
+        {teamMembers.length > 0 && (
+          <div className="bg-white border border-navy/10 rounded-lg p-4 space-y-4">
+            <div>
+              <div className="text-[10px] font-semibold tracking-widest text-yi-gold uppercase">
+                Individual Recognition
+              </div>
+              <p className="mt-1 text-xs text-navy/50">
+                Optional — for awards like best delegate. These scores do{" "}
+                <strong>not</strong> affect the team&apos;s score or rank. Leave
+                a member blank to skip them. {MEMBER_TOTAL_MAX} max each.
+              </p>
+            </div>
+
+            {teamMembers.map((m) => {
+              const saved = memberEvals.get(m.delegate_id) ?? {};
+              return (
+                <div
+                  key={m.delegate_id}
+                  className="border-t border-navy/10 pt-3 space-y-3"
+                >
+                  <p className="text-sm font-bold text-navy">
+                    {m.delegates?.full_name ?? "Unnamed delegate"}
+                  </p>
+                  {MEMBER_CRITERIA.map((c) => (
+                    <ScoreSlider
+                      key={c.key}
+                      id={`member_${m.delegate_id}_${c.key}`}
+                      name={`member_${m.delegate_id}_${c.key}`}
+                      label={c.label}
+                      description={c.description}
+                      max={c.max}
+                      step={1}
+                      defaultValue={
+                        saved[c.key] !== undefined ? Number(saved[c.key]) : null
+                      }
+                      disabled={submitted}
+                    />
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Yi Judging Kit — structured comments */}
         <div className="bg-white border border-navy/10 rounded-lg p-4 space-y-4">

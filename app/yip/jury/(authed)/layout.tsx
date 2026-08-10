@@ -109,8 +109,10 @@ export default async function JuryLayout({
         </div>
       </header>
 
-      {/* Main content */}
-      <main className="flex-1 pb-4 mx-auto w-full max-w-lg overflow-x-hidden">
+      {/* Main content. md:max-w-5xl — tablets get the full width (the scoring
+          screen adds a right-side jump dock at md+ and two-across criteria at
+          lg+); phones keep the unchanged max-w-lg column. */}
+      <main className="flex-1 pb-4 mx-auto w-full max-w-lg md:max-w-5xl overflow-x-hidden">
         {children}
       </main>
 

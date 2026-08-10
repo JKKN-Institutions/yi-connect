@@ -412,7 +412,7 @@ export function ScoreForm({
                     type="button"
                     disabled={isLocked}
                     onClick={() => handleScoreChange(criterion.key, val)}
-                    className={`min-w-[36px] h-9 rounded-md text-xs font-medium transition-all
+                    className={`min-w-[36px] h-9 rounded-md text-xs font-medium transition-all md:min-w-11 md:h-12 md:text-sm
                       ${
                         value === val
                           ? "bg-blue-600 text-white shadow-sm"
@@ -431,7 +431,7 @@ export function ScoreForm({
                   type="button"
                   disabled={isLocked}
                   onClick={() => handleScoreChange(criterion.key, i)}
-                  className={`min-w-[36px] h-9 rounded-md text-xs font-medium transition-all
+                  className={`min-w-[36px] h-9 rounded-md text-xs font-medium transition-all md:min-w-11 md:h-12 md:text-sm
                     ${
                       value === i
                         ? "bg-blue-600 text-white shadow-sm"
@@ -498,7 +498,7 @@ export function ScoreForm({
                     disabled={isLocked}
                     onClick={() => handleScoreChange(criterion.key, val)}
                     aria-label={`Score ${val} for ${criterion.label}`}
-                    className={`min-w-[32px] h-9 rounded-md text-xs font-medium transition-all
+                    className={`min-w-[32px] h-9 rounded-md text-xs font-medium transition-all md:min-w-11 md:h-12 md:text-sm
                       ${
                         value === val
                           ? "bg-blue-600 text-white shadow-sm"
@@ -518,7 +518,7 @@ export function ScoreForm({
                   disabled={isLocked}
                   onClick={() => handleScoreChange(criterion.key, i)}
                   aria-label={`Score ${i} for ${criterion.label}`}
-                  className={`min-w-[32px] h-9 rounded-md text-xs font-medium transition-all
+                  className={`min-w-[32px] h-9 rounded-md text-xs font-medium transition-all md:min-w-11 md:h-12 md:text-sm
                     ${
                       value === i
                         ? "bg-blue-600 text-white shadow-sm"
@@ -633,7 +633,14 @@ export function ScoreForm({
           (c) => c.kind !== "participation"
         );
         const renderRow = compactMode ? renderCriterionCompact : renderCriterion;
-        const groupClass = compactMode ? "space-y-2" : "space-y-5 landscape-2col";
+        // Tablet: two-across criteria at lg+ (landscape tablets, 1024px+)
+        // only — at md the scoring column shares the row with the jump dock
+        // and is too narrow for two readable cards. Chips inside a card
+        // already flex-wrap, so a many-chip criterion simply wraps. lg:space-y-0
+        // neutralises the space-y margins inside the grid (gap takes over).
+        const groupClass = compactMode
+          ? "space-y-2 lg:grid lg:grid-cols-2 lg:gap-2 lg:space-y-0"
+          : "space-y-5 landscape-2col lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0";
 
         return (
           <>

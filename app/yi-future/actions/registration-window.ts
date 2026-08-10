@@ -6,6 +6,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import { checkWaitlistAbuse } from "@/lib/yi-future/waitlist-guard";
 import { requirePlatformAdmin } from "./national-admins";
 
 export type SaveWindowResult =
@@ -67,40 +68,59 @@ export async function saveRegistrationWindow(
 
 // ─── WAITLIST (public — shown when registrations are fully closed) ──
 // Unauthenticated by nature: a late student leaves an email so the national
-// team can invite them next time. Response is always the same neutral
-// confirmation, and a repeat email is silently accepted (unique index per
-// edition), so this never reveals who is already on the list.
+// team can invite them next time. A successful response is always the same
+// neutral confirmation, and a repeat email is silently accepted (unique index
+// per edition), so this never reveals who is already on the list.
+//
+// GUARDED since 2026-08-10. This action shipped with no rate limit, no bot
+// challenge and no origin check, and on 2026-08-07 a script used it to insert
+// 2,358,427 faker.js addresses in 2h14m — 99.99% of the table. checkWaitlistAbuse()
+// is now mandatory here; see lib/yi-future/waitlist-guard.ts for the sizing.
+//
+// When registration reopens, ~120 genuine students on this list are still
+// waiting to be told — they were promised exactly that. Export them from
+// /api/csv/waitlist and email them before announcing publicly.
 export async function joinRegistrationWaitlist(
-  email: string
-): Promise<{ ok: true; message: string }> {
+  email: string,
+  turnstileToken?: string | null
+): Promise<{ ok: boolean; message: string }> {
   const NEUTRAL = "Thanks — we've noted your email.";
   const clean = email?.trim().toLowerCase() ?? "";
 
-  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean) && clean.length <= 255) {
-    try {
-      const svc = await createServiceClient();
-      const { data: edition } = await svc
-        .schema("future")
-        .from("editions")
-        .select("id")
-        .eq("is_active", true)
-        .maybeSingle();
-      if (edition) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (svc as any)
-          .schema("future")
-          .from("registration_waitlist")
-          .upsert(
-            { edition_id: (edition as { id: string }).id, email: clean },
-            { onConflict: "edition_id,email", ignoreDuplicates: true }
-          );
-      }
-    } catch (e) {
-      console.warn(
-        "[waitlist] insert failed:",
-        e instanceof Error ? e.message : String(e)
+  // A malformed address gets the neutral reply without a write: telling the
+  // caller it was rejected would leak that a well-formed one was accepted.
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean) || clean.length > 255) {
+    return { ok: true, message: NEUTRAL };
+  }
+
+  try {
+    const svc = await createServiceClient();
+    const { data: edition } = await svc
+      .schema("future")
+      .from("editions")
+      .select("id")
+      .eq("is_active", true)
+      .maybeSingle();
+    if (!edition) return { ok: true, message: NEUTRAL };
+
+    const editionId = (edition as { id: string }).id;
+
+    const guard = await checkWaitlistAbuse(svc, editionId, turnstileToken ?? null);
+    if (!guard.ok) return { ok: false, message: guard.error };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (svc as any)
+      .schema("future")
+      .from("registration_waitlist")
+      .upsert(
+        { edition_id: editionId, email: clean, ip: guard.ip },
+        { onConflict: "edition_id,email", ignoreDuplicates: true }
       );
-    }
+  } catch (e) {
+    console.warn(
+      "[waitlist] insert failed:",
+      e instanceof Error ? e.message : String(e)
+    );
   }
 
   return { ok: true, message: NEUTRAL };

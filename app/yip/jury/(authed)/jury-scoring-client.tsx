@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import {
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+  useMemo,
+  useSyncExternalStore,
+} from "react";
 import { createClient } from "@/lib/yip/supabase/client";
 import { ScoreForm } from "@/components/yip/scoring/score-form";
 import {
@@ -147,6 +154,28 @@ function filterParticipantsBySearch(
   );
 }
 
+// Tablet layout (md+ = 768px): SSR-safe viewport check via
+// useSyncExternalStore — no window/matchMedia at module scope (Node 20
+// defines a global `navigator`, so typeof-guards are dead; see CLAUDE.md).
+// The MediaQueryList is created lazily on first client-side use only.
+let mdQuery: MediaQueryList | null = null;
+function getMdQuery(): MediaQueryList {
+  if (!mdQuery) mdQuery = window.matchMedia("(min-width: 768px)");
+  return mdQuery;
+}
+function subscribeMd(callback: () => void): () => void {
+  const q = getMdQuery();
+  q.addEventListener("change", callback);
+  return () => q.removeEventListener("change", callback);
+}
+function useIsMdUp(): boolean {
+  return useSyncExternalStore(
+    subscribeMd,
+    () => getMdQuery().matches,
+    () => false // server render assumes phone; CSS handles the visuals
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────
 
 export function JuryScoringClient({
@@ -174,6 +203,9 @@ function JuryScoringClientInner({
   initialEventLocked,
 }: Props) {
   const supabase = createClient();
+  // Tablet (md+): the jump bar renders as a right-side dock that never
+  // overlaps the form, so the phone-only pad auto-collapse is skipped there.
+  const isMdUp = useIsMdUp();
 
   const [currentSpeaker, setCurrentSpeaker] =
     useState<CurrentSpeakerInfo | null>(null);
@@ -1070,7 +1102,9 @@ function JuryScoringClientInner({
     setPickerSearch(""); // clear search after picking a participant
     // Collapse the digit pad once a participant is opened (jump chip, picker
     // row or Unfinished chip) so it stops covering the form's bottom rows.
-    setJumpPadOpen(false);
+    // Phone-only: at md+ the jump panel is a side dock that never covers the
+    // form, so the pad stays open for the next rapid jump.
+    if (!isMdUp) setJumpPadOpen(false);
     // Rapid scoring: loadParticipantScore resolves synchronously (no spinner
     // flash) whenever the caches are warm — setLoading(true) below is a no-op
     // in that common case since setLoading(false) follows on the same tick.
@@ -1338,13 +1372,23 @@ function JuryScoringClientInner({
 
   return (
     <div
-      className="space-y-4 pb-56"
-      // Real clearance under the fixed quick-jump bar (measured, since its
-      // height varies) so its overlay never swallows taps on page content —
-      // e.g. the "Score a specific participant" header. pb-56 is the fallback
-      // until the first measure lands.
+      // Below md: real clearance under the fixed quick-jump bar (measured,
+      // since its height varies) so its overlay never swallows taps on page
+      // content — e.g. the "Score a specific participant" header. Applied via
+      // a CSS custom property so it is PHONE-ONLY; the var's 14rem fallback
+      // (= pb-56) covers the window before the first measure lands.
+      // At md+ the jump bar is a fixed RIGHT-side dock instead — no bottom
+      // overlay to clear (md:pb-8), but the content column reserves md:pr-80
+      // (dock w-72 + right-4 offset + gap) so the dock never overlaps it.
+      className={`space-y-4 max-md:pb-[var(--yip-jumpbar-clearance,14rem)] md:pb-8 md:pl-4 ${
+        selectedSessionId ? "md:pr-80" : "md:pr-4"
+      }`}
       style={
-        jumpBarHeight > 0 ? { paddingBottom: jumpBarHeight + 28 } : undefined
+        jumpBarHeight > 0
+          ? ({
+              "--yip-jumpbar-clearance": `${jumpBarHeight + 28}px`,
+            } as React.CSSProperties)
+          : undefined
       }
     >
       {eventLocked && (
@@ -1889,8 +1933,13 @@ function JuryScoringClientInner({
       {selectedSessionId && (
         <div
           ref={jumpBarRef}
-          className="fixed inset-x-0 bottom-0 z-30 mx-auto mb-3 max-w-md rounded-xl border-2 border-gray-200 bg-white/95 px-3 py-2.5 backdrop-blur"
-          style={{ boxShadow: "0 -2px 10px rgba(0,0,0,0.07)", width: "calc(100% - 2rem)" }}
+          // Phone (<md): fixed bottom-center bar, exactly as before (the
+          // former inline width now lives in w-[calc(100%-2rem)]).
+          // Tablet (md+): fixed right-edge dock, vertically centered beside
+          // the form — the content column's md:pr-80 guarantees no overlap.
+          // Scrolls internally if the matches/Unfinished strips grow tall;
+          // max-h keeps it clear of the sticky 56px header.
+          className="fixed left-0 right-0 bottom-0 z-30 mx-auto mb-3 w-[calc(100%-2rem)] max-w-md rounded-xl border-2 border-gray-200 bg-white/95 px-3 py-2.5 backdrop-blur shadow-[0_-2px_10px_rgba(0,0,0,0.07)] md:left-auto md:right-4 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:mb-0 md:w-72 md:max-h-[calc(100vh-8rem)] md:overflow-y-auto md:shadow-[0_4px_16px_rgba(0,0,0,0.08)]"
         >
           <label
             htmlFor="quick-jump-input"
@@ -1956,9 +2005,10 @@ function JuryScoringClientInner({
                   key={d}
                   type="button"
                   onClick={() => setQuickJump((q) => q + d)}
-                  className="rounded-md border-2 text-sm font-bold active:scale-95"
+                  // min-h-11 = the same 44px as before on phones; md+ grows
+                  // keys to a 48px tablet target with larger text.
+                  className="min-h-11 rounded-md border-2 text-sm font-bold active:scale-95 md:min-h-12 md:text-base"
                   style={{
-                    minHeight: "44px",
                     borderColor: `${GOLD}66`,
                     color: INK,
                     background: `${GOLD}14`,
@@ -1971,8 +2021,7 @@ function JuryScoringClientInner({
                 type="button"
                 onClick={() => setQuickJump((q) => q.slice(0, -1))}
                 aria-label="Backspace"
-                className="rounded-md border-2 border-gray-200 text-sm font-bold text-gray-700 active:scale-95"
-                style={{ minHeight: "44px" }}
+                className="min-h-11 rounded-md border-2 border-gray-200 text-sm font-bold text-gray-700 active:scale-95 md:min-h-12 md:text-base"
               >
                 ⌫
               </button>
@@ -1980,8 +2029,7 @@ function JuryScoringClientInner({
                 type="button"
                 onClick={() => setQuickJump("")}
                 aria-label="Clear"
-                className="rounded-md border-2 border-gray-200 text-sm font-bold text-gray-700 active:scale-95"
-                style={{ minHeight: "44px" }}
+                className="min-h-11 rounded-md border-2 border-gray-200 text-sm font-bold text-gray-700 active:scale-95 md:min-h-12 md:text-base"
               >
                 ×
               </button>

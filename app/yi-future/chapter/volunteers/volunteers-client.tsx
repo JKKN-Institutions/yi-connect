@@ -163,9 +163,12 @@ export function VolunteersClient({
           </div>
         </form>
         <p className="mt-2 text-[11px] text-navy/40">
-          Codes are 6 characters, never contain 0/O/1/I, and are checked against
-          every delegate, mentor, jury, partner and expert code before being
-          issued — so a volunteer can never sign in as somebody else.
+          A volunteer code is 6 characters and always starts with a ZERO — read
+          it out as &ldquo;zero&rdquo;. Student, mentor, jury, partner and expert
+          codes can never contain a zero, so a volunteer code can never be
+          anybody else&rsquo;s code and a volunteer can never sign in as a
+          student. If they type the letter O the sign-in box corrects it for
+          them.
         </p>
       </section>
 

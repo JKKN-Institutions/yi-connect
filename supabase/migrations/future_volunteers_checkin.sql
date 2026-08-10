@@ -39,20 +39,41 @@
 -- ---------------------------------------------------------------------------
 -- BLOCKER B — access-code uniqueness is PER TABLE only, and
 --   validateAccessCode() resolves a submitted code across
---   delegates -> mentors -> jury_assignments -> corporate_partners -> experts
---   in a FIXED ORDER. A volunteer code that happened to equal a delegate's
---   code would resolve as the DELEGATE, silently signing a staff member in as
---   a student. Closed on three layers:
---     1. APP      uniqueVolunteerAccessCode() in app/yi-future/actions/
---                 volunteers.ts checks a candidate against ALL SIX
---                 code-holding future tables before accepting it.
---     2. DB       the trigger below REJECTS (errcode 23505) any volunteer code
---                 already present in any of the other five tables, so a future
---                 code path that bypasses the action still cannot mint one.
---     3. RESOLVER volunteers resolve FIRST in validateAccessCode(), and a code
---                 that matches a volunteer AND any other code-holder is DENIED
---                 outright as ambiguous rather than silently resolving to
---                 either identity (never escalate, never impersonate).
+--   delegates -> mentors -> jury_assignments -> corporate_partners -> experts.
+--   A volunteer code that happened to equal a delegate's code would resolve as
+--   the DELEGATE, silently signing a staff member in as a student.
+--
+--   CHOSEN: make the collision IMPOSSIBLE rather than handle it. A volunteer
+--   code has a structurally different SHAPE — exactly 6 characters with a
+--   leading ZERO — and the generator that mints every delegate / mentor / jury /
+--   partner / expert code draws from a 32-character alphabet that contains no
+--   zero at all (0, O, 1 and I were excluded as ambiguous in print). So no
+--   other code-holder's code can ever have the volunteer shape, and
+--   validateAccessCode() routes on the shape: a 0-leading code is looked up
+--   ONLY in future.volunteers, and any other code is never looked up there.
+--   Definition and proof: lib/yi-future/access-code-shape.ts. Census of the
+--   16,838 codes live on 2026-08-10: zero contain 0, O, 1 or I anywhere.
+--
+--   REJECTED: deny an ambiguous code. It fails at the worst possible moment —
+--   a volunteer standing at a busy desk on event day, told their code belongs
+--   to two people and needing a chair to mint a new one on the spot.
+--
+--   Two defence-in-depth layers remain, and are now UNREACHABLE by design,
+--   which is the point — they only start mattering if somebody widens that
+--   shared alphabet to include a zero:
+--     1. APP  uniqueVolunteerAccessCode() in app/yi-future/actions/
+--             volunteers.ts checks a candidate against ALL SIX code-holding
+--             future tables before accepting it.
+--     2. DB   the trigger below REJECTS (errcode 23505) any volunteer code
+--             already present in any of the other five tables, so a future code
+--             path that bypasses the action still cannot mint one.
+--
+--   NOTE FOR WHOEVER APPLIES THIS FILE: the shape decision changed NO DDL in
+--   this migration — only the comments above. There is nothing to re-apply and
+--   no follow-up migration. The shape is enforced in application code, not by a
+--   CHECK constraint, deliberately: a CHECK on the other five tables' codes
+--   would have to be a second migration against 16,838 live rows for a rule
+--   their only generator already cannot break.
 -- ============================================================================
 
 -- ─── 1. future.volunteers ───────────────────────────────────────────────────
@@ -94,9 +115,12 @@ create unique index if not exists uq_future_volunteers_access_code
   on future.volunteers (access_code)
   where access_code is not null;
 
--- BLOCKER B layer 2 — cross-table collision guard. Not SECURITY DEFINER on
--- purpose: it runs as the writing role, and only the service client writes
--- this table (RLS below has no policies for anon/authenticated).
+-- BLOCKER B defence-in-depth — cross-table collision guard. Unreachable while
+-- volunteer codes keep their leading-zero shape (see the header); kept so that
+-- widening the shared code alphabet cannot mint a colliding code behind the
+-- app's back. Not SECURITY DEFINER on purpose: it runs as the writing role, and
+-- only the service client writes this table (RLS below has no policies for
+-- anon/authenticated).
 create or replace function future.volunteers_access_code_global_guard()
 returns trigger
 language plpgsql

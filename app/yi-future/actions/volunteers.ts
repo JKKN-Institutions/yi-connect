@@ -14,7 +14,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
-import { generateAccessCode } from "@/lib/yi-future/access-code";
+import { generateVolunteerAccessCode } from "@/lib/yi-future/access-code-shape";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 import {
   VOLUNTEER_STATIONS,
@@ -51,16 +51,20 @@ async function requireVolunteerChapterAdmin(
 }
 
 /**
- * BLOCKER B, layer 1 — GLOBAL uniqueness at generation time.
+ * BLOCKER B, layer 2 — belt to go with the braces.
  *
- * validateAccessCode() resolves a code across delegates, mentors,
- * jury_assignments, corporate_partners and experts as well as volunteers, and
- * every uniqueness constraint in this schema is PER TABLE. A volunteer code
- * equal to a delegate's code would therefore be an identity collision. So a
- * candidate is checked against ALL SIX code-holding tables before it is
- * accepted. (The DB trigger installed by
- * supabase/migrations/future_volunteers_checkin.sql enforces the same rule as
- * a second layer for any future code path that skips this function.)
+ * The braces are the SHAPE: generateVolunteerAccessCode() mints a leading-zero
+ * code, and no other Yi-Future generator can emit a zero at all, so a
+ * cross-table collision is structurally impossible (see
+ * lib/yi-future/access-code-shape.ts). The check below therefore cannot fire
+ * today — which is exactly why it stays. If somebody ever widens the shared
+ * alphabet in lib/yi-future/access-code.ts, this is one of the two places that
+ * still refuses to mint a colliding code; the other is the trigger installed by
+ * supabase/migrations/future_volunteers_checkin.sql, for any future code path
+ * that skips this function.
+ *
+ * Cost of keeping it: six indexed equality lookups, once, when a chair adds a
+ * volunteer. Nothing at a desk waits on it.
  */
 const CODE_TABLES = [
   "volunteers",
@@ -73,7 +77,7 @@ const CODE_TABLES = [
 
 async function uniqueVolunteerAccessCode(svc: LooseClient): Promise<string> {
   for (let attempt = 0; attempt < 25; attempt++) {
-    const code = generateAccessCode();
+    const code = generateVolunteerAccessCode();
     let taken = false;
     for (const table of CODE_TABLES) {
       const { data } = await svc

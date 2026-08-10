@@ -1,5 +1,6 @@
 import { useState, useTransition, useEffect, useRef } from "react";
 import { validateAccessCode } from "@/app/yi-future/actions/auth";
+import { normalizeAccessCodeInput } from "@/lib/yi-future/access-code-shape";
 
 // This form is also the CHECK-IN DESK's front door: a volunteer signs in here
 // with their 6-character code. Without the guard below, a validateAccessCode()
@@ -45,10 +46,11 @@ export function CodeEntryStep({
   }, []);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const cleaned = e.target.value
-      .toUpperCase()
-      .replace(/[^A-Z2-9]/g, "")
-      .slice(0, 6);
+    // Same canonicalisation the server applies, imported rather than repeated
+    // so the box can never silently eat a character the resolver would have
+    // accepted. It keeps the digit 0 (a check-in volunteer code starts with
+    // one) and rewrites a typed letter O into it.
+    const cleaned = normalizeAccessCodeInput(e.target.value).slice(0, 6);
     setCode(cleaned);
     if (error) setError(null);
   }
@@ -116,8 +118,9 @@ export function CodeEntryStep({
           Enter your 6-character code
         </h1>
         <p className="mt-3 text-sm text-navy/60 leading-relaxed max-w-sm mx-auto">
-          Your chapter admin shared this with you. Codes are case-insensitive and
-          never contain 0, O, 1 or I.
+          Your chapter admin shared this with you. Codes are case-insensitive.
+          Student codes never contain 0, O, 1 or I — a check-in volunteer code
+          always starts with a zero.
         </p>
       </div>
 

@@ -10,12 +10,15 @@
  *   1. Every async call is wrapped in withTimeout(). Nothing can hang forever.
  *   2. Every async IIFE inside an effect has BOTH a .catch() that releases the
  *      UI and a timeout, so a rejected promise can never leave the screen stuck.
- *   3. A timeout is NOT reported as a failure. The server action may already
- *      have written the row, so the tap goes AMBER ("not confirmed") with a
- *      Refresh button — never a green tick we cannot prove, never a rollback
- *      that hides a write that happened.
+ *   3. A lost reply is RETRIED QUIETLY (3 attempts, short backoff, one hard
+ *      ceiling across all of them). Only if it still cannot be confirmed does
+ *      the tap go AMBER ("not confirmed") with a Refresh button — never a green
+ *      tick we cannot prove, never a rollback that hides a write that happened.
+ *      Amber has to stay rare: a volunteer who sees five warnings stops reading
+ *      the sixth, and that is the one that matters.
  *   4. An explicit ok:false rolls the optimistic tick back and prints the
- *      server's sentence on that row. No toast that scrolls away.
+ *      server's sentence on that row — immediately, never retried. Retrying a
+ *      rejection only delays an honest answer.
  *   5. One in-flight write per delegate. Double-tapping cannot fire twice.
  *   6. Offline is stated in words at the top of the screen and marks are
  *      blocked, because a silent queue that never flushes loses attendance.
@@ -28,32 +31,20 @@ import {
   markDelegatePresent,
 } from "@/app/yi-future/actions/volunteer-desk";
 import type { DeskRoster, DeskSession } from "@/lib/yi-future/volunteers";
+// The retry policy for a mark lives in lib/ so it can be exercised on its own —
+// "does it retry a refusal?" is not a question a screenshot can answer. Read the
+// header of that file for why repeating the write is safe and where the ceiling
+// comes from.
+import {
+  MARK_ATTEMPTS,
+  TimeoutError,
+  markWithRetry,
+  withTimeout,
+} from "@/lib/yi-future/desk-retry";
 
 const LOAD_TIMEOUT_MS = 12_000;
-const MARK_TIMEOUT_MS = 10_000;
 
-class TimeoutError extends Error {}
-
-function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new TimeoutError("timeout")),
-      ms
-    );
-    p.then(
-      (v) => {
-        clearTimeout(timer);
-        resolve(v);
-      },
-      (e) => {
-        clearTimeout(timer);
-        reject(e);
-      }
-    );
-  });
-}
-
-type RowState = "idle" | "saving" | "error" | "unconfirmed";
+type RowState = "idle" | "saving" | "retrying" | "error" | "unconfirmed";
 
 export function DeskClient({
   volunteerName,
@@ -77,6 +68,8 @@ export function DeskClient({
   const [query, setQuery] = useState("");
   const [rowState, setRowState] = useState<Record<string, RowState>>({});
   const [rowError, setRowError] = useState<Record<string, string>>({});
+  /** Which attempt a retrying row is on, so the label can show progress. */
+  const [rowAttempt, setRowAttempt] = useState<Record<string, number>>({});
   const inFlight = useRef<Set<string>>(new Set());
 
   const [online, setOnline] = useState(true);
@@ -163,6 +156,7 @@ export function DeskClient({
         // A fresh read is the source of truth — clear stale row flags.
         setRowState({});
         setRowError({});
+        setRowAttempt({});
         setLoadingRoster(false);
       })().catch((e) => {
         if (cancelled) return;
@@ -224,61 +218,61 @@ export function DeskClient({
         : r
     );
 
-    try {
-      const res = await withTimeout(
-        markDelegatePresent(sessionId, delegateId, nextPresent),
-        MARK_TIMEOUT_MS
+    // Undo the optimistic flip. Only ever called when we KNOW nothing landed.
+    const rollBack = () =>
+      setRoster((r) =>
+        r
+          ? {
+              ...r,
+              presentCount: r.presentCount + (nextPresent ? -1 : 1),
+              rows: r.rows.map((row) =>
+                row.id === delegateId ? { ...row, present: !nextPresent } : row
+              ),
+            }
+          : r
       );
-      if (res.ok) {
+
+    try {
+      const outcome = await markWithRetry(
+        () => markDelegatePresent(sessionId, delegateId, nextPresent),
+        (attempt) => {
+          // Something is still happening. Say which try we are on so the row
+          // never looks frozen, and never show a tick we cannot prove.
+          setRowState((m) => ({ ...m, [delegateId]: "retrying" }));
+          setRowAttempt((m) => ({ ...m, [delegateId]: attempt }));
+        }
+      );
+
+      if (outcome.kind === "ok") {
         setRowState((m) => ({ ...m, [delegateId]: "idle" }));
-      } else {
-        // Rule 4: roll the tick back, show the server's own sentence.
-        setRoster((r) =>
-          r
-            ? {
-                ...r,
-                presentCount: r.presentCount + (nextPresent ? -1 : 1),
-                rows: r.rows.map((row) =>
-                  row.id === delegateId
-                    ? { ...row, present: !nextPresent }
-                    : row
-                ),
-              }
-            : r
-        );
-        setRowState((m) => ({ ...m, [delegateId]: "error" }));
-        setRowError((m) => ({ ...m, [delegateId]: res.error }));
-      }
-    } catch (e) {
-      if (e instanceof TimeoutError) {
+      } else if (outcome.kind === "unconfirmed") {
         // Rule 3: it may well have saved. Do NOT roll back and do NOT claim
-        // success — flag it and push the volunteer to Refresh.
+        // success — flag it amber and push the volunteer to Refresh.
         setRowState((m) => ({ ...m, [delegateId]: "unconfirmed" }));
-        setRowError((m) => ({
-          ...m,
-          [delegateId]: "No reply in 10s — tap Refresh to check if it saved.",
-        }));
+        setRowError((m) => ({ ...m, [delegateId]: outcome.error }));
       } else {
-        setRoster((r) =>
-          r
-            ? {
-                ...r,
-                presentCount: r.presentCount + (nextPresent ? -1 : 1),
-                rows: r.rows.map((row) =>
-                  row.id === delegateId
-                    ? { ...row, present: !nextPresent }
-                    : row
-                ),
-              }
-            : r
-        );
+        // Rule 4 (rejected) and a request that never got out (failed): print the
+        // sentence. Roll the tick back too — unless an earlier attempt had timed
+        // out, in which case a write may be sitting in the database and rule 3
+        // still wins over rule 4.
+        if (!(outcome.kind === "rejected" && outcome.mayHaveLanded)) rollBack();
         setRowState((m) => ({ ...m, [delegateId]: "error" }));
-        setRowError((m) => ({
-          ...m,
-          [delegateId]: "Network error — tap the name again to retry.",
-        }));
+        setRowError((m) => ({ ...m, [delegateId]: outcome.error }));
       }
+    } catch {
+      // markWithRetry is written not to throw; if it ever does, the button still
+      // has to come back and the volunteer still has to get a sentence.
+      setRowState((m) => ({ ...m, [delegateId]: "unconfirmed" }));
+      setRowError((m) => ({
+        ...m,
+        [delegateId]: "Could not confirm that — tap Refresh to check if it saved.",
+      }));
     } finally {
+      setRowAttempt((m) => {
+        const next = { ...m };
+        delete next[delegateId];
+        return next;
+      });
       inFlight.current.delete(delegateId);
     }
   }
@@ -471,11 +465,16 @@ export function DeskClient({
                 {roster.rows.map((row) => {
                   const state = rowState[row.id] ?? "idle";
                   const err = rowError[row.id];
+                  const attempt = rowAttempt[row.id] ?? 0;
                   return (
                     <li key={row.id}>
                       <button
                         type="button"
-                        disabled={!canMark || state === "saving"}
+                        disabled={
+                          !canMark ||
+                          state === "saving" ||
+                          state === "retrying"
+                        }
                         onClick={() => toggle(row.id, !row.present)}
                         aria-pressed={row.present}
                         className={`w-full text-left px-4 py-4 rounded-lg border-2 flex items-center justify-between gap-3 min-h-[64px] transition-colors disabled:opacity-60 ${
@@ -483,9 +482,13 @@ export function DeskClient({
                             ? "border-red-400 bg-red-50"
                             : state === "unconfirmed"
                               ? "border-amber-400 bg-amber-50"
-                              : row.present
-                                ? "border-emerald-500 bg-emerald-50"
-                                : "border-navy/15 bg-white"
+                              : state === "retrying"
+                                ? // Not green: nothing is confirmed yet. Not
+                                  // amber either: nothing has failed yet.
+                                  "border-navy/40 bg-navy/5"
+                                : row.present
+                                  ? "border-emerald-500 bg-emerald-50"
+                                  : "border-navy/15 bg-white"
                         }`}
                       >
                         <span className="font-semibold text-navy text-base">
@@ -494,6 +497,10 @@ export function DeskClient({
                         <span className="text-xs font-bold uppercase tracking-wider shrink-0">
                           {state === "saving" ? (
                             <span className="text-navy/50">saving…</span>
+                          ) : state === "retrying" ? (
+                            <span className="text-navy/60">
+                              retrying {attempt} of {MARK_ATTEMPTS}…
+                            </span>
                           ) : state === "unconfirmed" ? (
                             <span className="text-amber-700">not confirmed</span>
                           ) : state === "error" ? (
@@ -528,8 +535,9 @@ export function DeskClient({
 
       <footer className="max-w-2xl mx-auto px-4 pb-10 pt-4">
         <p className="text-[11px] text-navy/40 text-center">
-          Every tap saves on its own. If a name goes amber, tap Refresh to see
-          what actually saved before marking it again.
+          Every tap saves on its own and retries by itself if the reply is slow.
+          If a name still goes amber, tap Refresh to see what actually saved
+          before marking it again.
         </p>
       </footer>
     </div>

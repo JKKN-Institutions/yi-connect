@@ -22,6 +22,7 @@ import { Badge } from "@/components/yip/ui/badge";
 import { Button } from "@/components/yip/ui/button";
 import { Crown, X, Plus } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
+import { SearchablePersonSelect } from "@/components/yip/searchable-person-select";
 import { toast } from "sonner";
 import { electPartyLeader, clearPartyLeader } from "@/app/yip/actions/parties";
 import type {
@@ -169,22 +170,17 @@ export function PartyLeadersCard({ data }: Props) {
 
                   {isOpen ? (
                     <div className="flex flex-col gap-2">
-                      <select
-                        autoFocus
+                      <SearchablePersonSelect
+                        options={candidates.map((p) => ({
+                          id: p.id,
+                          label: p.full_name,
+                          sublabel: constLabel(p) || undefined,
+                        }))}
                         value={pickValue}
-                        onChange={(e) => setPickValue(e.target.value)}
+                        onChange={setPickValue}
+                        placeholder="Select a party member…"
                         disabled={isPending}
-                        className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#FF9933]/40"
-                      >
-                        <option value="">Select a party member…</option>
-                        {candidates.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {constLabel(p)
-                              ? `${constLabel(p)} — ${p.full_name}`
-                              : p.full_name}
-                          </option>
-                        ))}
-                      </select>
+                      />
                       <div className="flex gap-2">
                         <Button
                           size="sm"

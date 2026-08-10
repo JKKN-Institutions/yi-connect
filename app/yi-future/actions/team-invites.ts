@@ -412,6 +412,85 @@ export async function freezeTeam(teamId: string): Promise<ActionResult> {
 // freezeTeam gates by team ownership (leader/captain); the chapter-admin
 // equivalent of that ownership check is getChapterContext + the same
 // chapter ownership check the team-detail page enforces.
+// ─── UNFREEZE EVERY LOCKED TEAM IN THE CHAPTER (chapter-admin auth) ──
+// Field request 2026-08-10. Freezing is something a CAPTAIN does to declare
+// their team final, so this reverses every captain's declaration at once —
+// the UI names the count and asks for a second click before calling it.
+//
+// Chapter-scoped by the same rule as unfreezeTeam: the admin's own chapter and
+// active edition, taken from getChapterContext rather than from any argument,
+// so there is no id for a caller to tamper with.
+export async function unfreezeAllTeams(): Promise<ActionResult> {
+  const ctx = await getChapterContext();
+  if (!ctx) {
+    return { ok: false, error: "Sign in as a chapter admin first." };
+  }
+
+  const svc = await createServiceClient();
+  const nowIso = new Date().toISOString();
+
+  // Count first — `head: true` returns the count without rows, so this is not
+  // subject to the 1,000-row PostgREST cap that a select-then-count would hit
+  // on a large chapter.
+  const { count: frozenCount } = await svc
+    .schema("future")
+    .from("teams")
+    .select("id", { count: "exact", head: true })
+    .eq("chapter_id", ctx.chapterId)
+    .eq("edition_id", ctx.editionId)
+    .eq("is_frozen", true);
+
+  if (!frozenCount) {
+    return { ok: true, message: "No locked teams to unlock." };
+  }
+
+  // Update by filter, not by an id list, for the same row-cap reason.
+  const { error } = await svc
+    .schema("future")
+    .from("teams")
+    .update({
+      is_frozen: false,
+      frozen_at: null,
+      updated_at: nowIso,
+    } as never)
+    .eq("chapter_id", ctx.chapterId)
+    .eq("edition_id", ctx.editionId)
+    .eq("is_frozen", true);
+  if (error) return { ok: false, error: error.message };
+
+  // Auto-resolve this chapter's open unlock requests — unfreezing IS the
+  // resolution, exactly as in unfreezeTeam. The open queue is small (at most
+  // one per frozen team, and only for captains who asked), so listing ids
+  // here is safe.
+  const { data: openReqs } = await (svc as AnyClient)
+    .schema("future")
+    .from("team_unlock_requests")
+    .select("team_id, teams!inner(chapter_id, edition_id)")
+    .eq("status", "open")
+    .eq("teams.chapter_id", ctx.chapterId)
+    .eq("teams.edition_id", ctx.editionId);
+  const reqTeamIds = ((openReqs as { team_id: string }[] | null) ?? []).map(
+    (r) => r.team_id
+  );
+  if (reqTeamIds.length > 0) {
+    await svc
+      .schema("future")
+      .from("team_unlock_requests" as AnyClient)
+      .update({ status: "resolved", resolved_at: nowIso } as never)
+      .in("team_id", reqTeamIds)
+      .eq("status", "open");
+  }
+
+  revalidatePath("/yi-future/chapter/teams");
+  revalidatePath("/yi-future/me/team");
+  revalidatePath("/yi-future/me/team/directory");
+  revalidatePath("/yi-future/me/team/invites");
+  return {
+    ok: true,
+    message: `Unlocked ${frozenCount} team${frozenCount === 1 ? "" : "s"}.`,
+  };
+}
+
 export async function unfreezeTeam(teamId: string): Promise<ActionResult> {
   const ctx = await getChapterContext();
   if (!ctx) {

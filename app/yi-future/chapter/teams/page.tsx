@@ -3,11 +3,13 @@ import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
 import { TEAM_SIZE_MIN, TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
+import { UnlockAllTeamsButton } from "@/components/yi-future/UnlockAllTeamsButton";
 
 type Team = {
   id: string;
   team_name: string;
   status: string | null;
+  is_frozen: boolean | null;
   captain_id: string | null;
   problem_statement_id: string | null;
   problem_statements:
@@ -26,7 +28,7 @@ async function getTeams(
     .schema("future")
     .from("teams")
     .select(
-      "id, team_name, status, captain_id, problem_statement_id, problem_statements(title, tracks(slug, name, color_hex)), captain:delegates!teams_captain_id_fkey(full_name), team_members(delegate_id)"
+      "id, team_name, status, is_frozen, captain_id, problem_statement_id, problem_statements(title, tracks(slug, name, color_hex)), captain:delegates!teams_captain_id_fkey(full_name), team_members(delegate_id)"
     )
     .eq("chapter_id", chapterId)
     .eq("edition_id", editionId)
@@ -113,6 +115,10 @@ export default async function TeamsPage({
       t.problem_statement_id
   ).length;
 
+  // Locked teams across the WHOLE chapter, not the current track filter — the
+  // bulk unlock is chapter-wide, so a filtered count would understate it.
+  const frozenCount = allTeams.filter((t) => t.is_frozen).length;
+
   // Track chips — derived from teams' problem→track joins
   const tracksInChapter = Array.from(
     new Map(
@@ -147,6 +153,7 @@ export default async function TeamsPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <UnlockAllTeamsButton frozenCount={frozenCount} />
           <Link
             href={`/api/csv/teams?chapter_id=${ctx.chapterId}`}
             className="text-xs font-semibold text-navy hover:text-yi-gold border border-navy/20 rounded px-3 py-1.5 inline-flex items-center gap-1.5"

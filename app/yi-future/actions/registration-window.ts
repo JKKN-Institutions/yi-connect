@@ -65,43 +65,16 @@ export async function saveRegistrationWindow(
   };
 }
 
-// ─── WAITLIST (public — shown when registrations are fully closed) ──
-// Unauthenticated by nature: a late student leaves an email so the national
-// team can invite them next time. Response is always the same neutral
-// confirmation, and a repeat email is silently accepted (unique index per
-// edition), so this never reveals who is already on the list.
-export async function joinRegistrationWaitlist(
-  email: string
-): Promise<{ ok: true; message: string }> {
-  const NEUTRAL = "Thanks — we've noted your email.";
-  const clean = email?.trim().toLowerCase() ?? "";
-
-  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean) && clean.length <= 255) {
-    try {
-      const svc = await createServiceClient();
-      const { data: edition } = await svc
-        .schema("future")
-        .from("editions")
-        .select("id")
-        .eq("is_active", true)
-        .maybeSingle();
-      if (edition) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (svc as any)
-          .schema("future")
-          .from("registration_waitlist")
-          .upsert(
-            { edition_id: (edition as { id: string }).id, email: clean },
-            { onConflict: "edition_id,email", ignoreDuplicates: true }
-          );
-      }
-    } catch (e) {
-      console.warn(
-        "[waitlist] insert failed:",
-        e instanceof Error ? e.message : String(e)
-      );
-    }
-  }
-
-  return { ok: true, message: NEUTRAL };
-}
+// ─── WAITLIST — REMOVED 2026-08-10 ──────────────────────────────────
+// joinRegistrationWaitlist() used to let any unauthenticated visitor write a
+// row to future.registration_waitlist. It had no rate limiting, no CAPTCHA and
+// no origin check, so on 2026-08-07 between 16:56 and 19:10 UTC a bot inserted
+// 2,358,427 faker.js addresses at ~440 rows/second — 99.99% of the table.
+//
+// The whole write path is deleted rather than merely hidden: a Server Action
+// stays a reachable POST endpoint even when no component renders it, so
+// removing <WaitlistForm /> alone would NOT have stopped the flood.
+//
+// The 183 genuine emails collected before the flood are retained in
+// future.registration_waitlist and still downloadable via /api/csv/waitlist.
+// If a waitlist is ever reinstated it MUST ship with rate limiting on day one.

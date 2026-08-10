@@ -6,7 +6,6 @@ import {
   getRegistrationWindow,
   isChapterOpenForRegistration,
 } from "@/lib/yi-future/registration-window";
-import { WaitlistForm } from "@/components/yi-future/WaitlistForm";
 import { JoinForm } from "./join-form";
 
 type ChapterRow = {
@@ -93,9 +92,6 @@ export default async function JoinPage() {
             >
               Sign in →
             </Link>
-            <div className="mt-6 pt-5 border-t border-navy/10">
-              <WaitlistForm />
-            </div>
           </div>
         </section>
         <footer className="border-t border-navy/10 py-6 px-4 bg-white">

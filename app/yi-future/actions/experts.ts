@@ -75,7 +75,8 @@ async function uniqueExpertCode(svc: LooseClient): Promise<string> {
 
 export async function createExpert(
   editionId: string,
-  formData: FormData
+  formData: FormData,
+  chapterId?: string | null
 ): Promise<ActionResult> {
   await requireExpertEditor();
   const full_name = String(formData.get("full_name") ?? "").trim();
@@ -97,6 +98,11 @@ export async function createExpert(
     .from("experts")
     .insert({
       edition_id: editionId,
+      // Stamp the creating chapter so this expert — and their access code —
+      // is visible to that chapter alone. Rows predating 2026-08-10 carry
+      // NULL and stay in the shared pool; see the migration for why they
+      // could not be attributed.
+      chapter_id: chapterId ?? null,
       full_name,
       title,
       organization,

@@ -34,7 +34,10 @@ type PhaseEvent = {
   expert_id: string | null;
 };
 
-async function getExperts(editionId: string): Promise<Expert[]> {
+async function getExperts(
+  editionId: string,
+  chapterId: string
+): Promise<Expert[]> {
   // access_code is a new column not in generated types → loose client.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const svc = (await createServiceClient()) as any;
@@ -42,9 +45,20 @@ async function getExperts(editionId: string): Promise<Expert[]> {
     .schema("future")
     .from("experts")
     .select(
-      "id, full_name, title, organization, email, phone, bio, expertise_areas, access_code"
+      "id, full_name, title, organization, email, phone, bio, expertise_areas, access_code, chapter_id"
     )
     .eq("edition_id", editionId)
+    // This chapter's own experts, plus the legacy shared pool.
+    //
+    // future.experts gained chapter_id on 2026-08-10 so a chapter's experts —
+    // and their access codes — stop being readable by all 65 chapters. The 9
+    // rows that predate it are NOT attributable: none is attached to any
+    // phase_event, so nothing records who owns them. They stay chapter_id NULL
+    // and remain visible to everyone, because silently emptying every
+    // chapter's roster would be worse than the exposure it fixes. Everything
+    // created from now on is stamped with its chapter, so the shared set only
+    // shrinks. Attributing those 9 is a call for the national team.
+    .or(`chapter_id.eq.${chapterId},chapter_id.is.null`)
     .order("full_name", { ascending: true });
   return (data as unknown as Expert[]) ?? [];
 }
@@ -81,7 +95,7 @@ export default async function ExpertsPage() {
   if (!ctx) redirect("/yi-future/chapter");
 
   const [experts, events] = await Promise.all([
-    getExperts(ctx.editionId),
+    getExperts(ctx.editionId, ctx.chapterId),
     getPhaseEvents(ctx.chapterId, ctx.editionId),
   ]);
 

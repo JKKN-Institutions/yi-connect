@@ -18,6 +18,9 @@ export default async function NewJuryPage() {
         editionId: ctx!.editionId,
         scope: "chapter",
         eventId: null,
+        // Without this the jury has no chapter binding and the action cannot
+        // gate the caller — see future_jury_expert_chapter_scope.sql.
+        chapterId: ctx!.chapterId,
       },
       formData
     );

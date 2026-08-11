@@ -22,6 +22,10 @@ export type PartySide = (typeof PARTY_SIDES)[number];
 // position bonuses (4 / 2) in yip.position_bonus_config but were absent from the
 // parliament_role enum, so no participant could hold them. Now assignable so each
 // can be given to a distinct student (Director: "1 person 1 role, more opportunity").
+// Adds (2026 Regional Round): deputy_minister (junior government role — ordinary
+// participant, votes + committees normally) and the two duty officials
+// parliamentary_administrator / parliamentary_journalist (announced at Oath,
+// visible on Positions, NOT scored — see OFFICIAL_DUTY_ROLES below).
 export const PARLIAMENT_ROLES = [
   "speaker",
   "nominated_speaker",
@@ -31,13 +35,28 @@ export const PARLIAMENT_ROLES = [
   "leader_of_opposition",
   "cabinet_minister",
   "shadow_minister",
+  "deputy_minister",
   "party_leader",
   "coalition_leader",
   "bill_committee",
   "committee_chair",
+  "parliamentary_administrator",
+  "parliamentary_journalist",
   "mp",
   "independent_mp",
 ] as const;
+
+// 2026 Regional Round duty officials — Parliamentary Administrator and
+// Parliamentary Journalist. They are OFFICIALS of the House, not competing MPs:
+// announced at Oath and shown on the Positions page, but never scored, never
+// eligible to vote (vote-eligibility.ts + vote-scope.ts), and never placed in a
+// committee pool (committee-assignment.ts) — mirroring how the Speaker Panel is
+// excluded from committees. deputy_minister is NOT here: it is an ordinary
+// government-side participant with no special exclusions.
+export const OFFICIAL_DUTY_ROLES = new Set<string>([
+  "parliamentary_administrator",
+  "parliamentary_journalist",
+]);
 
 // "Ex-" roles — a single-seat leader deposed mid-event (no-confidence, impeach,
 // or organiser depose). They keep their base role's leadership points, but are
@@ -99,10 +118,13 @@ export const ROLE_LABELS: Record<string, string> = {
   leader_of_opposition: "Leader of Opposition",
   cabinet_minister: "Cabinet Minister",
   shadow_minister: "Shadow Minister",
+  deputy_minister: "Deputy Minister",
   party_leader: "Party Leader",
   coalition_leader: "Coalition Leader",
   bill_committee: "Bill Committee Member",
   committee_chair: "Committee Chairperson",
+  parliamentary_administrator: "Parliamentary Administrator",
+  parliamentary_journalist: "Parliamentary Journalist",
   committee_drafter: "Committee Drafter",
   committee_presenter: "Committee Presenter",
   mp: "Member of Parliament",
@@ -123,10 +145,13 @@ export const ROLE_COLORS: Record<string, string> = {
   leader_of_opposition: "bg-red-600 text-white",
   cabinet_minister: "bg-blue-500 text-white",
   shadow_minister: "bg-red-500 text-white",
+  deputy_minister: "bg-blue-400 text-white",
   party_leader: "bg-indigo-600 text-white",
   coalition_leader: "bg-teal-600 text-white",
   bill_committee: "bg-purple-500 text-white",
   committee_chair: "bg-purple-700 text-white",
+  parliamentary_administrator: "bg-slate-600 text-white",
+  parliamentary_journalist: "bg-cyan-600 text-white",
   committee_drafter: "bg-purple-600 text-white",
   committee_presenter: "bg-purple-400 text-white",
   mp: "bg-gray-500 text-white",
@@ -244,8 +269,18 @@ export const OATH_TEXT =
 export type AgendaMode = "party" | "committee" | "mixed";
 
 /** Derive the correct mode from an agenda_type. */
+// committee_reports (2026 Regional Round: committees present one-page POLICY
+// REPORTS — not bills — then the House debates them; runs Day 1 Part I and
+// Day 2 Part II) is committee-mode like committee_discussion.
+// private_members_bills (bills moved by Members who are NOT ministers) is an
+// ordinary House session → falls through to the "party" default below, like
+// bill_presentation.
 export function modeForAgendaType(agendaType: string): AgendaMode {
-  if (agendaType === "committee_discussion" || agendaType === "bill_drafting") {
+  if (
+    agendaType === "committee_discussion" ||
+    agendaType === "bill_drafting" ||
+    agendaType === "committee_reports"
+  ) {
     return "committee";
   }
   if (

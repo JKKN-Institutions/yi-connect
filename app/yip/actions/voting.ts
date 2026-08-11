@@ -1770,7 +1770,13 @@ export async function openRunoff(
 // httpOnly session cookie — never trusts a client-supplied id. Fails closed:
 // callers treat a null partyId as "hide all party-scoped ballots".
 export async function getMyVoteScope(): Promise<
-  ActionResult<{ partyId: string | null; side: "ruling" | "opposition" | null }>
+  ActionResult<{
+    partyId: string | null;
+    side: "ruling" | "opposition" | null;
+    // Duty officials (Parliamentary Administrator / Journalist) never vote —
+    // sessionAppliesToViewer hides every ballot from them via this field.
+    parliamentRole: string | null;
+  }>
 > {
   const sess = await getYipSession();
   if (!sess || sess.type !== "participant") {
@@ -1780,7 +1786,7 @@ export async function getMyVoteScope(): Promise<
   const supabase = await createServiceClient();
   const { data } = await supabase
     .from("participants")
-    .select("party_id, party_side")
+    .select("party_id, party_side, parliament_role")
     .eq("id", sess.id)
     .maybeSingle();
 
@@ -1791,7 +1797,11 @@ export async function getMyVoteScope(): Promise<
 
   return {
     success: true,
-    data: { partyId: data?.party_id ?? null, side },
+    data: {
+      partyId: data?.party_id ?? null,
+      side,
+      parliamentRole: data?.parliament_role ?? null,
+    },
   };
 }
 

@@ -23,6 +23,9 @@ const RULING_ROLES = new Set([
   "prime_minister",
   "deputy_prime_minister",
   "cabinet_minister",
+  // 2026 Regional Round: a Deputy Minister is an ordinary government-side
+  // participant — eligible for Best Member — Ruling Bench like a minister.
+  "deputy_minister",
   "mp",
   "bill_committee",
   // A deposed PM / Deputy PM stays on the ruling bench.
@@ -434,12 +437,16 @@ export async function computeResults(
   // 4. Compute per-participant averages + per-criterion averages + min juror score
   const resultRows: ResultRow[] = [];
   // Team Spirit re-base (Director ruling 2026-06-25): each participant's INDIVIDUAL
-  // contribution across the two committee sessions ('committee_bill_drafting' +
+  // contribution across the committee sessions ('committee_bill_drafting' +
   // 'bill_presentation_voting'), summed from sessionEntries raw. Averaged per
   // committee AFTER the loop to set committeeLevel on every member's row.
+  // 'committee_reports' (2026 Regional Round: committees present policy reports,
+  // scored per committee like bill drafting) counts as a committee session too —
+  // no-op for events without such sessions.
   const COMMITTEE_SESSION_KEYS = new Set([
     "committee_bill_drafting",
     "bill_presentation_voting",
+    "committee_reports",
   ]);
   const committeeContribByParticipant = new Map<string, number>();
 

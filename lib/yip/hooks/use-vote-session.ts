@@ -55,6 +55,7 @@ export function useVoteSession(
   const hasViewer = options?.viewer !== undefined;
   const viewerPartyId = options?.viewer?.partyId ?? null;
   const viewerSide = options?.viewer?.side ?? null;
+  const viewerRole = options?.viewer?.parliamentRole ?? null;
   const excludeParallel = options?.excludeParallel ?? false;
   const [session, setSession] = useState<VoteSession | null>(null);
   const [tallies, setTallies] = useState<VoteTally[]>([]);
@@ -90,7 +91,7 @@ export function useVoteSession(
         all.find((s) =>
           sessionAppliesToViewer(
             { vote_type: s.vote_type, config: s.config },
-            { partyId: viewerPartyId, side: viewerSide }
+            { partyId: viewerPartyId, side: viewerSide, parliamentRole: viewerRole }
           )
         ) ?? null;
     } else if (excludeParallel) {
@@ -117,6 +118,7 @@ export function useVoteSession(
     hasViewer,
     viewerPartyId,
     viewerSide,
+    viewerRole,
     excludeParallel,
   ]);
 

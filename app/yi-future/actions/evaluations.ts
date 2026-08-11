@@ -2,7 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import {
+  createClient,
+  createServiceClient,
+} from "@/lib/yi-future/supabase/server";
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
 import {
@@ -383,5 +386,121 @@ export async function saveEvaluation(input: {
   return {
     ok: true,
     message: "Draft saved.",
+  };
+}
+
+/**
+ * Admin unlock of a SUBMITTED evaluation.
+ *
+ * saveEvaluation has always refused a second write with "Evaluation already
+ * submitted. Ask admin to unlock if needed." — but no unlock existed anywhere
+ * in the codebase or the UI, so the only remedy was a hand-written UPDATE
+ * against the database. This is that unlock: it flips status back to 'draft'
+ * so the juror's own screen re-enables (every control there is derived from
+ * `existing?.status === "submitted"`) and they can correct and re-submit.
+ *
+ * Scores are NOT touched here. Unlocking only removes finality; the juror
+ * remains the one who writes the numbers, through their own session.
+ *
+ * NATIONAL-ONLY, matching the admin override saveEvaluation already
+ * establishes above: an evaluation is addressed by id alone and carries no
+ * chapter scope, so a chapter chair with this power could reopen (and, via
+ * saveEvaluation's admin path, rewrite) another chapter's jury results. The
+ * gate therefore fails CLOSED — not signed in, or signed in without national
+ * standing, both deny explicitly rather than bouncing anywhere.
+ */
+export async function unlockEvaluation(input: {
+  evaluationId: string;
+}): Promise<ActionResult> {
+  const access = await resolveFutureAccessOrNull();
+  if (!access) {
+    return {
+      ok: false,
+      error:
+        "Sign in as a Yi Future national admin to reopen a submitted scorecard.",
+    };
+  }
+  if (!access.isNational) {
+    return {
+      ok: false,
+      error:
+        "Only a Yi Future national admin can reopen a submitted scorecard. Ask the national team to unlock it.",
+    };
+  }
+
+  const svc = await createServiceClient();
+
+  const { data: row } = await svc
+    .schema("future")
+    .from("evaluations")
+    .select("id, status, team_id, criteria_scores, total_score")
+    .eq("id", input.evaluationId)
+    .maybeSingle();
+  const ev = row as {
+    id: string;
+    status: EvaluationStatus | null;
+    team_id: string;
+    criteria_scores: CriteriaScores;
+    total_score: number;
+  } | null;
+
+  if (!ev) {
+    return { ok: false, error: "That scorecard no longer exists." };
+  }
+  if (ev.status !== "submitted") {
+    return { ok: false, error: "That scorecard is already open for editing." };
+  }
+
+  // Compare-and-swap on status: at a live final two admins can both react to
+  // the same "I submitted by mistake", and only one of them may be told it
+  // worked — otherwise the second click would log a second unlock of a
+  // scorecard the juror had already begun re-editing.
+  const { data: updated, error } = await svc
+    .schema("future")
+    .from("evaluations")
+    .update({
+      status: "draft",
+      submitted_at: null,
+      updated_at: new Date().toISOString(),
+    } as never)
+    .eq("id", ev.id)
+    .eq("status", "submitted")
+    .select("id");
+  if (error) return { ok: false, error: error.message };
+  if (((updated as { id: string }[] | null) ?? []).length === 0) {
+    return {
+      ok: false,
+      error: "That scorecard was already reopened by someone else.",
+    };
+  }
+
+  // Audit trail. Unlocking destroys a submitted score's finality, so who did
+  // it and what the frozen numbers were at that moment must survive whatever
+  // the juror types next. previous_* and new_* are deliberately equal: this
+  // row records a status change, not a score change.
+  const {
+    data: { user },
+  } = await (await createClient()).auth.getUser();
+  await svc
+    .schema("future")
+    .from("evaluation_audit_log")
+    .insert({
+      evaluation_id: ev.id,
+      previous_scores: ev.criteria_scores,
+      previous_total: ev.total_score,
+      new_scores: ev.criteria_scores,
+      new_total: ev.total_score,
+      changed_by: user?.email ?? access.userId,
+      reason: "admin_unlock",
+    });
+
+  revalidatePath("/yi-future/jury");
+  revalidatePath(`/yi-future/jury/${ev.team_id}`);
+  revalidatePath("/yi-future/chapter/scoring");
+  revalidatePath("/yi-future/chapter/results");
+
+  return {
+    ok: true,
+    message: "Reopened — the juror can edit and submit again.",
   };
 }

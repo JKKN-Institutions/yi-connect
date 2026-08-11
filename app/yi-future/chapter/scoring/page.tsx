@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { fetchAllRows } from "@/lib/pagination";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
+import { resolveFutureAccessOrNull } from "@/lib/yi-future/auth/require-access";
+import { UnlockEvaluationButton } from "@/components/yi-future/UnlockEvaluationButton";
 import { PHASES } from "@/lib/yi-future/constants";
 import {
   aggregateEvaluations,
@@ -19,6 +21,7 @@ type Team = {
 };
 
 type Evaluation = {
+  id: string;
   team_id: string;
   jury_id: string;
   criteria_scores: CriteriaScores;
@@ -63,7 +66,7 @@ async function getEvaluations(
       .schema("future")
       .from("evaluations")
       .select(
-        "team_id, jury_id, criteria_scores, total_score, status, teams!inner(chapter_id, edition_id), jury_assignments(jury_name, archetype)"
+        "id, team_id, jury_id, criteria_scores, total_score, status, teams!inner(chapter_id, edition_id), jury_assignments(jury_name, archetype)"
       )
       .eq("teams.chapter_id", chapterId)
       .eq("teams.edition_id", editionId)
@@ -213,13 +216,21 @@ export default async function ScoringPage() {
   const ctx = await getChapterContext();
   if (!ctx) redirect("/yi-future/chapter");
 
-  const [teams, evals, rubric, phaseEvents, teamMembers] = await Promise.all([
-    getTeams(ctx.chapterId, ctx.editionId),
-    getEvaluations(ctx.chapterId, ctx.editionId),
-    getDefaultRubric(ctx.editionId),
-    getPhaseEvents(ctx.chapterId, ctx.editionId),
-    getTeamMembers(ctx.chapterId, ctx.editionId),
-  ]);
+  const [teams, evals, rubric, phaseEvents, teamMembers, access] =
+    await Promise.all([
+      getTeams(ctx.chapterId, ctx.editionId),
+      getEvaluations(ctx.chapterId, ctx.editionId),
+      getDefaultRubric(ctx.editionId),
+      getPhaseEvents(ctx.chapterId, ctx.editionId),
+      getTeamMembers(ctx.chapterId, ctx.editionId),
+      resolveFutureAccessOrNull(),
+    ]);
+
+  // Reopening a submitted scorecard is NATIONAL-ONLY (see unlockEvaluation).
+  // Read the same gate the action reads, so the button appears exactly when
+  // the click would be allowed — a chapter chair is never shown a control
+  // that would only answer with a refusal.
+  const canUnlock = access?.isNational === true;
 
   // Journey score computation. Fetch attendance by phase event (a handful per
   // chapter) rather than by a huge delegate-id list; computeTeamJourneyScores
@@ -387,9 +398,17 @@ export default async function ScoringPage() {
       {/* Per-team jury breakdown */}
       {teamAggregates.some((a) => a.count > 0) && (
         <section>
-          <h3 className="text-sm font-bold text-navy mb-3">
+          <h3 className="text-sm font-bold text-navy mb-1">
             Juror-by-juror breakdown
           </h3>
+          {/* A juror who submits by mistake is locked out of their own
+              scorecard, so the remedy has to be findable from the page the
+              admin is already staring at when it happens. */}
+          <p className="text-xs text-navy/50 mb-3">
+            {canUnlock
+              ? "Submitted by mistake? Reopen a juror's scorecard so they can change it and submit again."
+              : "Submitted by mistake? A Yi Future national admin can reopen a juror's scorecard — ask the national team."}
+          </p>
           <div className="space-y-3">
             {teams.map((t) => {
               const list = byTeam.get(t.id) ?? [];
@@ -414,8 +433,17 @@ export default async function ScoringPage() {
                             {e.jury_assignments?.archetype ?? "—"}
                           </div>
                         </div>
-                        <div className="font-mono font-bold text-navy">
-                          {e.total_score} / {totalMax}
+                        <div className="flex items-center gap-3">
+                          <div className="font-mono font-bold text-navy">
+                            {e.total_score} / {totalMax}
+                          </div>
+                          {canUnlock && (
+                            <UnlockEvaluationButton
+                              evaluationId={e.id}
+                              juryName={e.jury_assignments?.jury_name ?? "this juror"}
+                              teamName={t.team_name}
+                            />
+                          )}
                         </div>
                       </li>
                     ))}

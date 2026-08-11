@@ -31,6 +31,7 @@ import {
   ChevronDown,
   ChevronRight,
   KeyRound,
+  Link2,
   Loader2,
   Mail,
   Send,
@@ -39,6 +40,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/yip/utils";
 import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 import {
+  getFormationDeepLink,
   reissueFormationCode,
   sendFormationInvites,
 } from "@/app/yip/actions/formation-emails";
@@ -296,6 +298,33 @@ export function InvitePanel({ eventId, plan, planError }: InvitePanelProps) {
                             : "No usable email — invite cannot be sent"}
                         </p>
                       </div>
+                      {/* Copy-link escape hatch (Director edge-case decision 2,
+                          11 Aug): works for EVERY participant — especially the
+                          no-email ones — so organisers can hand the voting link
+                          over WhatsApp or any other channel. */}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 shrink-0 px-2 text-[11px]"
+                        disabled={sending}
+                        onClick={async () => {
+                          const res = await getFormationDeepLink(
+                            eventId,
+                            r.participantId
+                          );
+                          if (!res.success) {
+                            toast.error(res.error);
+                            return;
+                          }
+                          await navigator.clipboard.writeText(res.data.url);
+                          toast.success(
+                            `Voting link copied — share it with ${res.data.fullName} on any channel.`
+                          );
+                        }}
+                      >
+                        <Link2 className="mr-1 size-3" />
+                        Copy link
+                      </Button>
                       <Button
                         size="sm"
                         variant="ghost"

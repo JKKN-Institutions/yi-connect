@@ -35,6 +35,7 @@ import {
   renderFormationEmail,
   isValidFormationEmail,
   maskFormationEmail,
+  FORMATION_DEEP_LINK_BASE,
 } from "@/lib/yip/formation-email-types";
 import type {
   FormationEmailKind,
@@ -765,6 +766,43 @@ export async function reissueFormationCode(
       accessCode: newCode,
       emailMasked: maskFormationEmail(participant.email),
       sent: result?.success ?? false,
+    },
+  };
+}
+
+/**
+ * The participant's formation deep link, for organiser hand-off over any
+ * channel (Director edge-case decision 2, 11 Aug 2026: the escape hatch for
+ * qualifiers whose email can't be fixed in time). canManage-gated; the link is
+ * exactly as sensitive as the emailed code itself, so it is fetched one
+ * participant at a time on click — never bulk-listed.
+ */
+export async function getFormationDeepLink(
+  eventId: string,
+  participantId: string
+): Promise<ActionResult<{ url: string; fullName: string }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  const supabase = await createServiceClient();
+  const { data: p } = await supabase
+    .from("participants")
+    .select("id, full_name, access_code")
+    .eq("id", participantId)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (!p) {
+    return { success: false, error: "Participant not found in this event." };
+  }
+  if (!p.access_code) {
+    return { success: false, error: "This participant has no access code yet." };
+  }
+  return {
+    success: true,
+    data: {
+      url: `${FORMATION_DEEP_LINK_BASE}/${p.access_code}`,
+      fullName: p.full_name,
     },
   };
 }

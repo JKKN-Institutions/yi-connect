@@ -761,6 +761,21 @@ export function FormationClient({
                           : ""}
                         . Open a runoff between only the tied candidates.
                       </p>
+                      {/* Director edge-case decision 3 (11 Aug): the organiser
+                          may instead resolve the tie DIRECTLY — a tied reveal
+                          writes no role, so assigning the seat on Positions and
+                          closing this step again works cleanly. */}
+                      <p className="text-xs text-amber-700">
+                        Or resolve it directly: assign the seat on the{" "}
+                        <Link
+                          href={`/yip/dashboard/events/${eventId}/positions`}
+                          className="font-medium underline"
+                        >
+                          Positions page
+                        </Link>
+                        , then press Close &amp; count again — the step will
+                        close with your pick standing.
+                      </p>
                       <div className="flex flex-wrap items-end gap-2">
                         <div className="space-y-1.5">
                           <Label

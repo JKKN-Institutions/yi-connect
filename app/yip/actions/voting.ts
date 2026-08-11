@@ -423,6 +423,11 @@ export async function openVote(
     // NOT checked in for this vote's day may still cast. Persisted in the
     // session config; honoured in castVote. Absent/false = normal check-in gate.
     override_checkin?: boolean;
+    // Online formation windows (pre-Regional-Round remote ballots) — ignored by
+    // in-hall flows. closesAt: hard cast deadline enforced in castVote;
+    // formationStepId: the yip.formation_steps row that opened this session.
+    closesAt?: string;
+    formationStepId?: string;
   }
 ): Promise<
   ActionResult<{
@@ -1230,6 +1235,17 @@ export async function castVote(
   if (!sess.ok) return { success: false, error: sess.error };
 
   if (session.status !== "open") {
+    return {
+      success: true,
+      data: { status: "closed" },
+    };
+  }
+
+  // Time-windowed (online formation) sessions carry config.closesAt — reject
+  // casts past the deadline even if the session row hasn't been swept closed yet.
+  const formationClosesAt = (session.config as { closesAt?: string } | null)
+    ?.closesAt;
+  if (formationClosesAt && Date.now() > Date.parse(formationClosesAt)) {
     return {
       success: true,
       data: { status: "closed" },

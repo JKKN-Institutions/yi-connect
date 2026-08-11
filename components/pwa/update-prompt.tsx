@@ -7,7 +7,7 @@
  * and handles the update process.
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -22,6 +22,10 @@ export function UpdatePrompt() {
   const [showReload, setShowReload] = useState(false)
   const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
+  // Set when the user presses "Update Now". The controllerchange guard below
+  // reloads for a controller REPLACEMENT; this covers the one case where the
+  // page never had a controller yet the user still asked for the update.
+  const updateRequestedRef = useRef(false)
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
@@ -55,9 +59,17 @@ export function UpdatePrompt() {
         return () => clearInterval(intervalId)
       })
 
-      // Handle controller change (when new SW activates)
+      // Handle controller change (when new SW activates).
+      //
+      // A BRAND-NEW service worker calling clients.claim() fires this too, so
+      // an unguarded reload here hard-refreshed EVERY page on a visitor's
+      // first hit — a second document load app-wide, seen as flicker on slow
+      // phones. Only a controller that REPLACES an existing one is an update
+      // worth reloading for. Same guard as the projector display.
+      const hadController = Boolean(navigator.serviceWorker.controller)
       let refreshing = false
       navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!hadController && !updateRequestedRef.current) return
         if (!refreshing) {
           refreshing = true
           window.location.reload()
@@ -69,6 +81,7 @@ export function UpdatePrompt() {
   const handleUpdate = () => {
     if (waitingWorker) {
       setIsUpdating(true)
+      updateRequestedRef.current = true
       // Tell the waiting service worker to skip waiting
       waitingWorker.postMessage({ type: 'SKIP_WAITING' })
     }

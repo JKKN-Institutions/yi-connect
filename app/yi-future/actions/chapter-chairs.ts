@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
+import {
+  isFutureAllowlistOwner,
+  isFuturePlatformOperator,
+} from "@/lib/yi-future/auth/admin-source";
 
 // ═══════════════════════════════════════════════════════════════════════
 // Chapter chairs — list + password-reset for the ~63 chapter chairs on
@@ -304,17 +308,16 @@ export async function resetChapterChairPassword(
   if (!user || !user.email) redirect("/yi-future/login");
   const viewerEmail = normalizeEmail(user.email);
 
+  // SOURCE (2026-08-11): yi_directory, not yi.national_admins. Same two
+  // predicates the Admins page badges render, so this gate can no longer
+  // disagree with the screen. Fail closed on all of: unknown email, no
+  // directory person, ambiguous person, no active role.
   const svc = await createServiceClient();
-  const { data: viewerRow } = await svc
-    .schema("yi")
-    .from("national_admins")
-    .select("is_super_admin, is_platform_admin" as never)
-    .eq("email", viewerEmail)
-    .maybeSingle<{ is_super_admin: boolean; is_platform_admin: boolean }>();
-  if (
-    !viewerRow ||
-    (!viewerRow.is_super_admin && !viewerRow.is_platform_admin)
-  ) {
+  const [viewerIsOwner, viewerIsPlatform] = await Promise.all([
+    isFutureAllowlistOwner(viewerEmail),
+    isFuturePlatformOperator(viewerEmail),
+  ]);
+  if (!viewerIsOwner && !viewerIsPlatform) {
     redirect("/yi-future/national/admin?error=not_super_or_platform_admin");
   }
 
@@ -417,17 +420,14 @@ export async function addChapterChair(
   if (!user || !user.email) redirect("/yi-future/login");
   const viewerEmail = normalizeEmail(user.email);
 
+  // SOURCE (2026-08-11): yi_directory, not yi.national_admins. See the
+  // note on resetChapterChairPassword above.
   const svc = await createServiceClient();
-  const { data: viewerRow } = await svc
-    .schema("yi")
-    .from("national_admins")
-    .select("is_super_admin, is_platform_admin" as never)
-    .eq("email", viewerEmail)
-    .maybeSingle<{ is_super_admin: boolean; is_platform_admin: boolean }>();
-  if (
-    !viewerRow ||
-    (!viewerRow.is_super_admin && !viewerRow.is_platform_admin)
-  ) {
+  const [viewerIsOwner, viewerIsPlatform] = await Promise.all([
+    isFutureAllowlistOwner(viewerEmail),
+    isFuturePlatformOperator(viewerEmail),
+  ]);
+  if (!viewerIsOwner && !viewerIsPlatform) {
     return {
       ok: false,
       error: "Only super or platform admins can add chairs.",

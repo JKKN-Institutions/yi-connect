@@ -6,7 +6,7 @@ import { readSession } from "./auth";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 import type { ActionResult } from "./editions";
 import type { Database } from "@/types/yi-future/database";
-import { sendPushToSubject } from "@/app/yi-future/actions/push";
+import { sendPushToSubject } from "@/lib/yi-future/push";
 
 type ConsentStatus = Database["future"]["Enums"]["consent_status"];
 

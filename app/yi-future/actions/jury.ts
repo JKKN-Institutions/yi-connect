@@ -425,7 +425,10 @@ export async function autoAssignJuryToTeams(
   const { data: jtaRows, error: jtaErr } = await (svc as any)
     .schema("future")
     .from("jury_track_assignments")
-    .select("jury_id, track_id, jury_assignments!inner(edition_id, is_active)")
+    .select(
+      "jury_id, track_id, jury_assignments!inner(edition_id, is_active, chapter_id)"
+    )
+    .eq("jury_assignments.chapter_id", chapterId)
     .eq("jury_assignments.edition_id", editionId)
     .eq("jury_assignments.is_active", true);
   if (jtaErr) return { ok: false, error: jtaErr.message };
@@ -521,6 +524,7 @@ export async function autoAllocateJury(
       .schema("future")
       .from("jury_assignments")
       .select("id, archetype")
+      .eq("chapter_id", chapterId)
       .eq("edition_id", editionId)
       .eq("is_active", true),
   ]);

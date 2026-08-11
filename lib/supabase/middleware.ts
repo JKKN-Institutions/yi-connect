@@ -319,10 +319,15 @@ function handleYiFutureAuth(
       url.searchParams.set('redirectTo', pathname)
       return NextResponse.redirect(url)
     }
-    // Note: deeper /national/admin allow-list check (yi.national_admins) is
-    // performed by the YiFuture-specific middleware/server helpers when the
-    // page or action runs. Keeping the root middleware lean avoids an extra
-    // DB round-trip per request.
+    // Note: this layer proves only "signed in". The deeper /national/admin
+    // allow-list check runs when the page or action does, via
+    // lib/yi-future/auth/admin-source.ts (yi_directory.role_assignments,
+    // app='future') — see app/yi-future/national/admin/layout.tsx for the
+    // view gate and requirePlatformAdmin() for the write gates. Keeping the
+    // root middleware lean avoids a DB round-trip on every request.
+    //
+    // The old note here pointed at yi.national_admins. That table is no
+    // longer read by any Yi-Future authorization path (2026-08-11).
     return supabaseResponse
   }
 

@@ -699,7 +699,7 @@ function AwardsTab({
                       {award.announced_at && (
                         <p className="mt-1 text-[11px] text-navy/40">
                           Announced{" "}
-                          {new Date(award.announced_at).toLocaleString("en-IN", {
+                          {new Date(award.announced_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",
                             day: "2-digit",
                             month: "short",
                             hour: "2-digit",

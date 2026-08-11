@@ -3,6 +3,7 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
+import { OFFICIAL_DUTY_ROLES } from "@/lib/yip/constants";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -95,7 +96,9 @@ export interface MySpeakingStatus {
 type ServiceClient = Awaited<ReturnType<typeof createServiceClient>>;
 
 // Presiding officers preside; they are not part of the "who got to speak from
-// the floor" denominator, so they're excluded from the fairness math.
+// the floor" denominator, so they're excluded from the fairness math. Duty
+// officials (OFFICIAL_DUTY_ROLES — Parliamentary Administrator / Journalist)
+// are officials of the House, not competing MPs, and are excluded the same way.
 const PRESIDING_ROLES = new Set(["speaker", "deputy_speaker"]);
 
 interface EligibleMember {
@@ -154,7 +157,12 @@ async function computeTurnData(
     .select("id, full_name, constituency_number, party_side, parliament_role")
     .eq("event_id", eventId);
   const eligible: EligibleMember[] = (parts ?? [])
-    .filter((p) => !p.parliament_role || !PRESIDING_ROLES.has(p.parliament_role))
+    .filter(
+      (p) =>
+        !p.parliament_role ||
+        (!PRESIDING_ROLES.has(p.parliament_role) &&
+          !OFFICIAL_DUTY_ROLES.has(p.parliament_role))
+    )
     .map((p) => ({
       id: p.id,
       full_name: p.full_name,

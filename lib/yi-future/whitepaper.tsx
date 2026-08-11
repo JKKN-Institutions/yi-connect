@@ -214,7 +214,7 @@ function splitParagraphs(body: string): string[] {
 function formatDate(iso: string | null): string {
   if (!iso) return "Unpublished draft";
   try {
-    return new Date(iso).toLocaleDateString("en-IN", {
+    return new Date(iso).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata",
       day: "numeric",
       month: "long",
       year: "numeric",

@@ -66,7 +66,7 @@ const AUDIENCE_LABEL: Record<string, string> = {
 
 function timeAgo(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleString("en-IN", {
+  return d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata",
     day: "numeric",
     month: "short",
     hour: "numeric",

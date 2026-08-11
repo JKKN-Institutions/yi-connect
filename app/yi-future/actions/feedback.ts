@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
-import { sendPushToSubject } from "@/app/yi-future/actions/push";
+import { sendPushToSubject } from "@/lib/yi-future/push";
 import {
   requireChapterAdmin,
   resolveFutureAccessOrNull,

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
-import { sendPushToSubject } from "@/app/yi-future/actions/push";
+import { sendPushToSubject } from "@/lib/yi-future/push";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 
 type InterviewOutcome = Database["future"]["Enums"]["interview_outcome"];
@@ -121,7 +121,7 @@ export async function scheduleInterview(
     const org =
       (partner as { organization: string | null } | null)?.organization ??
       "A partner";
-    const when = new Date(scheduled_at).toLocaleString("en-IN", {
+    const when = new Date(scheduled_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",
       dateStyle: "medium",
       timeStyle: "short",
     });

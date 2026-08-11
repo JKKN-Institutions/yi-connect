@@ -72,7 +72,7 @@ async function getAttendance(delegateId: string): Promise<Attendance[]> {
 }
 
 function fmt(iso: string): string {
-  return new Date(iso).toLocaleString("en-IN", {
+  return new Date(iso).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",
     month: "short",
     day: "numeric",
     hour: "2-digit",

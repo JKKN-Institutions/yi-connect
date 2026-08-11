@@ -124,6 +124,15 @@ const KEY_ROLES: { role: ParliamentRole; label: string }[] = [
   // coalition_leader is a plain event-wide leadership role (no per-party link),
   // so it assigns cleanly through setParliamentRole like the others above.
   { role: "coalition_leader", label: "Coalition Leader" },
+  // 2026 Regional Round. deputy_minister is a junior government role (ordinary
+  // participant — votes and joins committees normally). The two duty officials
+  // are announced at Oath and shown here, but are NOT scored, NOT voters and
+  // NOT committee-allocatable (OFFICIAL_DUTY_ROLES in lib/yip/constants.ts).
+  // None of the three carries a bonus unless position_bonus_config adds one —
+  // absent config the card correctly shows +0.
+  { role: "deputy_minister", label: "Deputy Minister" },
+  { role: "parliamentary_administrator", label: "Parliamentary Administrator" },
+  { role: "parliamentary_journalist", label: "Parliamentary Journalist" },
 ];
 
 // Members already holding a points-bearing senior post are not offered as a
@@ -147,6 +156,11 @@ const SENIOR_POSITION_ROLES = new Set<string>([
   "ex_speaker",
   "ex_deputy_speaker",
   "ex_leader_of_opposition",
+  // Duty officials aren't competing MPs — never offered as party-leader
+  // candidates. (deputy_minister is deliberately NOT here: like a plain MP it
+  // may be promoted to party leader by the organiser.)
+  "parliamentary_administrator",
+  "parliamentary_journalist",
 ]);
 
 // ─── Actions ───────────────────────────────────────────────────────

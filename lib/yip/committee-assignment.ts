@@ -17,13 +17,20 @@
  * committees too.)
  */
 
+import { OFFICIAL_DUTY_ROLES } from "@/lib/yip/constants";
+
 // Handbook model (YIP 2026, p.19): all students are grouped across parties into
 // mixed committees for bill drafting — EXCEPT the Speaker Panel (Speaker + Deputy
 // Speakers), who preside over the House and are therefore not in any committee.
 // PM, LoP, ministers, party leaders and independents all sit on a committee.
+// 2026 Regional Round: the duty officials (Parliamentary Administrator /
+// Journalist, OFFICIAL_DUTY_ROLES) are officials of the House, not competing
+// MPs — excluded from committee pools the same way as the Speaker Panel.
+// deputy_minister is an ordinary government participant and IS allocatable.
 const PRESIDING_ROLES = new Set(["speaker", "deputy_speaker"]);
 export function isCommitteeEligible(parliamentRole: string | null): boolean {
-  return !PRESIDING_ROLES.has(parliamentRole ?? "");
+  const role = parliamentRole ?? "";
+  return !PRESIDING_ROLES.has(role) && !OFFICIAL_DUTY_ROLES.has(role);
 }
 
 export interface CommitteeParticipant {

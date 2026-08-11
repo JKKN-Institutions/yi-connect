@@ -22,6 +22,9 @@ const AGENDA_TYPES: { value: string; label: string }[] = [
   { value: "question_hour", label: "Question Hour" },
   { value: "zero_hour", label: "Zero Hour" },
   { value: "bill_presentation", label: "Bill Presentation" },
+  // 2026 Regional Round sessions.
+  { value: "committee_reports", label: "Committee Reports" },
+  { value: "private_members_bills", label: "Private Members' Bills" },
 ];
 
 type RubricCriterion = { key: string; label: string; max_score: number };

@@ -1,4 +1,5 @@
 import type { createServiceClient } from "@/lib/yip/supabase/server";
+import { isVotingEligibleRole } from "@/lib/yip/vote-scope";
 
 type ServiceClient = Awaited<ReturnType<typeof createServiceClient>>;
 
@@ -39,15 +40,27 @@ export async function assertCheckedInForVote(
     day = item?.day ?? null;
   }
 
-  if (day === 0) return { ok: true };
-
   const { data: participant } = await supabase
     .from("participants")
-    .select("checked_in, checked_in_day1, checked_in_day2")
+    .select("parliament_role, checked_in, checked_in_day1, checked_in_day2")
     .eq("id", participantId)
     .maybeSingle();
 
   if (!participant) return { ok: false, error: "Participant not found." };
+
+  // Duty officials (2026 Regional Round: Parliamentary Administrator /
+  // Journalist) are officials of the House, not voting Members — blocked on
+  // EVERY cast path (self, kiosk, floor, bulk) regardless of day or check-in.
+  // Single source of truth: isVotingEligibleRole (vote-scope.ts).
+  if (!isVotingEligibleRole(participant.parliament_role)) {
+    return {
+      ok: false,
+      error:
+        "House officials (Parliamentary Administrator / Journalist) don't vote — this ballot can't be cast for you.",
+    };
+  }
+
+  if (day === 0) return { ok: true };
 
   const present =
     day === 1

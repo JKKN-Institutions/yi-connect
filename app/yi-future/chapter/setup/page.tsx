@@ -7,6 +7,7 @@ import {
   addCoreTeamMember,
   removeCoreTeamMember,
 } from "@/app/yi-future/actions/core-team";
+import { CoreTeamAccessPanel } from "@/components/yi-future/chapter/CoreTeamAccessPanel";
 import { CORE_TEAM_ROLES, CORE_TEAM_ROLE_LABELS } from "@/lib/yi-future/constants";
 import type { Database } from "@/types/yi-future/database";
 
@@ -131,7 +132,11 @@ export default async function ChapterSetupPage() {
 
   async function addMember(formData: FormData) {
     "use server";
-    await addCoreTeamMember(
+    // RETURN the result. It was discarded, which threw away the one-time
+    // password the action issues for a brand-new member — the chair saw only a
+    // silent re-render and the new member had a working account nobody had the
+    // credential for.
+    return await addCoreTeamMember(
       { chapterId: ctx!.chapterId, editionId: ctx!.editionId },
       formData
     );
@@ -145,6 +150,7 @@ export default async function ChapterSetupPage() {
 
   const filledRoles = new Set(core.map((c) => c.role));
   const missingRoles = CORE_TEAM_ROLES.filter((r) => !filledRoles.has(r));
+  const noLoginCount = core.filter((c) => !c.user_id).length;
 
   return (
     <div className="space-y-8">
@@ -338,20 +344,38 @@ export default async function ChapterSetupPage() {
           </div>
         </div>
 
+        {/* A row with no sign-in is invisible until someone tries to log in and
+            can't. Count it where the chair is already looking. */}
+        {noLoginCount > 0 && (
+          <div className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-xs text-navy">
+            <span className="font-semibold text-red-700">
+              {noLoginCount} of {core.length}
+            </span>{" "}
+            {noLoginCount === 1 ? "member has" : "members have"} no way to sign
+            in, so they cannot open any chapter screen. Use{" "}
+            <span className="font-semibold">Create login</span> on each — it
+            never changes anyone&apos;s role.
+          </div>
+        )}
+
         <div className="space-y-2 mb-6">
           {core.map((m) => (
             <div
               key={m.id}
-              className="flex items-center justify-between p-3 border border-navy/10 rounded-md"
+              className="flex items-start justify-between gap-3 p-3 border border-navy/10 rounded-md"
             >
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-navy">
                     {m.full_name}
                   </span>
-                  {m.user_id && (
+                  {m.user_id ? (
                     <span className="text-[10px] font-semibold text-yi-green">
-                      ✓ Linked to auth
+                      ✓ Can sign in
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-semibold text-red-600">
+                      ✕ No sign-in — cannot open any chapter screen
                     </span>
                   )}
                 </div>
@@ -364,6 +388,17 @@ export default async function ChapterSetupPage() {
                   {m.email && <span> · {m.email}</span>}
                   {m.phone && <span> · {m.phone}</span>}
                 </div>
+                {/* Repair access WITHOUT touching the member's role — the add
+                    form can only express the 4 operational roles, so
+                    remove-and-re-add silently demotes a chair. */}
+                <CoreTeamAccessPanel
+                  member={{
+                    id: m.id,
+                    full_name: m.full_name,
+                    email: m.email,
+                    user_id: m.user_id,
+                  }}
+                />
               </div>
               {(m.role as string) === "chapter_chair" ||
               (m.role as string) === "chapter_co_chair" ? (
@@ -396,7 +431,7 @@ export default async function ChapterSetupPage() {
         {/* Add new */}
         <div className="pt-5 border-t border-navy/10">
           <h4 className="text-sm font-bold text-navy mb-3">Add member</h4>
-          <form action={addMember} className="space-y-3">
+          <ActionResultForm action={addMember} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <input
                 name="full_name"
@@ -446,7 +481,7 @@ export default async function ChapterSetupPage() {
                 Add
               </button>
             </div>
-          </form>
+          </ActionResultForm>
         </div>
       </section>
     </div>

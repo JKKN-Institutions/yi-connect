@@ -8,7 +8,7 @@ import {
   requireFutureNationalAdmin,
 } from "@/lib/yi-future/auth/require-access";
 import { readSession } from "./auth";
-import { sendPushToSubject } from "./push";
+import { sendPushToSubject } from "@/lib/yi-future/push";
 import type {
   AnnouncementAudience,
   AnnouncementResult,

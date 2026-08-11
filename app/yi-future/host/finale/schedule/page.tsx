@@ -53,7 +53,7 @@ const BUFFER_MINUTES = 5;
 const SLOT_MINUTES = PRESENTATION_MINUTES + BUFFER_MINUTES;
 
 function formatTime(date: Date): string {
-  return date.toLocaleTimeString("en-IN", {
+  return date.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata",
     hour: "2-digit",
     minute: "2-digit",
     hour12: true,
@@ -128,7 +128,7 @@ export default async function FinaleSchedulePage() {
           <p className="mt-0.5 text-xs text-navy/40">
             {new Date(ctx.nationalEvent.start_date).toLocaleDateString(
               "en-IN",
-              {
+              { timeZone: "Asia/Kolkata",
                 weekday: "long",
                 year: "numeric",
                 month: "long",

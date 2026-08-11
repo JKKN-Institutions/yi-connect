@@ -221,6 +221,9 @@ export type Database = {
         | "ex_leader_of_opposition"
         | "ex_speaker"
         | "ex_deputy_speaker"
+        | "deputy_minister"
+        | "parliamentary_administrator"
+        | "parliamentary_journalist"
       party_side: "ruling" | "opposition"
       registration_source:
         | "microsoft_forms"
@@ -4276,6 +4279,9 @@ export const Constants = {
         "ex_leader_of_opposition",
         "ex_speaker",
         "ex_deputy_speaker",
+        "deputy_minister",
+        "parliamentary_administrator",
+        "parliamentary_journalist",
       ],
       party_side: ["ruling", "opposition"],
       registration_source: [

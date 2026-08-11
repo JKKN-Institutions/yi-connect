@@ -13,6 +13,8 @@
 // resolve visibility through THIS file so the rule never drifts. The tally
 // scoping in actions/voting.ts uses the same config.partyId / config.side keys.
 
+import { OFFICIAL_DUTY_ROLES } from "@/lib/yip/constants";
+
 export type VoteScopeKind = "house" | "party" | "bench";
 
 export type ViewerScope = {
@@ -20,7 +22,27 @@ export type ViewerScope = {
   partyId: string | null;
   /** The viewer's bench (participants.party_side). */
   side: "ruling" | "opposition" | null;
+  /**
+   * The viewer's parliament_role, when the caller has it. Duty officials
+   * (Parliamentary Administrator / Journalist) are not voting Members, so NO
+   * session applies to them. Optional so existing callers are unchanged —
+   * enforcement does not rely on it (every cast path is blocked server-side in
+   * vote-eligibility.ts); this only hides ballots from officials' screens.
+   */
+  parliamentRole?: string | null;
 };
+
+/**
+ * Duty officials (2026 Regional Round: parliamentary_administrator,
+ * parliamentary_journalist) are officials of the House, not voting Members.
+ * Single source of truth for the vote paths — used by sessionAppliesToViewer
+ * (visibility) and assertCheckedInForVote (server enforcement on every cast).
+ */
+export function isVotingEligibleRole(
+  parliamentRole: string | null | undefined
+): boolean {
+  return !OFFICIAL_DUTY_ROLES.has(parliamentRole ?? "");
+}
 
 export type ScopedSession = {
   vote_type: string;
@@ -95,6 +117,9 @@ export function sessionAppliesToViewer(
   s: ScopedSession,
   viewer: ViewerScope
 ): boolean {
+  // Duty officials never vote — no session applies to them (any kind).
+  if (!isVotingEligibleRole(viewer.parliamentRole)) return false;
+
   const kind = voteScopeKind(s.vote_type);
 
   if (kind === "house") return true;

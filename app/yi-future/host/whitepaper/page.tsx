@@ -120,7 +120,7 @@ export default async function HostWhitepaperPage() {
             {wp.published_at && (
               <div className="text-xs text-navy/50">
                 Published{" "}
-                {new Date(wp.published_at).toLocaleDateString("en-IN")}
+                {new Date(wp.published_at).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })}
               </div>
             )}
           </div>

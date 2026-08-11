@@ -91,7 +91,7 @@ export default async function GovernmentPage() {
                 <div className="flex-shrink-0 text-right">
                   {e.scheduled_at && (
                     <div className="text-xs font-mono text-navy/60">
-                      {new Date(e.scheduled_at).toLocaleString("en-IN", {
+                      {new Date(e.scheduled_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",
                         month: "short",
                         day: "numeric",
                         hour: "2-digit",

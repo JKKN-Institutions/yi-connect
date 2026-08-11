@@ -220,7 +220,7 @@ export default async function TeamsPage({
                 — “{r.reason}”{" "}
                 <span className="text-xs text-navy/40">
                   (
-                  {new Date(r.created_at).toLocaleDateString(undefined, {
+                  {new Date(r.created_at).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata",
                     day: "numeric",
                     month: "short",
                   })}

@@ -82,7 +82,7 @@ function eventLabel(e: PhaseEvent): string {
   const typeLabel =
     (PHASE_EVENT_LABELS as Record<string, string>)[e.type] ?? e.title;
   const date = e.scheduled_at
-    ? new Date(e.scheduled_at).toLocaleDateString("en-IN", {
+    ? new Date(e.scheduled_at).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata",
         day: "numeric",
         month: "short",
       })

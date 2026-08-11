@@ -23,7 +23,7 @@ function formatRelative(iso: string): string {
     if (hr < 24) return `${hr} hour${hr === 1 ? "" : "s"} ago`;
     const day = Math.floor(hr / 24);
     if (day < 30) return `${day} day${day === 1 ? "" : "s"} ago`;
-    return new Date(iso).toLocaleDateString("en-IN", {
+    return new Date(iso).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata",
       day: "numeric",
       month: "short",
       year: "numeric",

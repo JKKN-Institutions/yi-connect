@@ -142,7 +142,7 @@ export default async function HostLiveControlPage({
           {active.starts_at && (
             <div className="mt-2 text-xs opacity-80 font-mono">
               Started at{" "}
-              {new Date(active.starts_at).toLocaleTimeString("en-IN", {
+              {new Date(active.starts_at).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata",
                 hour: "2-digit",
                 minute: "2-digit",
               })}

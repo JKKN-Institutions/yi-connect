@@ -22,7 +22,7 @@ function relTime(iso: string): string {
   if (hr < 24) return `${hr}h ago`;
   const d = Math.floor(hr / 24);
   if (d < 7) return `${d}d ago`;
-  return new Date(iso).toLocaleDateString();
+  return new Date(iso).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" });
 }
 
 export default async function DelegateMessagesPage({

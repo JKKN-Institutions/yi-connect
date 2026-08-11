@@ -187,7 +187,7 @@ export function TeamLockControls({
 
         <p className="mt-1.5 text-[11px] text-navy/50">
           {appliedAt
-            ? `Ran ${new Date(appliedAt).toLocaleString()} — locked ${
+            ? `Ran ${new Date(appliedAt).toLocaleString(undefined, { timeZone: "Asia/Kolkata" })} — locked ${
                 lockedCount ?? 0
               } team${lockedCount === 1 ? "" : "s"}. Teams you unlock now stay unlocked.`
             : lockAt

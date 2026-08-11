@@ -10,7 +10,7 @@ const NAVY = "#1a1a3e";
 const GOLD = "#F5A623";
 
 function when(iso: string): string {
-  return new Date(iso).toLocaleString("en-IN", {
+  return new Date(iso).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",
     day: "numeric",
     month: "short",
     year: "numeric",

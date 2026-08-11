@@ -83,7 +83,7 @@ export default async function NationalWhitepapersPage() {
                     </span>
                     {w.published_at && (
                       <div className="text-[10px] text-navy/40 mt-1">
-                        {new Date(w.published_at).toLocaleDateString("en-IN")}
+                        {new Date(w.published_at).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })}
                       </div>
                     )}
                   </td>

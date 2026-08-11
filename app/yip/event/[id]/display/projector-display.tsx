@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import confetti from "canvas-confetti";
 import { clauseTexts } from "@/lib/yip/bill-provisions";
+import { billSourceOf, BILL_SOURCE_LABELS } from "@/lib/yip/bill-sources";
 import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, PARTY_COLORS, MINISTRIES, OATH_TEXT } from "@/lib/yip/constants";
 import { computeMultiSeatOutcome } from "@/lib/yip/election-outcome";
@@ -59,6 +60,9 @@ interface BillDisplayInfo {
   status: string | null;
   presenter_1_name: string | null;
   presenter_2_name: string | null;
+  /** Regional Round bill origin — absent (null) until the bill-sources
+   *  migration is applied; treated as "committee". */
+  source: string | null;
 }
 
 export function ProjectorDisplay({ eventId }: { eventId: string }) {
@@ -484,19 +488,16 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
     };
   }, [currentAgendaItem?.agenda_type, eventId, supabase, fetchCurrentQuestion]);
 
-  // Fetch presented bill for bill_presentation agenda type
+  // Fetch presented bill for bill_presentation agenda type.
+  // select("*") instead of an explicit column list so the Regional Round
+  // `source` column arrives automatically once its migration is applied and is
+  // simply absent (→ treated as "committee") before that — no 42703 possible.
   const fetchPresentedBill = useCallback(async () => {
     const { data } = await supabase
       .from("bills")
       .select(
         `
-        id,
-        title,
-        objective,
-        party_side,
-        committee_name,
-        provisions,
-        status,
+        *,
         presenter_1_participant:participants!bills_presenter_1_fkey(full_name),
         presenter_2_participant:participants!bills_presenter_2_fkey(full_name)
       `
@@ -520,6 +521,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         status: data.status,
         presenter_1_name: p1?.full_name ?? null,
         presenter_2_name: p2?.full_name ?? null,
+        source: (data as { source?: string | null }).source ?? null,
       });
     } else {
       setPresentedBill(null);
@@ -1099,24 +1101,31 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
             {currentAgendaItem.agenda_type === "bill_presentation" &&
               presentedBill && (
                 <div className="mx-auto max-w-3xl space-y-6">
-                  {/* Committee / party badge — benchless bills are identified by
-                      committee, not by ruling/opposition side. */}
+                  {/* Committee / party / source badge — benchless bills are
+                      identified by committee; Regional Round government and
+                      private-member bills by their source. */}
                   <span
                     className={cn(
                       "inline-flex items-center rounded-full px-5 py-1.5 text-sm font-semibold",
-                      presentedBill.party_side === "ruling"
-                        ? "bg-blue-600 text-white"
-                        : presentedBill.party_side === "opposition"
-                          ? "bg-red-600 text-white"
-                          : "bg-[#FF9933] text-white"
+                      billSourceOf(presentedBill) === "government"
+                        ? "bg-emerald-600 text-white"
+                        : billSourceOf(presentedBill) === "private_member"
+                          ? "bg-violet-600 text-white"
+                          : presentedBill.party_side === "ruling"
+                            ? "bg-blue-600 text-white"
+                            : presentedBill.party_side === "opposition"
+                              ? "bg-red-600 text-white"
+                              : "bg-[#FF9933] text-white"
                     )}
                   >
-                    {presentedBill.committee_name ??
-                      (presentedBill.party_side === "ruling"
-                        ? "Ruling Party Bill"
-                        : presentedBill.party_side === "opposition"
-                          ? "Opposition Bill"
-                          : "Committee Bill")}
+                    {billSourceOf(presentedBill) !== "committee"
+                      ? BILL_SOURCE_LABELS[billSourceOf(presentedBill)]
+                      : (presentedBill.committee_name ??
+                        (presentedBill.party_side === "ruling"
+                          ? "Ruling Party Bill"
+                          : presentedBill.party_side === "opposition"
+                            ? "Opposition Bill"
+                            : "Committee Bill"))}
                   </span>
 
                   {/* Bill title */}
@@ -1151,14 +1160,17 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                     </div>
                   )}
 
-                  {/* Presenters */}
+                  {/* Presenters — presenter_1 is the MOVER (the concerned
+                      Minister / private Member) for government & PMB bills */}
                   {(presentedBill.presenter_1_name ||
                     presentedBill.presenter_2_name) && (
                     <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
                       {presentedBill.presenter_1_name && (
                         <div className="text-center">
                           <p className="text-xs uppercase tracking-widest text-gray-500">
-                            Presenter 1
+                            {billSourceOf(presentedBill) !== "committee"
+                              ? "Moved by"
+                              : "Presenter 1"}
                           </p>
                           <p className="text-lg font-semibold text-white">
                             {presentedBill.presenter_1_name}

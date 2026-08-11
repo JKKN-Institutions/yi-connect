@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
 import { PARTY_COLORS } from "@/lib/yip/constants";
+import { billSourceOf, billSourceBadgeLabel } from "@/lib/yip/bill-sources";
 import { toast } from "sonner";
 import {
   getBills,
@@ -93,7 +94,18 @@ export function BillSession({ eventId, agendaItemId }: BillSessionProps) {
     const isForce = !(bill.status === "approved" || bill.status === "submitted");
     setConfirmDialog({
       open: true,
-      title: `Present ${bill.committee_name ?? (bill.party_side === "ruling" ? "Ruling" : bill.party_side === "opposition" ? "Opposition" : "Committee")} Bill`,
+      title: `Present ${
+        billSourceOf(bill) === "government"
+          ? "Government"
+          : billSourceOf(bill) === "private_member"
+            ? "Private Member's"
+            : (bill.committee_name ??
+              (bill.party_side === "ruling"
+                ? "Ruling"
+                : bill.party_side === "opposition"
+                  ? "Opposition"
+                  : "Committee"))
+      } Bill`,
       description: isForce
         ? `"${bill.title}" isn't finalised (status: ${bill.status ?? "drafting"}). Present it and put it to a vote anyway?`
         : `Mark "${bill.title}" as presented? This will show the bill on the projector display.`,
@@ -304,16 +316,22 @@ function BillCard({
     bill.party_side === "ruling" || bill.party_side === "opposition"
       ? bill.party_side
       : null;
+  // Regional Round: "Govt" / "PMB" badge for the new sources, committee name
+  // (or party fallback) for committee bills.
+  const source = billSourceOf(bill);
   const partyLabel =
-    bill.committee_name ??
-    (side === "ruling"
-      ? "Ruling Party"
-      : side === "opposition"
-        ? "Opposition"
-        : "Committee Bill");
+    source !== "committee"
+      ? billSourceBadgeLabel(bill)
+      : (bill.committee_name ??
+        (side === "ruling"
+          ? "Ruling Party"
+          : side === "opposition"
+            ? "Opposition"
+            : "Committee Bill"));
   const status = bill.status ?? "drafting";
   const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.drafting;
   const provisions = clauseTexts(bill.provisions);
+  const moverName = bill.mover_name ?? bill.presenter_1_name ?? null;
 
   const canPresent =
     status === "approved" || status === "submitted";
@@ -335,7 +353,13 @@ function BillCard({
           <span
             className={cn(
               "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
-              side ? PARTY_COLORS[side].badge : "bg-[#FF9933]/15 text-[#9a5212]"
+              source === "government"
+                ? "bg-emerald-100 text-emerald-800"
+                : source === "private_member"
+                  ? "bg-violet-100 text-violet-800"
+                  : side
+                    ? PARTY_COLORS[side].badge
+                    : "bg-[#FF9933]/15 text-[#9a5212]"
             )}
           >
             {partyLabel}
@@ -373,19 +397,30 @@ function BillCard({
         </div>
       )}
 
-      {/* Presenters */}
+      {/* Presenters — the MOVER for government / private-member bills */}
       <div className="flex flex-wrap gap-2 mb-3">
-        {bill.presenter_1_name && (
-          <span className="inline-flex items-center gap-1 rounded bg-gray-50 px-2 py-0.5 text-[10px] text-gray-600">
-            <Users className="size-2.5" />
-            P1: {bill.presenter_1_name}
-          </span>
-        )}
-        {bill.presenter_2_name && (
-          <span className="inline-flex items-center gap-1 rounded bg-gray-50 px-2 py-0.5 text-[10px] text-gray-600">
-            <Users className="size-2.5" />
-            P2: {bill.presenter_2_name}
-          </span>
+        {source !== "committee" ? (
+          moverName && (
+            <span className="inline-flex items-center gap-1 rounded bg-gray-50 px-2 py-0.5 text-[10px] text-gray-600">
+              <Users className="size-2.5" />
+              Moved by: {moverName}
+            </span>
+          )
+        ) : (
+          <>
+            {bill.presenter_1_name && (
+              <span className="inline-flex items-center gap-1 rounded bg-gray-50 px-2 py-0.5 text-[10px] text-gray-600">
+                <Users className="size-2.5" />
+                P1: {bill.presenter_1_name}
+              </span>
+            )}
+            {bill.presenter_2_name && (
+              <span className="inline-flex items-center gap-1 rounded bg-gray-50 px-2 py-0.5 text-[10px] text-gray-600">
+                <Users className="size-2.5" />
+                P2: {bill.presenter_2_name}
+              </span>
+            )}
+          </>
         )}
       </div>
 

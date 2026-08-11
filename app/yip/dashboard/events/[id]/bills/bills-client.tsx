@@ -31,7 +31,18 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
-import { PARTY_COLORS } from "@/lib/yip/constants";
+import { PARTY_COLORS, ROLE_LABELS } from "@/lib/yip/constants";
+import {
+  billSourceOf,
+  isGovernmentMinister,
+  canMovePrivateMemberBill,
+  BILL_SOURCE_LABELS,
+  type BillSource,
+} from "@/lib/yip/bill-sources";
+import {
+  SearchablePersonSelect,
+  type PersonOption,
+} from "@/components/yip/searchable-person-select";
 import { Input } from "@/components/yip/ui/input";
 import { Label } from "@/components/yip/ui/label";
 import { Textarea } from "@/components/yip/ui/textarea";
@@ -90,6 +101,15 @@ const STATUS_CONFIG: Record<
 
 // ─── Component ──────────────────────────────────────────────────
 
+/** Participant row for the Government / PMB mover pickers. */
+export interface BillPersonRow {
+  id: string;
+  full_name: string;
+  parliament_role: string | null;
+  cabinet_portfolio: string | null;
+  constituency_number: number | null;
+}
+
 interface BillsClientProps {
   eventId: string;
   initialBills: BillWithMembers[];
@@ -100,6 +120,8 @@ interface BillsClientProps {
   canManage: boolean;
   /** Committee names in this event, for the Add Bill picker. */
   committees: string[];
+  /** All participants in this event, for the Government/PMB mover pickers. */
+  people: BillPersonRow[];
 }
 
 export function BillsClient({
@@ -109,6 +131,7 @@ export function BillsClient({
   canDelete,
   canManage,
   committees,
+  people,
 }: BillsClientProps) {
   const router = useRouter();
   const [bills, setBills] = useState(initialBills);
@@ -123,18 +146,54 @@ export function BillsClient({
   // Manual Add-Bill (admin shortcut) — bypasses the committee draft/report flow.
   const [addOpen, setAddOpen] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({
+  const emptyForm = {
+    source: "committee" as BillSource,
     committeeName: "",
+    moverParticipantId: "",
     title: "",
     objective: "",
     provisions: "",
     approved: true,
     extra: false,
-  });
+  };
+  const [form, setForm] = useState(emptyForm);
+
+  // Mover options for the Regional Round bill sources (type-to-search).
+  // Government Bills → Cabinet ministers only; PMBs → any non-minister Member.
+  const ministerOptions: PersonOption[] = people
+    .filter((p) => isGovernmentMinister(p.parliament_role))
+    .map((p) => ({
+      id: p.id,
+      label: p.full_name,
+      sublabel:
+        p.cabinet_portfolio ??
+        ROLE_LABELS[p.parliament_role ?? ""] ??
+        undefined,
+    }));
+  const privateMemberOptions: PersonOption[] = people
+    .filter((p) => canMovePrivateMemberBill(p.parliament_role))
+    .map((p) => ({
+      id: p.id,
+      label: p.full_name,
+      sublabel: [
+        p.constituency_number != null ? `No. ${p.constituency_number}` : null,
+        ROLE_LABELS[p.parliament_role ?? ""] ?? null,
+      ]
+        .filter(Boolean)
+        .join(" · ") || undefined,
+    }));
 
   async function handleAddBill() {
-    if (!form.committeeName) {
+    if (form.source === "committee" && !form.committeeName) {
       toast.error("Pick a committee.");
+      return;
+    }
+    if (form.source === "government" && !form.moverParticipantId) {
+      toast.error("Pick the Minister who moves this Government Bill.");
+      return;
+    }
+    if (form.source === "private_member" && !form.moverParticipantId) {
+      toast.error("Pick the Member who moves this Private Member's Bill.");
       return;
     }
     if (!form.title.trim()) {
@@ -154,23 +213,26 @@ export function BillsClient({
         : undefined,
       approved: form.approved,
       extra: form.extra,
+      source: form.source,
+      moverParticipantId: form.moverParticipantId || undefined,
     });
     setAdding(false);
     if (result.success) {
       toast.success(
-        form.extra
-          ? "Extra bill added — available in the Bill Presentation session."
-          : "Bill added — it's now available in the Bill Presentation session."
+        form.source !== "committee"
+          ? `${BILL_SOURCE_LABELS[form.source]} added — available in the Bill Presentation session.`
+          : form.extra
+            ? "Extra bill added — available in the Bill Presentation session."
+            : "Bill added — it's now available in the Bill Presentation session."
       );
+      if (result.data.degraded) {
+        toast.warning(
+          "Saved without its source tag (bill-sources migration not applied yet) — the mover is still recorded as the presenter.",
+          { duration: 9000 }
+        );
+      }
       setAddOpen(false);
-      setForm({
-        committeeName: "",
-        title: "",
-        objective: "",
-        provisions: "",
-        approved: true,
-        extra: false,
-      });
+      setForm(emptyForm);
       router.refresh();
     } else {
       toast.error(result.error);
@@ -368,31 +430,92 @@ export function BillsClient({
           <DialogHeader>
             <DialogTitle>Add a bill manually</DialogTitle>
             <DialogDescription>
-              Enter a committee&apos;s bill directly so it can be presented and
-              voted on — no need for the full draft → report → submit flow. It
-              appears immediately in the Control panel&apos;s Bill Presentation
-              session.
+              Enter a bill directly so it can be presented and voted on — a
+              committee&apos;s bill (no need for the full draft → report →
+              submit flow), a Cabinet-prepared Government Bill, or a Private
+              Member&apos;s Bill. It appears immediately in the Control
+              panel&apos;s Bill Presentation session.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="add-bill-committee">Committee</Label>
+              <Label htmlFor="add-bill-source">Bill source</Label>
               <select
-                id="add-bill-committee"
-                value={form.committeeName}
+                id="add-bill-source"
+                value={form.source}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, committeeName: e.target.value }))
+                  setForm((f) => ({
+                    ...f,
+                    source: e.target.value as BillSource,
+                    // A different source means a different mover/committee.
+                    moverParticipantId: "",
+                  }))
                 }
                 className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-[#1a1a3e]/40 focus:outline-none"
               >
-                <option value="">Select committee…</option>
-                {committees.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
+                <option value="committee">
+                  Committee bill (drafted at the event)
+                </option>
+                <option value="government">
+                  Government Bill (Cabinet-prepared, moved by its Minister)
+                </option>
+                <option value="private_member">
+                  Private Member&apos;s Bill (moved by a non-minister Member)
+                </option>
               </select>
             </div>
+            {form.source === "committee" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="add-bill-committee">Committee</Label>
+                <select
+                  id="add-bill-committee"
+                  value={form.committeeName}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, committeeName: e.target.value }))
+                  }
+                  className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:border-[#1a1a3e]/40 focus:outline-none"
+                >
+                  <option value="">Select committee…</option>
+                  {committees.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {form.source === "government" && (
+              <div className="space-y-1.5">
+                <Label>Moved by (concerned Minister)</Label>
+                <SearchablePersonSelect
+                  options={ministerOptions}
+                  value={form.moverParticipantId}
+                  onChange={(id) =>
+                    setForm((f) => ({ ...f, moverParticipantId: id }))
+                  }
+                  placeholder="Type to search Cabinet ministers…"
+                />
+                {ministerOptions.length === 0 && (
+                  <p className="text-xs text-amber-600">
+                    No Cabinet ministers found — assign PM / Deputy PM /
+                    Cabinet Minister roles first (Positions).
+                  </p>
+                )}
+              </div>
+            )}
+            {form.source === "private_member" && (
+              <div className="space-y-1.5">
+                <Label>Moved by (private Member)</Label>
+                <SearchablePersonSelect
+                  options={privateMemberOptions}
+                  value={form.moverParticipantId}
+                  onChange={(id) =>
+                    setForm((f) => ({ ...f, moverParticipantId: id }))
+                  }
+                  placeholder="Type to search Members (non-ministers)…"
+                />
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="add-bill-title">Bill title</Label>
               <Input
@@ -430,24 +553,26 @@ export function BillsClient({
                 placeholder={"Provision 1\nProvision 2\nProvision 3"}
               />
             </div>
-            <div className="flex items-center justify-between rounded-md border px-3 py-2">
-              <div className="pr-3">
-                <p className="text-sm font-medium text-gray-900">
-                  Extra bill for this committee
-                </p>
-                <p className="text-xs text-gray-500">
-                  On: add an additional bill for a committee that already has one
-                  (multiple bills on the floor). The committee is shown in the
-                  title. Off: one bill per committee.
-                </p>
+            {form.source === "committee" && (
+              <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                <div className="pr-3">
+                  <p className="text-sm font-medium text-gray-900">
+                    Extra bill for this committee
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    On: add an additional bill for a committee that already has one
+                    (multiple bills on the floor). The committee is shown in the
+                    title. Off: one bill per committee.
+                  </p>
+                </div>
+                <Switch
+                  checked={form.extra}
+                  onCheckedChange={(v) =>
+                    setForm((f) => ({ ...f, extra: v }))
+                  }
+                />
               </div>
-              <Switch
-                checked={form.extra}
-                onCheckedChange={(v) =>
-                  setForm((f) => ({ ...f, extra: v }))
-                }
-              />
-            </div>
+            )}
             <div className="flex items-center justify-between rounded-md border px-3 py-2">
               <div className="pr-3">
                 <p className="text-sm font-medium text-gray-900">
@@ -489,6 +614,20 @@ const NEUTRAL_BILL = {
   badge: "bg-[#FF9933]/15 text-[#9a5212]",
 } as const;
 
+// Regional Round source accents — distinct from ruling-blue / opposition-red.
+const SOURCE_BILL_COLORS = {
+  government: {
+    border: "border-emerald-300",
+    badge: "bg-emerald-100 text-emerald-800",
+    header: "bg-emerald-50",
+  },
+  private_member: {
+    border: "border-violet-300",
+    badge: "bg-violet-100 text-violet-800",
+    header: "bg-violet-50",
+  },
+} as const;
+
 // ─── Bill Column Component ──────────────────────────────────────
 
 function BillColumn({
@@ -508,30 +647,43 @@ function BillColumn({
     bill?.party_side === "ruling" || bill?.party_side === "opposition"
       ? bill.party_side
       : null;
+  // Regional Round: government / private-member bills carry their own label
+  // and accent; committee bills keep the committee-name / party-side scheme.
+  const source = bill ? billSourceOf(bill) : "committee";
   const label =
-    bill?.committee_name ??
-    (side === "ruling"
-      ? "Ruling Party Bill"
-      : side === "opposition"
-        ? "Opposition Party Bill"
-        : "Committee Bill");
-  const colors = side ? PARTY_COLORS[side] : NEUTRAL_BILL;
+    source !== "committee"
+      ? BILL_SOURCE_LABELS[source]
+      : (bill?.committee_name ??
+        (side === "ruling"
+          ? "Ruling Party Bill"
+          : side === "opposition"
+            ? "Opposition Party Bill"
+            : "Committee Bill"));
+  const colors =
+    source !== "committee"
+      ? SOURCE_BILL_COLORS[source]
+      : side
+        ? PARTY_COLORS[side]
+        : NEUTRAL_BILL;
   const status = bill?.status ?? "drafting";
   const statusConfig = STATUS_CONFIG[status] ?? STATUS_CONFIG.drafting;
   const StatusIcon = statusConfig.icon;
   const provisions = clauseTexts(bill?.provisions);
+  const moverName = bill?.mover_name ?? bill?.presenter_1_name ?? null;
 
   return (
     <Card className={cn("overflow-hidden", colors.border, "border")}>
-      {/* Committee / party header bar */}
+      {/* Source / committee / party header bar */}
       <div
         className={cn(
           "px-4 py-2.5 flex items-center justify-between",
-          side === "ruling"
-            ? "bg-blue-50"
-            : side === "opposition"
-              ? "bg-red-50"
-              : "bg-[#FF9933]/10"
+          source !== "committee"
+            ? SOURCE_BILL_COLORS[source].header
+            : side === "ruling"
+              ? "bg-blue-50"
+              : side === "opposition"
+                ? "bg-red-50"
+                : "bg-[#FF9933]/10"
         )}
       >
         <span
@@ -647,7 +799,28 @@ function BillColumn({
               </div>
             )}
 
+            {/* Mover (government / private-member bills) */}
+            {source !== "committee" && moverName && (
+              <div>
+                <p className="text-xs text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                  <Users className="size-3" />
+                  Moved by
+                </p>
+                <div className="mt-1.5 rounded bg-gray-50 px-2 py-1.5">
+                  <p className="text-[10px] text-gray-400">
+                    {source === "government"
+                      ? "Concerned Minister"
+                      : "Private Member"}
+                  </p>
+                  <p className="text-xs font-medium text-gray-700 truncate">
+                    {moverName}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Committee Members */}
+            {source === "committee" && (
             <div>
               <p className="text-xs text-gray-400 uppercase tracking-wider flex items-center gap-1">
                 <Users className="size-3" />
@@ -690,6 +863,7 @@ function BillColumn({
                 )}
               </div>
             </div>
+            )}
 
             {/* Vote Results (if bill has been voted on) */}
             {(bill.votes_for !== null || bill.votes_against !== null) && (

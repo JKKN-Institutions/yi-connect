@@ -157,17 +157,27 @@ export const getYipEventAccess = cache(async (
     return FULL("regional_admin", "regional_admin");
   }
 
-  // Chapter authority is CHAPTER-level only: a chapter_admin / chair_email /
-  // organiser matches by chapter ONLY for chapter-level events. Regional /
-  // national events (even if they carry a chapter_name) are owned by RM (zone,
-  // step 2) / national / super (step 1) — a chapter chair is NOT their owner.
-  // (2026-06-02; matches the dashboard listing scope.)
+  // Chapter authority applies to CHAPTER-level events AND to REGIONAL events
+  // hosted by the chapter. Originally chapter-only (2026-06-02): regional /
+  // national events were owned exclusively by RM (zone, step 2) / national /
+  // super (step 1). Extended 2026-08-11 (Director decision 5, Online House
+  // Formation): host-chapter organisers RUN regional rounds — a regional event
+  // carries its HOST chapter in `chapter_name`, and that chapter's chair /
+  // organisers get their usual chapter authority on it ("using the tools they
+  // know from chapter rounds"). Every inner branch (3a/3a-ii/3b/3c) still
+  // requires the role/chair row to match THIS chapter, so a chair of chapter X
+  // gets nothing on a regional round hosted by chapter Y. National events
+  // remain RM/national/super only.
   // Require a NON-EMPTY normalised chapter name: a whitespace-only chapter_name
   // is truthy but norms to "", which would then match a (future) chair/role row
   // whose yi_chapter is also empty. Guarding here fails the whole chapter block
   // closed for all of 3a/3a-ii/3b/3c (same fail-closed discipline as chair_email).
   const chapName = norm(event.chapter_name);
-  if (event.chapter_name && chapName && event.level === "chapter") {
+  if (
+    event.chapter_name &&
+    chapName &&
+    (event.level === "chapter" || event.level === "regional")
+  ) {
 
     // 3a. Explicit YIP chapter_admin role for this chapter → full (canonical chair).
     const isExplicitAdmin = active.some(

@@ -15,7 +15,7 @@ import {
   isMemberUnscored,
   type MemberScores,
 } from "@/lib/yi-future/member-rubric";
-import { sendPushToSubject } from "@/app/yi-future/actions/push";
+import { sendPushToSubject } from "@/lib/yi-future/push";
 import { readSession } from "./auth";
 import { resolveFutureAccessOrNull } from "@/lib/yi-future/auth/require-access";
 

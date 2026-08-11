@@ -1,7 +1,7 @@
 "use server";
 
 import { requireFutureNationalAdmin } from "@/lib/yi-future/auth/require-access";
-import { sendPushToSubject } from "./push";
+import { sendPushToSubject } from "@/lib/yi-future/push";
 import type { PushSubjectType } from "./push-types";
 
 // NOTE: "use server" files may only export async functions. Types below are

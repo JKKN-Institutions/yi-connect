@@ -4,12 +4,7 @@ import webpush from "web-push";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import { readSession } from "@/app/yi-future/actions/auth";
 import { fetchAllRows } from "@/lib/pagination";
-import {
-  getVapidPublicKey,
-  getVapidPrivateKey,
-  getVapidSubject,
-  hasVapidConfig,
-} from "@/lib/yi-future/vapid";
+import { configureWebPush } from "@/lib/yi-future/push";
 
 // NOTE: "use server" files may only export async functions. Types and
 // runtime constants live in @/app/actions/push-types. web-push requires
@@ -19,7 +14,6 @@ import {
 import type {
   PushSubjectType,
   SaveSubscriptionInput,
-  PushPayload,
   PushSaveResult,
 } from "./push-types";
 
@@ -48,15 +42,9 @@ async function resolveCurrentSubject(): Promise<
   return null;
 }
 
-function configureWebPush(): boolean {
-  if (!hasVapidConfig()) return false;
-  webpush.setVapidDetails(
-    getVapidSubject(),
-    getVapidPublicKey()!,
-    getVapidPrivateKey()!
-  );
-  return true;
-}
+// configureWebPush() now lives in @/lib/yi-future/push alongside
+// sendPushToSubject — see the note above sendPushToSubject's former home
+// below. It is imported, not redefined, so both paths share one config.
 
 // ─── ACTIONS ────────────────────────────────────────────────────────
 
@@ -130,96 +118,30 @@ export async function removePushSubscription(
   return { ok: true };
 }
 
-/**
- * Send a push notification to all subscriptions owned by a given subject.
- * Silently cleans up dead subscriptions (410 Gone / 404 Not Found).
- */
-export async function sendPushToSubject(
-  subjectType: SubjectType,
-  subjectId: string,
-  payload: PushPayload
-): Promise<{ sent: number; failed: number; removed: number }> {
-  if (!configureWebPush()) {
-    return { sent: 0, failed: 0, removed: 0 };
-  }
-
-  const svc = await createServiceClient();
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: subs } = await (svc as any)
-    .schema("future")
-    .from("push_subscriptions")
-    .select("id, endpoint, p256dh, auth")
-    .eq("subject_type", subjectType)
-    .eq("subject_id", subjectId);
-
-  const rows: Array<{
-    id: string;
-    endpoint: string;
-    p256dh: string;
-    auth: string;
-  }> = Array.isArray(subs) ? subs : [];
-
-  if (rows.length === 0) return { sent: 0, failed: 0, removed: 0 };
-
-  const body = JSON.stringify({
-    title: payload.title,
-    body: payload.body,
-    url: payload.url ?? "/",
-    tag: payload.tag,
-  });
-
-  let sent = 0;
-  let failed = 0;
-  const deadIds: string[] = [];
-
-  await Promise.all(
-    rows.map(async (sub) => {
-      try {
-        await webpush.sendNotification(
-          {
-            endpoint: sub.endpoint,
-            keys: { p256dh: sub.p256dh, auth: sub.auth },
-          },
-          body
-        );
-        sent += 1;
-      } catch (err: unknown) {
-        failed += 1;
-        const statusCode =
-          err && typeof err === "object" && "statusCode" in err
-            ? (err as { statusCode: number }).statusCode
-            : 0;
-        if (statusCode === 404 || statusCode === 410) {
-          deadIds.push(sub.id);
-        }
-      }
-    })
-  );
-
-  if (deadIds.length > 0) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (svc as any)
-      .schema("future")
-      .from("push_subscriptions")
-      .delete()
-      .in("id", deadIds);
-  }
-
-  // Best-effort last_used_at touch on successful endpoints
-  if (sent > 0) {
-    const now = new Date().toISOString();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (svc as any)
-      .schema("future")
-      .from("push_subscriptions")
-      .update({ last_used_at: now })
-      .eq("subject_type", subjectType)
-      .eq("subject_id", subjectId);
-  }
-
-  return { sent, failed, removed: deadIds.length };
-}
+// ─── MOVED OUT (2026-08-11, security) ──────────────────────────────
+//
+// `sendPushToSubject` used to be exported from THIS file. Because every
+// export of a `"use server"` module is a registered Server Action with its
+// own remotely-invocable POST endpoint, and because that function had no
+// authorization check whatsoever, anyone who could reach the app could
+// deliver an arbitrary notification title, body and click-through URL to any
+// subject id — i.e. a phishing message rendered with the app's own icon and
+// name. It was inert only because VAPID keys are unset in production
+// (configureWebPush() returns false and the send no-ops); configuring push
+// would have armed it silently.
+//
+// Every caller was already server-side and already applied its own gate
+// before calling, so it moved to `@/lib/yi-future/push` — a `server-only`
+// module with NO "use server" directive. A function that is not exported
+// from a `"use server"` module gets no action ID and no endpoint, so it is
+// unreachable from the network by construction. That is strictly stronger
+// than adding a role check to a public endpoint.
+//
+// The gated way to send an ad-hoc push to an arbitrary subject remains
+// `sendDevTestPush` in ./dev-push.ts, behind requireFutureNationalAdmin().
+//
+// DO NOT re-export sendPushToSubject from here (or any other "use server"
+// file) — that re-opens the endpoint and re-creates the gap.
 
 // ════════════════════════════════════════════════════════════════════
 // yi.push_subscriptions — admin notification channel (migration 135)

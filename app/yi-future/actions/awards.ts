@@ -6,7 +6,7 @@ import { createClient, createServiceClient } from "@/lib/yi-future/supabase/serv
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
 import { AWARD_CATEGORIES } from "@/lib/yi-future/constants";
-import { sendPushToSubject } from "@/app/yi-future/actions/push";
+import { sendPushToSubject } from "@/lib/yi-future/push";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 
 type AwardCategory = Database["future"]["Enums"]["award_category"];

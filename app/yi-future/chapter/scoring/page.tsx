@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { fetchAllRows } from "@/lib/pagination";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
+import { UnlockEvaluationButton } from "@/components/yi-future/scoring/UnlockEvaluationButton";
 import { PHASES } from "@/lib/yi-future/constants";
 import {
   aggregateEvaluations,
@@ -19,6 +20,8 @@ type Team = {
 };
 
 type Evaluation = {
+  // Needed so a submitted score can be named for reopening.
+  id: string;
   team_id: string;
   jury_id: string;
   criteria_scores: CriteriaScores;
@@ -63,7 +66,7 @@ async function getEvaluations(
       .schema("future")
       .from("evaluations")
       .select(
-        "team_id, jury_id, criteria_scores, total_score, status, teams!inner(chapter_id, edition_id), jury_assignments(jury_name, archetype)"
+        "id, team_id, jury_id, criteria_scores, total_score, status, teams!inner(chapter_id, edition_id), jury_assignments(jury_name, archetype)"
       )
       .eq("teams.chapter_id", chapterId)
       .eq("teams.edition_id", editionId)
@@ -404,7 +407,7 @@ export default async function ScoringPage() {
                     {list.map((e) => (
                       <li
                         key={`${e.team_id}-${e.jury_id}`}
-                        className="flex items-center justify-between p-2 border border-navy/10 rounded"
+                        className="flex flex-wrap items-center justify-between gap-2 p-2 border border-navy/10 rounded"
                       >
                         <div>
                           <div className="font-semibold">
@@ -414,8 +417,19 @@ export default async function ScoringPage() {
                             {e.jury_assignments?.archetype ?? "—"}
                           </div>
                         </div>
-                        <div className="font-mono font-bold text-navy">
-                          {e.total_score} / {totalMax}
+                        <div className="flex items-center gap-3">
+                          <div className="font-mono font-bold text-navy">
+                            {e.total_score} / {totalMax}
+                          </div>
+                          {/* Reopen. The juror's numbers stay put; only they can
+                              enter a new one. Every use is logged. */}
+                          <UnlockEvaluationButton
+                            evaluationId={e.id}
+                            juryName={e.jury_assignments?.jury_name ?? null}
+                            teamName={t.team_name}
+                            score={e.total_score}
+                            totalMax={totalMax}
+                          />
                         </div>
                       </li>
                     ))}

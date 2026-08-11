@@ -21,6 +21,12 @@ import { resolveFutureAccessOrNull } from "@/lib/yi-future/auth/require-access";
 
 type EvaluationStatus = Database["future"]["Enums"]["evaluation_status"];
 
+// Tables added after the last `supabase gen types` run are absent from the
+// generated types; the established pattern is a loose client at those call
+// sites rather than hand-editing types.ts.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyEvalClient = any;
+
 export type OtherJurorEvalRow = {
   id: string;
   jury_id: string;
@@ -384,4 +390,239 @@ export async function saveEvaluation(input: {
     ok: true,
     message: "Draft saved.",
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// REOPEN A SUBMITTED EVALUATION
+//
+// saveEvaluation() refuses to overwrite an evaluation once status =
+// 'submitted', and the sentence it returns is "Evaluation already submitted.
+// Ask admin to unlock if needed." No unlock existed — not for a chapter admin,
+// not for a national admin, nowhere in the codebase. A juror who mis-tapped a
+// slider and pressed Submit had made a permanent wrong score, and since these
+// scores decide the awards, the only remedy was editing the database by hand.
+//
+// FOUR PROPERTIES
+//
+// 1. THE SCORES ARE LEFT ALONE. Only `status` and `submitted_at` change. The
+//    juror reopens the form with their numbers exactly where they left them and
+//    corrects the one that was wrong, rather than re-entering six from memory
+//    under time pressure — which is its own chance to introduce a new mistake.
+//
+// 2. THE RECORD IS WRITTEN FIRST. future.evaluation_unlocks is inserted BEFORE
+//    the status flips, and if that insert fails NOTHING is reopened. An unlock
+//    that cannot be recorded does not happen — which also means the feature is
+//    inert until the migration is applied, and says so on screen.
+//
+// 3. SCOPED TO THE CALLER'S OWN CHAPTER, and it fails CLOSED. A chapter admin
+//    may reopen scores for their own chapter's teams only. Note this does NOT
+//    let them change a score: saveEvaluation still requires the juror's own
+//    session (or a national admin), so the only person who can enter a new
+//    number is the juror themselves. Unlock hands the form back; it does not
+//    hand over the pen.
+//
+// 4. IT DENIES EXPLICITLY. Every refusal returns a sentence, never a silent
+//    redirect to a dashboard.
+// ═══════════════════════════════════════════════════════════════════════
+
+/** Reopen one submitted evaluation so its juror can correct it. */
+export async function unlockEvaluation(input: {
+  evaluationId: string;
+  reason?: string;
+}): Promise<ActionResult> {
+  const access = await resolveFutureAccessOrNull();
+  if (!access) {
+    return {
+      ok: false,
+      error: "Nothing was reopened. You are not signed in as a Yi Future admin.",
+    };
+  }
+
+  if (!input.evaluationId) {
+    return { ok: false, error: "Nothing was reopened. No score was named." };
+  }
+
+  const reason = (input.reason ?? "").trim();
+  if (reason.length > 500) {
+    return {
+      ok: false,
+      error: `Nothing was reopened. The reason is ${reason.length} characters; keep it under 500 so it fits in the record.`,
+    };
+  }
+
+  const svc = await createServiceClient();
+  // future.evaluation_unlocks is not in the generated types yet (as with every
+  // other table added after the last regen) → loose client for those statements.
+  const loose = svc as AnyEvalClient;
+
+  // ─── Load the evaluation, and the team it belongs to ──────────────────
+  const { data: evRaw } = await svc
+    .schema("future")
+    .from("evaluations")
+    .select(
+      "id, status, total_score, jury_id, team_id, teams!inner(id, team_name, chapter_id, edition_id)"
+    )
+    .eq("id", input.evaluationId)
+    .maybeSingle();
+
+  const ev = evRaw as unknown as {
+    id: string;
+    status: string | null;
+    total_score: number | null;
+    jury_id: string;
+    team_id: string;
+    teams: {
+      id: string;
+      team_name: string;
+      chapter_id: string | null;
+      edition_id: string | null;
+    } | null;
+  } | null;
+
+  if (!ev || !ev.teams) {
+    return {
+      ok: false,
+      error:
+        "Nothing was reopened. That score no longer exists — reload this page.",
+    };
+  }
+
+  const chapterId = ev.teams.chapter_id;
+  const editionId = ev.teams.edition_id;
+
+  // ─── Gate: own chapter only, national may reach in. Fails CLOSED ──────
+  // A null chapter denies rather than skipping the check.
+  const isOwnChapter = !!chapterId && access.chapterIds.includes(chapterId);
+  if (!access.isNational && !isOwnChapter) {
+    return {
+      ok: false,
+      error:
+        "Nothing was reopened. You can only reopen scores for your own chapter's teams.",
+    };
+  }
+  if (!chapterId || !editionId) {
+    return {
+      ok: false,
+      error:
+        "Nothing was reopened. That team is not attached to a chapter and edition.",
+    };
+  }
+
+  // ─── Only a SUBMITTED score can be reopened ───────────────────────────
+  if (ev.status !== "submitted") {
+    return {
+      ok: false,
+      error:
+        ev.status === "draft"
+          ? "Nothing was reopened. That score is already open — the juror can still edit it."
+          : `Nothing was reopened. That score is "${ev.status ?? "unknown"}", not submitted.`,
+    };
+  }
+
+  // ─── Snapshots for the record ─────────────────────────────────────────
+  const { data: juryRaw } = await svc
+    .schema("future")
+    .from("jury_assignments")
+    .select("jury_name")
+    .eq("id", ev.jury_id)
+    .maybeSingle();
+  const juryName = (juryRaw as { jury_name: string | null } | null)?.jury_name ?? null;
+
+  const actor = await describeUnlockActor(access.userId);
+
+  // ─── 1. THE RECORD, BEFORE THE REOPEN ─────────────────────────────────
+  // If this fails, nothing is reopened. The most likely cause today is the
+  // migration not having been applied, so the message names it.
+  const { data: recRaw, error: recErr } = await loose
+    .schema("future")
+    .from("evaluation_unlocks")
+    .insert({
+      evaluation_id: ev.id,
+      team_id: ev.team_id,
+      team_name: ev.teams.team_name,
+      jury_id: ev.jury_id,
+      jury_name: juryName,
+      chapter_id: chapterId,
+      edition_id: editionId,
+      score_at_unlock: ev.total_score,
+      unlocked_by_user_id: access.userId,
+      unlocked_by_name: actor.name,
+      unlocked_by_email: actor.email,
+      unlocked_by_scope: access.isNational && !isOwnChapter ? "national" : "chapter",
+      reason: reason.length > 0 ? reason : null,
+    })
+    .select("id")
+    .maybeSingle();
+
+  if (recErr) {
+    return {
+      ok: false,
+      error: `Nothing was reopened. The unlock log could not be written, and a reopen that cannot be recorded must not happen. (${
+        recErr.message ?? "unknown error"
+      })`,
+    };
+  }
+  if (!(recRaw as { id: string } | null)?.id) {
+    return {
+      ok: false,
+      error:
+        "Nothing was reopened. The unlock log took the entry but did not confirm it. Reload this page before trying again.",
+    };
+  }
+
+  // ─── 2. THE REOPEN ────────────────────────────────────────────────────
+  // Only status and submitted_at. criteria_scores, the comments and the
+  // per-member recognition scores are all left exactly as the juror left them.
+  const { error: updErr } = await loose
+    .schema("future")
+    .from("evaluations")
+    .update({ status: "draft", submitted_at: null })
+    .eq("id", ev.id)
+    .eq("status", "submitted");
+
+  if (updErr) {
+    return {
+      ok: false,
+      error: `The reopen was recorded but did NOT take effect: ${
+        updErr.message ?? "the database refused the change"
+      }. The score is still submitted. Reload this page.`,
+    };
+  }
+
+  revalidatePath("/yi-future/chapter/scoring");
+  revalidatePath("/yi-future/chapter/results");
+  revalidatePath("/yi-future/jury");
+  revalidatePath(`/yi-future/jury/${ev.team_id}`);
+
+  return {
+    ok: true,
+    message: `${
+      juryName ?? "That juror"
+    }'s score for ${ev.teams.team_name} is open again. Their numbers are still there — ask them to correct what is wrong and submit again.`,
+  };
+}
+
+/**
+ * Best-effort name/email for the admin doing the reopen, snapshotted into the
+ * record. Never throws and never blocks the unlock: an unnamed record is still
+ * a record.
+ */
+async function describeUnlockActor(
+  userId: string
+): Promise<{ name: string | null; email: string | null }> {
+  try {
+    const svc = await createServiceClient();
+    // yi_directory is the canonical identity spine and is not in the generated
+    // future types → loose client, the established cross-schema pattern.
+    const { data } = await (svc as AnyEvalClient)
+      .schema("yi_directory")
+      .from("people")
+      .select("full_name, email")
+      .eq("user_id", userId)
+      .maybeSingle();
+    const p = data as { full_name: string | null; email: string | null } | null;
+    return { name: p?.full_name ?? null, email: p?.email ?? null };
+  } catch {
+    return { name: null, email: null };
+  }
 }

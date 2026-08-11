@@ -239,13 +239,22 @@ export function AttendanceGrid({
         ),
         BULK_TIMEOUT_MS
       );
-      if (!result.success) throw new Error(result.error);
+      // A returned error means the action refused BEFORE writing (bad rows,
+      // denied gate, active lock) or the single upsert statement itself
+      // failed — either way nothing landed, so we can say so outright.
+      if (!result.success) {
+        setOverrides(rollback);
+        setBulkError(`Nothing was saved — ${result.error}`);
+        return;
+      }
     } catch (err) {
-      // Every optimistic mark this call set rolls back together — the grid
-      // must not show a cohort as present when the write did not land.
+      // A throw or a timeout is different: the write may well have landed and
+      // only the reply was lost, so do NOT claim nothing changed. Roll the
+      // optimistic marks back (never show a cohort present on a failed write)
+      // and point at Refresh, which re-reads what is actually stored.
       setOverrides(rollback);
       setBulkError(
-        reason(err, "Could not save — nothing was changed. Try again.")
+        `${reason(err, "Could not save.")} The marks below are back to their last confirmed values — tap Refresh to see what is stored.`
       );
     } finally {
       setBulkPending(false);
@@ -327,7 +336,7 @@ export function AttendanceGrid({
           role="alert"
           className="rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-800"
         >
-          Nothing was saved — {bulkError}
+          {bulkError}
         </div>
       )}
 
@@ -337,9 +346,9 @@ export function AttendanceGrid({
           className="rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-800"
         >
           {failedIds.length} student{failedIds.length === 1 ? "" : "s"} did not
-          save and {failedIds.length === 1 ? "is" : "are"} shown in red below —{" "}
-          {failedIds.length === 1 ? "its" : "their"} attendance is NOT recorded.
-          Tap {failedIds.length === 1 ? "it" : "them"} again to retry.
+          save and {failedIds.length === 1 ? "is" : "are"} shown in red below.
+          Tap {failedIds.length === 1 ? "that student" : "them"} again to retry,
+          or tap Refresh to see what is stored.
         </div>
       )}
 

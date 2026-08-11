@@ -26,14 +26,32 @@ async function requireTeamChapterAdmin(teamId: string): Promise<void> {
 }
 
 // ─── CREATE TEAM ────────────────────────────────────────────────────
-export async function createTeam(
-  input: { chapterId: string; editionId: string },
-  formData: FormData
-): Promise<ActionResult> {
+//
+// Split in two on purpose:
+//
+//   createTeamCore  — does the work, RETURNS a result. Callable in a loop.
+//   createTeam      — the form action. Calls the core, then redirects.
+//
+// WHY: createTeam used to end in redirect(), and Next.js implements redirect()
+// by THROWING to unwind the request. So any caller that wanted to create
+// several teams in one go (bulk placement, seeding a chapter's teams from a
+// roster) aborted after the very first team, with the exception surfacing as a
+// navigation rather than as an error — nothing looked broken, the remaining
+// teams simply never existed. A server action that throws by design cannot be
+// composed, so the composable part is now separate.
+//
+// createTeamCore is exported, which makes it a reachable server action in its
+// own right. That is safe: it applies the SAME requireChapterAdmin gate on the
+// same chapterId, so it grants nothing createTeam did not already grant.
+export async function createTeamCore(input: {
+  chapterId: string;
+  editionId: string;
+  teamName: string;
+}): Promise<ActionResult & { teamId?: string }> {
   // Scope to the chapter the team is created in — a chair of chapter A must
   // not create teams under chapter B.
   await requireChapterAdmin(input.chapterId);
-  const team_name = String(formData.get("team_name") ?? "").trim();
+  const team_name = input.teamName.trim();
   if (!team_name) return { ok: false, error: "Team name is required." };
   if (team_name.length > 80) {
     return { ok: false, error: "Team name must be under 80 characters." };
@@ -70,9 +88,28 @@ export async function createTeam(
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/yi-future/chapter/teams");
-  const newId = (inserted as { id: string } | null)?.id;
-  if (newId) {
-    redirect(`/yi-future/chapter/teams/${newId}`);
+  return { ok: true, teamId: (inserted as { id: string } | null)?.id };
+}
+
+/**
+ * Form action for /yi-future/chapter/teams/new. Behaviour is unchanged from
+ * before the split: same gate, same validation strings, same revalidate, and on
+ * success the same redirect — to the new team when an id came back, otherwise to
+ * the list. Failures still return `{ ok: false, error }` for NewTeamForm to show.
+ */
+export async function createTeam(
+  input: { chapterId: string; editionId: string },
+  formData: FormData
+): Promise<ActionResult> {
+  const result = await createTeamCore({
+    chapterId: input.chapterId,
+    editionId: input.editionId,
+    teamName: String(formData.get("team_name") ?? ""),
+  });
+  if (!result.ok) return result;
+
+  if (result.teamId) {
+    redirect(`/yi-future/chapter/teams/${result.teamId}`);
   }
   redirect("/yi-future/chapter/teams");
 }

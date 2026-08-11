@@ -23,6 +23,17 @@ export const WATCHDOG_APPROVE_MS = 120_000;
 export const WATCHDOG_STEP_MS = 60_000;
 
 /**
+ * A staff-override placement is one student: ~8 queries, no loop.
+ *
+ * Shorter than the batch on purpose. This is the one call in the placement
+ * screen that writes a team membership directly, so the admin must be told
+ * quickly that the answer never came and that they have to go and look —
+ * waiting two minutes before saying "reload and check" is the worst version of
+ * this failure.
+ */
+export const WATCHDOG_OVERRIDE_MS = 30_000;
+
+/**
  * Reject the WAIT (never the request) if the server has not answered in time.
  *
  * The underlying action keeps running on the server — that is precisely why the

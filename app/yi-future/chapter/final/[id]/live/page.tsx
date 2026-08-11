@@ -107,12 +107,18 @@ async function getEvaluations(eventId: string): Promise<EvaluationRow[]> {
   return (data as unknown as EvaluationRow[]) ?? [];
 }
 
-async function getJuryCount(editionId: string): Promise<number> {
+async function getJuryCount(
+  chapterId: string,
+  editionId: string
+): Promise<number> {
   const svc = await createServiceClient();
   const { count } = await svc
     .schema("future")
     .from("jury_assignments")
     .select("id", { count: "exact", head: true })
+    // Scoped to the chapter: without this the tile counted every active
+    // juror in the edition, so a chapter with 1 juror read "10".
+    .eq("chapter_id", chapterId)
     .eq("edition_id", editionId)
     .eq("is_active", true);
   return count ?? 0;
@@ -139,7 +145,7 @@ export default async function LiveControlPage({
     getSections(id),
     getTeams(ctx.chapterId, ctx.editionId),
     getEvaluations(id),
-    getJuryCount(ctx.editionId),
+    getJuryCount(ctx.chapterId, ctx.editionId),
   ]);
 
   const secByKey = new Map<CFSection, Section>();

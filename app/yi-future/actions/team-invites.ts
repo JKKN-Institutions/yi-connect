@@ -5,7 +5,15 @@ import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { readSession } from "@/app/yi-future/actions/auth";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
 import { TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
-import { INVITE_EXPIRY_DAYS, isInviteExpired } from "@/lib/yi-future/invite-expiry";
+import { isInviteExpired } from "@/lib/yi-future/invite-expiry";
+import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
+import {
+  isDuplicateMembershipError,
+  respondInviteError,
+  unfreezeTeamError,
+  type RespondInviteResult,
+  type UnfreezeTeamResult,
+} from "@/lib/yi-future/invite-error-codes";
 
 // `team_invitations` was added in migration 120 but generated types haven't
 // been regenerated yet — treat the schema client as untyped at the call site.
@@ -19,7 +27,8 @@ export type ActionResult =
 type TeamRow = {
   id: string;
   edition_id: string;
-  chapter_id: string;
+  /** Nullable in practice — every gate that scopes by it must deny on null. */
+  chapter_id: string | null;
   captain_id: string | null;
   leader_delegate_id: string | null;
   is_frozen: boolean | null;
@@ -235,13 +244,27 @@ export async function sendInvite(input: {
 }
 
 // ─── RESPOND TO INVITE ──────────────────────────────────────────────
+//
+// EVERY refusal returns BOTH a machine-readable `code` and a sentence written
+// for a 17-year-old — see lib/yi-future/invite-error-codes.ts for the full list
+// and for why the sentences live there and not here.
+//
+// Two rules this function must keep:
+//   1. NO RAW DATABASE TEXT. Every path that used to return `err.message`
+//      (the uniq_delegate_per_edition duplicate-key text, chiefly) now returns
+//      a sentence instead. A student must never be shown Postgres output.
+//   2. THE PROSE IS PART OF THE CONTRACT until callers migrate to codes.
+//      components/yi-future/team/PendingInviteActions.tsx still detects the
+//      "team filled up mid-tap" case by matching the team_full sentence through
+//      isTeamFullError(). The codes were added ALONGSIDE the sentences, and the
+//      sentences are byte-identical to before, so that consumer is unaffected.
 export async function respondInvite(
   inviteId: string,
   response: "accepted" | "declined"
-): Promise<ActionResult> {
+): Promise<RespondInviteResult> {
   const session = await readSession();
   if (!session || session.type !== "delegate") {
-    return { ok: false, error: "Sign in as a delegate first." };
+    return respondInviteError("not_signed_in");
   }
 
   const svc = await createServiceClient();
@@ -259,12 +282,12 @@ export async function respondInvite(
     status: string;
     created_at: string;
   } | null;
-  if (!invite) return { ok: false, error: "Invite not found." };
+  if (!invite) return respondInviteError("invite_not_found");
   if (invite.invited_delegate_id !== session.id) {
-    return { ok: false, error: "This invite is not addressed to you." };
+    return respondInviteError("not_your_invite");
   }
   if (invite.status !== "pending") {
-    return { ok: false, error: "That invite is no longer pending." };
+    return respondInviteError("invite_not_pending");
   }
 
   const nowIso = new Date().toISOString();
@@ -277,10 +300,7 @@ export async function respondInvite(
       .from("team_invitations" as AnyClient)
       .update({ status: "expired", responded_at: nowIso } as never)
       .eq("id", inviteId);
-    return {
-      ok: false,
-      error: `This invite has expired — invites are valid for ${INVITE_EXPIRY_DAYS} days. Ask the team to send you a new one.`,
-    };
+    return respondInviteError("invite_expired");
   }
 
   if (response === "declined") {
@@ -289,16 +309,17 @@ export async function respondInvite(
       .from("team_invitations" as AnyClient)
       .update({ status: "declined", responded_at: nowIso } as never)
       .eq("id", inviteId);
-    if (error) return { ok: false, error: error.message };
+    // Was `error.message` — raw Postgres text on a student's screen.
+    if (error) return respondInviteError("unexpected");
     revalidatePath("/yi-future/me/team/invites");
     return { ok: true, message: "Invite declined." };
   }
 
   // ACCEPTED — must check team frozen + size + UNIQUE-per-edition
   const team = await loadTeam(invite.team_id);
-  if (!team) return { ok: false, error: "Team no longer exists." };
+  if (!team) return respondInviteError("team_not_found");
   if (team.is_frozen) {
-    return { ok: false, error: "That team is frozen — can't accept." };
+    return respondInviteError("team_frozen");
   }
 
   const { count: memberCount } = await svc
@@ -307,10 +328,9 @@ export async function respondInvite(
     .select("delegate_id", { count: "exact", head: true })
     .eq("team_id", invite.team_id);
   if ((memberCount ?? 0) >= TEAM_SIZE_MAX) {
-    return {
-      ok: false,
-      error: `That team is already at ${TEAM_SIZE_MAX} members.`,
-    };
+    // LOAD-BEARING SENTENCE — see the header note. Keep the wording in step with
+    // RESPOND_INVITE_MESSAGES.team_full, which isTeamFullError() matches.
+    return respondInviteError("team_full");
   }
 
   // Insert into team_members (UNIQUE INDEX uniq_delegate_per_edition will block
@@ -324,12 +344,13 @@ export async function respondInvite(
       role_in_team: "member",
     } as never);
   if (insErr) {
-    return {
-      ok: false,
-      error:
-        insErr.message ??
-        "Couldn't join that team. You may already be on another team this edition.",
-    };
+    // THIS was the leak. `insErr.message` here is
+    // `duplicate key value violates unique constraint "uniq_delegate_per_edition"`
+    // whenever the student is already on a team — and it went straight to their
+    // screen. Both branches now return a sentence plus a code.
+    return respondInviteError(
+      isDuplicateMembershipError(insErr) ? "already_on_team" : "unexpected"
+    );
   }
 
   // Mark this invite accepted
@@ -338,7 +359,9 @@ export async function respondInvite(
     .from("team_invitations" as AnyClient)
     .update({ status: "accepted", responded_at: nowIso } as never)
     .eq("id", inviteId);
-  if (upErr) return { ok: false, error: upErr.message };
+  // The membership row above DID land, so this is not "you weren't added" —
+  // it is "you're in, the paperwork lagged". Distinct code, honest sentence.
+  if (upErr) return respondInviteError("partially_applied");
 
   // Auto-decline ALL OTHER pending invites for this delegate (one team / edition).
   await svc
@@ -407,11 +430,6 @@ export async function freezeTeam(teamId: string): Promise<ActionResult> {
   return { ok: true, message: "Team frozen." };
 }
 
-// ─── UNFREEZE TEAM (chapter-admin auth) ─────────────────────────────
-// The UI copy tells delegates to "ask your chapter admin to unfreeze".
-// freezeTeam gates by team ownership (leader/captain); the chapter-admin
-// equivalent of that ownership check is getChapterContext + the same
-// chapter ownership check the team-detail page enforces.
 // ─── LOCK EVERY TEAM IN THE CHAPTER (chapter-admin auth) ────────────
 // Field request 2026-08-10. Locking was previously CAPTAIN-only, from their
 // own team page — an admin could undo a lock but never apply one, so a chapter
@@ -594,25 +612,42 @@ export async function unfreezeAllTeams(): Promise<ActionResult> {
   };
 }
 
-export async function unfreezeTeam(teamId: string): Promise<ActionResult> {
-  const ctx = await getChapterContext();
-  if (!ctx) {
-    return { ok: false, error: "Sign in as a chapter admin first." };
-  }
-
+// ─── UNFREEZE ONE TEAM (chapter-admin OR national auth) ─────────────
+// The UI copy tells delegates to "ask your chapter admin to unfreeze", and
+// freezeTeam gates by team ownership (leader/captain). The admin-side
+// equivalent is "admin of the chapter THIS TEAM belongs to".
+//
+// THE BUG THIS FIXES: the gate used to be getChapterContext(), which resolves
+// the CALLER's own chapter, and then compared the team's chapter to it. A Yi
+// Future national admin has no core-team row of their own, so getChapterContext
+// returned null and they were refused with "Sign in as a chapter admin first."
+// while drilling into a chapter they legitimately oversee — every chapter.
+//
+// Correct shape (same as requireTeamChapterAdmin in actions/teams.ts): look up
+// the TARGET team's chapter FIRST, then require admin of THAT chapter.
+// requireChapterAdmin returns early for national admins and otherwise checks the
+// caller's chapter list, so one call covers both tiers.
+//
+// FAILS CLOSED, twice over:
+//   - unknown team          → structured team_not_found, no gate call at all.
+//   - team with NULL chapter → structured team_chapter_unknown. This guard is
+//     not decorative: requireChapterAdmin(null) fails OPEN for a national admin
+//     (it returns before looking at the chapter), so a null scope must be
+//     rejected here rather than handed to the gate.
+// Denial of a wrong-chapter admin is requireChapterAdmin's own explicit 403 at
+// /yi-future/forbidden, which names the reason — never a silent bounce.
+export async function unfreezeTeam(
+  teamId: string
+): Promise<UnfreezeTeamResult> {
+  // Target FIRST, gate SECOND — the whole point of the fix.
   const team = await loadTeam(teamId);
-  if (!team) return { ok: false, error: "Team not found." };
+  if (!team) return unfreezeTeamError("team_not_found");
+  if (!team.chapter_id) return unfreezeTeamError("team_chapter_unknown");
 
-  // Ownership: the team must belong to the admin's chapter.
-  if (team.chapter_id !== ctx.chapterId) {
-    return {
-      ok: false,
-      error: "Only the team's chapter admin can unfreeze it.",
-    };
-  }
+  await requireChapterAdmin(team.chapter_id);
 
   if (!team.is_frozen) {
-    return { ok: false, error: "Team is not frozen." };
+    return unfreezeTeamError("not_frozen");
   }
 
   const svc = await createServiceClient();
@@ -626,7 +661,9 @@ export async function unfreezeTeam(teamId: string): Promise<ActionResult> {
       updated_at: nowIso,
     } as never)
     .eq("id", teamId);
-  if (error) return { ok: false, error: error.message };
+  // Was `error.message`. LockedTeamsPanel prints this string straight into the
+  // page with no translation layer, so it must not be Postgres output.
+  if (error) return unfreezeTeamError("unexpected");
 
   // Auto-resolve any open unlock request — unfreezing IS the resolution.
   await svc

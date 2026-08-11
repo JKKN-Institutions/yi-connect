@@ -380,6 +380,15 @@ export default async function UnteamedDelegatesPage({
                     <div className="text-xs text-navy/60 mt-0.5">
                       {g.delegates.length} delegate{g.delegates.length === 1 ? "" : "s"} without a team
                     </div>
+                    {/* This list only NAMES the problem. The drill-in suggests a
+                        team for each student and needs a human to approve each
+                        suggestion before any invitation goes out. */}
+                    <Link
+                      href={`/yi-future/national/admin/delegates/unteamed/${ch.id}`}
+                      className="mt-1.5 inline-block text-xs font-semibold text-navy underline hover:text-yi-gold"
+                    >
+                      Suggest teams for these students →
+                    </Link>
                   </div>
                   {chair && (
                     <div className="text-right">

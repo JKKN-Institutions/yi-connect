@@ -5,6 +5,7 @@ import { createClient, createServiceClient } from "@/lib/yi-future/supabase/serv
 import { readSession } from "@/app/yi-future/actions/auth";
 import { fetchAllRows } from "@/lib/pagination";
 import { configureWebPush } from "@/lib/yi-future/push";
+import { hasFuturePlatformTier } from "@/lib/yi-future/auth/admin-source";
 
 // NOTE: "use server" files may only export async functions. Types and
 // runtime constants live in @/app/actions/push-types. web-push requires
@@ -241,14 +242,14 @@ export async function unsubscribeFromPush(
  * national_admin) is DELIBERATELY EXCLUDED. Previously this gate (and
  * its sibling in national-admins.ts) accepted the regular tier, letting
  * a regular national admin broadcast to every admin device — a
- * privilege escalation. This predicate now mirrors
- * hasYiFuturePlatformTier() in app/yi-future/actions/national-admins.ts
- * — kept inline here to avoid a cross-action-file import (push.ts is a
- * "use server" boundary). Keep the two role sets in sync.
+ * privilege escalation.
  *
- * Two-step lookup (people.id by email, then role_assignments). Casts via
- * `unknown` mirror the chapter-chairs.ts pattern: yi_directory isn't in
- * the future-pinned Database type.
+ * SOURCE (2026-08-11): this used to be a hand-copied duplicate of
+ * hasYiFuturePlatformTier() in national-admins.ts, with a comment asking
+ * whoever changed one to remember the other. It now calls the one
+ * implementation in lib/yi-future/auth/admin-source.ts (a plain lib
+ * module, so importing it does not cross a "use server" boundary), and
+ * the two sets cannot drift because there is only one set.
  */
 async function isSuperOrPlatform(): Promise<boolean> {
   const supabase = await createClient();
@@ -256,89 +257,7 @@ async function isSuperOrPlatform(): Promise<boolean> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user || !user.email) return false;
-
-  const email = user.email.trim().toLowerCase();
-  const svc = await createServiceClient();
-
-  const svcDir = (svc as unknown as {
-    schema: (s: string) => {
-      from: (t: string) => {
-        select: (c: string) => {
-          eq: (k: string, v: string) => {
-            maybeSingle: () => Promise<{ data: { id: string } | null }>;
-          };
-        };
-      };
-    };
-  }).schema("yi_directory");
-
-  const { data: person } = await svcDir
-    .from("people")
-    .select("id")
-    .eq("email", email)
-    .maybeSingle();
-  if (!person) return false;
-
-  // (a) Cross-app platform-owner short-circuit — NO app filter.
-  const svcDirPlatform = (svc as unknown as {
-    schema: (s: string) => {
-      from: (t: string) => {
-        select: (c: string) => {
-          eq: (k: string, v: string) => {
-            eq: (k: string, v: boolean) => {
-              in: (
-                k: string,
-                v: string[]
-              ) => Promise<{ data: Array<{ role: string }> | null }>;
-            };
-          };
-        };
-      };
-    };
-  }).schema("yi_directory");
-
-  const { data: platformRows } = await svcDirPlatform
-    .from("role_assignments")
-    .select("role")
-    .eq("person_id", person.id)
-    .eq("is_active", true)
-    .in("role", ["platform_super_admin", "super_admin"]);
-  if ((platformRows ?? []).length > 0) return true;
-
-  // (b) app='future' platform/super tier (regular tier excluded).
-  const svcDirRoles = (svc as unknown as {
-    schema: (s: string) => {
-      from: (t: string) => {
-        select: (c: string) => {
-          eq: (k: string, v: string) => {
-            eq: (k: string, v: string) => {
-              eq: (k: string, v: boolean) => {
-                in: (
-                  k: string,
-                  v: string[]
-                ) => Promise<{ data: Array<{ role: string }> | null }>;
-              };
-            };
-          };
-        };
-      };
-    };
-  }).schema("yi_directory");
-
-  const { data: rows } = await svcDirRoles
-    .from("role_assignments")
-    .select("role")
-    .eq("person_id", person.id)
-    .eq("app", "future")
-    .eq("is_active", true)
-    .in("role", [
-      "future_super_admin",
-      "platform_super_admin",
-      "super_admin",
-      "platform_admin",
-    ]);
-
-  return (rows ?? []).length > 0;
+  return hasFuturePlatformTier(user.email);
 }
 
 /**
@@ -347,7 +266,8 @@ async function isSuperOrPlatform(): Promise<boolean> {
  *
  * For MVP, only filter.kind === "all" sends to every row in
  * yi.push_subscriptions. Future filters (chapter / role) are stubbed
- * with a TODO — they require joins onto yi.chapter_chairs / national_admins.
+ * with a TODO — they require joins onto future.chapter_core_team /
+ * yi_directory.role_assignments.
  */
 export async function broadcastPush(
   title: string,

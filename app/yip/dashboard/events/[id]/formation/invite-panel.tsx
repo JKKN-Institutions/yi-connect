@@ -38,14 +38,15 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/yip/utils";
 import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
-// TODO wire-up: swap ./_stubs for @/app/yip/actions/formation-emails at integration.
 import {
   reissueFormationCode,
   sendFormationInvites,
-  type FormationEmailBatchItemResult,
-  type FormationInvitePlan,
-  type FormationQuotaCheck,
-} from "./_stubs";
+} from "@/app/yip/actions/formation-emails";
+import type {
+  FormationEmailBatchItemResult,
+  FormationEmailSendPlan as FormationInvitePlan,
+  FormationQuotaCheck,
+} from "@/lib/yip/formation-email-types";
 
 /** Resend batch ceiling — mirrors EMAIL_BATCH_MAX in email-codes.ts. */
 const INVITE_BATCH_MAX = 50;

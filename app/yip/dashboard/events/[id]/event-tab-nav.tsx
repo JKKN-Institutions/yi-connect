@@ -29,6 +29,7 @@ import {
   UserCog,
   Crown,
   Landmark,
+  Vote,
   PanelLeftClose,
   PanelLeftOpen,
   CheckCircle2,
@@ -64,6 +65,9 @@ const GROUPS: TabGroup[] = [
       { label: "Parties", href: "/parties", icon: Flag },
       { label: "Allocation", href: "/allocation", icon: Shuffle },
       { label: "Cabinet", href: "/cabinet", icon: Landmark },
+      // Online House Formation — Regional Round only (visibility-gated below):
+      // pre-event remote elections + appointments, run by the host chapter.
+      { label: "Formation", href: "/formation", icon: Vote },
       { label: "Jury", href: "/jury", icon: Scale },
       // Volunteers tab also hosts YUVA Desks (sub-tabbed on the page).
       { label: "Volunteers", href: "/volunteers", icon: Shield },
@@ -134,11 +138,14 @@ function isActive(tabHref: string, pathname: string, basePath: string) {
 export function EventTabNav({
   eventId,
   eventStatus,
+  eventLevel,
   canViewScores = false,
   setupProgress,
 }: {
   eventId: string;
   eventStatus?: string;
+  /** events.level — Formation is a Regional-Round-only tab. */
+  eventLevel?: string;
   canViewScores?: boolean;
   /** Map of { tabHref → done } for the Before-the-Event setup checklist. Tabs
    *  not present in the map show no indicator. */
@@ -173,6 +180,8 @@ export function EventTabNav({
   const visible = (tab: Tab) => {
     // Certificates only appear once results are published.
     if (tab.label === "Certificates") return eventStatus === "results_published";
+    // Online House Formation exists only for Regional Round events.
+    if (tab.label === "Formation") return eventLevel === "regional";
     // Scoring / Committees / Results are score-bearing → super-admin only.
     if (SCORE_TABS.has(tab.label)) return canViewScores;
     return true;

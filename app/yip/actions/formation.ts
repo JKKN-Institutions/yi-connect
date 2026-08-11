@@ -311,6 +311,7 @@ export async function getFormationState(
   const allSessionIds = steps.flatMap((s) => s.session_ids);
   const sessions: Record<string, FormationSessionLite> = {};
   const voteCounts: Record<string, number> = {};
+  const turnout: FormationState["turnout"] = {};
 
   if (allSessionIds.length > 0) {
     const { data: sessionRows } = await supabase
@@ -326,7 +327,7 @@ export async function getFormationState(
       sessions[s.id] = {
         id: s.id,
         vote_type: s.vote_type,
-        status: s.status,
+        status: s.status ?? "unknown",
         partyId: cfg.partyId ?? null,
         side: cfg.side ?? null,
         closesAt: cfg.closesAt ?? null,
@@ -334,12 +335,45 @@ export async function getFormationState(
     }
 
     const { data: votes } = await formationVotesTable(supabase)
-      .select("session_id")
+      .select("session_id, participant_id")
       .in("session_id", allSessionIds);
+    const votersBySession = new Map<string, Set<string>>();
     for (const v of votes ?? []) {
-      if (v.session_id) {
-        voteCounts[v.session_id] = (voteCounts[v.session_id] ?? 0) + 1;
+      if (!v.session_id) continue;
+      voteCounts[v.session_id] = (voteCounts[v.session_id] ?? 0) + 1;
+      if (v.participant_id) {
+        const set = votersBySession.get(v.session_id) ?? new Set<string>();
+        set.add(v.participant_id);
+        votersBySession.set(v.session_id, set);
       }
+    }
+
+    // Per-step turnout summary (plan §3.2): party ballots partition the
+    // electorate, house/bench ballots take it whole — per-session sums are
+    // step totals either way. Same eligibility rules as getFormationTurnout.
+    const { data: participants } = await supabase
+      .from("participants")
+      .select("id, party_id, party_side")
+      .eq("event_id", eventId);
+    const everyone = participants ?? [];
+    for (const step of steps) {
+      if (step.session_ids.length === 0) continue;
+      let eligible = 0;
+      let voted = 0;
+      for (const sessionId of step.session_ids) {
+        const lite = sessions[sessionId];
+        if (!lite) continue;
+        const eligibleRows =
+          lite.partyId != null
+            ? everyone.filter((p) => p.party_id === lite.partyId)
+            : lite.side != null
+              ? everyone.filter((p) => p.party_side === lite.side)
+              : everyone;
+        const voters = votersBySession.get(sessionId) ?? new Set<string>();
+        eligible += eligibleRows.length;
+        voted += eligibleRows.filter((p) => voters.has(p.id)).length;
+      }
+      turnout[step.step_key] = { eligible, voted };
     }
   }
 
@@ -356,6 +390,7 @@ export async function getFormationState(
       },
       sessions,
       voteCounts,
+      turnout,
     },
   };
 }
@@ -1091,9 +1126,11 @@ export async function getFormationAnnouncement(
   const [{ data: participants }, { data: parties }] = await Promise.all([
     supabase
       .from("participants")
-      .select(
-        "id, full_name, school_name, parliament_role, cabinet_portfolio, party_id, party_side"
-      )
+      // select("*"): cabinet_portfolios post-dates the generated types (which
+      // are never regenerated — house rule), so a typed column list rejects
+      // it; the star select carries it at runtime and person() reads it via a
+      // narrowing cast.
+      .select("*")
       .eq("event_id", eventId)
       .order("full_name"),
     supabase
@@ -1108,7 +1145,10 @@ export async function getFormationAnnouncement(
     id: p.id,
     full_name: p.full_name,
     school_name: p.school_name,
-    ministry: (p as { cabinet_portfolio?: string | null }).cabinet_portfolio ?? null,
+    // Primary ministry = first held portfolio (multi-ministry column is plural).
+    ministry:
+      (p as { cabinet_portfolios?: string[] | null }).cabinet_portfolios?.[0] ??
+      null,
   });
   const roleOf = (p: (typeof people)[number]): string =>
     (p.parliament_role as string | null) ?? "";

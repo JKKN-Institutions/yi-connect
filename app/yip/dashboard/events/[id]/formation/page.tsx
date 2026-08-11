@@ -19,8 +19,8 @@ import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 import {
   sweepFormationDeadlines,
   getFormationState,
-  getFormationInvitePlan,
-} from "./_stubs";
+} from "@/app/yip/actions/formation";
+import { getFormationInvitePlan } from "@/app/yip/actions/formation-emails";
 import { FormationClient } from "./formation-client";
 
 export const metadata: Metadata = {

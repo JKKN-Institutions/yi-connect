@@ -223,6 +223,12 @@ export type FormationState = {
   sessions: Record<string, FormationSessionLite>;
   /** Ballots cast per session id (live turnout, never the ballots themselves). */
   voteCounts: Record<string, number>;
+  /**
+   * Per-step turnout summary for election steps (plan §3.2): eligible voters
+   * across the step's ballots vs how many of them have cast. Party ballots
+   * partition the electorate, so per-session sums are step totals.
+   */
+  turnout: Partial<Record<FormationStepKey, { eligible: number; voted: number }>>;
 };
 
 export type FormationPendingParticipant = {

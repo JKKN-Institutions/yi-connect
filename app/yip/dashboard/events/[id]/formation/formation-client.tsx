@@ -59,28 +59,32 @@ import type { MinistryPortfolio } from "@/lib/yip/cabinet";
 import {
   getEventParties,
   getPartyMembers,
-  openRunoff,
   type PartyLite,
   type VoteCandidate,
 } from "@/app/yip/actions/voting";
-// TODO wire-up: swap ./_stubs for the real Lane A/B modules at integration.
 import {
   FORMATION_STEPS,
+  type FormationState,
+  type FormationStepKey,
+  type FormationStepRow,
+  type FormationTurnout,
+} from "@/lib/yip/formation";
+import {
   closeFormationStep,
   extendFormationStep,
   getFormationState,
   getFormationTurnout,
   lockFormation,
+  openFormationRunoff,
   openFormationStep,
   runFormationAllocation,
-  sendFormationReminders,
-  type FormationInvitePlan,
-  type FormationState,
-  type FormationStepKey,
-  type FormationStepRow,
-  type FormationTie,
-  type FormationTurnout,
-} from "./_stubs";
+} from "@/app/yip/actions/formation";
+import { sendFormationReminders } from "@/app/yip/actions/formation-emails";
+import type { FormationEmailSendPlan as FormationInvitePlan } from "@/lib/yip/formation-email-types";
+
+// A step's unresolved tie: the revealed ballot(s) whose top candidates
+// finished level (party-leader steps can tie in several parties at once).
+type FormationTie = { sessionIds: string[] };
 import { InvitePanel } from "./invite-panel";
 import { AppointmentsPanel } from "./appointments-panel";
 
@@ -435,14 +439,15 @@ export function FormationClient({
         startTransition(async () => {
           const res = await closeFormationStep(eventId, key);
           if (res.success) {
-            if (res.data.closed) {
+            if (!res.data.tie) {
               toast.success(`${label} complete — winners recorded.`);
               setTieByStep((p) => ({ ...p, [key]: undefined }));
-            } else if (res.data.tie) {
-              setTieByStep((p) => ({ ...p, [key]: res.data.tie! }));
-              toast.warning(
-                `Tie (${res.data.tie.tiedCount} votes each) — open a runoff to break it.`
-              );
+            } else {
+              setTieByStep((p) => ({
+                ...p,
+                [key]: { sessionIds: res.data.tiedSessionIds },
+              }));
+              toast.warning("Tie — open a runoff to break it.");
             }
             await refresh();
           } else {
@@ -454,10 +459,11 @@ export function FormationClient({
     });
   }
 
-  // Runoff: reuse the existing openRunoff action (ballot = tied candidates
-  // only), then push the step's new deadline onto the fresh session via
-  // extendFormationStep (plan: runoff id is appended to session_ids; a new
-  // closesAt is required).
+  // Runoff: openFormationRunoff restricts the fresh ballot to only the tied
+  // candidates, stamps the new deadline into its config, appends it to the
+  // step's session_ids, and archives the revealed tie tally. Party-leader
+  // steps can tie in several parties at once — one runoff per tied ballot,
+  // all on the same deadline.
   function handleOpenRunoff(key: FormationStepKey, tie: FormationTie) {
     const iso = localToIso(runoffLocal[key] ?? "");
     if (!iso) {
@@ -465,15 +471,12 @@ export function FormationClient({
       return;
     }
     startTransition(async () => {
-      const res = await openRunoff(tie.sessionId);
-      if (!res.success) {
-        toast.error(res.error);
-        return;
-      }
-      const ext = await extendFormationStep(eventId, key, iso);
-      if (!ext.success) {
-        toast.error(ext.error);
-        return;
+      for (const sessionId of tie.sessionIds) {
+        const res = await openFormationRunoff(eventId, key, sessionId, iso);
+        if (!res.success) {
+          toast.error(res.error);
+          return;
+        }
       }
       toast.success(
         "Runoff open — only the tied candidates are on the ballot."
@@ -752,9 +755,11 @@ export function FormationClient({
                   {def.mode === "election" && tie && (
                     <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
                       <p className="text-sm font-medium text-amber-800">
-                        Tie — {tie.tiedCandidateIds.length} candidates on{" "}
-                        {tie.tiedCount} votes each. Open a runoff between only
-                        the tied candidates.
+                        Tie — the leading candidates finished on equal votes
+                        {tie.sessionIds.length > 1
+                          ? ` in ${tie.sessionIds.length} ballots`
+                          : ""}
+                        . Open a runoff between only the tied candidates.
                       </p>
                       <div className="flex flex-wrap items-end gap-2">
                         <div className="space-y-1.5">

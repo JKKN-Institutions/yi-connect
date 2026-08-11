@@ -424,10 +424,48 @@ export async function runFormationAllocation(
   }
 
   const alloc = await runAllocationAction(eventId, {
-    assignSides: true,
+    assignSides: false,
     assignRoles: false,
   });
   if (!alloc.success) return { success: false, error: alloc.error };
+
+  // Benchless-default reality (rehearsal-caught, 2026-08-11): on an event with
+  // no sided parties yet, runAllocationAction writes party_side NULL for
+  // everyone — even with assignSides on — and formParties then refuses ("no
+  // bench yet"). Online formation needs benches BEFORE parties (decision-1
+  // sequencing), so this step assigns them itself, AFTER allocation (whose
+  // write clobbers party_side): school-ordered alternation → two near-equal,
+  // school-spread benches.
+  const { data: roster } = await supabase
+    .from("participants")
+    .select("id, school_name")
+    .eq("event_id", eventId)
+    .order("school_name")
+    .order("id");
+  const rows = roster ?? [];
+  if (rows.length < 2) {
+    return {
+      success: false,
+      error: "Need at least 2 participants to form benches.",
+    };
+  }
+  const rulingIds = rows.filter((_, i) => i % 2 === 0).map((r) => r.id);
+  const oppositionIds = rows.filter((_, i) => i % 2 === 1).map((r) => r.id);
+  for (const [side, ids] of [
+    ["ruling", rulingIds],
+    ["opposition", oppositionIds],
+  ] as const) {
+    const { error: benchErr } = await supabase
+      .from("participants")
+      .update({ party_side: side })
+      .in("id", ids);
+    if (benchErr) {
+      return {
+        success: false,
+        error: `Bench assignment failed: ${benchErr.message}`,
+      };
+    }
+  }
 
   const parties = await formParties(eventId, opts.partyCount, false);
   if (!parties.success) return { success: false, error: parties.error };

@@ -1,5 +1,33 @@
 import { useState, useTransition, useEffect, useRef } from "react";
 import { validateAccessCode } from "@/app/yi-future/actions/auth";
+import { normalizeAccessCodeInput } from "@/lib/yi-future/access-code-shape";
+
+// This form is also the CHECK-IN DESK's front door: a volunteer signs in here
+// with their 6-character code. Without the guard below, a validateAccessCode()
+// that throws or never answers left the button stuck on "Unlocking…" with no
+// message and no way forward — the exact failure mode that has broken this
+// app's sign-in three times before. So: hard 12s ceiling, and a catch that
+// always releases the UI with a sentence.
+const CODE_SUBMIT_TIMEOUT_MS = 12_000;
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error("__code_submit_timeout__")),
+      ms
+    );
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      }
+    );
+  });
+}
 
 export function CodeEntryStep({
   onBack,
@@ -18,10 +46,11 @@ export function CodeEntryStep({
   }, []);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const cleaned = e.target.value
-      .toUpperCase()
-      .replace(/[^A-Z2-9]/g, "")
-      .slice(0, 6);
+    // Same canonicalisation the server applies, imported rather than repeated
+    // so the box can never silently eat a character the resolver would have
+    // accepted. It keeps the digit 0 (a check-in volunteer code starts with
+    // one) and rewrites a typed letter O into it.
+    const cleaned = normalizeAccessCodeInput(e.target.value).slice(0, 6);
     setCode(cleaned);
     if (error) setError(null);
   }
@@ -30,24 +59,40 @@ export function CodeEntryStep({
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const res = await validateAccessCode(code);
-      if (res.ok) {
-        // Tiny nav-tactile effect via vibration (supported on most Androids)
-        if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-          try {
-            navigator.vibrate?.(30);
-          } catch {
-            /* no-op */
-          }
-        }
-        onSuccess(res.redirect);
-      } else {
-        setError(res.error);
-        // Shake by re-triggering animation
+      const shake = () => {
         inputRef.current?.classList.remove("animate-shake");
         // Force reflow then re-add
         void inputRef.current?.offsetWidth;
         inputRef.current?.classList.add("animate-shake");
+      };
+      try {
+        const res = await withTimeout(
+          validateAccessCode(code),
+          CODE_SUBMIT_TIMEOUT_MS
+        );
+        if (res.ok) {
+          // Tiny nav-tactile effect via vibration (supported on most Androids)
+          if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+            try {
+              navigator.vibrate?.(30);
+            } catch {
+              /* no-op */
+            }
+          }
+          onSuccess(res.redirect);
+        } else {
+          setError(res.error);
+          shake();
+        }
+      } catch (e) {
+        const timedOut =
+          e instanceof Error && e.message === "__code_submit_timeout__";
+        setError(
+          timedOut
+            ? "Sign-in did not answer in 12 seconds. Check the Wi-Fi, then tap Unlock again."
+            : "Something went wrong signing you in. Tap Unlock to try again."
+        );
+        shake();
       }
     });
   }
@@ -73,8 +118,9 @@ export function CodeEntryStep({
           Enter your 6-character code
         </h1>
         <p className="mt-3 text-sm text-navy/60 leading-relaxed max-w-sm mx-auto">
-          Your chapter admin shared this with you. Codes are case-insensitive and
-          never contain 0, O, 1 or I.
+          Your chapter admin shared this with you. Codes are case-insensitive.
+          Student codes never contain 0, O, 1 or I — a check-in volunteer code
+          always starts with a zero.
         </p>
       </div>
 

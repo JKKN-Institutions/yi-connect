@@ -12,9 +12,23 @@ import {
   appBaseUrl,
 } from "@/lib/auth/branded-password-reset";
 import { resolveFutureAccessOrNull } from "@/lib/yi-future/auth/require-access";
+import {
+  isVolunteerCodeShape,
+  normalizeAccessCodeInput,
+} from "@/lib/yi-future/access-code-shape";
 
 // ─── SHARED ─────────────────────────────────────────────────────────
-type AccessCodeRole = "delegate" | "mentor" | "jury" | "partner" | "expert";
+// "volunteer" = check-in desk staff (future.volunteers). They hold a 6-char
+// code like a delegate does but have NO auth account and NO delegate row. Their
+// code has a structurally different shape (leading zero) — see
+// lib/yi-future/access-code-shape.ts.
+type AccessCodeRole =
+  | "delegate"
+  | "mentor"
+  | "jury"
+  | "partner"
+  | "expert"
+  | "volunteer";
 
 type SessionPayload = {
   type: AccessCodeRole;
@@ -22,10 +36,6 @@ type SessionPayload = {
   edition_id: string;
   name?: string;
 };
-
-function normalizeCode(raw: string): string {
-  return raw.trim().toUpperCase().replace(/[^A-Z2-9]/g, "");
-}
 
 // ─── LOGIN ADMIN (Supabase Auth) ────────────────────────────────────
 export type LoginResult = { ok: true } | { ok: false; error: string };
@@ -71,15 +81,102 @@ export type AccessCodeResult =
   | { ok: true; redirect: string }
   | { ok: false; error: string };
 
+const NOT_RECOGNIZED =
+  "That code was not recognized. Check the letters and try again.";
+
 export async function validateAccessCode(
   codeRaw: string
 ): Promise<AccessCodeResult> {
-  const code = normalizeCode(codeRaw);
+  const code = normalizeAccessCodeInput(codeRaw);
   if (code.length !== 6) {
     return { ok: false, error: "Access code must be 6 characters." };
   }
 
   const svc = await createServiceClient();
+
+  // ─── SHAPE ROUTING ────────────────────────────────────────────────
+  // Access-code uniqueness in this schema is PER TABLE; there is no global
+  // uniqueness across code-holders. Rather than pick a winner for a collision
+  // (impersonation one way, privilege escalation the other) or refuse an
+  // ambiguous code — which fails at the worst possible moment, a volunteer
+  // standing at a busy desk on event day — volunteer codes are given a shape
+  // the other five generators provably cannot produce: a leading ZERO, which
+  // is not in their 32-character alphabet at all.
+  //
+  // So the code itself says who it belongs to. A 0-leading code is looked up
+  // ONLY in future.volunteers; anything else is never looked up there. There
+  // is no ambiguous case to handle, because there is no code that can be both.
+  // See lib/yi-future/access-code-shape.ts for the guarantee and the one
+  // change that would break it.
+  if (isVolunteerCodeShape(code)) {
+    // future.volunteers is new and not in the generated types → loose client.
+    //
+    // Wrapped in try/catch on purpose: until the migration is applied the
+    // table does not exist and PostgREST answers with an error body, and a
+    // genuine throw (network, client change) must still end in a sentence
+    // rather than a 500 at the desk.
+    type VolunteerRow = {
+      id: string;
+      edition_id: string;
+      full_name: string | null;
+      is_active: boolean | null;
+      arrived: boolean | null;
+    };
+    let volunteer: VolunteerRow | null = null;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (svc as any)
+        .schema("future")
+        .from("volunteers")
+        .select("id, edition_id, full_name, is_active, arrived")
+        .eq("access_code", code)
+        .maybeSingle();
+      volunteer = (data as VolunteerRow | null) ?? null;
+    } catch {
+      volunteer = null;
+    }
+
+    // No volunteer holds this code. It cannot belong to a delegate/mentor/
+    // jury/partner/expert either — none of their codes can start with a zero —
+    // so this is a mistyped or retired code, and the ordinary answer is right.
+    if (!volunteer) return { ok: false, error: NOT_RECOGNIZED };
+
+    // Explicit denial — the code holder is legitimate, so say what happened
+    // rather than "not recognized" (which would send them hunting for typos).
+    if (volunteer.is_active === false) {
+      return {
+        ok: false,
+        error:
+          "This volunteer code has been switched off. Ask your chapter chair to turn it back on.",
+      };
+    }
+
+    await writeSession({
+      type: "volunteer",
+      id: volunteer.id,
+      edition_id: volunteer.edition_id,
+      name: volunteer.full_name ?? undefined,
+    });
+
+    // First sign-in stamps arrival so the chair can see the desk is staffed.
+    // Best-effort and SWALLOWED: the cookie is already written above, so a
+    // throw here would report "sign-in failed" to somebody who is in fact
+    // signed in — the worst possible message at a desk.
+    if (!volunteer.arrived) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (svc as any)
+          .schema("future")
+          .from("volunteers")
+          .update({ arrived: true, arrived_at: new Date().toISOString() })
+          .eq("id", volunteer.id);
+      } catch {
+        /* non-fatal — arrival stamp only */
+      }
+    }
+
+    return { ok: true, redirect: "/yi-future/volunteer" };
+  }
 
   // 1. Delegate
   const { data: delegate } = (await svc
@@ -191,10 +288,7 @@ export async function validateAccessCode(
     return { ok: true, redirect: "/yi-future/expert" };
   }
 
-  return {
-    ok: false,
-    error: "That code was not recognized. Check the letters and try again.",
-  };
+  return { ok: false, error: NOT_RECOGNIZED };
 }
 
 // ─── EMAIL ME MY CODE (delegate lost access code — BUG-477) ─────────

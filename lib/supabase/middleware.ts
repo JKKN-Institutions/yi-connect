@@ -332,6 +332,11 @@ function handleYiFutureAuth(
     '/yi-future/mentor': 'mentor',
     '/yi-future/jury': 'jury',
     '/yi-future/partner': 'partner',
+    // Check-in desk staff (future.volunteers). Without this entry the route
+    // would fall through to the default allow at the bottom of this function,
+    // i.e. be publicly reachable. The page re-verifies the volunteer row
+    // server-side; this is the outer, cheap layer.
+    '/yi-future/volunteer': 'volunteer',
   }
   for (const [path, expectedType] of Object.entries(accessCodeRoles)) {
     if (pathname === path || pathname.startsWith(path + '/')) {
@@ -340,7 +345,9 @@ function handleYiFutureAuth(
         supabaseResponse,
         'yifuture_session',
         expectedType,
-        '/yi-future/join'
+        // A volunteer is not a delegate — never send them to the student
+        // registration form. Send them back to the code door.
+        expectedType === 'volunteer' ? '/yi-future/access' : '/yi-future/join'
       )
     }
   }
@@ -358,6 +365,7 @@ const YIFUTURE_ROLE_HOME: Record<string, string> = {
   mentor: '/yi-future/mentor',
   jury: '/yi-future/jury',
   partner: '/yi-future/partner',
+  volunteer: '/yi-future/volunteer',
 }
 
 /**

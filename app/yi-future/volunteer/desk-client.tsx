@@ -383,7 +383,7 @@ export function DeskClient({
               <option value="">— pick the session —</option>
               {sessions.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {new Date(s.scheduled_at).toLocaleString("en-IN", {
+                  {new Date(s.scheduled_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",
                     dateStyle: "medium",
                     timeStyle: "short",
                   })}{" "}

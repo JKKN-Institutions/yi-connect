@@ -171,7 +171,7 @@ export default async function HostPostEventPage({
             {report.submitted_at && (
               <span className="text-navy/40">
                 {" "}
-                · {new Date(report.submitted_at).toLocaleString()}
+                · {new Date(report.submitted_at).toLocaleString(undefined, { timeZone: "Asia/Kolkata" })}
               </span>
             )}
           </p>

@@ -152,7 +152,7 @@ export default async function HostDeliverablesPage() {
         {deliverable?.submitted_at && (
           <p className="mt-1 text-xs text-navy/50">
             Last saved:{" "}
-            {new Date(deliverable.submitted_at).toLocaleString("en-IN")}
+            {new Date(deliverable.submitted_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}
           </p>
         )}
       </div>

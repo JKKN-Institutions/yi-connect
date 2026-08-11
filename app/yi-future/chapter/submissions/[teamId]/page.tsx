@@ -145,7 +145,7 @@ export default async function AdminSubmissionDetailPage({
                 {s?.submitted_at && (
                   <div className="text-xs text-navy/50 mt-0.5">
                     Submitted{" "}
-                    {new Date(s.submitted_at).toLocaleString("en-IN", {
+                    {new Date(s.submitted_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",
                       dateStyle: "medium",
                       timeStyle: "short",
                     })}

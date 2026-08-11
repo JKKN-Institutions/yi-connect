@@ -378,7 +378,7 @@ export default async function MyTeamPage() {
               on{" "}
               {new Date(openUnlockRequest.created_at).toLocaleDateString(
                 undefined,
-                { day: "numeric", month: "short" }
+                { timeZone: "Asia/Kolkata", day: "numeric", month: "short" }
               )}
               . Your chapter admin will see it on their Teams page — once they
               unlock the team you can edit members, invites and the problem
@@ -710,7 +710,7 @@ export default async function MyTeamPage() {
               {team.frozen_at && (
                 <>
                   {" on "}
-                  {new Date(team.frozen_at).toLocaleDateString(undefined, {
+                  {new Date(team.frozen_at).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata",
                     day: "numeric",
                     month: "short",
                     year: "numeric",

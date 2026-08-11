@@ -98,7 +98,7 @@ async function getAttendance(eventId: string): Promise<AttendanceRow[]> {
 }
 
 function fmt(iso: string): string {
-  return new Date(iso).toLocaleString("en-IN", {
+  return new Date(iso).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",
     dateStyle: "medium",
     timeStyle: "short",
   });

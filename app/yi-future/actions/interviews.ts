@@ -121,7 +121,7 @@ export async function scheduleInterview(
     const org =
       (partner as { organization: string | null } | null)?.organization ??
       "A partner";
-    const when = new Date(scheduled_at).toLocaleString("en-IN", {
+    const when = new Date(scheduled_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",
       dateStyle: "medium",
       timeStyle: "short",
     });

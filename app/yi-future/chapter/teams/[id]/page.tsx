@@ -266,7 +266,7 @@ export default async function TeamDetailPage({
                   (
                   {new Date(unlockRequest.created_at).toLocaleDateString(
                     undefined,
-                    { day: "numeric", month: "short" }
+                    { timeZone: "Asia/Kolkata", day: "numeric", month: "short" }
                   )}
                   )
                 </span>

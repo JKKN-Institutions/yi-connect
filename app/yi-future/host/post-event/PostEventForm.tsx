@@ -145,7 +145,7 @@ export function PostEventForm({
         <div className="flex items-center justify-between gap-3 pt-2">
           <p className="text-xs text-navy/50">
             {savedAt
-              ? `Draft saved · ${new Date(savedAt).toLocaleString()}`
+              ? `Draft saved · ${new Date(savedAt).toLocaleString(undefined, { timeZone: "Asia/Kolkata" })}`
               : "Not saved yet."}
           </p>
           <div className="flex items-center gap-3">

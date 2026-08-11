@@ -16,6 +16,10 @@
     {
       "path": "/yi-future/api/cron/lock-teams",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/yip/api/cron/formation-drain-emails",
+      "schedule": "*/5 * * * *"
     }
   ],
   "headers": [

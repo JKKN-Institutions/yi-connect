@@ -33,6 +33,7 @@ import {
   type ImportDelegateRow,
   type ImportedDelegate,
 } from "@/lib/yi-future/delegate-import";
+import { safeError } from "@/lib/yi-future/db-error";
 
 type Svc = Awaited<ReturnType<typeof createServiceClient>>;
 

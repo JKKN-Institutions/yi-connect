@@ -11,6 +11,7 @@ import {
   rankTeams,
   type CriteriaScores,
 } from "@/lib/yi-future/rubric";
+import { MEMBER_CRITERIA } from "@/lib/yi-future/member-rubric";
 
 type Team = {
   id: string;
@@ -136,6 +137,75 @@ async function getTeamMembers(
   );
 }
 
+// member_evaluations is not in the generated types yet — same cast pattern the
+// action files use (placement-override.ts, team-invites.ts).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyClient = any;
+
+type MemberEvalRow = {
+  jury_id: string;
+  team_id: string;
+  delegate_id: string;
+  scores: Record<string, number> | null;
+};
+
+/**
+ * Individual Recognition scores (future.member_evaluations).
+ *
+ * These were written by jurors from #866 onward and read by NO admin screen
+ * until now — a juror could score a delegate and nobody running the chapter
+ * could ever see it. Scoped to this chapter's teams, and paginated because a
+ * team can have 5 members × several jurors, which passes PostgREST's ~1000-row
+ * cap faster than the team count suggests.
+ *
+ * Unlike the team table above this does NOT filter to submitted: an individual
+ * score on a still-open scorecard is real and the organiser needs to see it.
+ */
+async function getMemberEvaluations(
+  chapterId: string,
+  editionId: string
+): Promise<MemberEvalRow[]> {
+  const svc = await createServiceClient();
+  return await fetchAllRows<MemberEvalRow>((from, to) =>
+    (svc as unknown as AnyClient)
+      .schema("future")
+      .from("member_evaluations")
+      .select(
+        "jury_id, team_id, delegate_id, scores, teams!inner(chapter_id, edition_id)"
+      )
+      .eq("teams.chapter_id", chapterId)
+      .eq("teams.edition_id", editionId)
+      .order("team_id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: MemberEvalRow[] | null;
+      error: unknown;
+    }>
+  );
+}
+
+/** delegate id -> full name, for the rows above. Names only, nothing else. */
+async function getDelegateNames(
+  chapterId: string,
+  editionId: string
+): Promise<Map<string, string>> {
+  const svc = await createServiceClient();
+  const rows = await fetchAllRows<{ id: string; full_name: string }>(
+    (from, to) =>
+      svc
+        .schema("future")
+        .from("delegates")
+        .select("id, full_name")
+        .eq("chapter_id", chapterId)
+        .eq("edition_id", editionId)
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: { id: string; full_name: string }[] | null;
+        error: unknown;
+      }>
+  );
+  return new Map(rows.map((r) => [r.id, r.full_name]));
+}
+
 async function getAllAttendance(
   phaseEventIds: string[]
 ): Promise<AttendanceRow[]> {
@@ -216,13 +286,72 @@ export default async function ScoringPage() {
   const ctx = await getChapterContext();
   if (!ctx) redirect("/yi-future/chapter");
 
-  const [teams, evals, rubric, phaseEvents, teamMembers] = await Promise.all([
+  const [
+    teams,
+    evals,
+    rubric,
+    phaseEvents,
+    teamMembers,
+    memberEvals,
+    delegateNames,
+  ] = await Promise.all([
     getTeams(ctx.chapterId, ctx.editionId),
     getEvaluations(ctx.chapterId, ctx.editionId),
     getDefaultRubric(ctx.editionId),
     getPhaseEvents(ctx.chapterId, ctx.editionId),
     getTeamMembers(ctx.chapterId, ctx.editionId),
+    getMemberEvaluations(ctx.chapterId, ctx.editionId),
+    getDelegateNames(ctx.chapterId, ctx.editionId),
   ]);
+
+  // Individual Recognition, grouped team -> delegate -> that delegate's scores
+  // averaged across whichever jurors scored them. These do NOT feed the team
+  // total by design (see lib/yi-future/member-rubric.ts) — this section only
+  // makes them visible.
+  // Juror names come from the evaluations join. A juror who scored a delegate
+  // but has no team evaluation row yet falls back to "a juror" rather than
+  // leaking a raw uuid onto the screen.
+  const jurorNameById = new Map(
+    evals
+      .filter((e) => e.jury_assignments?.jury_name)
+      .map((e) => [e.jury_id, e.jury_assignments!.jury_name])
+  );
+  const memberScoresByTeam = new Map<
+    string,
+    {
+      delegateId: string;
+      name: string;
+      perCriterion: Map<string, { total: number; count: number }>;
+      jurors: Set<string>;
+    }[]
+  >();
+  for (const row of memberEvals) {
+    if (!row.scores) continue;
+    if (!memberScoresByTeam.has(row.team_id)) {
+      memberScoresByTeam.set(row.team_id, []);
+    }
+    const list = memberScoresByTeam.get(row.team_id)!;
+    let entry = list.find((d) => d.delegateId === row.delegate_id);
+    if (!entry) {
+      entry = {
+        delegateId: row.delegate_id,
+        name: delegateNames.get(row.delegate_id) ?? "(unknown delegate)",
+        perCriterion: new Map(),
+        jurors: new Set(),
+      };
+      list.push(entry);
+    }
+    entry.jurors.add(jurorNameById.get(row.jury_id) ?? "a juror");
+    for (const c of MEMBER_CRITERIA) {
+      const v = row.scores[c.key];
+      if (typeof v !== "number") continue;
+      const acc = entry.perCriterion.get(c.key) ?? { total: 0, count: 0 };
+      acc.total += v;
+      acc.count += 1;
+      entry.perCriterion.set(c.key, acc);
+    }
+  }
+  const totalMemberScored = memberEvals.length;
 
   // Journey score computation. Fetch attendance by phase event (a handful per
   // chapter) rather than by a huge delegate-id list; computeTeamJourneyScores
@@ -440,6 +569,81 @@ export default async function ScoringPage() {
           </div>
         </section>
       )}
+
+      {/* Individual Recognition — per-delegate scores. Written by jurors since
+          #866 and, until now, displayed nowhere. Deliberately does NOT feed any
+          team total; this is for best-delegate style recognition only. */}
+      <div className="bg-white border border-navy/10 rounded-lg p-4">
+        <h3 className="text-sm font-semibold text-navy">
+          Individual Recognition
+        </h3>
+        <p className="mt-1 text-xs text-navy/50">
+          Per-delegate scores from the jury screen, averaged across whichever
+          jurors scored that delegate. These do not change any team&apos;s total
+          or rank — they are for individual awards.
+        </p>
+
+        {totalMemberScored === 0 ? (
+          <p className="mt-3 text-sm text-navy/50">
+            No delegate has been scored individually yet. Scores appear here as
+            jurors fill in the Individual Recognition section.
+          </p>
+        ) : (
+          <div className="mt-3 space-y-4">
+            {teams.map((t) => {
+              const rows = memberScoresByTeam.get(t.id);
+              if (!rows || rows.length === 0) return null;
+              return (
+                <div key={t.id}>
+                  <div className="text-xs font-semibold text-navy">
+                    {t.team_name}
+                  </div>
+                  <div className="mt-1 overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-[10px] uppercase tracking-widest text-navy/40">
+                          <th className="py-1 pr-3">Delegate</th>
+                          {MEMBER_CRITERIA.map((c) => (
+                            <th key={c.key} className="py-1 pr-3">
+                              {c.label} /{c.max}
+                            </th>
+                          ))}
+                          <th className="py-1 pr-3">Scored by</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((d) => (
+                          <tr
+                            key={d.delegateId}
+                            className="border-t border-navy/5"
+                          >
+                            <td className="py-1 pr-3 font-medium text-navy">
+                              {d.name}
+                            </td>
+                            {MEMBER_CRITERIA.map((c) => {
+                              const acc = d.perCriterion.get(c.key);
+                              return (
+                                <td key={c.key} className="py-1 pr-3">
+                                  {acc && acc.count > 0
+                                    ? (acc.total / acc.count).toFixed(1)
+                                    : "—"}
+                                </td>
+                              );
+                            })}
+                            <td className="py-1 pr-3 text-xs text-navy/50">
+                              {Array.from(d.jurors).join(", ")}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       <p className="text-xs text-navy/40">
         <Link

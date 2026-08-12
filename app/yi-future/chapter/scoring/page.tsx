@@ -282,7 +282,13 @@ function computeTeamJourneyScores(
   return result;
 }
 
-export default async function ScoringPage() {
+export default async function ScoringPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ present?: string }>;
+}) {
+  const { present: presentFlag } = await searchParams;
+  const showPresentOnly = presentFlag === "1";
   const ctx = await getChapterContext();
   if (!ctx) redirect("/yi-future/chapter");
 
@@ -394,8 +400,26 @@ export default async function ScoringPage() {
     };
   });
 
+  // Ranks are computed across EVERY team before any display filter, so hiding
+  // absent teams can never change who is #1.
   const ranked = rankTeams(teamAggregates.filter((a) => a.count > 0));
   const rankByTeam = new Map(ranked.map((r) => [r.team_id, r.rank]));
+
+  // "Checked in only" — teams with at least one member marked present, which is
+  // exactly the set the jury screen now shows. Reuses attendance and membership
+  // already loaded above, so the toggle costs no extra query.
+  const presentDelegateIds = new Set(
+    allAttendance.filter((a) => a.attended).map((a) => a.delegate_id)
+  );
+  const presentTeamIds = new Set(
+    teamMembers
+      .filter((m) => presentDelegateIds.has(m.delegate_id))
+      .map((m) => m.team_id)
+  );
+  const visibleAggregates = showPresentOnly
+    ? teamAggregates.filter((a) => presentTeamIds.has(a.team_id))
+    : teamAggregates;
+  const absentCount = teamAggregates.length - presentTeamIds.size;
 
   const totalMax = rubric?.total_max ?? 100;
   const threshold = rubric?.threshold_for_national ?? 70;
@@ -412,6 +436,37 @@ export default async function ScoringPage() {
             Evaluations averaged across jurors. Threshold {threshold}/
             {totalMax} to advance to nationals.
           </p>
+          {/* Same set the jury screen shows: at least one member checked in.
+              Ranks are computed across every team before this filter, so the
+              numbers never move — only which rows are listed. */}
+          <div className="mt-2 flex items-center gap-2 text-xs">
+            <Link
+              href="/yi-future/chapter/scoring"
+              className={
+                showPresentOnly
+                  ? "px-2 py-1 rounded-full border border-navy/20 text-navy/60 hover:border-navy/40"
+                  : "px-2 py-1 rounded-full bg-navy text-ivory font-semibold"
+              }
+            >
+              All teams ({teamAggregates.length})
+            </Link>
+            <Link
+              href="/yi-future/chapter/scoring?present=1"
+              className={
+                showPresentOnly
+                  ? "px-2 py-1 rounded-full bg-navy text-ivory font-semibold"
+                  : "px-2 py-1 rounded-full border border-navy/20 text-navy/60 hover:border-navy/40"
+              }
+            >
+              Checked in only ({presentTeamIds.size})
+            </Link>
+            {showPresentOnly && absentCount > 0 && (
+              <span className="text-navy/50">
+                {absentCount} {absentCount === 1 ? "team" : "teams"} hidden —
+                nobody checked in. Ranks still count every team.
+              </span>
+            )}
+          </div>
         </div>
         <Link
           href={`/api/csv/scoring?chapter_id=${ctx.chapterId}`}
@@ -441,17 +496,19 @@ export default async function ScoringPage() {
             </tr>
           </thead>
           <tbody>
-            {teamAggregates.length === 0 ? (
+            {visibleAggregates.length === 0 ? (
               <tr>
                 <td
                   colSpan={7}
                   className="px-4 py-6 text-center text-navy/40"
                 >
-                  No teams.
+                  {showPresentOnly && teamAggregates.length > 0
+                    ? "No team has anyone checked in yet."
+                    : "No teams."}
                 </td>
               </tr>
             ) : (
-              teamAggregates.map((a) => {
+              visibleAggregates.map((a) => {
                 const rank = rankByTeam.get(a.team_id);
                 return (
                   <tr key={a.team_id} className="border-t border-navy/5">

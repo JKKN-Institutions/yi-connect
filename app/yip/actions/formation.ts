@@ -806,11 +806,33 @@ export async function closeFormationStep(
   const steps = await loadSteps(supabase, eventId);
   const step = steps.find((s) => s.step_key === stepKey);
   if (!step) return { success: false, error: "Formation step not found" };
-  if (step.status !== "open") {
-    return { success: false, error: "Only an open step can be closed." };
-  }
 
+  // The organiser-mode 'appointments' step has no ballot and no window —
+  // appointments are made inline on the panel whenever, then the organiser
+  // marks the step complete. It therefore closes directly from 'pending'
+  // (rehearsal-caught 2026-08-12: it has no "Open" control, so requiring
+  // 'open' first made it un-completable and blocked Lock). Election steps
+  // still must be opened before they can be closed.
   if (def.mode === "organiser") {
+    if (step.status === "closed" || step.status === "locked") {
+      return { success: false, error: "This step is already complete." };
+    }
+    // Sequencing: every earlier step must be closed first (mirrors
+    // openFormationStep) so appointments can't be finished before the
+    // elections that seat the benches it draws from.
+    const blocker = steps.find(
+      (s) =>
+        s.step_order < step.step_order &&
+        s.status !== "closed" &&
+        s.status !== "locked"
+    );
+    if (blocker) {
+      const bDef = formationStepDef(blocker.step_key);
+      return {
+        success: false,
+        error: `Finish "${bDef?.label ?? blocker.step_key}" first — steps run in order.`,
+      };
+    }
     const upErr = await updateStep(supabase, eventId, stepKey, {
       status: "closed",
       closed_at_ts: new Date().toISOString(),
@@ -821,6 +843,10 @@ export async function closeFormationStep(
       success: true,
       data: { tie: false, tiedSessionIds: [], runoffOffered: false },
     };
+  }
+
+  if (step.status !== "open") {
+    return { success: false, error: "Only an open election step can be closed." };
   }
 
   if (step.session_ids.length === 0) {

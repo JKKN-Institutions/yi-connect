@@ -20,6 +20,7 @@ import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { resolveFutureAccessOrNull } from "@/lib/yi-future/auth/require-access";
 import type { MergeClusterResult } from "@/lib/yi-future/college-dedupe";
+import { safeError } from "@/lib/yi-future/db-error";
 
 export async function mergeCollegeCluster(input: {
   chapterId: string;
@@ -63,7 +64,7 @@ export async function mergeCollegeCluster(input: {
     .from("colleges")
     .select("id, name, chapter_id, is_approved, merged_into")
     .in("id", [targetId, ...sourceIds]);
-  if (readErr) return { ok: false, error: readErr.message };
+  if (readErr) return { ok: false, error: safeError(readErr.message, "college-dedupe.mergeCollegeCluster") };
 
   const rows =
     (rowsRaw as {
@@ -103,7 +104,7 @@ export async function mergeCollegeCluster(input: {
       .from("colleges")
       .update({ is_approved: true } as never)
       .eq("id", targetId);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: safeError(error.message, "college-dedupe.mergeCollegeCluster") };
   }
 
   // ─── 4. Merge, one source at a time ───────────────────────────────────

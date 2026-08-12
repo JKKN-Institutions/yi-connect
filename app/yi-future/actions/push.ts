@@ -17,6 +17,7 @@ import type {
   SaveSubscriptionInput,
   PushSaveResult,
 } from "./push-types";
+import { safeError } from "@/lib/yi-future/db-error";
 
 type SubjectType = PushSubjectType;
 type SaveResult = PushSaveResult;
@@ -83,7 +84,7 @@ export async function savePushSubscription(
     .from("push_subscriptions")
     .upsert(row, { onConflict: "endpoint" });
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "push.savePushSubscription") };
   return { ok: true };
 }
 
@@ -115,7 +116,7 @@ export async function removePushSubscription(
     .eq("subject_id", subject.id)
     .eq("endpoint", endpoint);
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "push.removePushSubscription") };
   return { ok: true };
 }
 
@@ -194,7 +195,7 @@ export async function subscribeToPush(
     .from("push_subscriptions")
     .upsert(row, { onConflict: "user_id,endpoint" });
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "push.subscribeToPush") };
   return { ok: true };
 }
 
@@ -221,7 +222,7 @@ export async function unsubscribeFromPush(
     .eq("user_id", user.id)
     .eq("endpoint", endpoint);
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "push.unsubscribeFromPush") };
   return { ok: true };
 }
 

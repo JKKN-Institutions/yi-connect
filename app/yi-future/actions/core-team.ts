@@ -13,6 +13,7 @@ import {
   resolveOrCreateSignInAccount,
 } from "@/lib/yi-future/auth/core-team-login";
 import type { CreateLoginResult } from "@/lib/yi-future/auth/core-team-login";
+import { safeError } from "@/lib/yi-future/db-error";
 
 type CoreTeamRole = Database["future"]["Enums"]["user_role"];
 
@@ -156,7 +157,7 @@ export async function addCoreTeamMember(
       user_id,
       is_active: true,
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "core-team.addCoreTeamMember") };
 
   revalidatePath("/yi-future/chapter/setup");
 
@@ -201,7 +202,7 @@ export async function updateCoreTeamMember(
     .from("chapter_core_team")
     .update({ full_name, email, phone, role: role as CoreTeamRole })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "core-team.updateCoreTeamMember") };
 
   revalidatePath("/yi-future/chapter/setup");
   return { ok: true, message: "Updated." };
@@ -244,7 +245,7 @@ export async function removeCoreTeamMember(
     .from("chapter_core_team")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "core-team.removeCoreTeamMember") };
   revalidatePath("/yi-future/chapter/setup");
   return { ok: true, message: "Removed." };
 }

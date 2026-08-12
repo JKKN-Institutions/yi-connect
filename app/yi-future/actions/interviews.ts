@@ -7,6 +7,7 @@ import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
 import { sendPushToSubject } from "@/lib/yi-future/push";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 type InterviewOutcome = Database["future"]["Enums"]["interview_outcome"];
 
@@ -106,7 +107,7 @@ export async function scheduleInterview(
       duration_minutes,
       room,
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "interviews.scheduleInterview") };
 
   revalidatePath("/yi-future/host/interviews");
 
@@ -153,7 +154,7 @@ export async function setInterviewOutcome(
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "interviews.setInterviewOutcome") };
   revalidatePath("/yi-future/host/interviews");
   revalidatePath("/partner");
   return { ok: true };
@@ -167,7 +168,7 @@ export async function deleteInterview(id: string): Promise<ActionResult> {
     .from("interview_slots")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "interviews.deleteInterview") };
   revalidatePath("/yi-future/host/interviews");
   return { ok: true, message: "Interview removed." };
 }

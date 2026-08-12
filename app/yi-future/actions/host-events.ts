@@ -6,6 +6,7 @@ import { createClient, createServiceClient } from "@/lib/yi-future/supabase/serv
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 type EventType = Database["future"]["Enums"]["event_type"];
 
@@ -66,7 +67,7 @@ export async function createNationalEvent(
       is_published: false,
       created_by: userId,
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "host-events.createNationalEvent") };
 
   revalidatePath("/yi-future/host");
   redirect("/yi-future/host");
@@ -101,7 +102,7 @@ export async function updateNationalEvent(
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "host-events.updateNationalEvent") };
 
   revalidatePath("/yi-future/host");
   return { ok: true, message: "Event updated." };
@@ -118,7 +119,7 @@ export async function publishNationalEvent(
     .from("events")
     .update({ is_published: publish })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "host-events.publishNationalEvent") };
   revalidatePath("/yi-future/host");
   return { ok: true };
 }

@@ -12,6 +12,7 @@ import {
 } from "@/lib/yi-future/stage-machine";
 import { TEAM_SIZE_MIN } from "@/lib/yi-future/constants";
 import { requireFutureNationalAdmin } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 // NATIONAL scope: advancing an edition's stage moves ALL 65 chapters at once,
 // so a single chapter chair must not be able to do it.
@@ -126,7 +127,7 @@ export async function advanceEditionStage(input: {
       updated_at: new Date().toISOString(),
     })
     .eq("id", input.editionId);
-  if (updErr) return { ok: false, error: updErr.message };
+  if (updErr) return { ok: false, error: safeError(updErr.message, "stages.advanceEditionStage") };
 
   await svc
     .schema("future")

@@ -256,7 +256,9 @@ export async function importDelegatesChunk(input: {
       if (error.code === "23505") {
         skipped++;
       } else {
-        errors.push(`${r.full_name}: ${error.message}`);
+        errors.push(
+          `${r.full_name}: ${safeError(error.message, "delegate-import.importDelegatesChunk")}`
+        );
       }
       continue;
     }

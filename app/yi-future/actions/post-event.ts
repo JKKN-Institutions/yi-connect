@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 import type { ActionResult } from "./editions";
+import { safeError } from "@/lib/yi-future/db-error";
 
 export type PostEventInput = {
   turnout_count: number | null;
@@ -143,7 +144,7 @@ export async function saveDraft(
         status: "draft",
       } as never)
       .eq("id", existing.id);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: safeError(error.message, "post-event.saveDraft") };
   } else {
     const { error } = await (svc as unknown as {
       schema: (s: string) => {
@@ -165,7 +166,7 @@ export async function saveDraft(
         media_gallery_paths: gallery,
         status: "draft",
       } as never);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: safeError(error.message, "post-event.saveDraft") };
   }
 
   revalidatePath("/yi-future/host/post-event");
@@ -216,7 +217,7 @@ export async function submit(eventId: string): Promise<ActionResult> {
       submitted_at: new Date().toISOString(),
     } as never)
     .eq("id", existing.id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "post-event.submit") };
 
   revalidatePath("/yi-future/host/post-event");
   return { ok: true, message: "Report submitted." };

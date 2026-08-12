@@ -334,20 +334,31 @@ export async function assignJuryToTrack(
   const { data: juryRow } = await svc
     .schema("future")
     .from("jury_assignments")
-    .select("id, edition_id")
+    .select("id, edition_id, chapter_id")
     .eq("id", juryId)
     .maybeSingle();
   if (!juryRow) return { ok: false, error: "Jury member not found." };
   const editionId = (juryRow as unknown as { edition_id: string }).edition_id;
+  const chapterId = (juryRow as unknown as { chapter_id: string | null })
+    .chapter_id;
+  // Fail closed: a jury row with no chapter cannot have its per-track cap
+  // computed safely, so refuse rather than count edition-wide.
+  if (!chapterId) {
+    return { ok: false, error: "Jury member is not scoped to a chapter." };
+  }
 
-  // Current ACTIVE panel for this track within the same edition.
+  // Current ACTIVE panel for this track within THIS CHAPTER's edition.
+  // Without the chapter_id filter the cap counted every chapter's jurors,
+  // so a track could read "full" (10/10) on another chapter's jurors and
+  // block this chapter from adding its own even with zero of its own on it.
   // jury_track_assignments is not in generated types yet → cast (established pattern).
   const { data: panelRows, error: panelErr } = await (svc as any)
     .schema("future")
     .from("jury_track_assignments")
-    .select("jury_id, jury_assignments!inner(edition_id, is_active)")
+    .select("jury_id, jury_assignments!inner(edition_id, chapter_id, is_active)")
     .eq("track_id", trackId)
     .eq("jury_assignments.edition_id", editionId)
+    .eq("jury_assignments.chapter_id", chapterId)
     .eq("jury_assignments.is_active", true);
   if (panelErr) return { ok: false, error: panelErr.message };
 

@@ -106,14 +106,21 @@ async function getTeams(
 // Multi-track jury memberships (future.jury_track_assignments — not in
 // generated types yet, hence the cast; established codebase pattern).
 async function getJuryTrackMemberships(
-  editionId: string
+  editionId: string,
+  chapterId: string
 ): Promise<JuryTrackRow[]> {
   const svc = await createServiceClient();
+  // Scope to THIS chapter: without the chapter_id filter the "N/10 jury"
+  // track counts (and the per-track "full" cap) counted every chapter's
+  // jurors in the edition, so a chapter with 1 juror showed e.g. 4/10.
   const { data } = await (svc as any)
     .schema("future")
     .from("jury_track_assignments")
-    .select("jury_id, track_id, jury_assignments!inner(edition_id, is_active)")
-    .eq("jury_assignments.edition_id", editionId);
+    .select(
+      "jury_id, track_id, jury_assignments!inner(edition_id, chapter_id, is_active)"
+    )
+    .eq("jury_assignments.edition_id", editionId)
+    .eq("jury_assignments.chapter_id", chapterId);
   return (data as unknown as JuryTrackRow[]) ?? [];
 }
 
@@ -176,7 +183,7 @@ export default async function JuryPage({
     getJury(ctx.editionId, ctx.chapterId),
     getTeams(ctx.chapterId, ctx.editionId),
     getTracks(ctx.editionId),
-    getJuryTrackMemberships(ctx.editionId),
+    getJuryTrackMemberships(ctx.editionId, ctx.chapterId),
   ]);
 
   const archCount: Record<JuryArchetype, number> = {

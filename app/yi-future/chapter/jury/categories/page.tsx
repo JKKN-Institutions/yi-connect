@@ -40,8 +40,13 @@ async function getTrackSummaries(
       (svc as any)
         .schema("future")
         .from("jury_track_assignments")
-        .select("jury_id, track_id, jury_assignments!inner(edition_id, is_active)")
+        // chapter_id filter: without it the per-track jury counts on this
+        // page summed every chapter's jurors in the edition, not this one's.
+        .select(
+          "jury_id, track_id, jury_assignments!inner(edition_id, chapter_id, is_active)"
+        )
         .eq("jury_assignments.edition_id", editionId)
+        .eq("jury_assignments.chapter_id", chapterId)
         .eq("jury_assignments.is_active", true),
       svc
         .schema("future")

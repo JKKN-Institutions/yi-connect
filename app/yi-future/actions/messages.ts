@@ -9,6 +9,7 @@ import {
   type SenderType as SharedSenderType,
   type Message as SharedMessage,
 } from "@/lib/messaging/actions";
+import { safeError } from "@/lib/yi-future/db-error";
 
 // ─── TYPES ──────────────────────────────────────────────────────────
 // Re-export the shared types so existing consumers keep working unchanged.
@@ -171,7 +172,7 @@ export async function getOrCreateThread(
   };
 
   if (error || !inserted) {
-    return { ok: false, error: error?.message ?? "Could not create thread." };
+    return { ok: false, error: safeError(error?.message, "messages") ?? "Could not create thread." };
   }
   return { ok: true, data: inserted };
 }

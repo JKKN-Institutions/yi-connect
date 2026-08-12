@@ -16,6 +16,7 @@ import {
   isVolunteerCodeShape,
   normalizeAccessCodeInput,
 } from "@/lib/yi-future/access-code-shape";
+import { safeError } from "@/lib/yi-future/db-error";
 
 // ─── SHARED ─────────────────────────────────────────────────────────
 // "volunteer" = check-in desk staff (future.volunteers). They hold a 6-char
@@ -46,7 +47,7 @@ export async function loginAdmin(
 ): Promise<LoginResult> {
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "auth") };
   return { ok: true };
 }
 

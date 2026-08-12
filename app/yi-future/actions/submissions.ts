@@ -7,6 +7,7 @@ import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 import { readSession } from "@/app/yi-future/actions/auth";
+import { safeError } from "@/lib/yi-future/db-error";
 
 type DeliverablePhase = Database["future"]["Enums"]["deliverable_phase"];
 type SubmissionStatus = Database["future"]["Enums"]["submission_status"];
@@ -150,7 +151,7 @@ export async function saveSubmissionDraft(input: {
       },
       { onConflict: "team_id,phase" }
     );
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "submissions") };
 
   revalidatePath("/yi-future/me/submissions");
   revalidatePath("/yi-future/chapter/submissions");
@@ -212,7 +213,7 @@ export async function submitSubmission(input: {
       },
       { onConflict: "team_id,phase" }
     );
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "submissions") };
 
   revalidatePath("/yi-future/me/submissions");
   revalidatePath("/yi-future/chapter/submissions");
@@ -270,7 +271,7 @@ export async function reviewSubmission(
       updated_at: new Date().toISOString(),
     })
     .eq("id", submissionId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "submissions") };
 
   revalidatePath("/yi-future/chapter/submissions");
   revalidatePath("/yi-future/me/submissions");

@@ -14,6 +14,7 @@ import {
   type RespondInviteResult,
   type UnfreezeTeamResult,
 } from "@/lib/yi-future/invite-error-codes";
+import { safeError } from "@/lib/yi-future/db-error";
 
 // `team_invitations` was added in migration 120 but generated types haven't
 // been regenerated yet — treat the schema client as untyped at the call site.
@@ -105,7 +106,7 @@ export async function createTeamAsDelegate(
     } as never)
     .select("id")
     .maybeSingle();
-  if (insErr) return { ok: false, error: insErr.message };
+  if (insErr) return { ok: false, error: safeError(insErr.message, "team-invites") };
 
   const teamId = (inserted as { id: string } | null)?.id;
   if (!teamId) return { ok: false, error: "Failed to create team." };
@@ -223,7 +224,7 @@ export async function sendInvite(input: {
         responded_at: null,
       } as never)
       .eq("id", existing.id);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: safeError(error.message, "team-invites") };
   } else {
     const { error } = await svc
       .schema("future")
@@ -235,7 +236,7 @@ export async function sendInvite(input: {
         message: input.message ?? null,
         status: "pending",
       } as never);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: safeError(error.message, "team-invites") };
   }
 
   revalidatePath("/yi-future/me/team/directory");
@@ -414,7 +415,7 @@ export async function freezeTeam(teamId: string): Promise<ActionResult> {
       updated_at: nowIso,
     } as never)
     .eq("id", teamId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "team-invites") };
 
   // Cancel all pending invites for this team
   await svc
@@ -469,7 +470,7 @@ export async function freezeAllTeams(): Promise<ActionResult> {
     .eq("chapter_id", ctx.chapterId)
     .eq("edition_id", ctx.editionId)
     .eq("is_frozen", false);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "team-invites") };
 
   revalidatePath("/yi-future/chapter/teams");
   revalidatePath("/yi-future/me/team");
@@ -503,7 +504,7 @@ export async function setTeamLockDeadline(
       .delete()
       .eq("chapter_id", ctx.chapterId)
       .eq("edition_id", ctx.editionId);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: safeError(error.message, "team-invites") };
     revalidatePath("/yi-future/chapter/teams");
     return { ok: true, message: "Automatic lock removed." };
   }
@@ -527,7 +528,7 @@ export async function setTeamLockDeadline(
       },
       { onConflict: "chapter_id,edition_id" }
     );
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "team-invites") };
 
   revalidatePath("/yi-future/chapter/teams");
   return { ok: true, message: "Automatic lock scheduled." };
@@ -577,7 +578,7 @@ export async function unfreezeAllTeams(): Promise<ActionResult> {
     .eq("chapter_id", ctx.chapterId)
     .eq("edition_id", ctx.editionId)
     .eq("is_frozen", true);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "team-invites") };
 
   // Auto-resolve this chapter's open unlock requests — unfreezing IS the
   // resolution, exactly as in unfreezeTeam. The open queue is small (at most
@@ -729,7 +730,7 @@ export async function requestTeamUnlock(
         error: "An unlock request for this team is already waiting for your chapter admin.",
       };
     }
-    return { ok: false, error: error.message };
+    return { ok: false, error: safeError(error.message, "team-invites") };
   }
 
   revalidatePath("/yi-future/me/team");
@@ -783,7 +784,7 @@ export async function pickProblemAsDelegate(
       updated_at: new Date().toISOString(),
     } as never)
     .eq("id", teamId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "team-invites") };
 
   revalidatePath("/yi-future/me/team");
   revalidatePath("/yi-future/me");
@@ -821,7 +822,7 @@ export async function clearProblemAsDelegate(
       updated_at: new Date().toISOString(),
     } as never)
     .eq("id", teamId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "team-invites") };
 
   revalidatePath("/yi-future/me/team");
   revalidatePath("/yi-future/me");
@@ -873,7 +874,7 @@ export async function setLeader(
       updated_at: new Date().toISOString(),
     } as never)
     .eq("id", teamId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "team-invites") };
 
   revalidatePath("/yi-future/me/team");
   return { ok: true, message: "Leader updated." };
@@ -928,7 +929,7 @@ export async function renameTeamAsCaptain(
     .from("teams")
     .update({ team_name: name, updated_at: new Date().toISOString() } as never)
     .eq("id", teamId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "team-invites") };
 
   revalidatePath("/yi-future/me");
   revalidatePath("/yi-future/me/team");
@@ -979,7 +980,7 @@ export async function leaveMyTeam(): Promise<ActionResult> {
     .delete()
     .eq("team_id", teamId)
     .eq("delegate_id", session.id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "team-invites") };
 
   // If the leaver was the designated leader, hand leadership back to the captain.
   if (team.leader_delegate_id === session.id) {
@@ -1053,7 +1054,7 @@ export async function deleteMyTeamAsCaptain(
     .from("teams")
     .delete()
     .eq("id", teamId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "team-invites") };
 
   revalidatePath("/yi-future/me");
   revalidatePath("/yi-future/me/team");
@@ -1114,7 +1115,7 @@ export async function removeMemberAsCaptain(
     .delete()
     .eq("team_id", teamId)
     .eq("delegate_id", delegateId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "team-invites") };
 
   // If the removed member was the designated leader, hand it back to the captain.
   if (team.leader_delegate_id === delegateId) {
@@ -1182,7 +1183,7 @@ export async function cancelTeamInvite(
       responded_at: new Date().toISOString(),
     } as never)
     .eq("id", inviteId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "team-invites") };
 
   revalidatePath("/yi-future/me/team");
   revalidatePath("/yi-future/me/team/directory");

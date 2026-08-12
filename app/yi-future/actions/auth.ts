@@ -517,9 +517,21 @@ export async function readSession(): Promise<SessionPayload | null> {
   // So a "." inside a delegate's name can NEVER be mistaken for the
   // signature separator, and the two formats never collide.
 
-  // LEGACY plaintext (pre-signing). Accept during the rollout window so
-  // in-flight sessions are not mass-logged-out. See ROLLOUT NOTE above.
+  // LEGACY plaintext (pre-signing), bare JSON starting with "{".
+  //
+  // Trust it ONLY when no secret is configured. In that mode writeSession
+  // cannot sign, so plaintext is the sole session format and rejecting it
+  // would be a hard login outage (the #276 -> #294 scar). Whenever a secret
+  // IS set, every legitimate cookie has been signed since the secret shipped
+  // (2026-06-02) and the 30-day maxAge means no genuine plaintext cookie can
+  // still exist — so a plaintext cookie can only be a forgery or a
+  // long-expired legacy cookie. Reject it and close the hand-forge vector.
+  //
+  // This is self-healing: it tightens the instant a secret is present and
+  // relaxes if one is ever removed, so it can never reproduce the mass
+  // logout that the timing (signing had JUST shipped) caused in #276.
   if (raw.startsWith("{")) {
+    if (getSessionSecret()) return null; // signed-only once a secret exists
     try {
       return JSON.parse(raw) as SessionPayload;
     } catch {

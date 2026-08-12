@@ -409,10 +409,11 @@ export async function saveEvaluation(input: {
 //    corrects the one that was wrong, rather than re-entering six from memory
 //    under time pressure — which is its own chance to introduce a new mistake.
 //
-// 2. THE RECORD IS WRITTEN FIRST. future.evaluation_unlocks is inserted BEFORE
-//    the status flips, and if that insert fails NOTHING is reopened. An unlock
-//    that cannot be recorded does not happen — which also means the feature is
-//    inert until the migration is applied, and says so on screen.
+// 2. THE RECORD IS WRITTEN FIRST. A row goes into the EXISTING
+//    future.evaluation_audit_log before the status flips, and if that insert
+//    fails NOTHING is reopened. An unlock that cannot be recorded does not
+//    happen. No new table: that log is already this codebase's home for
+//    changes to a scorecard.
 //
 // 3. SCOPED TO THE CALLER'S OWN CHAPTER, and it fails CLOSED. A chapter admin
 //    may reopen scores for their own chapter's teams only. Note this does NOT
@@ -451,8 +452,8 @@ export async function unlockEvaluation(input: {
   }
 
   const svc = await createServiceClient();
-  // future.evaluation_unlocks is not in the generated types yet (as with every
-  // other table added after the last regen) → loose client for those statements.
+  // future.evaluation_audit_log is not in the generated types (as with every
+  // table added after the last regen) → loose client for those statements.
   const loose = svc as AnyEvalClient;
 
   // ─── Load the evaluation, and the team it belongs to ──────────────────
@@ -460,7 +461,7 @@ export async function unlockEvaluation(input: {
     .schema("future")
     .from("evaluations")
     .select(
-      "id, status, total_score, jury_id, team_id, teams!inner(id, team_name, chapter_id, edition_id)"
+      "id, status, total_score, criteria_scores, jury_id, team_id, teams!inner(id, team_name, chapter_id, edition_id)"
     )
     .eq("id", input.evaluationId)
     .maybeSingle();
@@ -469,6 +470,7 @@ export async function unlockEvaluation(input: {
     id: string;
     status: string | null;
     total_score: number | null;
+    criteria_scores: CriteriaScores | null;
     jury_id: string;
     team_id: string;
     teams: {
@@ -531,25 +533,34 @@ export async function unlockEvaluation(input: {
   const actor = await describeUnlockActor(access.userId);
 
   // ─── 1. THE RECORD, BEFORE THE REOPEN ─────────────────────────────────
-  // If this fails, nothing is reopened. The most likely cause today is the
-  // migration not having been applied, so the message names it.
+  // future.evaluation_audit_log is the table this codebase already has for
+  // changes to a scorecard. Reusing it rather than adding a parallel unlock
+  // table: one history per evaluation, one place to read it.
+  //
+  // previous_* and new_* are deliberately IDENTICAL here — a reopen does not
+  // change any number, it only makes them editable again. The pair records
+  // what the score stood at when it was reopened, which is the question an
+  // award dispute actually asks.
+  //
+  // If this insert fails, nothing is reopened. A reopen that cannot be
+  // recorded must not happen.
   const { data: recRaw, error: recErr } = await loose
     .schema("future")
-    .from("evaluation_unlocks")
+    .from("evaluation_audit_log")
     .insert({
       evaluation_id: ev.id,
-      team_id: ev.team_id,
-      team_name: ev.teams.team_name,
-      jury_id: ev.jury_id,
-      jury_name: juryName,
-      chapter_id: chapterId,
-      edition_id: editionId,
-      score_at_unlock: ev.total_score,
-      unlocked_by_user_id: access.userId,
-      unlocked_by_name: actor.name,
-      unlocked_by_email: actor.email,
-      unlocked_by_scope: access.isNational && !isOwnChapter ? "national" : "chapter",
-      reason: reason.length > 0 ? reason : null,
+      previous_scores: ev.criteria_scores,
+      new_scores: ev.criteria_scores,
+      previous_total: ev.total_score,
+      new_total: ev.total_score,
+      changed_by: [
+        actor.name ?? actor.email ?? access.userId,
+        access.isNational && !isOwnChapter ? "(national admin)" : "(chapter admin)",
+      ].join(" "),
+      reason: [
+        `REOPENED ${juryName ?? "juror"}'s scorecard for ${ev.teams.team_name}`,
+        reason.length > 0 ? `— ${reason}` : "— no reason given",
+      ].join(" "),
     })
     .select("id")
     .maybeSingle();
@@ -557,7 +568,7 @@ export async function unlockEvaluation(input: {
   if (recErr) {
     return {
       ok: false,
-      error: `Nothing was reopened. The unlock log could not be written, and a reopen that cannot be recorded must not happen. (${
+      error: `Nothing was reopened. The score history could not be written, and a reopen that cannot be recorded must not happen. (${
         recErr.message ?? "unknown error"
       })`,
     };
@@ -566,7 +577,7 @@ export async function unlockEvaluation(input: {
     return {
       ok: false,
       error:
-        "Nothing was reopened. The unlock log took the entry but did not confirm it. Reload this page before trying again.",
+        "Nothing was reopened. The score history took the entry but did not confirm it. Reload this page before trying again.",
     };
   }
 

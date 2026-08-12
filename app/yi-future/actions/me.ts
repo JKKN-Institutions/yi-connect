@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { readSession } from "./auth";
 import type { ActionResult } from "./editions";
+import { safeError } from "@/lib/yi-future/db-error";
 
 async function requireDelegate(): Promise<string | null> {
   const session = await readSession();
@@ -36,7 +37,7 @@ export async function updateMyResume(
     .from("delegates")
     .update({ resume_url })
     .eq("id", delegateId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "me") };
 
   revalidatePath("/yi-future/me");
   revalidatePath("/yi-future/me/resume");

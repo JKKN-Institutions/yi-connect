@@ -9,6 +9,7 @@ import {
   type SenderType as SharedSenderType,
   type Message as SharedMessage,
 } from "@/lib/messaging/actions";
+import { safeError } from "@/lib/yi-future/db-error";
 
 // ─── TYPES ──────────────────────────────────────────────────────────
 // Re-export the shared types so existing consumers keep working unchanged.
@@ -171,7 +172,15 @@ export async function getOrCreateThread(
   };
 
   if (error || !inserted) {
-    return { ok: false, error: error?.message ?? "Could not create thread." };
+    // safeError always returns a string, so the old `?? "Could not create
+    // thread."` fallback would now be dead code. Keep that wording for the
+    // no-message case instead of letting the generic sentence swallow it.
+    return {
+      ok: false,
+      error: error?.message
+        ? safeError(error.message, "messages")
+        : "Could not create thread.",
+    };
   }
   return { ok: true, data: inserted };
 }

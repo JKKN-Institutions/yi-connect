@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { fetchAllRows } from "@/lib/pagination";
 import { readSession } from "./auth";
+import { safeError } from "@/lib/yi-future/db-error";
 
 // ─── LIVE COUNTERS (safe for public SSR/client) ────────────────────
 export type LiveCounts = {
@@ -302,7 +303,7 @@ export async function completeProfile(
       registered_at: registeredAt,
     })
     .eq("id", session.id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "gamification") };
 
   revalidatePath("/yi-future/me");
   revalidatePath("/join");
@@ -355,7 +356,7 @@ export async function saveQuizResult(
       points,
     })
     .eq("id", session.id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "gamification") };
 
   revalidatePath("/yi-future/me");
   revalidatePath("/join");

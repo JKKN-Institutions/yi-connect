@@ -15,6 +15,7 @@ import { inviteMember, removeMember } from "@/app/yi-future/actions/members";
 import { TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
 import { TrackIcon, trackIconText } from "@/components/yi-future/TrackIcon";
 import { unfreezeTeam } from "@/app/yi-future/actions/team-invites";
+import { placeDelegateDirectly } from "@/app/yi-future/actions/placement-override";
 import { ActionResultForm } from "@/components/yi-future/admin/ActionResultForm";
 
 type TeamDetail = {
@@ -200,6 +201,42 @@ export default async function TeamDetailPage({
   async function clearProblemAction() {
     "use server";
     return await clearProblem(team!.id);
+  }
+
+  /**
+   * Add a delegate to this team WITHOUT waiting for them to accept.
+   *
+   * The Invite control above is consent-based: it creates a pending invitation
+   * and the student joins only when they accept. That is right for normal
+   * onboarding and wrong on event day, when the student is standing in the room
+   * and an organiser needs them scoreable now. It also deadlocks an empty team:
+   * inviting needs a captain, and a captain must already be a member, so a team
+   * created with nobody on it can never be filled from this page.
+   *
+   * Reuses placeDelegateDirectly rather than inserting team_members here, so
+   * every direct add lands in future.team_placement_overrides with who did it
+   * and why. The audit is the reason this power is allowed to exist.
+   */
+  async function directAddAction(formData: FormData) {
+    "use server";
+    const did = String(formData.get("delegate_id") ?? "");
+    if (!did) return { ok: false as const, error: "Pick a delegate first." };
+    const res = await placeDelegateDirectly({
+      chapterId: team!.chapter_id,
+      delegateId: did,
+      teamId: team!.id,
+      reason: String(formData.get("reason") ?? "").trim() || undefined,
+      acknowledged: true,
+    });
+    if (!res.ok) return { ok: false as const, error: res.error };
+    // caveat = placed, but a follow-up write (e.g. the audit row) did not land.
+    // Surface it rather than reporting a clean success.
+    return {
+      ok: true as const,
+      message: `${res.delegateName} added to ${res.teamName}.${
+        res.caveat ? ` ${res.caveat}` : ""
+      }`,
+    };
   }
 
   async function deleteTeamAction() {
@@ -403,6 +440,60 @@ export default async function TeamDetailPage({
             >
               Invite
             </button>
+          </ActionResultForm>
+        )}
+
+        {/* Add without waiting for acceptance. Invite above needs the student to
+            accept, which is right for onboarding and wrong on event day — and it
+            deadlocks an empty team, because inviting needs a captain and a
+            captain must already be a member. Recorded via placeDelegateDirectly. */}
+        {team.team_members.length < TEAM_SIZE_MAX && !team.is_frozen && (
+          <ActionResultForm
+            action={directAddAction}
+            className="mt-3 pt-3 border-t border-navy/10 space-y-2"
+          >
+            <div className="text-xs font-semibold text-navy">
+              Add straight away, without an invitation
+            </div>
+            <p className="text-xs text-navy/60">
+              Puts the delegate on this team immediately — they do not have to
+              accept anything. Use this when the student is here and needs to be
+              scoreable now. Your name and the reason are recorded.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <select
+                name="delegate_id"
+                required
+                defaultValue=""
+                className="flex-1 min-w-[220px] px-3 py-2 border border-navy/20 rounded-md text-sm bg-white"
+              >
+                <option value="" disabled>
+                  — pick a delegate —
+                </option>
+                {delegates
+                  .filter(
+                    (d) => !memberIds.has(d.id) && d.team_members.length === 0
+                  )
+                  .map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.full_name} {d.email && `(${d.email})`}
+                    </option>
+                  ))}
+              </select>
+              <input
+                type="text"
+                name="reason"
+                maxLength={200}
+                placeholder="Why (optional) — e.g. present at the final"
+                className="flex-1 min-w-[200px] px-3 py-2 border border-navy/20 rounded-md text-sm bg-white"
+              />
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-md border-2 border-navy text-navy text-sm font-semibold hover:bg-navy hover:text-ivory"
+              >
+                Add now
+              </button>
+            </div>
           </ActionResultForm>
         )}
       </section>

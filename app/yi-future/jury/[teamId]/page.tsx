@@ -14,6 +14,7 @@ import {
   type MemberScores,
 } from "@/lib/yi-future/member-rubric";
 import { ScoreSlider } from "@/components/yi-future/jury/ScoreSlider";
+import { AutoSaveDraft } from "@/components/yi-future/jury/AutoSaveDraft";
 import { SubmitButtons } from "./submit-buttons";
 
 type Team = {
@@ -236,7 +237,13 @@ export default async function JuryEvaluationPage({
   const teamMembers = await getTeamMembers(team.id);
   const memberEvals = await getMemberEvals(session.id, team.id, event.id);
 
-  async function save(formData: FormData) {
+  // Auto-save needs to know whether the write actually landed, and a form
+  // action must return void — so the shared body lives in persist() and the two
+  // entry points differ only in what they return. <form action={save}> is
+  // untouched.
+  async function persist(
+    formData: FormData
+  ): Promise<{ ok: true; message?: string } | { ok: false; error: string }> {
     "use server";
     const scores: CriteriaScores = {};
     for (const c of rubric!.criteria) {
@@ -314,6 +321,21 @@ export default async function JuryEvaluationPage({
       recommendation,
       submit,
     });
+
+    // Only reached when submit was false or the submit was refused —
+    // saveEvaluation redirects away on a successful submit.
+    return { ok: true, message: "Draft saved." };
+  }
+
+  async function save(formData: FormData) {
+    "use server";
+    await persist(formData);
+  }
+
+  async function autoSaveDraft(formData: FormData) {
+    "use server";
+    formData.set("_submit", "0");
+    return await persist(formData);
   }
 
   return (
@@ -529,6 +551,11 @@ export default async function JuryEvaluationPage({
           </div>
         </details>
 
+        {!submitted && (
+          <div className="flex items-center justify-end pt-1">
+            <AutoSaveDraft action={autoSaveDraft} enabled={!submitted} />
+          </div>
+        )}
         {!submitted && <SubmitButtons />}
       </form>
 

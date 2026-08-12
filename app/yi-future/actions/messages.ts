@@ -172,7 +172,15 @@ export async function getOrCreateThread(
   };
 
   if (error || !inserted) {
-    return { ok: false, error: safeError(error?.message, "messages") ?? "Could not create thread." };
+    // safeError always returns a string, so the old `?? "Could not create
+    // thread."` fallback would now be dead code. Keep that wording for the
+    // no-message case instead of letting the generic sentence swallow it.
+    return {
+      ok: false,
+      error: error?.message
+        ? safeError(error.message, "messages")
+        : "Could not create thread.",
+    };
   }
   return { ok: true, data: inserted };
 }

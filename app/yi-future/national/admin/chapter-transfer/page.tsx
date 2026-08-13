@@ -217,6 +217,28 @@ export default async function ChapterTransferPage({
             ))}
           </select>
         </div>
+        <div>
+          <label
+            htmlFor="to"
+            className="block text-xs font-semibold text-navy mb-1.5"
+          >
+            Chapter to move to
+          </label>
+          <select
+            id="to"
+            name="to"
+            defaultValue={to ?? ""}
+            className="px-3 py-2 border border-navy/20 rounded-md text-sm min-w-[16rem]"
+          >
+            <option value="">Choose a chapter…</option>
+            {chapters.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+                {c.city ? ` — ${c.city}` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
         <button
           type="submit"
           className="px-4 py-2 min-h-[44px] rounded-md bg-navy text-white text-sm font-semibold"
@@ -224,6 +246,18 @@ export default async function ChapterTransferPage({
           Show what can move
         </button>
       </form>
+
+      {from && to && from === to && (
+        <p role="alert" className="mt-4 text-xs font-semibold text-red-600">
+          Those are the same chapter. Pick a different destination.
+        </p>
+      )}
+      {fromChapter && !toChapter && (
+        <p className="mt-4 text-sm text-navy/60">
+          Choose the destination chapter too — whether a college can move or has
+          to be merged depends on what is already there.
+        </p>
+      )}
 
       {fromChapter && movable && (
         <>

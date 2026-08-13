@@ -323,6 +323,39 @@ export async function transferToChapter(
   }
 
   for (const line of plan.filter((l) => l.entityType === "college")) {
+    if (line.mergeTargetId) {
+      // MERGE. The destination already has this college, so moving the row is
+      // impossible (unique on chapter+name+city) and also wrong — there would
+      // then be two records for one institution. Repoint the students, then
+      // soft-merge the source. This is exactly what mergePendingCollege does;
+      // the source row keeps its chapter, which is why no constraint fires.
+      const { error: relinkErr } = await svc
+        .schema("future")
+        .from("delegates")
+        .update({ college_id: line.mergeTargetId, chapter_id: toChapterId })
+        .eq("college_id", line.entityId);
+      if (relinkErr) {
+        failures.push(
+          `students at "${line.entityName}": ${safeError(relinkErr.message, "chapter-transfer.relinkOnMerge")}`
+        );
+        continue;
+      }
+
+      // Only after every student is repointed — otherwise a failure here would
+      // strand them on a college marked merged-away.
+      const { error: mergeErr } = await svc
+        .schema("future")
+        .from("colleges")
+        .update({ merged_into: line.mergeTargetId, is_approved: false })
+        .eq("id", line.entityId);
+      if (mergeErr) {
+        failures.push(
+          `merging "${line.entityName}": ${safeError(mergeErr.message, "chapter-transfer.softMerge")}`
+        );
+      }
+      continue;
+    }
+
     const { error: cErr } = await svc
       .schema("future")
       .from("colleges")

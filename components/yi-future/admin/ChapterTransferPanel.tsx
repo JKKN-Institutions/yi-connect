@@ -56,6 +56,12 @@ export function ChapterTransferPanel({
   return (
     <ActionResultForm action={transferToChapter} className="mt-6 space-y-6">
       <input type="hidden" name="from" value={fromChapter.id} />
+      <input type="hidden" name="to" value={toChapter.id} />
+
+      <p className="text-sm text-navy">
+        Moving from <strong>{fromChapter.name}</strong> to{" "}
+        <strong>{toChapter.name}</strong>.
+      </p>
 
       {/* ─── Colleges ─────────────────────────────────────────────── */}
       <section className="bg-white border border-navy/10 rounded-lg p-4">

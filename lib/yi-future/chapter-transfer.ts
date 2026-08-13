@@ -41,6 +41,10 @@ export type TransferPlanLine = {
   entityId: string;
   entityName: string;
   delegatesMoved: number;
+  /** Set on a college that collides with one already in the destination: its
+   *  students are repointed to this record and the source is soft-merged. */
+  mergeTargetId?: string | null;
+  mergeTargetName?: string | null;
 };
 
 /**

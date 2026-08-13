@@ -28,12 +28,61 @@ async function loadChapters(): Promise<ChapterRow[]> {
   return (data as ChapterRow[] | null) ?? [];
 }
 
-async function loadMovable(fromChapterId: string): Promise<{
+/**
+ * Colleges in the destination, keyed by name+city, resolved through
+ * `merged_into` to the surviving record.
+ *
+ * A college cannot always move: (chapter, name, city) is unique, and that
+ * constraint counts soft-merged rows too. So the screen has to know, before
+ * the admin clicks, which of their selections are really merges.
+ */
+function buildDestinationIndex(
+  rows: { id: string; name: string; city: string | null; merged_into: string | null }[]
+): Map<string, string> {
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const key = (n: string, c: string | null) =>
+    `${n.trim().toLowerCase()}|${(c ?? "").trim().toLowerCase()}`;
+
+  const index = new Map<string, string>();
+  for (const row of rows) {
+    let cur = row;
+    for (let hop = 0; hop < 5 && cur.merged_into; hop++) {
+      const next = byId.get(cur.merged_into);
+      if (!next) break;
+      cur = next;
+    }
+    index.set(key(row.name, row.city), cur.name);
+  }
+  return index;
+}
+
+async function loadMovable(
+  fromChapterId: string,
+  toChapterId: string | null
+): Promise<{
   colleges: TransferableCollege[];
   teams: TransferableTeam[];
   truncated: boolean;
 }> {
   const svc = await createServiceClient();
+
+  let destIndex = new Map<string, string>();
+  if (toChapterId) {
+    const { data: destRows } = await svc
+      .schema("future")
+      .from("colleges")
+      .select("id, name, city, merged_into")
+      .eq("chapter_id", toChapterId)
+      .range(0, DELEGATE_SCAN_LIMIT);
+    destIndex = buildDestinationIndex(
+      (destRows as {
+        id: string;
+        name: string;
+        city: string | null;
+        merged_into: string | null;
+      }[] | null) ?? []
+    );
+  }
 
   const { data: colRows } = await svc
     .schema("future")

@@ -2,6 +2,10 @@ import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { Toaster } from 'react-hot-toast';
+// Both toast libraries are in use across the app (react-hot-toast ~146 files,
+// sonner ~69). Each has its own independent store, so both providers must be
+// mounted or one library's toasts silently no-op. No file imports both.
+import { Toaster as SonnerToaster } from 'sonner';
 import { Analytics } from '@vercel/analytics/next';
 import { ServiceWorkerRegister } from '@/components/pwa/sw-register';
 import { InstallPrompt } from '@/components/pwa/install-prompt';
@@ -124,6 +128,7 @@ export default function RootLayout({
         {children}
         <MobileNav />
         <Toaster position='top-right' />
+        <SonnerToaster position='top-right' richColors />
         <ServiceWorkerRegister />
         <InstallPrompt />
         <UpdatePrompt />

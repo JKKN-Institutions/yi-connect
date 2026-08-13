@@ -26,7 +26,9 @@ type ActionResult<T = null> =
 
 export async function advanceAgenda(
   eventId: string
-): Promise<ActionResult<{ nextItemId: string | null }>> {
+): Promise<
+  ActionResult<{ nextItemId: string | null; nextDayWithItems: number | null }>
+> {
   const access = await getYipEventAccess(eventId);
   if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
   const supabase = await createServiceClient();
@@ -54,8 +56,21 @@ export async function advanceAgenda(
     return { success: false, error: "No agenda items found" };
   }
 
-  // Determine the current day from event status
-  const currentDay = event.status === "day2_live" ? 2 : 1;
+  // Determine the current day. Prefer the day of the item that is ACTUALLY
+  // live; fall back to the event status only when nothing is live.
+  // Why: organisers routinely start Day-2 sessions straight from the Day-2 tab
+  // without flipping the event status first (Salem ran Question Hour + Zero
+  // Hour on Day 2 while status was still `day1_live`). Deriving the day from
+  // status alone then filters `dayItems` to the WRONG day, so the live item is
+  // not found (currentIdx = -1) — Next neither completes it nor moves forward,
+  // it jumps the whole house BACK to the first unfinished Day-1 session.
+  // When the live item's day already matches the status-derived day (every
+  // normally-run event) this resolves to exactly the same number as before.
+  const liveItem = event.current_agenda_item_id
+    ? items.find((i) => i.id === event.current_agenda_item_id)
+    : null;
+  const statusDay = event.status === "day2_live" ? 2 : 1;
+  const currentDay = liveItem?.day ?? statusDay;
   const dayItems = items.filter((i) => i.day === currentDay);
 
   // Find current item index
@@ -115,8 +130,29 @@ export async function advanceAgenda(
   // New session → fresh Speaking Floor (clear any pending raise-to-speak hands).
   await expireActiveSpeakingRequests(supabase, eventId);
 
+  // Day boundary: this day has nothing left, but a LATER day still does.
+  // Report it so the Control panel can say so in words and point at the
+  // status button. We deliberately do NOT flip the event status here — moving
+  // the house to the next day stays the organiser's explicit decision.
+  let nextDayWithItems: number | null = null;
+  if (!nextItem) {
+    const laterDays = items
+      .filter(
+        (i) =>
+          typeof i.day === "number" &&
+          i.day > currentDay &&
+          i.status !== "completed" &&
+          i.status !== "skipped"
+      )
+      .map((i) => i.day as number);
+    if (laterDays.length > 0) nextDayWithItems = Math.min(...laterDays);
+  }
+
   revalidatePath(`/yip/dashboard/events/${eventId}/control`);
-  return { success: true, data: { nextItemId: nextItem?.id ?? null } };
+  return {
+    success: true,
+    data: { nextItemId: nextItem?.id ?? null, nextDayWithItems },
+  };
 }
 
 // ─── Re-open a Completed Agenda Item (BUG-409) ────────────────────
@@ -308,8 +344,13 @@ export async function goToPreviousAgendaItem(
     return { success: false, error: "No agenda items found" };
   }
 
-  // Determine the current day from event status (same rule as advanceAgenda)
-  const currentDay = event.status === "day2_live" ? 2 : 1;
+  // Determine the current day (same rule as advanceAgenda): the day of the
+  // item that is actually live, falling back to the event status. Without
+  // this, a Day-2 session running while the status still reads `day1_live`
+  // is not found in `dayItems`, so Previous dead-ends on "Already at the
+  // first item" for the whole of Day 2.
+  const liveItem = items.find((i) => i.id === event.current_agenda_item_id);
+  const currentDay = liveItem?.day ?? (event.status === "day2_live" ? 2 : 1);
   const dayItems = items.filter((i) => i.day === currentDay);
 
   // Find current item index within the current day's ordered items

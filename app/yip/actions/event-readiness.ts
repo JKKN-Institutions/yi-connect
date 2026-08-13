@@ -67,6 +67,9 @@ export async function getEventReadiness(
     qApproved,
     scoresSubmitted,
     posConfig,
+    resultsCount,
+    latestResult,
+    latestScore,
   ] = await Promise.all([
     supabase
       .from("events")
@@ -157,6 +160,32 @@ export async function getEventReadiness(
       .eq("event_id", eventId)
       .eq("status", "submitted"),
     getPositionBonusConfigAdmin().catch(() => ({ bonuses: {} })),
+    // Results snapshot (added 2026-08-13). The board used to end at "scores
+    // being submitted", so an event could finish with hundreds of submitted
+    // scores and ZERO computed results and the board would still report every
+    // step ready — exactly what happened to Varanasi Chapter Round 2026 (667
+    // submitted scores, 0 result rows, nobody ever pressed "Show Results").
+    // Three cheap reads: how many students are ranked, when that snapshot was
+    // taken, and when the newest score landed (newer score ⇒ stale snapshot).
+    supabase
+      .from("results")
+      .select("id", { count: "exact", head: true })
+      .eq("event_id", eventId),
+    supabase
+      .from("results")
+      .select("computed_at")
+      .eq("event_id", eventId)
+      .order("computed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("scores")
+      .select("submitted_at")
+      .eq("event_id", eventId)
+      .eq("status", "submitted")
+      .order("submitted_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   const total = pTotal.count ?? 0;
@@ -176,6 +205,13 @@ export async function getEventReadiness(
   const questionsTotal = qTotal.count ?? 0;
   const questionsApproved = qApproved.count ?? 0;
   const scored = scoresSubmitted.count ?? 0;
+  const ranked = resultsCount.count ?? 0;
+  const lastComputedAt = latestResult.data?.computed_at ?? null;
+  const lastScoreAt = latestScore.data?.submitted_at ?? null;
+  // Same rule as getResultsFreshness(): "stale" only once results EXIST and a
+  // score was submitted after the last compute. ISO strings compare correctly.
+  const resultsStale =
+    !!lastComputedAt && !!lastScoreAt && lastScoreAt > lastComputedAt;
 
   const cabMinistries = ev.data?.cabinet_ministries ?? null;
   const cabCount = ev.data?.cabinet_ministry_count ?? null;
@@ -355,6 +391,25 @@ export async function getEventReadiness(
           ok: scored > 0,
           detail: scored > 0 ? `${scored} scores submitted` : "no scores yet",
           href: `${base}/scoring`,
+        },
+        // LAST item of the LAST phase on purpose: "your next step" walks the
+        // phases in order and stops at the first ⚠, so this can only become the
+        // pointer once every earlier step is green — it can never hijack the
+        // pointer while the house is still running. Non-blocking, like the rest
+        // of this board.
+        {
+          key: "results_computed",
+          label: "Results computed",
+          ok: scored === 0 ? true : ranked > 0 && !resultsStale,
+          detail:
+            scored === 0
+              ? "nothing to compute yet"
+              : ranked === 0
+                ? `⚠ ${scored} scores submitted but results have never been computed — open Results and press "Show Results"`
+                : resultsStale
+                  ? `⚠ ${ranked} students ranked, but scores were submitted after that — press "Show Results" again to refresh`
+                  : `${ranked} students ranked`,
+          href: `${base}/results`,
         },
       ],
     },

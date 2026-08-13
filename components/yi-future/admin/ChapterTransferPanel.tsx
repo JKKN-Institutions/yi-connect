@@ -158,29 +158,6 @@ export function ChapterTransferPanel({
       <section className="bg-white border border-navy/10 rounded-lg p-4 space-y-4">
         <div>
           <label
-            htmlFor="to"
-            className="block text-xs font-semibold text-navy mb-1.5"
-          >
-            Move them to
-          </label>
-          <select
-            id="to"
-            name="to"
-            required
-            defaultValue=""
-            className="px-3 py-2 border border-navy/20 rounded-md text-sm min-w-[16rem]"
-          >
-            <option value="">Choose a chapter…</option>
-            {chapters.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label
             htmlFor="reason"
             className="block text-xs font-semibold text-navy mb-1.5"
           >

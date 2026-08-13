@@ -266,7 +266,17 @@ export async function transferToChapter(
         from_chapter_name: fromChapter.name,
         to_chapter_name: toChapter.name,
         delegates_moved: line.delegatesMoved,
-        reason: reason.length > 0 ? reason : null,
+        // The record must say which of the two things happened. "Moved" and
+        // "merged into an existing record" have different consequences and an
+        // award dispute a year later needs to tell them apart.
+        reason: [
+          line.mergeTargetName
+            ? `MERGED into existing ${toChapter.name} record "${line.mergeTargetName}".`
+            : null,
+          reason.length > 0 ? reason : null,
+        ]
+          .filter(Boolean)
+          .join(" ") || null,
         batch_id: batchId,
       }))
     );

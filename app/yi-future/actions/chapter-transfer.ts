@@ -407,10 +407,15 @@ export async function transferToChapter(
     };
   }
 
-  const colleges = plan.filter((l) => l.entityType === "college").length;
+  const collegeLines = plan.filter((l) => l.entityType === "college");
+  const merged = collegeLines.filter((l) => l.mergeTargetId).length;
+  const colleges = collegeLines.length - merged;
   const teams = plan.filter((l) => l.entityType === "team").length;
   const parts = [
     colleges > 0 ? `${colleges} college${colleges === 1 ? "" : "s"}` : null,
+    merged > 0
+      ? `${merged} duplicate${merged === 1 ? "" : "s"} merged into existing ${toChapter.name} records`
+      : null,
     teams > 0 ? `${teams} team${teams === 1 ? "" : "s"}` : null,
   ].filter(Boolean);
 

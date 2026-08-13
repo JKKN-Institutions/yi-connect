@@ -179,8 +179,15 @@ export function ChapterTransferPanel({
           ) : (
             <span>
               Moving <strong>{pickedColleges.size}</strong> college
-              {pickedColleges.size === 1 ? "" : "s"} and{" "}
-              <strong>{pickedTeams.size}</strong> team
+              {pickedColleges.size === 1 ? "" : "s"}
+              {mergeCount > 0 ? (
+                <>
+                  {" "}
+                  (<strong>{mergeCount}</strong> of them merged into records{" "}
+                  {toChapter.name} already has)
+                </>
+              ) : null}{" "}
+              and <strong>{pickedTeams.size}</strong> team
               {pickedTeams.size === 1 ? "" : "s"}, carrying about{" "}
               <strong>{studentsMoving}</strong> student
               {studentsMoving === 1 ? "" : "s"}.

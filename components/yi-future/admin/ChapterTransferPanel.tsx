@@ -51,6 +51,11 @@ export function ChapterTransferPanel({
     .filter((c) => pickedColleges.has(c.id) && c.delegatesOnTeams > 0)
     .reduce((n, c) => n + c.delegatesOnTeams, 0);
 
+  // How many ticked colleges are really merges rather than moves.
+  const mergeCount = colleges.filter(
+    (c) => pickedColleges.has(c.id) && c.mergesIntoName
+  ).length;
+
   const nothingPicked = pickedColleges.size === 0 && pickedTeams.size === 0;
 
   return (

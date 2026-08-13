@@ -109,6 +109,16 @@ function localToIso(local: string): string | null {
   return Number.isFinite(t) ? new Date(t).toISOString() : null;
 }
 
+/** ISO string → datetime-local input value ("" when empty/invalid). */
+function isoToLocal(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "";
+  const d = new Date(t);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 const STEP_ICONS: Record<FormationStepKey, typeof Vote> = {
   allocation: Shuffle,
   speaker_ballot: Crown,
@@ -245,6 +255,37 @@ export function FormationClient({
     [stepRow]
   );
 
+  // Parties that got NO ballot in an open party_leader_ballots step. The
+  // server enumerates every party but records a failure for any it cannot
+  // open (e.g. "no members"), leaving the step open with parties silently
+  // missing — they are absent from the turnout denominator too, so without
+  // this the gap is invisible outside the database.
+  const partyLeaderRow = stepRow("party_leader_ballots");
+  const partyLeaderOpen = partyLeaderRow?.status === "open";
+  const [partyList, setPartyList] = useState<PartyLite[] | null>(null);
+  useEffect(() => {
+    if (!partyLeaderOpen) return;
+    let alive = true;
+    void getEventParties(eventId).then((p) => {
+      if (alive) setPartyList(p);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [eventId, partyLeaderOpen]);
+
+  const partiesWithoutBallot: PartyLite[] =
+    partyLeaderOpen && partyList && state
+      ? (() => {
+          const covered = new Set<string>();
+          for (const sid of partyLeaderRow?.session_ids ?? []) {
+            const pid = state.sessions[sid]?.partyId;
+            if (pid) covered.add(pid);
+          }
+          return partyList.filter((p) => !covered.has(p.id));
+        })()
+      : [];
+
   const doneCount =
     state?.steps.filter((s) => s.status === "closed" || s.status === "locked")
       .length ?? 0;
@@ -254,12 +295,15 @@ export function FormationClient({
 
   // ─── Ballot dialog (open an election step) ──────────────────────
 
-  function handleOpenBallotDialog(stepKey: FormationStepKey) {
+  function handleOpenBallotDialog(
+    stepKey: FormationStepKey,
+    opts?: { onlyPartyIds?: string[]; closesAtLocal?: string }
+  ) {
     setNomineeSearch("");
     setBallotDialog({
       open: true,
       stepKey,
-      closesAtLocal: "",
+      closesAtLocal: opts?.closesAtLocal ?? "",
       groups: [],
       selectedIds: [],
       loading: true,
@@ -267,18 +311,27 @@ export function FormationClient({
     getEventParties(eventId).then(async (parties) => {
       // PM = ruling bench only; LoP = opposition bench only; speaker + party
       // leaders draw from the whole House (grouped by party).
+      const scoped = opts?.onlyPartyIds
+        ? parties.filter((p) => opts.onlyPartyIds!.includes(p.id))
+        : parties;
       const pool =
         stepKey === "pm_ballot"
-          ? parties.filter((p) => p.side === "ruling")
+          ? scoped.filter((p) => p.side === "ruling")
           : stepKey === "lop_ballot"
-            ? parties.filter((p) => p.side === "opposition")
-            : parties;
+            ? scoped.filter((p) => p.side === "opposition")
+            : scoped;
       const lists = await Promise.all(
         pool.map((p) => getPartyMembers(eventId, p.id))
       );
+      // party_leader_ballots opens one ballot PER party server-side, so an
+      // empty party is a hard failure there — keep it visible as a blocker
+      // instead of hiding it and manufacturing a partial open. Other steps
+      // open a single house/bench ballot, so empty parties are just noise.
       const groups = pool
         .map((party, i) => ({ party, members: lists[i] ?? [] }))
-        .filter((g) => g.members.length > 0);
+        .filter(
+          (g) => stepKey === "party_leader_ballots" || g.members.length > 0
+        );
       setBallotDialog((prev) =>
         prev.open && prev.stepKey === stepKey
           ? { ...prev, groups, loading: false }
@@ -327,6 +380,17 @@ export function FormationClient({
         : { ok: false, hint: "Nominate at least 2 candidates." };
     }
     if (key === "party_leader_ballots") {
+      // A party with no members cannot get a ballot at all — the server would
+      // open the rest and return a partial failure. Block BEFORE that happens.
+      const empty = ballotDialog.groups.filter((g) => g.members.length === 0);
+      if (empty.length > 0) {
+        return {
+          ok: false,
+          hint: `No members in: ${empty
+            .map((g) => g.party.name)
+            .join(", ")} — add members (or delete the party) on the Parties tab first.`,
+        };
+      }
       // Every party with ≥2 members needs ≥2 nominees (its own ballot).
       const short = ballotDialog.groups.filter(
         (g) =>
@@ -697,6 +761,53 @@ export function FormationClient({
 
                   {def.mode === "election" && isOpen && (
                     <div className="space-y-4">
+                      {/* Partial open: some parties never got a ballot. The
+                          server's own error tells the organiser to "open the
+                          step again to retry" — openFormationStep IS re-entrant
+                          for this step — but until now no control did that, and
+                          the turnout bar counts only parties that DID get a
+                          ballot, so the gap was invisible. */}
+                      {def.key === "party_leader_ballots" &&
+                        partiesWithoutBallot.length > 0 && (
+                          <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
+                            <p className="text-sm font-medium text-amber-800">
+                              No ballot opened for:{" "}
+                              {partiesWithoutBallot
+                                .map((p) => p.name)
+                                .join(", ")}
+                              . Their members cannot vote, and they are NOT
+                              counted in the turnout below.
+                            </p>
+                            <p className="text-xs text-amber-700">
+                              A party with no members cannot get a ballot — add
+                              members on the{" "}
+                              <Link
+                                href={`/yip/dashboard/events/${eventId}/parties`}
+                                className="font-medium underline"
+                              >
+                                Parties page
+                              </Link>
+                              , then open the remaining ballots. You can also
+                              assign that party&apos;s leader directly there.
+                            </p>
+                            <Button
+                              size="sm"
+                              disabled={isPending}
+                              onClick={() =>
+                                handleOpenBallotDialog("party_leader_ballots", {
+                                  onlyPartyIds: partiesWithoutBallot.map(
+                                    (p) => p.id
+                                  ),
+                                  closesAtLocal: isoToLocal(row?.closes_at),
+                                })
+                              }
+                            >
+                              <Vote className="mr-1.5 size-3.5" />
+                              Open remaining party ballots…
+                            </Button>
+                          </div>
+                        )}
+
                       <TurnoutBlock eventId={eventId} stepKey={def.key} />
 
                       {/* Window editor: extend */}
@@ -956,7 +1067,9 @@ export function FormationClient({
             <div className="max-h-72 space-y-4 overflow-y-auto pr-1">
               {ballotDialog.groups.map((g) => {
                 const visible = filterNominees(g.members);
-                if (visible.length === 0) return null;
+                // A member-less party is a blocker, not a search miss — always
+                // render it so the organiser sees why the ballot is refused.
+                if (visible.length === 0 && g.members.length > 0) return null;
                 const picks = g.members.filter((m) =>
                   ballotDialog.selectedIds.includes(m.id)
                 ).length;
@@ -975,6 +1088,12 @@ export function FormationClient({
                         {picks} nominated
                       </span>
                     </div>
+                    {g.members.length === 0 && (
+                      <p className="rounded-lg border-2 border-red-200 bg-red-50 p-2.5 text-xs text-red-700">
+                        No members — this party cannot get a ballot. Add members
+                        or delete it on the Parties tab.
+                      </p>
+                    )}
                     {visible.map((m) => {
                       const checked = ballotDialog.selectedIds.includes(m.id);
                       return (

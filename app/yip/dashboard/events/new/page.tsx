@@ -231,8 +231,16 @@ export default function NewEventPage() {
       setError("Event name is required");
       return false;
     }
-    if (form.level === "chapter" && !form.yi_chapter_id) {
-      setError("Please choose a chapter for a Chapter Level event");
+    if (!form.yi_chapter_id) {
+      // Regional / national rounds carry their HOST chapter in chapter_name,
+      // and that is what grants the host chapter's chair + organisers access
+      // (getYipEventAccess) and puts the round on their dashboard. Leaving it
+      // blank produces a round nobody at chapter level can open.
+      setError(
+        form.level === "chapter"
+          ? "Please choose a chapter for a Chapter Level event"
+          : "Please choose the host chapter — its chair and organisers manage this round"
+      );
       return false;
     }
     if (!form.day1_date) {
@@ -374,7 +382,7 @@ export default function NewEventPage() {
 
             <div>
               <Label htmlFor="yi_chapter_id">
-                Chapter {form.level === "chapter" ? "*" : "(optional)"}
+                {form.level === "chapter" ? "Chapter *" : "Host chapter *"}
               </Label>
               <select
                 id="yi_chapter_id"
@@ -398,8 +406,9 @@ export default function NewEventPage() {
                 ))}
               </select>
               <p className="mt-1 text-xs text-gray-500">
-                Linking a chapter fills in the city, state and region
-                automatically.
+                {form.level === "chapter"
+                  ? "Linking a chapter fills in the city, state and region automatically."
+                  : "The chapter running this round — its chair and organisers get access to manage it. Also fills in the city, state and region."}
               </p>
             </div>
 
@@ -577,7 +586,9 @@ export default function NewEventPage() {
                 </div>
                 {selectedChapter && (
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Chapter</span>
+                    <span className="text-gray-500">
+                      {form.level === "chapter" ? "Chapter" : "Host chapter"}
+                    </span>
                     <span className="font-medium">{selectedChapter.name}</span>
                   </div>
                 )}

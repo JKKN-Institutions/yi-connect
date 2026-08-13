@@ -372,6 +372,26 @@ export async function createEvent(
     }
   }
 
+  // A HOST CHAPTER is REQUIRED for regional / national rounds (2026-08-11).
+  // `events.chapter_name` is the host chapter for those levels, and it is now
+  // load-bearing on two paths: getYipEventAccess grants the host chapter's
+  // chair + organisers their usual chapter authority on a regional event
+  // (Director decision 5, Online House Formation), and the dashboard lists a
+  // regional event to a chapter by the same chapter_name match. A regional
+  // round saved with a blank chapter_name is therefore administrable by NOBODY
+  // at chapter level and invisible on their dashboard. Server-side check is
+  // the real gate — the wizard's is only a courtesy.
+  if (data.level === "regional" || data.level === "national") {
+    const hostChapter = (derivedChapterName ?? data.chapter_name ?? "").trim();
+    if (!hostChapter) {
+      return {
+        success: false,
+        error:
+          "Choose the host chapter for a Regional or National round — its chair and organisers manage the round.",
+      };
+    }
+  }
+
   // Create-permission gate (no event exists yet, so getYipEventAccess can't
   // apply). Event creation is a super-admin action, or a regional admin
   // creating an event in a zone they administer. Chapter chairs/organisers run
@@ -647,6 +667,33 @@ export async function updateEvent(
               zone: chapter.region as Database["public"]["Enums"]["yi_zone"],
             }
           : {}),
+      };
+    }
+  }
+
+  // Host chapter stays REQUIRED for regional / national rounds (same reason as
+  // createEvent: chapter_name is what getYipEventAccess and the dashboard match
+  // on for a host chapter). Editing is also the REPAIR path for a regional
+  // event created before this rule, so resolve the effective level + host
+  // chapter from this payload falling back to the stored row.
+  const { data: current } = await supabase
+    .from("events")
+    .select("level, chapter_name")
+    .eq("id", eventId)
+    .maybeSingle();
+  const nextLevel = data.level ?? current?.level;
+  if (nextLevel === "regional" || nextLevel === "national") {
+    const nextHostChapter = (
+      derivedFields.chapter_name ??
+      data.chapter_name ??
+      current?.chapter_name ??
+      ""
+    ).trim();
+    if (!nextHostChapter) {
+      return {
+        success: false,
+        error:
+          "Choose the host chapter for a Regional or National round — its chair and organisers manage the round.",
       };
     }
   }

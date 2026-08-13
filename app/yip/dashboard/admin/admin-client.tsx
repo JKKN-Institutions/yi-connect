@@ -8,6 +8,7 @@ import {
   createNationalEvent,
 } from "@/app/yip/actions/pipeline";
 import type { Season, SeasonPipelineData, SeasonEvent } from "@/app/yip/actions/pipeline";
+import { listEventChapters } from "@/app/yip/actions/events";
 import { Badge } from "@/components/yip/ui/badge";
 import { Button } from "@/components/yip/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
@@ -68,6 +69,11 @@ function formatDate(dateStr: string) {
 
 // ─── Create Event Dialog ────────────────────────────────────────
 
+type ChapterGroup = {
+  region: string;
+  chapters: { id: string; name: string; city: string | null }[];
+};
+
 function CreateEventDialog({
   type,
   open,
@@ -85,6 +91,7 @@ function CreateEventDialog({
     venue_name: string;
     day1_date: string;
     day2_date: string;
+    yi_chapter_id: string;
   }) => void;
   loading: boolean;
 }) {
@@ -94,6 +101,26 @@ function CreateEventDialog({
   const [venueName, setVenueName] = useState("");
   const [day1, setDay1] = useState("");
   const [day2, setDay2] = useState("");
+  // HOST chapter — required. Its chair + organisers are who actually run the
+  // round (getYipEventAccess), and the dashboard lists a regional round to a
+  // chapter by this chapter_name, so a host-less round reaches nobody.
+  const [hostChapterId, setHostChapterId] = useState("");
+  const [chapterGroups, setChapterGroups] = useState<ChapterGroup[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    listEventChapters()
+      .then((groups) => {
+        if (active) setChapterGroups(groups);
+      })
+      .catch(() => {
+        /* picker stays empty; the server still refuses a host-less round */
+      });
+    return () => {
+      active = false;
+    };
+  }, [open]);
 
   if (!open) return null;
 
@@ -126,6 +153,32 @@ function CreateEventDialog({
               placeholder={`YIP ${label} - City`}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#FF9933] focus:outline-none focus:ring-1 focus:ring-[#FF9933]"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Host chapter
+            </label>
+            <select
+              value={hostChapterId}
+              onChange={(e) => setHostChapterId(e.target.value)}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-[#FF9933] focus:outline-none focus:ring-1 focus:ring-[#FF9933]"
+            >
+              <option value="">Select the host chapter…</option>
+              {chapterGroups.map((group) => (
+                <optgroup key={group.region} label={group.region}>
+                  {group.chapters.map((chapter) => (
+                    <option key={chapter.id} value={chapter.id}>
+                      {chapter.name}
+                      {chapter.city ? ` — ${chapter.city}` : ""}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">
+              The chapter running this round — its chair and organisers get
+              access to manage it.
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -195,9 +248,19 @@ function CreateEventDialog({
           <Button
             size="sm"
             className="bg-[#FF9933] text-white hover:bg-[#E68A2E]"
-            disabled={!name || !city || !state || !day1 || !day2 || loading}
+            disabled={
+              !name || !city || !state || !day1 || !day2 || !hostChapterId || loading
+            }
             onClick={() =>
-              onSubmit({ name, city, state, venue_name: venueName, day1_date: day1, day2_date: day2 })
+              onSubmit({
+                name,
+                city,
+                state,
+                venue_name: venueName,
+                day1_date: day1,
+                day2_date: day2,
+                yi_chapter_id: hostChapterId,
+              })
             }
           >
             {loading && <Loader2 className="size-4 animate-spin" />}
@@ -253,6 +316,7 @@ export function AdminDashboardClient({ seasons }: { seasons: Season[] }) {
       venue_name: string;
       day1_date: string;
       day2_date: string;
+      yi_chapter_id: string;
     }
   ) {
     setCreateLoading(true);

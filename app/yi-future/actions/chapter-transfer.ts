@@ -137,12 +137,18 @@ export async function transferToChapter(
     const { data: colRows, error: colErr } = await svc
       .schema("future")
       .from("colleges")
-      .select("id, name, chapter_id")
+      .select("id, name, city, chapter_id")
       .in("id", collegeIds);
     if (colErr) {
       return { ok: false, error: safeError(colErr.message, "chapter-transfer.readColleges") };
     }
-    const cols = (colRows as { id: string; name: string; chapter_id: string | null }[] | null) ?? [];
+    const cols =
+      (colRows as {
+        id: string;
+        name: string;
+        city: string | null;
+        chapter_id: string | null;
+      }[] | null) ?? [];
 
     for (const id of collegeIds) {
       const col = cols.find((c) => c.id === id);

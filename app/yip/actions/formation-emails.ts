@@ -136,6 +136,25 @@ function votesTable(
 
 // ─── Quota pre-flight (module-private core) ───────────────────────
 
+/**
+ * True when the probe failed because the API key is not PERMITTED to call
+ * /domains — not because the Resend account is unhealthy. Production runs a
+ * send-only key: /domains answers 401 `restricted_api_key` while POST /emails
+ * works, so refusing on it blocked 100% of formation email. Quota codes
+ * (monthly_quota_exceeded / daily_quota_exceeded) are deliberately NOT listed
+ * here — those must keep refusing loudly (the July 2026 rule).
+ */
+function isProbeScopeError(err: {
+  name?: string;
+  statusCode?: number | null;
+}): boolean {
+  return (
+    err.name === "restricted_api_key" ||
+    err.name === "invalid_access" ||
+    err.statusCode === 403
+  );
+}
+
 async function computeQuota(
   supabase: Awaited<ReturnType<typeof createServiceClient>>,
   plannedCount: number
@@ -156,11 +175,13 @@ async function computeQuota(
 
   // 2. Live probe — a cheap authenticated call. A disabled key or exhausted
   // account fails HERE, before any student email is attempted (there is no
-  // Resend quota API; this is the closest honest signal).
+  // Resend quota API; this is the closest honest signal). A permission-scoped
+  // refusal means only "probe unavailable" — proceed, since send scope is
+  // unaffected. See isProbeScopeError.
   try {
     const resend = new Resend(apiKey);
     const { error: probeError } = await resend.domains.list();
-    if (probeError) {
+    if (probeError && !isProbeScopeError(probeError)) {
       return {
         ok: false,
         reason: `Email service refused the pre-flight probe: ${
@@ -335,6 +356,41 @@ async function enqueueAndSendBatch(args: {
   }));
 }
 
+// ─── Refusal audit (module-private) ───────────────────────────────
+// A quota refusal used to leave ZERO trace — no email AND no row — so nobody
+// could later tell a refused send from one never requested. Log one 'failed'
+// row per intended recipient. attempts:0 marks "never attempted"; the drain
+// cron only picks 'pending', so these are never auto-retried, and the daily
+// count only sums 'sent', so they can't feed back into the cap.
+
+async function logRefusedSends(args: {
+  supabase: Awaited<ReturnType<typeof createServiceClient>>;
+  eventId: string;
+  kind: FormationEmailKind;
+  stepId?: string | null;
+  reason: string;
+  recipients: { participantId: string; email: string }[];
+}): Promise<void> {
+  const { supabase, eventId, kind, stepId, reason, recipients } = args;
+  if (recipients.length === 0) return;
+  try {
+    await formationEmailsTable(supabase).insert(
+      recipients.map((r) => ({
+        event_id: eventId,
+        participant_id: r.participantId,
+        step_id: stepId ?? null,
+        kind,
+        recipient_email: r.email,
+        status: "failed",
+        error: reason,
+        attempts: 0,
+      }))
+    );
+  } catch {
+    // Best-effort audit — never mask the refusal the organiser must see.
+  }
+}
+
 // ─── 1. Quota check (also exposed to the UI) ──────────────────────
 
 /**
@@ -465,10 +521,15 @@ export async function sendFormationInvites(
   // Quota pre-flight — refuse the WHOLE batch on !ok (July 2026 rule).
   const quota = await computeQuota(supabase, sendable.length);
   if (!quota.ok) {
-    return {
-      success: false,
-      error: `Send refused by quota pre-flight: ${quota.reason}`,
-    };
+    const reason = `Send refused by quota pre-flight: ${quota.reason}`;
+    await logRefusedSends({
+      supabase,
+      eventId,
+      kind: "invite",
+      reason,
+      recipients: sendable,
+    });
+    return { success: false, error: reason };
   }
 
   const sent = await enqueueAndSendBatch({
@@ -608,10 +669,16 @@ export async function sendFormationReminders(
   // Quota pre-flight — refuse the whole reminder run on !ok.
   const quota = await computeQuota(supabase, pending.length);
   if (!quota.ok) {
-    return {
-      success: false,
-      error: `Send refused by quota pre-flight: ${quota.reason}`,
-    };
+    const reason = `Send refused by quota pre-flight: ${quota.reason}`;
+    await logRefusedSends({
+      supabase,
+      eventId,
+      kind: "reminder",
+      stepId: step.id,
+      reason,
+      recipients: pending,
+    });
+    return { success: false, error: reason };
   }
 
   if (pending.length === 0) {
@@ -691,10 +758,17 @@ export async function reissueFormationCode(
   // code and no way to receive the new one.
   const quota = await computeQuota(supabase, 1);
   if (!quota.ok) {
-    return {
-      success: false,
-      error: `Send refused by quota pre-flight: ${quota.reason}`,
-    };
+    const reason = `Send refused by quota pre-flight: ${quota.reason}`;
+    await logRefusedSends({
+      supabase,
+      eventId,
+      kind: "reissue",
+      reason,
+      recipients: [
+        { participantId: participant.id, email: participant.email.trim() },
+      ],
+    });
+    return { success: false, error: reason };
   }
 
   // Fresh unique code (participants.ts loop: check participants + jury).

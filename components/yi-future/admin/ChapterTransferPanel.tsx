@@ -101,6 +101,15 @@ export function ChapterTransferPanel({
                     ? ` · ${c.delegatesOnTeams} on a team`
                     : ""}
                 </span>
+                {/* The destination already has this college. Say so here, on
+                    the row, rather than letting the admin discover it as a
+                    database error after clicking. */}
+                {c.mergesIntoName && (
+                  <span className="block text-xs font-semibold text-yi-gold">
+                    Already in {toChapter.name} — these students will be merged
+                    into “{c.mergesIntoName}”, and this duplicate closed.
+                  </span>
+                )}
               </span>
             </label>
           ))}

@@ -353,6 +353,59 @@ export async function transferToChapter(
   };
 }
 
+/**
+ * The college in `chapterId` that `name`/`city` collides with, resolved to the
+ * row that actually SURVIVES.
+ *
+ * Two things make this necessary:
+ *   • `uq_colleges_chapter_name_city` is unique on
+ *     (chapter_id, lower(name), coalesce(lower(city),'')), so a move into a
+ *     chapter that already has the same college is rejected outright.
+ *   • That constraint does NOT ignore `merged_into`. A twin that was itself
+ *     soft-merged still occupies the key, so pairing only against un-merged
+ *     rows finds nothing and the move fails anyway. Both were observed on the
+ *     first real use of this screen.
+ *
+ * So: match any row, merged or not, then walk `merged_into` to the survivor —
+ * which is where the students should actually land.
+ */
+async function resolveMergeTarget(
+  svc: Awaited<ReturnType<typeof createServiceClient>>,
+  chapterId: string,
+  name: string,
+  city: string | null
+): Promise<{ id: string; name: string } | null> {
+  const { data } = await svc
+    .schema("future")
+    .from("colleges")
+    .select("id, name, city, merged_into")
+    .eq("chapter_id", chapterId);
+
+  const rows =
+    (data as {
+      id: string;
+      name: string;
+      city: string | null;
+      merged_into: string | null;
+    }[] | null) ?? [];
+
+  const key = (n: string, c: string | null) =>
+    `${n.trim().toLowerCase()}|${(c ?? "").trim().toLowerCase()}`;
+  const byId = new Map(rows.map((r) => [r.id, r]));
+
+  let cur = rows.find((r) => key(r.name, r.city) === key(name, city)) ?? null;
+  if (!cur) return null;
+
+  // Follow the merge chain to the surviving record. Bounded so a cycle in the
+  // data cannot hang the request.
+  for (let hop = 0; hop < 5 && cur.merged_into; hop++) {
+    const next = byId.get(cur.merged_into);
+    if (!next) break;
+    cur = next;
+  }
+  return { id: cur.id, name: cur.name };
+}
+
 /** Name or email of the acting admin, for the record. Never throws. */
 async function describeActor(userId: string): Promise<string | null> {
   try {

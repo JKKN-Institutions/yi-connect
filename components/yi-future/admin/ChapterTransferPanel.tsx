@@ -19,12 +19,12 @@ import {
 
 export function ChapterTransferPanel({
   fromChapter,
-  chapters,
+  toChapter,
   colleges,
   teams,
 }: {
   fromChapter: { id: string; name: string };
-  chapters: { id: string; name: string }[];
+  toChapter: { id: string; name: string };
   colleges: TransferableCollege[];
   teams: TransferableTeam[];
 }) {

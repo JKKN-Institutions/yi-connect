@@ -157,14 +157,21 @@ async function loadMovable(
 export default async function ChapterTransferPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string }>;
+  searchParams: Promise<{ from?: string; to?: string }>;
 }) {
   await requireFutureNationalAdmin();
-  const { from } = await searchParams;
+  const { from, to } = await searchParams;
 
   const chapters = await loadChapters();
   const fromChapter = from ? chapters.find((c) => c.id === from) ?? null : null;
-  const movable = fromChapter ? await loadMovable(fromChapter.id) : null;
+  // The destination is chosen up front, not at the end, because whether a
+  // college can move or must be merged depends entirely on what is already in
+  // the destination — and that has to be on screen before the click.
+  const toChapter =
+    to && to !== from ? chapters.find((c) => c.id === to) ?? null : null;
+  const movable = fromChapter
+    ? await loadMovable(fromChapter.id, toChapter?.id ?? null)
+    : null;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">

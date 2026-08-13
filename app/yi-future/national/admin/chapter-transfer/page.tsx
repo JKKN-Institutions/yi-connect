@@ -141,6 +141,10 @@ async function loadMovable(
       city: c.city,
       delegates: byCollege.get(c.id)?.total ?? 0,
       delegatesOnTeams: byCollege.get(c.id)?.onTeams ?? 0,
+      mergesIntoName:
+        destIndex.get(
+          `${c.name.trim().toLowerCase()}|${(c.city ?? "").trim().toLowerCase()}`
+        ) ?? null,
     })),
     teams: teamList.map((t) => ({
       id: t.id,

@@ -171,11 +171,29 @@ export async function transferToChapter(
         .select("id", { count: "exact", head: true })
         .eq("college_id", id)
         .eq("chapter_id", fromChapterId);
+
+      // Does the destination already have this college? If so this is a merge,
+      // not a move — the database would refuse the move outright.
+      const target = await resolveMergeTarget(
+        svc,
+        toChapterId,
+        col.name,
+        col.city
+      );
+      if (target && target.id === id) {
+        return {
+          ok: false,
+          error: `Nothing was moved. "${col.name}" appears to already be its own merge target — reload the page.`,
+        };
+      }
+
       plan.push({
         entityType: "college",
         entityId: id,
         entityName: col.name,
         delegatesMoved: count ?? 0,
+        mergeTargetId: target?.id ?? null,
+        mergeTargetName: target?.name ?? null,
       });
     }
   }

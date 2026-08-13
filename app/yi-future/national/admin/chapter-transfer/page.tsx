@@ -259,7 +259,7 @@ export default async function ChapterTransferPage({
         </p>
       )}
 
-      {fromChapter && movable && (
+      {fromChapter && toChapter && movable && (
         <>
           {movable.truncated && (
             <p
@@ -273,16 +273,14 @@ export default async function ChapterTransferPage({
           )}
           <ChapterTransferPanel
             fromChapter={{ id: fromChapter.id, name: fromChapter.name }}
-            chapters={chapters
-              .filter((c) => c.id !== fromChapter.id)
-              .map((c) => ({ id: c.id, name: c.name }))}
+            toChapter={{ id: toChapter.id, name: toChapter.name }}
             colleges={movable.colleges}
             teams={movable.teams}
           />
         </>
       )}
 
-      {fromChapter && movable && movable.colleges.length === 0 && movable.teams.length === 0 && (
+      {fromChapter && toChapter && movable && movable.colleges.length === 0 && movable.teams.length === 0 && (
         <p className="mt-6 text-sm text-navy/60">
           {fromChapter.name} has no colleges or teams on file, so there is
           nothing to move.

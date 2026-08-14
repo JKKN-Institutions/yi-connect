@@ -12,6 +12,11 @@ import { listScoringBuckets } from "./scoring-buckets";
 import { getScoringFlagsConfig } from "./scoring-flags";
 import { getSessionScoringParams } from "./scoring";
 import { fetchAllRows } from "@/lib/pagination";
+import {
+  buildMissingResultsNotice,
+  isRoundOver,
+  type MissingResultsNotice,
+} from "@/lib/yip/results-missing";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -2157,4 +2162,67 @@ export async function submitAllDraftsForJury(
   }
   revalidatePath(`/yip/dashboard/events/${eventId}/scoring`);
   return { success: true, data: { submitted, skipped } };
+}
+
+/**
+ * POST-EVENT ONLY — "this round has scores but nobody ever computed results".
+ *
+ * Returns null unless every condition in buildMissingResultsNotice holds (see
+ * lib/yip/results-missing.ts for the rule and why it is time-gated). Rendered
+ * on the event's own overview page; deliberately NOT wired into
+ * getEventReadiness / the Control panel, whose live "your next step" pointer a
+ * prior attempt hijacked mid-event (PR #915, rejected).
+ *
+ * Cost: one event row + two head-only counts. Read-only.
+ */
+export async function getMissingResultsNotice(
+  eventId: string
+): Promise<MissingResultsNotice | null> {
+  // Same audience as the Results page itself — no point telling someone to
+  // press a button on a page they cannot open.
+  const access = await getYipEventAccess(eventId);
+  if (!access.canViewScores) return null;
+
+  const supabase = await createServiceClient();
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("status, day1_date, day2_date, is_mock")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (!event) return null;
+
+  // Cheap gate first: if the round is not over, skip the counts entirely.
+  if (
+    !isRoundOver(
+      event.status as string,
+      event.day1_date as string | null,
+      event.day2_date as string | null
+    )
+  ) {
+    return null;
+  }
+
+  const [{ count: submittedScoreCount }, { count: resultRowCount }] =
+    await Promise.all([
+      supabase
+        .from("scores")
+        .select("id", { count: "exact", head: true })
+        .eq("event_id", eventId)
+        .eq("status", "submitted"),
+      supabase
+        .from("results")
+        .select("id", { count: "exact", head: true })
+        .eq("event_id", eventId),
+    ]);
+
+  return buildMissingResultsNotice({
+    eventId,
+    status: event.status as string,
+    day1Date: event.day1_date as string | null,
+    day2Date: event.day2_date as string | null,
+    isMock: Boolean(event.is_mock),
+    submittedScoreCount: submittedScoreCount ?? 0,
+    resultRowCount: resultRowCount ?? 0,
+  });
 }

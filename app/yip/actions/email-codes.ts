@@ -157,6 +157,7 @@ Young Indians · CII`;
       </div>
       <p style="margin:28px 0 8px"><a href="${JOIN_URL}" style="display:inline-block;background:#138808;color:#ffffff;padding:13px 28px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px">Sign in to YIP</a></p>
       <p style="margin:0 0 20px;color:#6b7280;font-size:13px">Or open <a href="${JOIN_URL}" style="color:#138808">${JOIN_URL}</a> and enter your code.</p>
+      ${groupsHtml}
       <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin:0 0 4px">
         <p style="margin:0;color:#b91c1c;font-size:13px;font-weight:600">Do NOT share this code with anyone — not classmates, friends or family. Anyone who has your code can sign in and act as you at the event.</p>
       </div>

@@ -297,6 +297,8 @@ export async function getYipEmailCodePlan(
       total: recipients.length,
       withEmail: recipients.filter((r) => r.hasEmail).length,
       recipients,
+      eventTotal: eventTotal ?? recipients.length,
+      filtered: scoped && recipients.length < (eventTotal ?? 0),
     },
   };
 }

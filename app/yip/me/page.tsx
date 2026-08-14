@@ -66,6 +66,8 @@ import { YourDayInTheHouseCard } from "./your-day-card";
 import { YourGrowthCard } from "./your-growth-card";
 import { SectionShell, SectionHeading, INK, SAFFRON, GREEN, GOLD, SERIF, inkA } from "./credential-ui";
 import { CommitteeBillsList, type DashboardCommitteeBill } from "./committee-bills-list";
+import { getMySelfNomination } from "@/app/yip/actions/self-nomination";
+import { selfNominationRoleLabels } from "@/lib/yip/self-nomination";
 
 // ─── Session parsing ─────────────────────────────────────────────
 
@@ -453,6 +455,16 @@ export default async function ParticipantPage() {
     ? new Date(event.day1_date).getFullYear()
     : "";
   const sessionStamp = [stampChapter, stampYear].filter(Boolean).join(" · ");
+
+  // Self-nomination window + whether this student has already put themselves
+  // forward. The action re-reads the httpOnly session cookie itself, so nothing
+  // is trusted from here. Fails CLOSED — a read error reads as "closed".
+  const selfNom = await getMySelfNomination(session.eventId);
+  const selfNomOpen = selfNom.success && selfNom.data.open;
+  const selfNomRoles =
+    selfNom.success && selfNom.data.nomination
+      ? selfNom.data.nomination.roles
+      : [];
 
   return (
     <div className="space-y-5">
@@ -886,6 +898,50 @@ export default async function ParticipantPage() {
             </div>
           </SectionShell>
         )}
+
+      {/* ─── SELF-NOMINATION (pre-event; admin-toggled window) ───────
+          Only shown when the organiser has OPENED the window, or when this
+          student already nominated. The column defaults to false on every
+          existing event, so a live chapter round mid-flight gains nothing on
+          this dashboard until an organiser deliberately switches it on. */}
+      {(selfNomOpen || selfNomRoles.length > 0) && (
+      <SectionShell accent={SAFFRON}>
+        <div className="px-5 py-4">
+          <SectionHeading
+            eyebrow="Leadership"
+            title="Self-Nomination"
+            icon={Gavel}
+            accent={SAFFRON}
+            trailing={
+              <Link
+                href="/yip/me/nominate"
+                className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
+                style={{ background: `${SAFFRON}14`, color: SAFFRON }}
+              >
+                {/* "Open" is the house CTA verb, but next to a "closed"
+                    status line it reads as the window state — so only use it
+                    when the window really is open and nothing is submitted. */}
+                {selfNomOpen && selfNomRoles.length === 0 ? "Open" : "View"}
+                <ChevronRight className="size-4" />
+              </Link>
+            }
+          />
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <span
+              className="size-1.5 shrink-0 rounded-full"
+              style={{ background: selfNomOpen ? GREEN : inkA(0.35) }}
+            />
+            <p className="text-xs" style={{ color: inkA(0.55) }}>
+              {selfNomRoles.length > 0
+                ? `You nominated for ${selfNominationRoleLabels(selfNomRoles)}`
+                : selfNomOpen
+                  ? "Nominate yourself for Administrator, Speaker and/or Party Leader"
+                  : "Nominations are closed"}
+            </p>
+          </div>
+        </div>
+      </SectionShell>
+      )}
 
       {/* ─── QUESTION HOUR ────────────────────────────────────────── */}
       <SectionShell accent={SAFFRON}>

@@ -20,6 +20,7 @@ import {
   Flag,
   Gavel,
   ListChecks,
+  ClipboardList,
   CalendarClock,
   Shield,
   Images,
@@ -59,6 +60,10 @@ const GROUPS: TabGroup[] = [
       // order. Drives the Control panel + projector view.
       { label: "Agenda", href: "/agenda", icon: CalendarClock },
       { label: "Participants", href: "/participants", icon: Users },
+      // Self-nomination — students put themselves forward for Administrator /
+      // Speaker / Party Leader from home before event day. Applies to EVERY
+      // event level, so unlike Formation it is not level-gated.
+      { label: "Nominations", href: "/nominations", icon: ClipboardList },
       // Committee picker (route stays /topics). Before Parties so the setup
       // order reads Committees → Parties → Allocation.
       { label: "Committees", href: "/topics", icon: BookOpen },

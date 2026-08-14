@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ChevronDown, Search, X } from 'lucide-react'
+import { ChevronDown, Search, Target, User, Calendar, CheckCircle2, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,40 +9,79 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import {
   ALIGNMENT_ROWS,
+  BAND_META,
   CHAPTER_ROWS,
   GAP_ROWS,
   LEAD_ROWS,
-  type Alignment,
+  RUBRIC,
+  type AlignmentRow,
+  type Band,
 } from '@/lib/policy-alignment/tn-budget-2026'
 
-const ALIGN_STYLES: Record<Alignment, string> = {
-  Direct:
+const BAND_STYLES: Record<Band, string> = {
+  'Act now':
     'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200',
-  Partial: 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200',
-  None: 'bg-rose-100 text-rose-900 dark:bg-rose-950 dark:text-rose-200',
-  Internal: 'bg-muted text-muted-foreground',
+  'Open a door':
+    'bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200',
+  'Re-scope first':
+    'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200',
+  'Not this year': 'bg-muted text-muted-foreground',
 }
 
-const ALIGN_ORDER: Alignment[] = ['Direct', 'Partial', 'None', 'Internal']
+const BAND_TONE: Record<Band, string> = {
+  'Act now': 'text-emerald-600 dark:text-emerald-400',
+  'Open a door': 'text-sky-600 dark:text-sky-400',
+  'Re-scope first': 'text-amber-600 dark:text-amber-400',
+  'Not this year': 'text-muted-foreground',
+}
 
-function AlignBadge({ value }: { value: Alignment }) {
+const BANDS: Band[] = ['Act now', 'Open a door', 'Re-scope first', 'Not this year']
+
+/** Four sub-scores as segmented bars — the number is auditable at a glance. */
+function ScoreMeter({ row, size = 'sm' }: { row: AlignmentRow; size?: 'sm' | 'lg' }) {
   return (
-    <span
-      className={cn(
-        'inline-block rounded px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap',
-        ALIGN_STYLES[value]
-      )}
-    >
-      {value}
-    </span>
+    <div className='flex items-center gap-2'>
+      <div className='flex gap-[3px]' aria-hidden='true'>
+        {RUBRIC.map(r => {
+          const v = row.scores[r.key]
+          return (
+            <span
+              key={r.key}
+              title={`${r.label}: ${v}/2 — ${v === 2 ? r.two : v === 1 ? r.one : r.zero}`}
+              className={cn(
+                'flex flex-col-reverse gap-[2px]',
+                size === 'lg' ? 'w-2.5' : 'w-1.5'
+              )}
+            >
+              {[0, 1].map(i => (
+                <span
+                  key={i}
+                  className={cn(
+                    'block rounded-[1px]',
+                    size === 'lg' ? 'h-2' : 'h-1.5',
+                    i < v ? 'bg-current opacity-90' : 'bg-current opacity-15'
+                  )}
+                />
+              ))}
+            </span>
+          )
+        })}
+      </div>
+      <span
+        className={cn(
+          'font-mono font-semibold tabular-nums',
+          size === 'lg' ? 'text-sm' : 'text-xs'
+        )}
+      >
+        {row.score}/8
+      </span>
+    </div>
   )
 }
 
-/** Small monospace chip carrying the budget paragraph number. */
 function Para({ value }: { value: string }) {
-  if (!value || value === '—') {
+  if (!value || value === '—')
     return <span className='text-muted-foreground text-xs'>—</span>
-  }
   return (
     <span className='bg-primary/10 text-primary rounded px-1.5 py-0.5 font-mono text-[11px] whitespace-nowrap'>
       ¶{value}
@@ -50,43 +89,48 @@ function Para({ value }: { value: string }) {
   )
 }
 
-function Stat({
-  n,
-  label,
-  active,
-  onClick,
-  tone,
-}: {
-  n: number
-  label: string
-  active?: boolean
-  onClick?: () => void
-  tone?: string
-}) {
-  const Tag = onClick ? 'button' : 'div'
+/** The action point — the thing someone actually does on Monday. */
+function ActionPoint({ row }: { row: AlignmentRow }) {
+  const dead = row.band === 'Not this year'
   return (
-    <Tag
-      type={onClick ? 'button' : undefined}
-      onClick={onClick}
-      aria-pressed={onClick ? !!active : undefined}
+    <div
       className={cn(
-        'bg-card rounded-lg border p-4 text-left transition-colors',
-        onClick && 'hover:border-primary/60 cursor-pointer',
-        active && 'border-primary ring-primary/30 ring-2'
+        'rounded-md border p-4',
+        dead ? 'bg-muted/40' : 'bg-primary/[0.04] border-primary/25'
       )}
     >
-      <span
-        className={cn(
-          'block font-mono text-2xl leading-none font-semibold tabular-nums',
-          tone
-        )}
-      >
-        {n}
-      </span>
-      <span className='text-muted-foreground mt-1.5 block text-xs leading-snug'>
-        {label}
-      </span>
-    </Tag>
+      <div className='mb-2 flex items-center gap-2'>
+        <Target
+          className={cn('size-4', dead ? 'text-muted-foreground' : 'text-primary')}
+        />
+        <span
+          className={cn(
+            'text-[10px] font-bold tracking-wider uppercase',
+            dead ? 'text-muted-foreground' : 'text-primary'
+          )}
+        >
+          {dead ? 'No action this year' : 'Do this first'}
+        </span>
+      </div>
+      <p className='text-sm leading-snug font-medium'>{row.firstStep}</p>
+      <dl className='mt-3 grid gap-x-6 gap-y-2 text-xs sm:grid-cols-3'>
+        <div className='flex gap-2'>
+          <dt className='sr-only'>Owner</dt>
+          <User className='text-muted-foreground mt-0.5 size-3.5 shrink-0' />
+          <dd className='leading-snug'>{row.owner}</dd>
+        </div>
+        <div className='flex gap-2'>
+          <dt className='sr-only'>Window</dt>
+          <Calendar className='text-muted-foreground mt-0.5 size-3.5 shrink-0' />
+          <dd className='leading-snug'>{row.window}</dd>
+        </div>
+        <div className='flex gap-2'>
+          <dt className='sr-only'>Proof it worked</dt>
+          <CheckCircle2 className='text-muted-foreground mt-0.5 size-3.5 shrink-0' />
+          <dd className='leading-snug'>{row.proof}</dd>
+        </div>
+      </dl>
+    </div>
   )
 }
 
@@ -94,13 +138,11 @@ export function AlignmentExplorer() {
   const [q, setQ] = useState('')
   const [pillar, setPillar] = useState<string | null>(null)
   const [vertical, setVertical] = useState<string | null>(null)
-  const [align, setAlign] = useState<Alignment | null>(null)
+  const [bandF, setBandF] = useState<Band | null>(null)
   const [open, setOpen] = useState<Set<number>>(new Set())
+  const [showRubric, setShowRubric] = useState(false)
 
-  const pillars = useMemo(
-    () => [...new Set(ALIGNMENT_ROWS.map(r => r.pillar))],
-    []
-  )
+  const pillars = useMemo(() => [...new Set(ALIGNMENT_ROWS.map(r => r.pillar))], [])
   const verticals = useMemo(
     () => [...new Set(ALIGNMENT_ROWS.map(r => r.vertical))].sort(),
     []
@@ -111,100 +153,211 @@ export function AlignmentExplorer() {
     return ALIGNMENT_ROWS.filter(r => {
       if (pillar && r.pillar !== pillar) return false
       if (vertical && r.vertical !== vertical) return false
-      if (align && r.align !== align) return false
+      if (bandF && r.band !== bandF) return false
       if (!needle) return true
-      return [
-        r.vertical,
-        r.programme,
-        r.target,
-        r.scheme,
-        r.dept,
-        r.action,
-        r.para,
-      ]
+      return [r.vertical, r.programme, r.scheme, r.dept, r.why, r.firstStep, r.owner, r.para]
         .join(' ')
         .toLowerCase()
         .includes(needle)
     })
-  }, [q, pillar, vertical, align])
+  }, [q, pillar, vertical, bandF])
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = {}
-    for (const r of rows) c[r.align] = (c[r.align] ?? 0) + 1
+    const c = {} as Record<Band, number>
+    for (const r of rows) c[r.band] = (c[r.band] ?? 0) + 1
     return c
   }, [rows])
 
-  const filtered = !!(q || pillar || vertical || align)
+  const filtered = !!(q || pillar || vertical || bandF)
 
-  function reset() {
+  const reset = () => {
     setQ('')
     setPillar(null)
     setVertical(null)
-    setAlign(null)
+    setBandF(null)
   }
 
-  function toggleRow(i: number) {
+  const toggleRow = (i: number) =>
     setOpen(prev => {
       const next = new Set(prev)
-      if (next.has(i)) next.delete(i)
-      else next.add(i)
+      next.has(i) ? next.delete(i) : next.add(i)
       return next
     })
-  }
+
+  /* Action plan groups — highest-scoring work first. */
+  const groups = useMemo(
+    () => [
+      {
+        title: 'Start here',
+        note: 'Perfect score. Same outcome, same people, same year, and the budget text explicitly invites an outside partner.',
+        rows: ALIGNMENT_ROWS.filter(r => r.score === 8),
+      },
+      {
+        title: 'Act now',
+        note: 'Strong on every dimension. These need a first move this year.',
+        rows: ALIGNMENT_ROWS.filter(r => r.score === 7),
+      },
+      {
+        title: 'Open a door',
+        note: 'The match is real but there is no route in yet. Find the counterpart before promising anything.',
+        rows: ALIGNMENT_ROWS.filter(r => r.score >= 5 && r.score <= 6),
+      },
+    ],
+    []
+  )
 
   return (
-    <Tabs defaultValue='matrix' className='w-full'>
+    <Tabs defaultValue='actions' className='w-full'>
       <TabsList className='mb-6 flex h-auto flex-wrap justify-start gap-1'>
-        <TabsTrigger value='matrix'>Alignment Matrix</TabsTrigger>
+        <TabsTrigger value='actions'>Action Plan</TabsTrigger>
+        <TabsTrigger value='matrix'>Scored Matrix</TabsTrigger>
         <TabsTrigger value='chapters'>Chapters</TabsTrigger>
         <TabsTrigger value='gaps'>Gaps &amp; Cautions</TabsTrigger>
         <TabsTrigger value='leads'>SRTN Leads</TabsTrigger>
       </TabsList>
 
-      {/* ─────────────── Alignment matrix ─────────────── */}
+      {/* ─────────────── Action plan ─────────────── */}
+      <TabsContent value='actions' className='space-y-8'>
+        <p className='text-muted-foreground max-w-2xl text-sm'>
+          Every programme scoring 5 or more, as a first move with an owner, a
+          window and a test of whether it worked. Ordered by how well the two
+          sides actually match — not by how appealing the idea sounds.
+        </p>
+
+        {groups.map(g => (
+          <section key={g.title}>
+            <div className='mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b pb-2'>
+              <h2 className='text-lg font-bold'>{g.title}</h2>
+              <span className='text-muted-foreground font-mono text-sm tabular-nums'>
+                {g.rows.length}
+              </span>
+              <p className='text-muted-foreground w-full text-xs sm:w-auto sm:flex-1'>
+                {g.note}
+              </p>
+            </div>
+            <ol className='space-y-3'>
+              {g.rows.map(r => (
+                <li
+                  key={r.programme}
+                  className='bg-card rounded-lg border p-4'
+                >
+                  <div className='mb-2 flex flex-wrap items-center gap-2'>
+                    <Badge variant='outline' className='text-[10px]'>
+                      {r.vertical}
+                    </Badge>
+                    <span className={BAND_TONE[r.band]}>
+                      <ScoreMeter row={r} />
+                    </span>
+                    <Para value={r.para} />
+                  </div>
+                  <h3 className='text-sm leading-snug font-bold'>
+                    {r.programme}
+                  </h3>
+                  <p className='text-muted-foreground mt-0.5 mb-3 text-sm leading-snug'>
+                    → {r.scheme}
+                  </p>
+                  <ActionPoint row={r} />
+                </li>
+              ))}
+            </ol>
+          </section>
+        ))}
+      </TabsContent>
+
+      {/* ─────────────── Scored matrix ─────────────── */}
       <TabsContent value='matrix' className='space-y-5'>
         <div className='grid grid-cols-2 gap-3 sm:grid-cols-4'>
-          {ALIGN_ORDER.map(a => (
-            <Stat
-              key={a}
-              n={counts[a] ?? 0}
-              label={
-                a === 'Direct'
-                  ? 'Same outcome, same year'
-                  : a === 'Partial'
-                    ? 'Needs re-scoping to fit'
-                    : a === 'None'
-                      ? 'No scheme in this budget'
-                      : 'Yi-facing, no policy surface'
-              }
-              active={align === a}
-              onClick={() => setAlign(align === a ? null : a)}
-              tone={
-                a === 'Direct'
-                  ? 'text-emerald-600 dark:text-emerald-400'
-                  : a === 'Partial'
-                    ? 'text-amber-600 dark:text-amber-400'
-                    : a === 'None'
-                      ? 'text-rose-600 dark:text-rose-400'
-                      : 'text-muted-foreground'
-              }
-            />
-          ))}
+          {BANDS.map(b => {
+            const meta = BAND_META.find(m => m.band === b)!
+            return (
+              <button
+                key={b}
+                type='button'
+                onClick={() => setBandF(bandF === b ? null : b)}
+                aria-pressed={bandF === b}
+                className={cn(
+                  'bg-card hover:border-primary/60 cursor-pointer rounded-lg border p-4 text-left transition-colors',
+                  bandF === b && 'border-primary ring-primary/30 ring-2'
+                )}
+              >
+                <span
+                  className={cn(
+                    'block font-mono text-2xl leading-none font-semibold tabular-nums',
+                    BAND_TONE[b]
+                  )}
+                >
+                  {counts[b] ?? 0}
+                </span>
+                <span className='mt-1.5 block text-xs font-semibold'>{b}</span>
+                <span className='text-muted-foreground mt-1 block text-[11px] leading-snug'>
+                  {meta.min > 0 ? `${meta.min}+ / 8` : '0–2 / 8'}
+                </span>
+              </button>
+            )
+          })}
         </div>
 
-        {/* Controls */}
+        <div>
+          <Button
+            size='sm'
+            variant='ghost'
+            onClick={() => setShowRubric(v => !v)}
+            aria-expanded={showRubric}
+            className='h-7 px-2 text-xs'
+          >
+            How the score works
+            <ChevronDown
+              className={cn('ml-1 size-3.5 transition-transform', showRubric && 'rotate-180')}
+            />
+          </Button>
+          {showRubric && (
+            <div className='bg-muted/40 mt-2 rounded-md border p-4'>
+              <p className='text-muted-foreground mb-3 text-xs'>
+                Four dimensions, 0–2 each, totalling 8. A judgement against a
+                fixed rubric — not a measurement.
+              </p>
+              <dl className='grid gap-3 sm:grid-cols-2'>
+                {RUBRIC.map(r => (
+                  <div key={r.key}>
+                    <dt className='text-xs font-bold'>{r.label}</dt>
+                    <dd className='text-muted-foreground text-xs leading-snug'>
+                      <b className='text-foreground'>2</b> {r.two} ·{' '}
+                      <b className='text-foreground'>1</b> {r.one} ·{' '}
+                      <b className='text-foreground'>0</b> {r.zero}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              <ul className='mt-3 space-y-1 border-t pt-3'>
+                {BAND_META.map(m => (
+                  <li key={m.band} className='text-xs leading-snug'>
+                    <span
+                      className={cn(
+                        'mr-2 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold',
+                        BAND_STYLES[m.band]
+                      )}
+                    >
+                      {m.band}
+                    </span>
+                    <span className='text-muted-foreground'>{m.blurb}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
         <div className='space-y-3'>
           <div className='relative'>
             <Search className='text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2' />
             <Input
               value={q}
               onChange={e => setQ(e.target.value)}
-              placeholder='Search programmes, schemes, departments…'
+              placeholder='Search programmes, schemes, departments, owners…'
               className='pl-9'
               aria-label='Search the alignment matrix'
             />
           </div>
-
           <div className='flex flex-wrap gap-1.5'>
             {pillars.map(p => (
               <Button
@@ -217,7 +370,6 @@ export function AlignmentExplorer() {
               </Button>
             ))}
           </div>
-
           <div className='flex flex-wrap gap-1.5'>
             {verticals.map(v => (
               <Button
@@ -231,7 +383,6 @@ export function AlignmentExplorer() {
               </Button>
             ))}
           </div>
-
           <div className='flex items-center justify-between gap-3'>
             <p className='text-muted-foreground text-xs'>
               Showing{' '}
@@ -249,7 +400,6 @@ export function AlignmentExplorer() {
           </div>
         </div>
 
-        {/* Rows */}
         <div className='divide-y rounded-lg border'>
           {rows.length === 0 && (
             <p className='text-muted-foreground p-8 text-center text-sm'>
@@ -268,11 +418,21 @@ export function AlignmentExplorer() {
                   className='hover:bg-muted/50 flex w-full items-start gap-3 p-4 text-left transition-colors'
                 >
                   <div className='min-w-0 flex-1'>
-                    <div className='mb-1 flex flex-wrap items-center gap-2'>
+                    <div className='mb-1.5 flex flex-wrap items-center gap-2'>
                       <Badge variant='outline' className='text-[10px]'>
                         {r.vertical}
                       </Badge>
-                      <AlignBadge value={r.align} />
+                      <span
+                        className={cn(
+                          'rounded px-2 py-0.5 text-[11px] font-semibold',
+                          BAND_STYLES[r.band]
+                        )}
+                      >
+                        {r.band}
+                      </span>
+                      <span className={BAND_TONE[r.band]}>
+                        <ScoreMeter row={r} />
+                      </span>
                       <Para value={r.para} />
                       {r.crore != null && (
                         <span className='text-muted-foreground font-mono text-[11px] tabular-nums'>
@@ -284,7 +444,7 @@ export function AlignmentExplorer() {
                       {r.programme}
                     </p>
                     <p className='text-muted-foreground mt-0.5 text-sm leading-snug'>
-                      {r.scheme}
+                      → {r.scheme}
                     </p>
                   </div>
                   <ChevronDown
@@ -296,26 +456,49 @@ export function AlignmentExplorer() {
                 </button>
 
                 {isOpen && (
-                  <dl className='bg-muted/40 grid gap-3 px-4 pb-4 text-sm sm:grid-cols-3'>
-                    <div>
-                      <dt className='text-muted-foreground mb-1 text-[10px] font-semibold tracking-wider uppercase'>
-                        Yi target 2026
-                      </dt>
-                      <dd className='leading-snug'>{r.target}</dd>
+                  <div className='space-y-4 px-4 pb-4'>
+                    <div className='bg-muted/40 rounded-md border p-4'>
+                      <p className='text-muted-foreground mb-1.5 text-[10px] font-bold tracking-wider uppercase'>
+                        Why {r.score}/8
+                      </p>
+                      <p className='text-sm leading-snug'>{r.why}</p>
+                      <dl className='mt-3 flex flex-wrap gap-x-5 gap-y-1.5 border-t pt-3'>
+                        {RUBRIC.map(rb => (
+                          <div key={rb.key} className='flex items-baseline gap-1.5'>
+                            <dt className='text-muted-foreground text-[11px]'>
+                              {rb.label}
+                            </dt>
+                            <dd className='font-mono text-[11px] font-semibold tabular-nums'>
+                              {r.scores[rb.key]}/2
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
                     </div>
-                    <div>
-                      <dt className='text-muted-foreground mb-1 text-[10px] font-semibold tracking-wider uppercase'>
-                        TN department
-                      </dt>
-                      <dd className='leading-snug'>{r.dept}</dd>
-                    </div>
-                    <div>
-                      <dt className='text-muted-foreground mb-1 text-[10px] font-semibold tracking-wider uppercase'>
-                        What SRTN does
-                      </dt>
-                      <dd className='leading-snug font-medium'>{r.action}</dd>
-                    </div>
-                  </dl>
+
+                    <ActionPoint row={r} />
+
+                    <dl className='grid gap-3 text-sm sm:grid-cols-3'>
+                      <div>
+                        <dt className='text-muted-foreground mb-1 text-[10px] font-semibold tracking-wider uppercase'>
+                          Yi target 2026
+                        </dt>
+                        <dd className='leading-snug'>{r.target}</dd>
+                      </div>
+                      <div>
+                        <dt className='text-muted-foreground mb-1 text-[10px] font-semibold tracking-wider uppercase'>
+                          TN department
+                        </dt>
+                        <dd className='leading-snug'>{r.dept}</dd>
+                      </div>
+                      <div>
+                        <dt className='text-muted-foreground mb-1 text-[10px] font-semibold tracking-wider uppercase'>
+                          Strategic note
+                        </dt>
+                        <dd className='leading-snug'>{r.action}</dd>
+                      </div>
+                    </dl>
+                  </div>
                 )}
               </div>
             )
@@ -355,10 +538,10 @@ export function AlignmentExplorer() {
                   className={cn(
                     'rounded px-2 py-0.5 text-[11px] font-semibold',
                     g.type.startsWith('Gap')
-                      ? ALIGN_STYLES.Partial
+                      ? BAND_STYLES['Re-scope first']
                       : g.type === 'Do not chase'
-                        ? ALIGN_STYLES.None
-                        : ALIGN_STYLES.Internal
+                        ? 'bg-rose-100 text-rose-900 dark:bg-rose-950 dark:text-rose-200'
+                        : BAND_STYLES['Not this year']
                   )}
                 >
                   {g.type}

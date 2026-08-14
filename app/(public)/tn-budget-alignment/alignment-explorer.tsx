@@ -21,9 +21,11 @@ import {
   ALIGNMENT_ROWS,
   BAND_META,
   CHAPTER_ROWS,
+  DEPT_CASES,
   EFFORT_META,
   GAP_ROWS,
   LEAD_ROWS,
+  POSITIONING,
   RUBRIC,
   type AlignmentRow,
   type Band,
@@ -150,6 +152,14 @@ function ActionPoint({ row }: { row: AlignmentRow }) {
         )}
       </div>
       <p className='text-sm leading-snug font-medium'>{row.firstStep}</p>
+      {!dead && (
+        <p className='mt-2.5 text-sm leading-snug'>
+          <span className='text-[10px] font-bold tracking-wider text-emerald-700 uppercase dark:text-emerald-400'>
+            Department gains ·{' '}
+          </span>
+          {row.govGain}
+        </p>
+      )}
       <dl className='mt-3 grid gap-x-6 gap-y-2 text-xs sm:grid-cols-3'>
         <div className='flex gap-2'>
           <dt className='sr-only'>Owner</dt>
@@ -283,8 +293,10 @@ export function AlignmentExplorer() {
   )
 
   return (
-    <Tabs defaultValue='actions' className='w-full'>
+    <Tabs defaultValue='govt' className='w-full'>
       <TabsList className='mb-6 flex h-auto flex-wrap justify-start gap-1'>
+        <TabsTrigger value='govt'>What the Government Gains</TabsTrigger>
+        <TabsTrigger value='positioning'>Positioning</TabsTrigger>
         <TabsTrigger value='actions'>Action Plan</TabsTrigger>
         <TabsTrigger value='owners'>By Owner</TabsTrigger>
         <TabsTrigger value='mychapter'>By Chapter</TabsTrigger>
@@ -293,6 +305,142 @@ export function AlignmentExplorer() {
         <TabsTrigger value='gaps'>Gaps &amp; Cautions</TabsTrigger>
         <TabsTrigger value='leads'>SRTN Leads</TabsTrigger>
       </TabsList>
+
+      {/* ─────────────── What the government gains ─────────────── */}
+      <TabsContent value='govt' className='space-y-8'>
+        <div className='border-primary/25 bg-primary/[0.04] rounded-lg border p-5'>
+          <p className='text-sm leading-relaxed'>
+            Read from the department&rsquo;s side of the table. Each entry states
+            what this budget obliges a department to deliver, what it is short
+            of, and what Yi can hand over &mdash;{' '}
+            <strong>
+              never what Yi gains. A Yi growth target is not a government
+              benefit.
+            </strong>{' '}
+            The cost column is what the department must give up, and it is never
+            money.
+          </p>
+        </div>
+
+        {DEPT_CASES.map(d => (
+          <section key={d.dept}>
+            <div className='mb-3 border-b pb-3'>
+              <div className='mb-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1'>
+                <h2 className='text-lg font-bold'>{d.dept}</h2>
+                <span className='text-muted-foreground font-mono text-xs'>
+                  {d.budget}
+                </span>
+                <Para value={d.para} />
+              </div>
+              <p className='text-muted-foreground text-sm leading-snug'>
+                <b className='text-foreground'>Obliged to deliver:</b>{' '}
+                {d.mandate}
+              </p>
+              <p className='mt-2 text-sm leading-snug'>
+                <b className='text-amber-700 dark:text-amber-400'>
+                  What they are short of:
+                </b>{' '}
+                {d.constraint}
+              </p>
+            </div>
+
+            <div className='space-y-2.5'>
+              {d.offers.map((o, i) => (
+                <div key={i} className='bg-card rounded-lg border p-4'>
+                  <p className='text-sm leading-snug font-semibold'>{o.work}</p>
+                  <dl className='mt-3 grid gap-3 text-sm sm:grid-cols-3'>
+                    <div className='sm:col-span-2'>
+                      <dt className='mb-1 text-[10px] font-bold tracking-wider text-emerald-700 uppercase dark:text-emerald-400'>
+                        What the department gains
+                      </dt>
+                      <dd className='leading-snug font-medium'>{o.gains}</dd>
+                    </div>
+                    <div>
+                      <dt className='text-muted-foreground mb-1 text-[10px] font-bold tracking-wider uppercase'>
+                        What it costs them
+                      </dt>
+                      <dd className='leading-snug'>{o.costs}</dd>
+                      {o.scale && (
+                        <dd className='text-muted-foreground mt-1.5 text-xs leading-snug'>
+                          Scale: {o.scale}
+                        </dd>
+                      )}
+                    </div>
+                  </dl>
+                </div>
+              ))}
+            </div>
+
+            <p className='text-muted-foreground mt-3 text-xs leading-snug'>
+              <b className='text-foreground'>Evidence handed back:</b>{' '}
+              {d.evidence}
+            </p>
+          </section>
+        ))}
+      </TabsContent>
+
+      {/* ─────────────── Positioning ─────────────── */}
+      <TabsContent value='positioning' className='space-y-8'>
+        <div>
+          <h2 className='text-2xl leading-tight font-bold text-balance'>
+            {POSITIONING.headline}
+          </h2>
+          <p className='text-muted-foreground mt-3 max-w-3xl text-base leading-relaxed'>
+            {POSITIONING.sub}
+          </p>
+        </div>
+
+        <div className='grid gap-3 md:grid-cols-3'>
+          {POSITIONING.assets.map(a => (
+            <div key={a.title} className='bg-card rounded-lg border p-4'>
+              <h3 className='mb-2 text-sm font-bold'>{a.title}</h3>
+              <p className='text-muted-foreground text-sm leading-snug'>
+                {a.body}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className='grid gap-4 md:grid-cols-2'>
+          <div className='rounded-lg border border-emerald-600/30 bg-emerald-50/50 p-4 dark:bg-emerald-950/20'>
+            <h3 className='mb-3 text-sm font-bold text-emerald-800 dark:text-emerald-300'>
+              Say this
+            </h3>
+            <ul className='space-y-2.5'>
+              {POSITIONING.say.map((s, i) => (
+                <li key={i} className='text-sm leading-snug'>
+                  {s}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className='rounded-lg border border-rose-600/30 bg-rose-50/50 p-4 dark:bg-rose-950/20'>
+            <h3 className='mb-3 text-sm font-bold text-rose-800 dark:text-rose-300'>
+              Never say this
+            </h3>
+            <ul className='space-y-2.5'>
+              {POSITIONING.neverSay.map((s, i) => (
+                <li key={i} className='text-sm leading-snug'>
+                  {s}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <div className='bg-card rounded-lg border p-4'>
+          <h3 className='mb-2 text-sm font-bold'>
+            The only things Yi ever asks for
+          </h3>
+          <ul className='grid gap-2 sm:grid-cols-2'>
+            {POSITIONING.ask.map((s, i) => (
+              <li key={i} className='text-sm leading-snug'>
+                &middot; {s}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </TabsContent>
 
       {/* ─────────────── Action plan ─────────────── */}
       <TabsContent value='actions' className='space-y-8'>

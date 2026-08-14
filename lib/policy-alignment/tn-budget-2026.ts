@@ -21,6 +21,10 @@
  * (Yi-SRTN-x-TN-Budget-2026-27-Alignment.xlsx, kept outside the repo). Update
  * both together so the public page and the circulated file cannot drift.
  *
+ * Framing: every row states what the DEPARTMENT gains, not what Yi does.
+ * A Yi growth target is not a government benefit and must never be presented
+ * as one — see POSITIONING.neverSay.
+ *
  * Author: Ommsharravana — Chapter Chair, Yi Erode
  */
 
@@ -32,40 +36,48 @@ export type OwnerScope = 'chapter' | 'region' | 'named';
 export type Scores = { outcome: number; people: number; timing: number; invitation: number };
 
 export type AlignmentRow = {
-  pillar: string;
-  vertical: string;
-  programme: string;
-  target: string;
-  scheme: string;
-  para: string;
-  crore: number | null;
-  dept: string;
-  align: Alignment;
-  action: string;
-  scores: Scores;
-  score: number;
-  band: Band;
-  why: string;
-  firstStep: string;
-  owner: string;
-  window: string;
-  proof: string;
-  effort: Effort;
-  /** Normalised role that actually carries the action. */
-  ownerRole: string;
-  /** chapter = every chapter does it · region = done once for SRTN · named = only these chapters */
-  ownerScope: OwnerScope;
-  namedChapters: string[];
+  pillar: string; vertical: string; programme: string; target: string;
+  scheme: string; para: string; crore: number | null; dept: string;
+  align: Alignment; action: string; scores: Scores; score: number; band: Band;
+  why: string; firstStep: string; owner: string; window: string; proof: string;
+  effort: Effort; ownerRole: string; ownerScope: OwnerScope; namedChapters: string[];
+  /** What the DEPARTMENT gets. The reason they would say yes. */
+  govGain: string;
 };
 
 export type ChapterRow = { chapter: string; named: string; scheme: string; para: string; vertical: string; move: string };
+export type GapRow = { type: string; item: string; detail: string; para: string; crore: number | null; recommendation: string; firstStep: string; owner: string; window: string; effort: Effort };
+export type LeadRow = { vertical: string; name: string; chapter: string; role: string };
 
-export type GapRow = {
-  type: string; item: string; detail: string; para: string; crore: number | null;
-  recommendation: string; firstStep: string; owner: string; window: string; effort: Effort;
+/** One concrete thing Yi does, stated as what the department gets for it. */
+export type DeptOffer = {
+  work: string;
+  gains: string;
+  costs: string;
+  scale?: string;
 };
 
-export type LeadRow = { vertical: string; name: string; chapter: string; role: string };
+export type DeptCase = {
+  dept: string;
+  budget: string;
+  /** What this budget obliges the department to deliver. */
+  mandate: string;
+  para: string;
+  /** What they are short of — the reason an outside partner is worth a meeting. */
+  constraint: string;
+  offers: DeptOffer[];
+  /** What the department receives back as proof. */
+  evidence: string;
+};
+
+export type Positioning = {
+  headline: string;
+  sub: string;
+  assets: { title: string; body: string }[];
+  say: string[];
+  neverSay: string[];
+  ask: string[];
+};
 
 export const RUBRIC: { key: keyof Scores; label: string; two: string; one: string; zero: string }[] = [
   { key: 'outcome', label: 'Outcome', two: 'Identical outcome', one: 'Contributing', zero: 'Unrelated' },
@@ -91,6 +103,509 @@ export const SOURCE_NOTE =
   'Built from the Yi Leadership Academy 2026 Pathfinder one-pagers and the Tamil Nadu Budget Speech of 5 August 2026. Paragraph numbers cite the speech.';
 
 export const AUTHOR = 'Ommsharravana — Chapter Chair, Yi Erode';
+
+export const POSITIONING: Positioning = {
+  "headline": "Yi is not asking the Government of Tamil Nadu for anything.",
+  "sub": "It is offering the three things this budget cannot buy: employers who will act, hands in fifteen cities, and independent evidence that a scheme landed. In a year with a ₹55,775 crore revenue deficit, the organisation that arrives without an ask is the one that gets a second meeting.",
+  "assets": [
+    {
+      "title": "Employers who will act",
+      "body": "Yi is CII-affiliated. It is not a student body and not a grant-seeking NGO — it is young business owners and professionals. Three separate commitments in this budget need exactly that constituency: 20,000 internships 'in collaboration with private industries' (¶27), 'industry transformation experts' on the Governance Reforms Committee (¶151), and a CSR-funded disaster response fund (¶153). No other youth organisation in Tamil Nadu can supply an employer."
+    },
+    {
+      "title": "Presence in fifteen cities",
+      "body": "Departments run state-wide schemes from Chennai and learn implementation reality months later, filtered upward through district staff. Yi has resident, professionally credible people in fifteen cities who can look at something this week. Six of those cities sit inside districts this budget names by name."
+    },
+    {
+      "title": "Independent evidence",
+      "body": "The Expenditure Reforms Committee has been asked to judge whether welfare reaches its target beneficiaries (¶181). It has no field instrument, and buying one from a consultancy is the very expenditure it exists to cut. Yi can sample publicly observable facts across fifteen cities, publish the method, and hand over the data — keeping no exclusive copy."
+    }
+  ],
+  "say": [
+    "Cite the paragraph number. It proves the budget was read, and it moves the conversation from a pitch to a shared document in ninety seconds.",
+    "Lead with what will be handed over, not with what access is wanted.",
+    "State the ask plainly and keep it small: a letter, a list, an introduction. Nothing else.",
+    "Say 'we are the industry side already named in ¶151' — it reframes Yi from applicant to specified constituency.",
+    "Offer the first piece of work unpaid and unconditional, with no MoU attached.",
+    "Name what Yi will NOT do — procurement, construction, anything with money attached. Refusing something is the fastest way to be believed."
+  ],
+  "neverSay": [
+    "Any Yi growth target — school counts, membership numbers, chapter expansion. That is Yi's KPI and reads as using the department to hit it.",
+    "'Partnership' as an opening word. It implies obligation before any value has been shown.",
+    "Any request for funding, however small, including reimbursement. One rupee changes the category from partner to vendor.",
+    "Political language from the budget speech. Yi is non-political; quote scheme names and paragraph numbers only.",
+    "A promise spanning all fifteen chapters unless all fifteen are genuinely ready. One undelivered city discredits the other fourteen.",
+    "'We would like to be involved.' Involvement is not a service. Name the deliverable."
+  ],
+  "ask": [
+    "A letter naming Yi as facilitator for a listed set of institutions",
+    "A list — schools, SHGs, troupes, beneficiaries, sites",
+    "An introduction to the district officer who owns the scheme",
+    "A schedule, where timing decides the value of the work"
+  ]
+};
+
+export const DEPT_CASES: DeptCase[] = [
+  {
+    "dept": "School Education",
+    "budget": "₹44,527 cr",
+    "mandate": "Constitute Anti-Drug Clubs and student volunteer groups across school campuses and display the 10581 helpline (¶16). Daily cleaning, water and 24-hour security in 10,000 schools (¶12). Rebuild 3,734 schools to recommended norms (¶13). Rewrite the curriculum around financial literacy, gender equality, environmental awareness and global citizenship (¶15).",
+    "para": "12, 13, 15, 16",
+    "constraint": "A club in every school needs one adult who turns up every month. The department has teachers, not spare adults, and ¶16 funds ₹7 crore of awareness across the whole State — there is no line item for facilitators.",
+    "offers": [
+      {
+        "work": "Constitute and run the Anti-Drug Club in schools where Yi already has a standing Thalir relationship, with a Yi member as the named monthly facilitator.",
+        "gains": "The club-formation commitment is met in those schools without hiring anyone or diverting a teacher.",
+        "costs": "A DEO letter naming Yi as facilitator for the listed schools.",
+        "scale": "~40 schools per chapter already in the network; 15 chapters."
+      },
+      {
+        "work": "Campus compliance sweep: is a club actually constituted, and is 10581 physically displayed where students can see it.",
+        "gains": "An independent count of what has actually landed. Right now nobody in Chennai can answer this for any district.",
+        "costs": "Nothing. Both facts are observable from outside a classroom.",
+        "scale": "300 schools across 15 cities in about six weeks."
+      },
+      {
+        "work": "Hand over the Kid-preneur financial-literacy module — already written, already run with school children — for the revised curriculum.",
+        "gains": "A tested module instead of a design tender and a procurement cycle.",
+        "costs": "A curriculum-cell review of the content.",
+        "scale": "Module plus trained delivery volunteers."
+      },
+      {
+        "work": "Staff the new one-hour daily after-school sport period in schools where staff cannot stay back (¶34).",
+        "gains": "The hour actually happens in schools that would otherwise report it as delivered on paper.",
+        "costs": "Headmaster permission and ground access.",
+        "scale": "2 schools per chapter to start; 30 across SRTN."
+      },
+      {
+        "work": "Layer the MASOOM child-safety protocol onto Palli Niraivu schools while they are being rebuilt.",
+        "gains": "Safety designed in at rebuild cost rather than retrofitted later at full cost.",
+        "costs": "Site access during works and a staff briefing slot.",
+        "scale": "Palli Niraivu schools in the 15 chapter districts."
+      },
+      {
+        "work": "Accessibility audit of each Palli Niraivu school before its works are signed off.",
+        "gains": "RPwD non-compliance caught while drawings can still change, instead of after handover.",
+        "costs": "The works schedule and site access.",
+        "scale": "Every rebuild school in a chapter district."
+      }
+    ],
+    "evidence": "A per-school sheet — club constituted yes/no, helpline displayed yes/no, date, photograph reference — handed to the District Education Officer monthly."
+  },
+  {
+    "dept": "Labour Welfare & Skill Development  ·  TNSDC",
+    "budget": "₹2,022 cr  ·  Vetri Skill ₹150 cr",
+    "mandate": "Skill 12 lakh college students and 1 lakh unemployed youth this year, and place 20,000 in stipended internships 'in collaboration with Government and private industries' (¶27). Skill 5 lakh youth in AI by 2031 (¶28). Open an AI/ML trade in 50 ITIs (¶25).",
+    "para": "25, 26, 27, 28",
+    "constraint": "The internship number is the hardest commitment in this budget, because government cannot manufacture employers. A department can fund a stipend; it cannot create a firm willing to host a student.",
+    "offers": [
+      {
+        "work": "Bring committed internship places from Yi member companies — a counted, signed number, not an expression of interest.",
+        "gains": "Real places against the 20,000 target, from firms already vetted through CII membership. This is the single scarcest input the scheme needs.",
+        "costs": "Nothing. The stipend is already budgeted.",
+        "scale": "Member firms across 15 cities."
+      },
+      {
+        "work": "Supply practitioner mentors to the AI Industry Development Program from member companies actually deploying AI.",
+        "gains": "Industry-current teaching without a consultancy engagement.",
+        "costs": "Scheduling and campus access."
+      },
+      {
+        "work": "Run Naukri Bazaar job fairs co-branded with District Employment and Career Guidance Centres.",
+        "gains": "Employer footfall the district centres struggle to attract on their own.",
+        "costs": "Venue and the centre's candidate list."
+      },
+      {
+        "work": "Place Yi professionals as guest faculty for the new SSC, RRB and IBPS coaching (¶26).",
+        "gains": "Subject expertise at zero cost against a ₹3.38 crore allocation.",
+        "costs": "A slot in the coaching timetable."
+      },
+      {
+        "work": "Run Project Smile as a dedicated placement channel for candidates with disabilities.",
+        "gains": "Inclusive-hiring outcomes that are measurable, not aspirational.",
+        "costs": "Candidate referrals from the district office."
+      }
+    ],
+    "evidence": "Signed internship and placement counts by district, with employer names, reconcilable against the scheme's own target."
+  },
+  {
+    "dept": "Home, Prohibition & Excise",
+    "budget": "₹17,290 cr",
+    "mandate": "Frame a new Road Safety Policy on five pillars, the fifth being education (¶146). Run 65 STING units against narcotics (¶144). Operate a ₹70 crore Rehabilitation Fund for de-addiction (¶145). Zero tolerance on crimes against women and children through the Singapenn Task Force (¶143).",
+    "para": "143, 144, 145, 146",
+    "constraint": "Enforcement scales with police strength. Prevention does not scale at all without civilians, and the department has no civilian cadre.",
+    "offers": [
+      {
+        "work": "Offer Farishtey as the State's bystander first-responder curriculum — already written, already certifying at scale.",
+        "gains": "The trauma-care pillar gets trained civilians at crash sites, using a curriculum the department does not have to commission.",
+        "costs": "Recognition of the certification. No funding."
+      },
+      {
+        "work": "Run Chota Cop in schools across the 15 chapter cities.",
+        "gains": "The education pillar delivered through a child-led mechanism with a decade of evidence behind it.",
+        "costs": "A joint letter with School Education."
+      },
+      {
+        "work": "Run helmet, seat-belt and Horn-Not-OK campaigns at the junctions scheduled for AI enforcement, two months ahead of the cameras (¶115).",
+        "gains": "Compliance rises before penalties start, which sharply reduces the public backlash that usually follows automated enforcement.",
+        "costs": "The rollout schedule — which junctions, when."
+      },
+      {
+        "work": "Position Break the Stigma as the prevention front-end to the Rehabilitation Fund.",
+        "gains": "Reduced intake pressure on ₹70 crore of treatment capacity.",
+        "costs": "A referral pathway with the district de-addiction cell."
+      },
+      {
+        "work": "Deliver parent POCSO sessions co-branded with the Singapenn Task Force.",
+        "gains": "Community reach for a task force that is police-staffed and cannot be everywhere.",
+        "costs": "An officer at the session."
+      }
+    ],
+    "evidence": "Certified-responder counts, campaign reach by junction, session registers with dates and locations."
+  },
+  {
+    "dept": "Finance  ·  Chief Secretary's office",
+    "budget": "Revenue deficit ₹55,775 cr",
+    "mandate": "Constitute an Expenditure Reforms Committee to review all welfare schemes 'by evaluating their positive impact on the target beneficiary groups' (¶181). Constitute a Governance Processes Reforms Committee including 'industry transformation experts' (¶151). Frame a Right to Services Act (¶152).",
+    "para": "151, 152, 181",
+    "constraint": "The Expenditure Reforms Committee has been asked to judge whether welfare actually reaches beneficiaries — and has no independent field instrument to do it with. Buying one from a consultancy is exactly the expenditure the Committee exists to reduce.",
+    "offers": [
+      {
+        "work": "Independent last-mile verification of a named scheme: one checkable question, sampled across 15 cities, method published alongside the result.",
+        "gains": "Third-party field evidence at zero procurement cost — precisely the Committee's stated mandate, delivered by a body with no financial interest in the answer.",
+        "costs": "Nothing. Yi picks schemes where the facts are publicly observable.",
+        "scale": "300-sample sweeps, six weeks each, repeatable."
+      },
+      {
+        "work": "Citizen-side usability testing of the 275 services being added to the Namma Arasu chatbot (¶95).",
+        "gains": "A defect list before public complaint, from villages rather than from a testing lab.",
+        "costs": "The service list."
+      },
+      {
+        "work": "Nominate industry practitioners to the Governance Processes Reforms Committee.",
+        "gains": "The 'industry transformation experts' the Committee is already specified to include, from an organised body rather than ad-hoc invitation.",
+        "costs": "Committee seats already provided for in ¶151."
+      },
+      {
+        "work": "Convene a structured youth consultation on the Right to Services Act through Future 6.0.",
+        "gains": "A consultation record with the demographic most affected by service delivery, before the Bill is drafted.",
+        "costs": "An official to attend and listen."
+      }
+    ],
+    "evidence": "Published method, sample size, and raw findings — handed over in full, with the State owning the data and Yi keeping no exclusive copy."
+  },
+  {
+    "dept": "Rural Development & Panchayat Raj",
+    "budget": "₹39,609 cr  ·  TN-VETRI ₹6,000 cr/yr",
+    "mandate": "Run TN-VETRI as a convergence mission across water, solid waste, sanitation and connectivity, 'converging with the needs and resources of other departments' (¶133, ¶134). Extend a ₹5 lakh investment subsidy to every SHG enterprise that performs (¶137), against a ₹38,000 crore SHG credit plan.",
+    "para": "133, 134, 137",
+    "constraint": "TN-VETRI is built to converge but needs a convener at block level. And the SHG subsidy funds production — it does not fund a market. An enterprise with capital and no buyer stalls.",
+    "offers": [
+      {
+        "work": "Give subsidised SHG enterprises market access through Rural Bazaar and Yi member retail and procurement networks.",
+        "gains": "The ₹5 lakh subsidy converts into a trading business instead of stranded inventory. This is the difference between the scheme's output and its outcome.",
+        "costs": "The DRDA's list of subsidised SHGs.",
+        "scale": "15 city bazaars plus year-round member procurement."
+      },
+      {
+        "work": "Act as the non-government convergence partner at block level for TN-VETRI.",
+        "gains": "A convener the BDO can task who does not sit in another department's hierarchy.",
+        "costs": "Naming Yi in the block plan."
+      },
+      {
+        "work": "Deliver financial and digital literacy in adopted villages, teaching the State's own e-Sevai and Namma Arasu services.",
+        "gains": "Uptake of digital infrastructure the State has already paid to build.",
+        "costs": "Nothing."
+      },
+      {
+        "work": "Support rural artisan livelihoods through Range De and the Palmyra and handicraft schemes.",
+        "gains": "Measurable rural incomes attributable to a named scheme.",
+        "costs": "Introductions to registered artisan groups."
+      }
+    ],
+    "evidence": "SHG turnover before and after market access, bazaar sales figures, literacy session registers by village."
+  },
+  {
+    "dept": "Youth Welfare & Sports Development",
+    "budget": "₹1,051 cr",
+    "mandate": "Build neighbourhood sports facilities and small gymnasiums in every block and urban local body (¶34). Introduce one hour of structured sport per day after school. Run the Tamil Nadu Rural Sports Competition at ₹42 crore and establish 10 Olympic Centres of Excellence (¶33). Integrate NCC and NSS into an Integrated Youth Development Programme (¶32).",
+    "para": "32, 33, 34",
+    "constraint": "Building a facility is procurement and will happen. Keeping it used, programmed and maintained afterwards is not procurement, and there is no cadre for it. Unused facilities are how sports budgets become embarrassments.",
+    "offers": [
+      {
+        "work": "Adopt programming and upkeep of one State-built neighbourhood facility per chapter, instead of building a parallel Yi facility.",
+        "gains": "Utilisation and maintenance without a recurring line item — the difference between a facility and a ruin three years on.",
+        "costs": "A use agreement.",
+        "scale": "15 facilities, one per chapter."
+      },
+      {
+        "work": "Run inter-school traditional sports festivals — kabaddi, kho-kho, carrom, chess — as feeder rounds into the Rural Sports Competition.",
+        "gains": "A talent funnel into a ₹42 crore competition, built and run at no cost to the department.",
+        "costs": "Recognition as a qualifying round."
+      },
+      {
+        "work": "Refer identified 8-18 talent into Olympic Centre of Excellence trials.",
+        "gains": "A wider catchment than departmental scouting reaches, especially in non-metro districts.",
+        "costs": "Trial access."
+      },
+      {
+        "work": "Ask that YUVA be named alongside NCC and NSS in the Integrated Youth Development Programme (¶32).",
+        "gains": "A third youth network in the programme at no additional cost — one that reaches college students NCC and NSS do not.",
+        "costs": "Naming Yi in the programme document."
+      }
+    ],
+    "evidence": "Facility usage logs, festival participant counts, athletes referred and selected."
+  },
+  {
+    "dept": "Municipal Administration & Water Supply",
+    "budget": "₹29,863 cr  ·  CM Urban Mission ₹2,117 cr",
+    "mandate": "Integrated solid waste management, protection of urban water bodies, expansion of green spaces, safety of women and children, and AI-driven e-governance under the Chief Minister's Integrated Urban Development Mission (¶107). People-friendly streets with pedestrian paths, cycle lanes and safe school access in every corporation (¶111).",
+    "para": "107, 108, 109, 111",
+    "constraint": "The Mission covers every urban local body and depends on citizen participation a corporation can invite but cannot mandate.",
+    "offers": [
+      {
+        "work": "Audit accessibility of streets scheduled for people-friendly redesign — before the tender drawings are finalised.",
+        "gains": "Design corrected on paper instead of rebuilt after handover. Timing is the entire value; the same audit after completion is worthless.",
+        "costs": "The redesign schedule and street list.",
+        "scale": "Sarv-Sugamya audits, minimum 5 public places per team."
+      },
+      {
+        "work": "Operate an e-waste collection channel for the city.",
+        "gains": "A waste stream neither the Urban Mission nor TN-VETRI names an operator for, handled at no cost.",
+        "costs": "Publicising the collection point."
+      },
+      {
+        "work": "Adopt and maintain named urban water bodies under Water Warriors.",
+        "gains": "Protection and upkeep without a maintenance contract.",
+        "costs": "Adding the water body to the protected list."
+      },
+      {
+        "work": "Ward-level citizen testing of e-Sevai 2.0 and the expanded chatbot services.",
+        "gains": "Knowing which services fail in real use, from residents rather than from a lab.",
+        "costs": "Nothing."
+      }
+    ],
+    "evidence": "Audit findings dated before tender, tonnage collected, water body condition reports, service failure lists."
+  },
+  {
+    "dept": "Environment, Climate Change & Forests",
+    "budget": "₹1,762 cr",
+    "mandate": "Restore 2,500 hectares of mangrove under TN-SHORE across eight coastal districts (¶127). Mitigate human-wildlife conflict across 100 villages in eleven named districts (¶128). Launch an Eco-Tourism Mission implemented 'through active community participation' (¶169).",
+    "para": "127, 128, 169",
+    "constraint": "Plantation is procurable; survival is not. Twelve months after a planting drive, someone has to still be there. And ¶169 requires community participation the department must find rather than fund.",
+    "offers": [
+      {
+        "work": "Monitor and report twelve-month tree survival, not sapling count, in chapter districts.",
+        "gains": "The metric the Green Tamil Nadu Mission is actually judged on, independently measured.",
+        "costs": "The planting locations."
+      },
+      {
+        "work": "Supply volunteers and local buy-in for mangrove restoration in Kanniyakumari and adjacent coastal blocks.",
+        "gains": "Labour and community acceptance in a district where a Yi chapter already sits.",
+        "costs": "Site coordination with the Forest Range Officer."
+      },
+      {
+        "work": "Provide community anchors for eco-tourism circuits — the participation the scheme text specifies.",
+        "gains": "The 'active community participation' ¶169 requires, supplied rather than sought.",
+        "costs": "Circuit inclusion."
+      },
+      {
+        "work": "Run conflict-mitigation awareness in the eleven named districts, six of which contain a Yi chapter.",
+        "gains": "Behaviour change in conflict villages, alongside the fencing and patrolling the ₹20 crore funds.",
+        "costs": "The village list."
+      }
+    ],
+    "evidence": "Twelve-month survival percentages by site, hectares supported, circuit anchors named, village session records."
+  },
+  {
+    "dept": "Welfare of Differently Abled Persons",
+    "budget": "₹1,485 cr",
+    "mandate": "Establish Nambikkai Illam institutions for intellectual disability in Thanjavur, Tiruvannamalai, Salem, Cuddalore and Virudhunagar (¶48). Subsidise AI-based assistive devices up to ₹30,000 (¶47).",
+    "para": "47, 48, 49",
+    "constraint": "An institution needs community acceptance around it and employers willing to hire its graduates. Neither can be procured, and both decide whether the building becomes a service or a shell.",
+    "offers": [
+      {
+        "work": "Run inclusive job fairs with member employers and convert them into issued appointment letters.",
+        "gains": "Actual appointments — the outcome the department is judged on, not training completions.",
+        "costs": "Candidate referrals.",
+        "scale": "15 jobs per chapter as the stated minimum."
+      },
+      {
+        "work": "Deliver PwD-led experiential sensitisation in schools and colleges around the new institutions.",
+        "gains": "Community acceptance in the districts where Nambikkai Illam is being built — Salem and Sivakasi already have Yi chapters in them.",
+        "costs": "Introductions to the institution."
+      },
+      {
+        "work": "Audit public buildings, schools and colleges for RPwD compliance.",
+        "gains": "A compliance baseline the department does not currently hold for any district.",
+        "costs": "Nothing."
+      }
+    ],
+    "evidence": "Appointment letters issued with employer names, audit reports by building, sensitisation session counts."
+  },
+  {
+    "dept": "Health & Family Welfare",
+    "budget": "₹23,357 cr",
+    "mandate": "Run 1,000 Mobile Geriatric Treatment Centres visiting every village panchayat (¶57). Build telemedicine as five hubs feeding 200 spokes, scaling to 1,000 (¶59). Establish Thai Care maternity centres (¶58).",
+    "para": "57, 58, 59",
+    "constraint": "A mobile unit's economics depend on turnout per visit. Turnout depends on a trusted local face telling people it is coming. The department has clinicians, not community organisers.",
+    "offers": [
+      {
+        "work": "Route and publicise mobile geriatric circuits in adopted villages, with a local Yi member as the visible anchor.",
+        "gains": "Higher turnout per visit, which is the unit economics of the entire ₹33 crore scheme.",
+        "costs": "The circuit schedule."
+      },
+      {
+        "work": "Drive awareness and utilisation of telemedicine spokes at Primary Health Centres.",
+        "gains": "Utilisation — without which hub-and-spoke capacity is stranded capital.",
+        "costs": "Spoke locations."
+      },
+      {
+        "work": "Run youth mental-health and substance-abuse sessions across YUVA colleges.",
+        "gains": "Reach into a cohort the public health system rarely touches until it presents as a crisis.",
+        "costs": "Nothing."
+      },
+      {
+        "work": "Deliver NCD screening drives through member companies for working-age adults.",
+        "gains": "Screening numbers from a population that does not visit government facilities, at employer cost.",
+        "costs": "Screening protocol and reporting format."
+      }
+    ],
+    "evidence": "Attendance per circuit against baseline, spoke utilisation, screening counts with referrals."
+  },
+  {
+    "dept": "Industries, Investment Promotion & Commerce  ·  MSME  ·  Handlooms",
+    "budget": "₹4,414 cr  ·  ₹2,142 cr  ·  ₹1,678 cr",
+    "mandate": "Create a Tamil Nadu Industrial Capability Directory listing the State's manufacturing and supply capabilities (¶78). Launch Guidance 3.0 (¶79) and a Non-Resident Tamil Investment Facilitation Desk (¶80). Establish the Tamil Nadu Institute of Design (¶88) and a Technical Textiles Transformation Scheme (¶89).",
+    "para": "78, 79, 80, 81, 88, 89",
+    "constraint": "A capability directory is worthless until firms list themselves. An NRT desk needs diaspora contacts to work. A design institute needs industry to tell it what to teach. All three launch empty.",
+    "offers": [
+      {
+        "work": "Seed the Industrial Capability Directory with Yi member firms across 15 cities and their supply capabilities.",
+        "gains": "A populated directory at launch rather than an empty portal an investor bounces off.",
+        "costs": "Directory access and a listing format."
+      },
+      {
+        "work": "Supply a warm diaspora pipeline to the Non-Resident Tamil Investment Desk through Yi International Membership.",
+        "gains": "Introductions to Tamils abroad already connected to home chapters, instead of cold outreach.",
+        "costs": "Nothing."
+      },
+      {
+        "work": "Provide industry input to the Tamil Nadu Institute of Design curriculum from the Tirupur, Karur, Kanchipuram and Sivakasi clusters.",
+        "gains": "Employability designed in from the first cohort, from the firms that will hire the graduates.",
+        "costs": "A curriculum consultation."
+      },
+      {
+        "work": "Run cluster-level safety and green-manufacturing programmes in Sivakasi, Tirupur and Karur.",
+        "gains": "Compliance improvement across an MSME cluster through peer pressure rather than inspection.",
+        "costs": "Nothing."
+      }
+    ],
+    "evidence": "Firms listed with capability tags, introductions made and converted, curriculum contributions on record."
+  },
+  {
+    "dept": "Tourism, Art & Culture",
+    "budget": "₹775 cr",
+    "mandate": "Select 200 folk art troupes each year and give each of them 100 days of performance under the Folk Artists Livelihood Protection Scheme (¶171). Run Food and Arts Festivals along culinary tourism routes (¶167). Take school students to named archaeological sites (¶175).",
+    "para": "167, 169, 170, 171, 175",
+    "constraint": "200 troupes times 100 days is twenty thousand performance-days. The scheme funds the artist. It does not fund a stage, an audience, or a calendar — and without those the commitment cannot physically be honoured.",
+    "offers": [
+      {
+        "work": "Supply performance slots for scheme-registered troupes at Yi chapter events, Varnam Vizha festivals and member company functions across 15 cities.",
+        "gains": "Guaranteed performance-days against a commitment the department has made but has no venue pipeline for. This is the clearest supply-demand match in the entire budget.",
+        "costs": "The registered troupe list.",
+        "scale": "15 cities, year-round chapter calendars."
+      },
+      {
+        "work": "Host regional editions of the Food and Arts Festival.",
+        "gains": "Reach and footfall without an event-management procurement.",
+        "costs": "Scheme branding and artist linkage."
+      },
+      {
+        "work": "Adopt and maintain a heritage site on the school-tour list, and host the visits.",
+        "gains": "A maintained site and hosted educational visits against a ₹1 crore allocation that funds transport, not hosting.",
+        "costs": "Site adoption permission."
+      }
+    ],
+    "evidence": "Performance-days delivered per troupe with dates and venues, festival footfall, site visits hosted."
+  },
+  {
+    "dept": "Social Welfare & Women Empowerment",
+    "budget": "₹9,818 cr",
+    "mandate": "Skill transgender persons through TNSDC and support them into enterprise with subsidy-linked credit; establish Aran shelter homes in five districts and short-stay facilities in fifteen (¶54). Construct 500 Anganwadi centres (¶53). Establish senior citizen homes in twelve districts and recreation centres in five (¶52).",
+    "para": "52, 53, 54",
+    "constraint": "Training and shelter are fundable. Employment at the end of them is not — it depends on employers choosing to hire, which no scheme can compel.",
+    "offers": [
+      {
+        "work": "Place TNSDC-trained transgender candidates into member companies.",
+        "gains": "The placement end of a training scheme, which is where such schemes usually fail quietly.",
+        "costs": "Candidate referrals from the district office."
+      },
+      {
+        "work": "Audit amenities at Anganwadi centres — water, toilets, electricity — in chapter cities.",
+        "gains": "A condition baseline against the ¶53 commitment, independently gathered.",
+        "costs": "Centre list."
+      },
+      {
+        "work": "Provide volunteer programming at senior citizen recreation centres — reading, yoga, indoor games.",
+        "gains": "Activity and footfall at new centres without a staffing line.",
+        "costs": "Centre access."
+      }
+    ],
+    "evidence": "Placements with employer names, Anganwadi condition sheets, programming calendars and attendance."
+  },
+  {
+    "dept": "AI, Information Technology & Digital Services",
+    "budget": "₹398 cr",
+    "mandate": "Strengthen the TN AI Mission across AI, quantum, AVGC-XR (¶94). Upgrade every e-Sevai centre and expand the Namma Arasu chatbot from 76 to 275 public services (¶95). Build a Tamil Large Language Model through the Tamil Virtual Academy (¶174).",
+    "para": "94, 95, 174",
+    "constraint": "Expanding to 275 services multiplies the surface area for failure, and defects surface as citizen complaints unless someone tests them in the field first.",
+    "offers": [
+      {
+        "work": "Field-test the new chatbot services in villages and small towns, and report exactly which ones fail and how.",
+        "gains": "A defect list before the complaints arrive, gathered from the actual usage conditions rather than a testing environment.",
+        "costs": "The service list.",
+        "scale": "Adopted rural networks across 15 chapters."
+      },
+      {
+        "work": "Point IDS 6 student innovation cohorts at real State problem statements from the AI Mission.",
+        "gains": "A solution and prototype pipeline at no cost, with the State choosing the problems.",
+        "costs": "Problem statements."
+      },
+      {
+        "work": "Supply volunteers for Tamil LLM evaluation and data quality review.",
+        "gains": "Evaluation capacity in Tamil from native speakers across all regions of the State.",
+        "costs": "Evaluation protocol."
+      }
+    ],
+    "evidence": "Service-by-service failure reports with location and device, prototypes delivered, evaluation sets completed."
+  },
+  {
+    "dept": "Higher Education",
+    "budget": "₹8,393 cr",
+    "mandate": "Establish 200 integrated student hostels delivering 1 lakh beds under TN-SUDAR, through a de-risked PPP, explicitly intended to 'integrate youth across diverse communities and faiths' (¶22). Establish a Government Law College of Excellence at Madurai (¶23).",
+    "para": "21, 22, 23",
+    "constraint": "TN-SUDAR states a social-integration objective alongside a construction target. Buildings are procurable; integration is a programme, and none is funded.",
+    "offers": [
+      {
+        "work": "Run structured integration and leadership programming inside TN-SUDAR hostels once occupied.",
+        "gains": "The social-integration objective in ¶22 actually pursued, rather than assumed to follow from shared accommodation.",
+        "costs": "Access to hostel common facilities."
+      },
+      {
+        "work": "Bring Young Indians Parliament to the new Madurai Law College as a standing civic exercise.",
+        "gains": "A practical civic and legislative exercise for a law school being built as an institution of excellence.",
+        "costs": "Academic calendar space."
+      },
+      {
+        "work": "Onboard ITIs and polytechnics — not only degree colleges — as YUVA partner institutions.",
+        "gains": "Youth programming reaching the vocational stream that most youth initiatives skip entirely.",
+        "costs": "Institution list."
+      }
+    ],
+    "evidence": "Programme calendars and participation by hostel and institution."
+  }
+];
 
 export const ALIGNMENT_ROWS: AlignmentRow[] = [
   {
@@ -120,7 +635,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "Afternoon",
     "ownerRole": "SRTN RM — Road Safety",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Trained civilians at crash sites, using a certification curriculum the department does not have to write or procure."
   },
   {
     "pillar": "Nation Building",
@@ -149,7 +665,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A quarter",
     "ownerRole": "Chapter Road Safety Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "The Road Safety Policy's education pillar delivered in schools, through a mechanism with a decade of evidence."
   },
   {
     "pillar": "Nation Building",
@@ -178,7 +695,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Chapter Road Safety Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "First-response capability around trauma centres, extending their reach beyond the clinical staff they fund."
   },
   {
     "pillar": "Nation Building",
@@ -207,7 +725,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Chapter Road Safety Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Public compliance raised before AI enforcement starts, reducing the backlash that follows automated penalties."
   },
   {
     "pillar": "Nation Building",
@@ -236,7 +755,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "Afternoon",
     "ownerRole": "SRTN RM — Road Safety",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "A ready-made public platform for launching the new Policy, at no event cost."
   },
   {
     "pillar": "Nation Building",
@@ -265,7 +785,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A quarter",
     "ownerRole": "Chapter Health Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "The Anti-Drug Club commitment met in schools that already have a standing adult facilitator, without hiring."
   },
   {
     "pillar": "Nation Building",
@@ -294,7 +815,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "SRTN RM — Health",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Reduced intake pressure on ₹70 crore of de-addiction capacity, by preventing rather than treating."
   },
   {
     "pillar": "Nation Building",
@@ -323,7 +845,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Chapter Health Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Sanitation behaviour change alongside TN-VETRI's physical works, which the works alone do not produce."
   },
   {
     "pillar": "Nation Building",
@@ -352,7 +875,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Chapter Health Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Independent confirmation that Super Clean Super Campus water and toilet upkeep is actually happening."
   },
   {
     "pillar": "Nation Building",
@@ -381,7 +905,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A quarter",
     "ownerRole": "Chapter Sports Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "The daily after-school sport hour actually running in schools that cannot staff it."
   },
   {
     "pillar": "Nation Building",
@@ -410,7 +935,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "Afternoon",
     "ownerRole": "SRTN RM — Health",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Reach for the Urban Public Health Mission without an event procurement."
   },
   {
     "pillar": "Nation Building",
@@ -439,7 +965,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A quarter",
     "ownerRole": "SRTN RM — MASOOM",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Prevention reaching children directly, extending a police-staffed task force into classrooms."
   },
   {
     "pillar": "Nation Building",
@@ -468,7 +995,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Chapter MASOOM Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Child-safety protocol designed into school rebuilds at build cost rather than retrofitted later."
   },
   {
     "pillar": "Nation Building",
@@ -497,7 +1025,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Chapter MASOOM Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Community reach for Singapenn among parents, who are where most disclosure actually begins."
   },
   {
     "pillar": "Nation Building",
@@ -526,7 +1055,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "Afternoon",
     "ownerRole": "SRTN RM — MASOOM",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "A trained delivery cadre available when the new gender-equality module needs teaching."
   },
   {
     "pillar": "Nation Building",
@@ -555,7 +1085,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A quarter",
     "ownerRole": "Chapter MASOOM Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Cyber-safety coverage in schools, which this budget funds nowhere else."
   },
   {
     "pillar": "Nation Building",
@@ -584,7 +1115,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Chapter MASOOM Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Child-protection reach into tribal habitations already receiving infrastructure investment."
   },
   {
     "pillar": "Nation Building",
@@ -613,7 +1145,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "SRTN RM — Accessibility",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Street accessibility problems identified while drawings can still change, avoiding rebuild cost."
   },
   {
     "pillar": "Nation Building",
@@ -642,7 +1175,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A quarter",
     "ownerRole": "Chapter Accessibility Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Appointment letters issued to candidates with disabilities — the outcome, not the training count."
   },
   {
     "pillar": "Nation Building",
@@ -671,7 +1205,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Chapter Accessibility Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "RPwD compliance caught before rebuild sign-off instead of after handover."
   },
   {
     "pillar": "Nation Building",
@@ -703,7 +1238,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "namedChapters": [
       "Salem",
       "Sivakasi"
-    ]
+    ],
+    "govGain": "Community acceptance around new Nambikkai Illam institutions in Salem and Virudhunagar."
   },
   {
     "pillar": "Nation Building",
@@ -732,7 +1268,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "SRTN RM — Accessibility",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Independent commentary on where assistive-device coverage falls short."
   },
   {
     "pillar": "Nation Building",
@@ -761,7 +1298,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "Afternoon",
     "ownerRole": "Chapter Accessibility Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "No State gain — railways is a Union subject. Listed so nobody wastes a meeting on it."
   },
   {
     "pillar": "Nation Building",
@@ -790,7 +1328,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A quarter",
     "ownerRole": "Chapter Climate Change Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Twelve-month survival data, which is the metric the mission is judged on, not sapling count."
   },
   {
     "pillar": "Nation Building",
@@ -819,7 +1358,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "SRTN RM — Climate Change",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Urban water bodies protected and maintained without a maintenance contract."
   },
   {
     "pillar": "Nation Building",
@@ -848,7 +1388,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Chapter Climate Change Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "An e-waste stream handled that neither urban nor rural mission names an operator for."
   },
   {
     "pillar": "Nation Building",
@@ -877,7 +1418,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Chapter Climate Change Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "A maintained heritage site with hosted school visits against an allocation that funds only transport."
   },
   {
     "pillar": "Nation Building",
@@ -906,7 +1448,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "Afternoon",
     "ownerRole": "Chapter Chair",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "No direct gain — this changes Yi's own footprint, not the State's."
   },
   {
     "pillar": "Nation Building",
@@ -935,7 +1478,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "Afternoon",
     "ownerRole": "National team",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "No State gain. Listed so the absence is explicit."
   },
   {
     "pillar": "MYTRI Stakeholders",
@@ -964,7 +1508,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Regional Chair",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "A delivery network reaching the same 12 lakh college students the scheme must skill this year."
   },
   {
     "pillar": "MYTRI Stakeholders",
@@ -993,7 +1538,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A quarter",
     "ownerRole": "Regional Chair",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "A campus hub for the AI programme without building one."
   },
   {
     "pillar": "MYTRI Stakeholders",
@@ -1022,7 +1568,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "Afternoon",
     "ownerRole": "Regional Chair",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "The industry consultation ¶151 specifies, convened rather than solicited."
   },
   {
     "pillar": "MYTRI Stakeholders",
@@ -1051,7 +1598,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A quarter",
     "ownerRole": "Chapter YUVA Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Youth programming reaching the ITI and polytechnic stream that most initiatives skip."
   },
   {
     "pillar": "MYTRI Stakeholders",
@@ -1080,7 +1628,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "Afternoon",
     "ownerRole": "Chapter YUVA Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "No State gain — internal engagement mechanics."
   },
   {
     "pillar": "MYTRI Stakeholders",
@@ -1109,7 +1658,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "Afternoon",
     "ownerRole": "Chapter Thalir Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Facilitator coverage in schools the department is already investing in."
   },
   {
     "pillar": "MYTRI Stakeholders",
@@ -1138,7 +1688,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "SRTN RM — Thalir",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "A constituted, already-trained student volunteer group in each school — exactly what ¶16 asks for."
   },
   {
     "pillar": "MYTRI Stakeholders",
@@ -1167,7 +1718,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "National Thalir Chair",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "A working civic practicum for the new curriculum's global-citizenship objective."
   },
   {
     "pillar": "MYTRI Stakeholders",
@@ -1196,7 +1748,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "SRTN RM — Thalir",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Tamil-language and Thirukkural engagement reaching students competitively."
   },
   {
     "pillar": "MYTRI Stakeholders",
@@ -1225,7 +1778,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A quarter",
     "ownerRole": "Chapter Thalir Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "A tested financial-literacy module instead of a design tender."
   },
   {
     "pillar": "MYTRI Stakeholders",
@@ -1254,7 +1808,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Chapter Thalir Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Footfall and engagement at named archaeological sites."
   },
   {
     "pillar": "MYTRI Stakeholders",
@@ -1283,7 +1838,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "SRTN RM — Rural Initiatives",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Subsidised SHG enterprises converted into trading businesses instead of stranded inventory."
   },
   {
     "pillar": "MYTRI Stakeholders",
@@ -1312,7 +1868,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Chapter Rural Initiatives Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "A non-government convener the BDO can task inside a TN-VETRI block."
   },
   {
     "pillar": "MYTRI Stakeholders",
@@ -1341,7 +1898,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Chapter Sports Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "State-built block facilities kept in use and maintained without a recurring line item."
   },
   {
     "pillar": "MYTRI Stakeholders",
@@ -1370,7 +1928,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Chapter Rural Initiatives Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Rural artisan incomes attributable to the Palmyra and handicraft schemes."
   },
   {
     "pillar": "MYTRI Stakeholders",
@@ -1399,7 +1958,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Chapter Rural Initiatives Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "The 'active community participation' the Eco-Tourism Mission text requires, supplied not sought."
   },
   {
     "pillar": "MYTRI Stakeholders",
@@ -1428,7 +1988,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "Afternoon",
     "ownerRole": "Chapter Rural Initiatives Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Recognition and exposure for Vetri Entrepreneur beneficiaries."
   },
   {
     "pillar": "MYTRI Stakeholders",
@@ -1457,7 +2018,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "Afternoon",
     "ownerRole": "Chapter Chair",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "No State gain — internal to Yi."
   },
   {
     "pillar": "Youth Leadership",
@@ -1486,7 +2048,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A quarter",
     "ownerRole": "Chapter Entrepreneurship Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Employer footfall at district job fairs the centres struggle to attract alone."
   },
   {
     "pillar": "Youth Leadership",
@@ -1515,7 +2078,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "Afternoon",
     "ownerRole": "Chapter Entrepreneurship Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "A populated Industrial Capability Directory at launch instead of an empty portal."
   },
   {
     "pillar": "Youth Leadership",
@@ -1544,7 +2108,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "Afternoon",
     "ownerRole": "National Entrepreneurship team",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "A public first outing for the Non-Resident Tamil Investment Desk."
   },
   {
     "pillar": "Youth Leadership",
@@ -1573,7 +2138,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Chapter Entrepreneurship Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Financial literacy delivered in classrooms by people who run businesses."
   },
   {
     "pillar": "Youth Leadership",
@@ -1602,7 +2168,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Chapter Entrepreneurship Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Publicity driving applications to the MSME subsidy schemes."
   },
   {
     "pillar": "Youth Leadership",
@@ -1631,7 +2198,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "Afternoon",
     "ownerRole": "Chapter Entrepreneurship Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Employability focus on the scheme's stated priority cohort."
   },
   {
     "pillar": "Youth Leadership",
@@ -1660,7 +2228,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "National Innovation Chair",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "A student innovation pipeline working the State's own problem statements at no cost."
   },
   {
     "pillar": "Youth Leadership",
@@ -1689,7 +2258,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A quarter",
     "ownerRole": "Chapter Innovation Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Enrichment inside SPARK schools rather than a competing programme for the same children."
   },
   {
     "pillar": "Youth Leadership",
@@ -1718,7 +2288,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "SRTN RM — Innovation",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "A campus arm for the AI programme, already staffed by students."
   },
   {
     "pillar": "Youth Leadership",
@@ -1747,7 +2318,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Chapter Innovation Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Practitioner-led AI and prototyping weeks inside SPARK schools and the new ITI trades."
   },
   {
     "pillar": "Youth Leadership",
@@ -1776,7 +2348,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Chapter Innovation Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Innovation mentoring reaching rural talent inside adopted blocks."
   },
   {
     "pillar": "Youth Leadership",
@@ -1805,7 +2378,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A quarter",
     "ownerRole": "SRTN RM — Learning",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Real, committed internship places against the hardest target in this budget."
   },
   {
     "pillar": "Youth Leadership",
@@ -1834,7 +2408,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A quarter",
     "ownerRole": "Chapter Learning Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Field uptake of the digital services the State has already paid to build, plus a defect list."
   },
   {
     "pillar": "Youth Leadership",
@@ -1863,7 +2438,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "Afternoon",
     "ownerRole": "Chapter Learning Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Subject expertise at district career centres at zero cost."
   },
   {
     "pillar": "Youth Leadership",
@@ -1892,7 +2468,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "Afternoon",
     "ownerRole": "Chapter Learning Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "No State gain — internal member development."
   },
   {
     "pillar": "Youth Leadership",
@@ -1921,7 +2498,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "SRTN RM — Sports",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "A feeder pipeline into the ₹42 crore Rural Sports Competition, built and run free."
   },
   {
     "pillar": "Youth Leadership",
@@ -1950,7 +2528,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Chapter Sports Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "Programming and upkeep for one State facility per chapter."
   },
   {
     "pillar": "Youth Leadership",
@@ -1979,7 +2558,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Chapter Sports Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "A wider talent catchment into Olympic Centre trials than departmental scouting reaches."
   },
   {
     "pillar": "Youth Leadership",
@@ -2008,7 +2588,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "Afternoon",
     "ownerRole": "Regional Chair",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "A third youth network alongside NCC and NSS, reaching college students they do not."
   },
   {
     "pillar": "Youth Leadership",
@@ -2037,7 +2618,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "Afternoon",
     "ownerRole": "Chapter Sports Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "No State gain — internal engagement."
   },
   {
     "pillar": "Youth Leadership",
@@ -2066,7 +2648,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "Afternoon",
     "ownerRole": "Chapter Branding Convener",
     "ownerScope": "chapter",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "No State gain — Yi-facing by design."
   },
   {
     "pillar": "Youth Leadership",
@@ -2095,7 +2678,8 @@ export const ALIGNMENT_ROWS: AlignmentRow[] = [
     "effort": "A week",
     "ownerRole": "Regional Chair",
     "ownerScope": "region",
-    "namedChapters": []
+    "namedChapters": [],
+    "govGain": "A warm diaspora pipeline for the NRT Desk instead of cold outreach."
   }
 ];
 

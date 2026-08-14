@@ -36,7 +36,7 @@ export default async function EventTopicsPage({
   const service = await createServiceClient();
   const { data: row } = await service
     .from("events")
-    .select("committee_topics")
+    .select("committee_topics, committee_whatsapp")
     .eq("id", id)
     .single();
 
@@ -75,6 +75,10 @@ export default async function EventTopicsPage({
       initialSelected={initialSelected}
       slots={slots}
       studentsBySlot={studentsBySlot}
+      committeeWhatsapp={
+        ((row as { committee_whatsapp?: unknown } | null)
+          ?.committee_whatsapp ?? {}) as Record<string, string>
+      }
     />
   );
 }

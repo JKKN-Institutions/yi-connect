@@ -10,9 +10,11 @@ import {
   setEventCommittees,
   setEventCommitteeCount,
   attributeCommitteeMinistry,
+  setCommitteeWhatsappLink,
   type CommitteeTopicOption,
 } from "@/app/yip/actions/events";
 import type { EventCommittee } from "@/lib/yip/event-committees";
+import { WHATSAPP_INVITE_HINT } from "@/lib/yip/whatsapp-links";
 
 /**
  * Per-chapter committee picker. Each chapter chooses WHICH of the official 15
@@ -35,6 +37,8 @@ export function CommitteePickerClient({
   slots: EventCommittee[];
   /** committee number → how many students already sit in it. */
   studentsBySlot: Record<number, number>;
+  /** committee number (as text) → WhatsApp group invite link. */
+  committeeWhatsapp: Record<string, string>;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -42,6 +46,13 @@ export function CommitteePickerClient({
   const [flash, setFlash] = useState<string | null>(null);
   const [countInput, setCountInput] = useState(
     slots.length > 0 ? String(slots.length) : "5"
+  );
+  // Edited locally so a half-typed link is never saved on every keystroke; the
+  // value is committed on blur or Enter.
+  const [waDraft, setWaDraft] = useState<Record<number, string>>(() =>
+    Object.fromEntries(
+      slots.map((s2) => [s2.number, committeeWhatsapp[String(s2.number)] ?? ""])
+    )
   );
 
   const anyAllocated = Object.values(studentsBySlot).some((n) => n > 0);
@@ -66,6 +77,30 @@ export function CommitteePickerClient({
               res.data.unassigned === 1 ? " was" : "s were"
             } in a committee you removed — they are now unassigned, so place them from the Participants tab.`
           : `Now running ${res.data.count} committees. Students will be split across Committee 1–${res.data.count}.`
+      );
+      router.refresh();
+    });
+  }
+
+  function saveWhatsapp(number: number) {
+    const url = (waDraft[number] ?? "").trim();
+    if (url === (committeeWhatsapp[String(number)] ?? "")) return; // unchanged
+    setError(null);
+    setFlash(null);
+    startTransition(async () => {
+      const res = await setCommitteeWhatsappLink(
+        eventId,
+        number,
+        url === "" ? null : url
+      );
+      if (!res.success) {
+        setError(res.error);
+        return;
+      }
+      setFlash(
+        res.data.saved
+          ? `WhatsApp group saved for Committee ${number}. It goes out with the access-code emails.`
+          : `WhatsApp group cleared for Committee ${number}.`
       );
       router.refresh();
     });
@@ -284,6 +319,31 @@ export function CommitteePickerClient({
                       {topic && (
                         <p className="mt-1 text-xs text-[#1a1a3e]/60">{topic}</p>
                       )}
+                      {/* This committee's WhatsApp group. Sent to its students
+                          with their access code. Saved on blur or Enter, never
+                          on every keystroke. */}
+                      <input
+                        type="url"
+                        inputMode="url"
+                        placeholder="WhatsApp group link (optional)"
+                        value={waDraft[s.number] ?? ""}
+                        onChange={(e) =>
+                          setWaDraft((prev) => ({
+                            ...prev,
+                            [s.number]: e.target.value,
+                          }))
+                        }
+                        onBlur={() => saveWhatsapp(s.number)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            saveWhatsapp(s.number);
+                          }
+                        }}
+                        disabled={pending}
+                        className="mt-1.5 w-full max-w-md rounded-lg border border-[#1a1a3e]/15 px-2.5 py-1.5 text-xs disabled:opacity-50"
+                        aria-label={`WhatsApp group link for committee ${s.number}`}
+                      />
                     </div>
                     <span className="shrink-0 text-xs text-[#1a1a3e]/50">
                       {students === 0

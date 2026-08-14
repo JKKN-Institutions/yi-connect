@@ -67,6 +67,33 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+// ─── Untyped reads for the two WhatsApp columns ─────────────────────
+// yip.parties.whatsapp_invite_url and yip.events.committee_whatsapp arrive in
+// migration 20260814170000_yip_whatsapp_group_links, but types/yip/database.ts
+// is not regenerated alongside (the supabase CLI appends a version banner that
+// corrupts the generated file). Narrow, file-local accessors for just these two
+// reads — the app/yip/actions/voting.ts pattern. Everything else stays typed.
+type WaPgError = { message: string };
+type WaRows<T> = {
+  select: (cols: string) => WaRows<T>;
+  eq: (col: string, val: unknown) => WaRows<T>;
+  in: (col: string, vals: readonly unknown[]) => WaRows<T>;
+  single: () => Promise<{ data: T | null; error: WaPgError | null }>;
+  then: Promise<{ data: T[] | null; error: WaPgError | null }>["then"];
+};
+type EventWaRow = { name: string | null; committee_whatsapp: unknown };
+type PartyWaRow = {
+  id: string;
+  name: string | null;
+  whatsapp_invite_url: string | null;
+};
+function waTable<T>(
+  sb: Awaited<ReturnType<typeof createServiceClient>>,
+  table: string
+): WaRows<T> {
+  return (sb as unknown as { from: (t: string) => WaRows<T> }).from(table);
+}
+
 // YIP-branded code email (inline styles only — email clients strip <style>).
 // Saffron header band with dark text (legible), green accent rule, big code box,
 // join CTA. Mirrors the WhatsApp message content so both channels say the same.
@@ -219,13 +246,20 @@ export async function getYipEmailCodePlan(
 export async function sendYipAccessCodeEmailsBatch(
   eventId: string,
   participantIds: string[]
-): Promise<ActionResult<{ results: YipEmailBatchItemResult[] }>> {
+): Promise<
+  ActionResult<{
+    results: YipEmailBatchItemResult[];
+    /** Parties/committees with no WhatsApp link on file. The codes were still
+     *  sent; this is so the organiser knows what to fill in and re-send. */
+    missingGroups: string[];
+  }>
+> {
   const access = await getYipEventAccess(eventId);
   if (!access.canManage) {
     return { success: false, error: "Not authorized to manage this event" };
   }
   if (participantIds.length === 0) {
-    return { success: true, data: { results: [] } };
+    return { success: true, data: { results: [], missingGroups: [] } };
   }
   if (participantIds.length > EMAIL_BATCH_MAX) {
     return { success: false, error: `Batch too large (max ${EMAIL_BATCH_MAX})` };
@@ -239,14 +273,12 @@ export async function sendYipAccessCodeEmailsBatch(
 
   const supabase = await createServiceClient();
 
-  const { data: event } = await supabase
-    .from("events")
+  const { data: event } = await waTable<EventWaRow>(supabase, "events")
     .select("name, committee_whatsapp")
     .eq("id", eventId)
     .single();
   const eventName = event?.name ?? "Young Indians Parliament";
-  const committeeWhatsapp = (event as { committee_whatsapp?: unknown } | null)
-    ?.committee_whatsapp;
+  const committeeWhatsapp = event?.committee_whatsapp;
 
   const { data: participants, error } = await supabase
     .from("participants")
@@ -275,17 +307,11 @@ export async function sendYipAccessCodeEmailsBatch(
     { name: string | null; whatsapp: string | null }
   >();
   if (partyIds.length > 0) {
-    const { data: parties } = await supabase
-      .from("parties")
+    const { data: parties } = await waTable<PartyWaRow>(supabase, "parties")
       .select("id, name, whatsapp_invite_url")
       .eq("event_id", eventId)
       .in("id", partyIds);
-    for (const row of parties ?? []) {
-      const r = row as {
-        id: string;
-        name: string | null;
-        whatsapp_invite_url: string | null;
-      };
+    for (const r of parties ?? []) {
       partyById.set(r.id, { name: r.name, whatsapp: r.whatsapp_invite_url });
     }
   }
@@ -353,7 +379,10 @@ export async function sendYipAccessCodeEmailsBatch(
   }
 
   if (sendable.length === 0) {
-    return { success: true, data: { results } };
+    return {
+      success: true,
+      data: { results, missingGroups: [...missingGroups].sort() },
+    };
   }
 
   // One batch request for all valid recipients — sidesteps the per-message
@@ -374,7 +403,10 @@ export async function sendYipAccessCodeEmailsBatch(
           error: batchError.message || "Email send failed",
         });
       }
-      return { success: true, data: { results } };
+      return {
+      success: true,
+      data: { results, missingGroups: [...missingGroups].sort() },
+    };
     }
     for (const s of sendable) {
       results.push({
@@ -395,5 +427,8 @@ export async function sendYipAccessCodeEmailsBatch(
     }
   }
 
-  return { success: true, data: { results } };
+  return {
+      success: true,
+      data: { results, missingGroups: [...missingGroups].sort() },
+    };
 }

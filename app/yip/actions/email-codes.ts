@@ -188,18 +188,55 @@ export async function sendYipAccessCodeEmailsBatch(
 
   const { data: event } = await supabase
     .from("events")
-    .select("name")
+    .select("name, committee_whatsapp")
     .eq("id", eventId)
     .single();
   const eventName = event?.name ?? "Young Indians Parliament";
+  const committeeWhatsapp = (event as { committee_whatsapp?: unknown } | null)
+    ?.committee_whatsapp;
 
   const { data: participants, error } = await supabase
     .from("participants")
-    .select("id, full_name, serial_no, email, access_code")
+    .select(
+      "id, full_name, serial_no, email, access_code, party_id, committee_name, committee_number"
+    )
     .eq("event_id", eventId)
     .in("id", participantIds);
 
   if (error) return { success: false, error: error.message };
+
+  // Each student belongs to one party and one committee, each with its own
+  // WhatsApp group; the email carries whichever links exist so they get the
+  // code and both groups in one message. A missing link is NOT a reason to
+  // withhold the access code (Director's choice) — the line is simply left
+  // out, and the caller is told which parties/committees are still unlinked.
+  const partyIds = [
+    ...new Set(
+      (participants ?? [])
+        .map((p) => (p as { party_id: string | null }).party_id)
+        .filter((v): v is string => !!v)
+    ),
+  ];
+  const partyById = new Map<
+    string,
+    { name: string | null; whatsapp: string | null }
+  >();
+  if (partyIds.length > 0) {
+    const { data: parties } = await supabase
+      .from("parties")
+      .select("id, name, whatsapp_invite_url")
+      .eq("event_id", eventId)
+      .in("id", partyIds);
+    for (const row of parties ?? []) {
+      const r = row as {
+        id: string;
+        name: string | null;
+        whatsapp_invite_url: string | null;
+      };
+      partyById.set(r.id, { name: r.name, whatsapp: r.whatsapp_invite_url });
+    }
+  }
+  const missingGroups = new Set<string>();
 
   const results: YipEmailBatchItemResult[] = [];
   type Sendable = {

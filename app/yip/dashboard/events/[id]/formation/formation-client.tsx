@@ -685,7 +685,7 @@ export function FormationClient({
       description:
         "This reopens the formation checklist and unlocks allocation, so you can fix a late change — a student dropping out, a wrong bench, a party that needs re-balancing. Every step goes back to done (not blank): each one keeps its window and its ballots, and you re-run only what you need, then lock the House again before event day.",
       warning:
-        "Nobody loses their seat. Everyone already elected — Speaker, party leaders, PM, LoP — keeps their role exactly as it is. Unlocking reopens the checklist; it does not undo an election.",
+        "Nobody loses their seat. Everyone already elected — Speaker, party leaders, PM, LoP — keeps their role exactly as it is. Unlocking reopens the checklist; it does not undo an election. It also reopens allocation for the whole event, so benches, parties and seat numbers become editable again until you lock. Only possible before the event starts.",
       action: () => {
         startTransition(async () => {
           const res = await unlockFormation(eventId);

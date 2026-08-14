@@ -149,14 +149,17 @@ async function requireMe(
   return { ok: true, participantId: sess.id };
 }
 
+// Route names are the ones the UI lanes actually shipped: the student screen is
+// /yip/me/nominate and the organiser screen is
+// /yip/dashboard/events/[id]/nominations. Revalidating any other path is a
+// silent no-op that leaves a stale window state on screen.
 function revalidateStudent() {
   revalidatePath("/yip/me");
-  revalidatePath("/yip/me/self-nomination");
+  revalidatePath("/yip/me/nominate");
 }
 
 function revalidateAdmin(eventId: string) {
-  revalidatePath(`/yip/dashboard/events/${eventId}/self-nominations`);
-  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/nominations`);
 }
 
 // ═══════════════════════════════════════════════════════════════════════

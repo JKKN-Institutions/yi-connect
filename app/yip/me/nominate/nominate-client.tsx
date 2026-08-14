@@ -10,9 +10,19 @@ import {
   Loader2,
   Pencil,
   Send,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { Button } from "@/components/yip/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/yip/ui/dialog";
 import {
   SectionShell,
   SectionHeading,
@@ -29,6 +39,7 @@ import {
 import {
   getMySelfNomination,
   submitSelfNomination,
+  withdrawSelfNomination,
 } from "@/app/yip/actions/self-nomination";
 
 /**
@@ -37,7 +48,13 @@ import {
  * THREE STATES, exactly as the feature spec behaves:
  *   FORM         — pick 1–3 roles, live counter, Submit disabled until ≥1.
  *   CONFIRMATION — tick + the chosen roles + "Edit selection" (re-submit; the
- *                  row is upserted, so editing is the same server call).
+ *                  row is upserted, so editing is the same server call) and
+ *                  "Withdraw my nomination", which deletes the row and returns
+ *                  the student to an empty FORM. Withdraw exists because the
+ *                  role set may not be empty — without it, a student who
+ *                  changes their mind can only swap roles, never stand down,
+ *                  and the organiser would pick someone who no longer wants it.
+ *                  Both controls disappear the moment the window closes.
  *   CLOSED       — the organiser's explicit toggle is off. A student who
  *                  already nominated still sees their picks above the closed
  *                  panel; only editing is taken away.
@@ -85,6 +102,7 @@ export function NominateClient({
   const [editing, setEditing] = useState(!initialSubmitted);
   const [selected, setSelected] = useState<SelfNominationRole[]>(initialRoles);
   const [error, setError] = useState<string | null>(loadError);
+  const [confirmWithdraw, setConfirmWithdraw] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   // Closed always wins over "editing" — a stale edit view must never linger
@@ -122,17 +140,46 @@ export function NominateClient({
       // Keep the reason on the page AND toast it.
       setError(res.error);
       toast.error(res.error);
+      await resyncFromServer();
+    });
+  }
 
-      // Re-sync with the server — the usual cause is the organiser closing the
-      // window mid-session, and the screen must show that, not just an error.
-      const fresh = await getMySelfNomination(eventId);
-      if (fresh.success) {
-        setOpen(fresh.data.open);
-        if (fresh.data.nomination) {
-          setHasSubmitted(true);
-          setSubmittedRoles(fresh.data.nomination.roles);
-        }
+  /**
+   * Pull the server's truth back after a write is REJECTED. The usual cause is
+   * the organiser closing the window mid-session, and the screen has to flip to
+   * CLOSED rather than sit there looking broken. Also covers the row having
+   * been withdrawn from another device.
+   */
+  async function resyncFromServer() {
+    const fresh = await getMySelfNomination(eventId);
+    if (!fresh.success) return;
+    setOpen(fresh.data.open);
+    if (fresh.data.nomination) {
+      setHasSubmitted(true);
+      setSubmittedRoles(fresh.data.nomination.roles);
+    } else {
+      setHasSubmitted(false);
+      setSubmittedRoles([]);
+    }
+  }
+
+  function handleWithdraw() {
+    setConfirmWithdraw(false);
+    setError(null);
+    startTransition(async () => {
+      const res = await withdrawSelfNomination(eventId);
+      if (res.success) {
+        setSubmittedRoles([]);
+        setSelected([]);
+        setHasSubmitted(false);
+        setEditing(true); // straight back to an empty form
+        toast.success("Nomination withdrawn.");
+        return;
       }
+
+      setError(res.error);
+      toast.error(res.error);
+      await resyncFromServer();
     });
   }
 
@@ -241,19 +288,39 @@ export function NominateClient({
             </ul>
 
             {open && (
-              <button
-                type="button"
-                onClick={() => {
-                  setError(null);
-                  setSelected(submittedRoles);
-                  setEditing(true);
-                }}
-                className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition-colors active:translate-y-px"
-                style={{ background: `${SAFFRON}14`, color: SAFFRON }}
-              >
-                <Pencil className="size-4" />
-                Edit selection
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    setSelected(submittedRoles);
+                    setEditing(true);
+                  }}
+                  disabled={isPending}
+                  className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition-colors active:translate-y-px disabled:opacity-50"
+                  style={{ background: `${SAFFRON}14`, color: SAFFRON }}
+                >
+                  <Pencil className="size-4" />
+                  Edit selection
+                </button>
+
+                {/* Standing down entirely. Deliberately quieter than Edit —
+                    it is the rarer, destructive choice. */}
+                <button
+                  type="button"
+                  onClick={() => setConfirmWithdraw(true)}
+                  disabled={isPending}
+                  className="mt-2 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl px-4 text-xs font-medium transition-colors active:translate-y-px disabled:opacity-50"
+                  style={{ color: "#b91c1c" }}
+                >
+                  {isPending ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="size-3.5" />
+                  )}
+                  Withdraw my nomination
+                </button>
+              </>
             )}
           </div>
         </SectionShell>
@@ -412,6 +479,36 @@ export function NominateClient({
           </div>
         </SectionShell>
       )}
+
+      {/* ─── WITHDRAW CONFIRMATION ─────────────────────────────── */}
+      <Dialog open={confirmWithdraw} onOpenChange={setConfirmWithdraw}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Withdraw your nomination?</DialogTitle>
+            <DialogDescription>
+              Your name comes off the organiser&apos;s list and you will not be
+              considered for any of the roles you picked. You can nominate again
+              while the session is still open.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmWithdraw(false)}
+              disabled={isPending}
+            >
+              Keep my nomination
+            </Button>
+            <Button
+              onClick={handleWithdraw}
+              disabled={isPending}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              {isPending ? "Withdrawing…" : "Yes, withdraw"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

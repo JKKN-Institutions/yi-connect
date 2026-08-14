@@ -857,7 +857,12 @@ export default async function ParticipantPage() {
           </SectionShell>
         )}
 
-      {/* ─── SELF-NOMINATION (pre-event; admin-toggled window) ─────── */}
+      {/* ─── SELF-NOMINATION (pre-event; admin-toggled window) ───────
+          Only shown when the organiser has OPENED the window, or when this
+          student already nominated. The column defaults to false on every
+          existing event, so a live chapter round mid-flight gains nothing on
+          this dashboard until an organiser deliberately switches it on. */}
+      {(selfNomOpen || selfNomRoles.length > 0) && (
       <SectionShell accent={SAFFRON}>
         <div className="px-5 py-4">
           <SectionHeading
@@ -894,6 +899,7 @@ export default async function ParticipantPage() {
           </div>
         </div>
       </SectionShell>
+      )}
 
       {/* ─── QUESTION HOUR ────────────────────────────────────────── */}
       <SectionShell accent={SAFFRON}>

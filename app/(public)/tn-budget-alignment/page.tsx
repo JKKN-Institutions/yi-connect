@@ -28,9 +28,10 @@ export default function TnBudgetAlignmentPage() {
         </h1>
         <p className='text-muted-foreground mt-3 max-w-2xl text-base leading-relaxed'>
           Every Yi Pathfinder 2026 programme mapped to the scheme in the Tamil
-          Nadu Revised Budget 2026-27 that funds the same outcome — with the
-          budget paragraph number attached, so any row can be checked against the
-          published speech.
+          Nadu Revised Budget 2026-27 that funds the same outcome — scored out of
+          8 against a fixed rubric, with the reasoning shown, the budget
+          paragraph cited, and a first move that names an owner, a window and a
+          test of whether it worked.
         </p>
         <dl className='text-muted-foreground mt-5 flex flex-wrap gap-x-8 gap-y-2 text-xs'>
           <div className='flex gap-2'>

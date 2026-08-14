@@ -3,7 +3,11 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import confetti from "canvas-confetti";
 import { clauseTexts } from "@/lib/yip/bill-provisions";
-import { billSourceOf, BILL_SOURCE_LABELS } from "@/lib/yip/bill-sources";
+import {
+  billSourceOf,
+  BILL_SOURCE_LABELS,
+  isBillFloorAgendaType,
+} from "@/lib/yip/bill-sources";
 import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, PARTY_COLORS, MINISTRIES, OATH_TEXT } from "@/lib/yip/constants";
 import { computeMultiSeatOutcome } from "@/lib/yip/election-outcome";
@@ -529,7 +533,10 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
   }, [eventId, supabase]);
 
   useEffect(() => {
-    if (currentAgendaItem?.agenda_type !== "bill_presentation") {
+    // Both bill-floor sessions show the presented bill — 'bill_presentation'
+    // and the Regional Round's 'private_members_bills'. The bare literal left
+    // the projector dark for the whole 90-minute PMB session.
+    if (!isBillFloorAgendaType(currentAgendaItem?.agenda_type)) {
       setPresentedBill(null);
       return;
     }
@@ -1098,7 +1105,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
               )}
 
             {/* Bill Presentation display */}
-            {currentAgendaItem.agenda_type === "bill_presentation" &&
+            {isBillFloorAgendaType(currentAgendaItem.agenda_type) &&
               presentedBill && (
                 <div className="mx-auto max-w-3xl space-y-6">
                   {/* Committee / party / source badge — benchless bills are
@@ -1193,7 +1200,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
               )}
 
             {/* Bill Presentation - no bill presented yet */}
-            {currentAgendaItem.agenda_type === "bill_presentation" &&
+            {isBillFloorAgendaType(currentAgendaItem.agenda_type) &&
               !presentedBill && (
                 <p className="text-2xl text-gray-500">
                   Awaiting bill presentation...

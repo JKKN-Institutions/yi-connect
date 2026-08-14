@@ -43,6 +43,7 @@ import {
   SelectValue,
 } from "@/components/yip/ui/select";
 import { cn } from "@/lib/yip/utils";
+import { isBillFloorAgendaType } from "@/lib/yip/bill-sources";
 import { toast } from "sonner";
 import { useVoteSession } from "@/lib/yip/hooks/use-vote-session";
 import { useActiveVoteSessions } from "@/lib/yip/hooks/use-active-vote-sessions";
@@ -292,7 +293,7 @@ export function VoteManager({
   const itemUsesVoting =
     currentAgendaItem?.use_for_voting === true ||
     agendaType === "speaker_election" ||
-    agendaType === "bill_presentation";
+    isBillFloorAgendaType(agendaType);
   const showVoteControls = Boolean(currentAgendaItem) && itemUsesVoting;
 
   // The active party-leader session's party id (config.partyId), used to label
@@ -376,10 +377,7 @@ export function VoteManager({
   // on other items. Re-runs only when the item changes, so a manual collapse
   // sticks until the organiser moves to the next item.
   useEffect(() => {
-    if (
-      agendaType === "speaker_election" ||
-      agendaType === "bill_presentation"
-    ) {
+    if (agendaType === "speaker_election" || isBillFloorAgendaType(agendaType)) {
       setElectionsMenuOpen(true);
     }
   }, [agendaType, currentAgendaItem?.id]);

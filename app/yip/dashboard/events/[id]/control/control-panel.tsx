@@ -45,6 +45,7 @@ import { MissionControl } from "./mission-control";
 import { AiMomentsCard } from "./ai-moments-card";
 import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS, isPreEventLive, PRE_EVENT_STATUS_LABEL } from "@/lib/yip/constants";
+import { isBillFloorAgendaType } from "@/lib/yip/bill-sources";
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
 import { armTimerSound } from "@/lib/yip/timer-sound";
@@ -391,9 +392,7 @@ export function ControlPanel({
   // a completed row does nothing), voting + jury silently stay dark. Surface a
   // one-tap fix instead of leaving them to improvise an on-the-spot item that
   // can't render as a bill session (the Erode 2026 incident).
-  const billSession = dayItems.find(
-    (i) => i.agenda_type === "bill_presentation"
-  );
+  const billSession = dayItems.find((i) => isBillFloorAgendaType(i.agenda_type));
   const currentIdxInDay = dayItems.findIndex((i) => i.id === currentItemId);
   const billIdxInDay = billSession
     ? dayItems.findIndex((i) => i.id === billSession.id)
@@ -1668,8 +1667,12 @@ export function ControlPanel({
             }
           />
 
-          {/* Bill Session (for bill_presentation agenda type) */}
-          {currentAgendaItem?.agenda_type === "bill_presentation" && (
+          {/* Bill Session — both bill-floor agenda types (Bill Presentation &
+              Voting, and the Regional Round's Private Members' Bills). This is
+              the ONLY surface that puts a bill on the floor, so gating it on
+              the bare 'bill_presentation' literal left the RR PMB session with
+              no way to choose the bill being moved. */}
+          {isBillFloorAgendaType(currentAgendaItem?.agenda_type) && currentAgendaItem && (
             <BillSession
               eventId={eventId}
               agendaItemId={currentAgendaItem.id}

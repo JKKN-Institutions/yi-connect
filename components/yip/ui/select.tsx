@@ -6,7 +6,69 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/yip/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+type DerivedSelectItem = { value: unknown; label: React.ReactNode }
+
+/**
+ * Walks the JSX tree the caller wrote and collects every `<SelectItem value=… >label</SelectItem>`.
+ *
+ * This is a *static* traversal of `children` — it does not need the popup to be mounted,
+ * which matters because Base UI unmounts the list while the select is closed.
+ */
+function collectSelectItems(
+  node: React.ReactNode,
+  out: DerivedSelectItem[]
+): void {
+  React.Children.forEach(node, (child) => {
+    if (!React.isValidElement(child)) return
+    const childProps = child.props as {
+      value?: unknown
+      children?: React.ReactNode
+    }
+    if (child.type === SelectItem || child.type === SelectPrimitive.Item) {
+      // Skip null/undefined values so an explicit `placeholder` on <SelectValue>
+      // keeps winning (Base UI lets a null item's label override the placeholder).
+      if (childProps.value != null) {
+        out.push({ value: childProps.value, label: childProps.children })
+      }
+      return
+    }
+    if (childProps.children != null) {
+      collectSelectItems(childProps.children, out)
+    }
+  })
+}
+
+/**
+ * Base UI's `<Select.Value>` renders the raw selected VALUE unless the root is given
+ * an `items` map to resolve value → label (a `placeholder` does not help — it only
+ * shows while nothing is selected). Every call site that used enum keys or UUIDs as
+ * item values therefore showed a raw code in the closed trigger.
+ *
+ * We derive `items` from the `<SelectItem>` children the caller already wrote, so no
+ * call site has to change. An explicit `items` prop always wins, and when nothing can
+ * be derived we fall through to Base UI's own behaviour.
+ */
+function Select<Value, Multiple extends boolean | undefined = false>({
+  items,
+  children,
+  ...props
+}: SelectPrimitive.Root.Props<Value, Multiple>) {
+  const derivedItems = React.useMemo(() => {
+    if (items !== undefined) return undefined
+    const collected: DerivedSelectItem[] = []
+    collectSelectItems(children, collected)
+    return collected.length > 0 ? collected : undefined
+  }, [items, children])
+
+  return (
+    <SelectPrimitive.Root
+      {...(props as SelectPrimitive.Root.Props<Value, Multiple>)}
+      items={items ?? derivedItems}
+    >
+      {children}
+    </SelectPrimitive.Root>
+  )
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (

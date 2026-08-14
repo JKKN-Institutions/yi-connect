@@ -180,6 +180,19 @@ export async function importDelegatesChunk(input: {
       errors.push("A row had no name and was skipped.");
       continue;
     }
+    // ─── No email AND no phone: cannot be checked for repeats ──────────
+    // Every duplicate test below is keyed on email or phone. A row carrying
+    // neither passes all of them by default, so re-uploading the same file —
+    // which people always do — creates that person again, and again. There is
+    // no key to de-duplicate on afterwards either, so the mess is permanent.
+    //
+    // Refused rather than imported-with-a-warning: a warning still leaves the
+    // duplicate behind, and the fix (add a phone number) is easy and belongs
+    // in the spreadsheet, not in the database.
+    if (!r.email && !r.phone) {
+      unverifiable.push(r.full_name);
+      continue;
+    }
     // Already in this edition?
     if (r.email && takenEmails.has(r.email)) {
       skipped++;

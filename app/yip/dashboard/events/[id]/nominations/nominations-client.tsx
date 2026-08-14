@@ -44,6 +44,7 @@ import {
   UserCheck,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ParticipantNameButton } from "@/components/yip/participant-profile-dialog";
 import { cn } from "@/lib/yip/utils";
 import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 import {
@@ -80,6 +81,7 @@ const ROLE_BADGE: Record<SelfNominationRole, string> = {
 
 export function NominationsClient({
   eventId,
+  eventName,
   canManage,
   initialOpen,
   initialRows,
@@ -87,6 +89,7 @@ export function NominationsClient({
   initialError,
 }: {
   eventId: string;
+  eventName: string;
   canManage: boolean;
   initialOpen: boolean;
   initialRows: SelfNominationResultRow[];
@@ -428,7 +431,15 @@ export function NominationsClient({
                         )}
                         <TableRow>
                           <TableCell className="font-medium text-[#1a1a3e]">
-                            {row.fullName}
+                            {/* Click the name to see the whole student without
+                                leaving the table — and without losing the
+                                filter or sort you are working through. */}
+                            <ParticipantNameButton
+                              eventId={eventId}
+                              eventName={eventName}
+                              participantId={row.participantId}
+                              name={row.fullName}
+                            />
                           </TableCell>
                           <TableCell className="text-[#1a1a3e]/70">
                             {constituencyLabel(

@@ -36,7 +36,7 @@ import {
   type SkillWillCategory,
 } from '@/types/assessment'
 import { useRouter } from 'next/navigation'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 
 interface AssessmentWizardProps {
   assessment: SkillWillAssessment

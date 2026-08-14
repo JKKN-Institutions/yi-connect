@@ -82,7 +82,7 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import {
   ActivityTemplatePicker,
   type ActivitySlotType,

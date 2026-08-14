@@ -30,7 +30,7 @@ import type {
   FormState
 } from '@/types/knowledge';
 import { z } from 'zod';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { Loader2, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 

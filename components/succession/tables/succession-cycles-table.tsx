@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { SuccessionCycle } from '@/lib/types/succession'
 import { deleteSuccessionCycle } from '@/app/actions/succession'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 
 interface SuccessionCyclesTableProps {
   cycles: SuccessionCycle[]

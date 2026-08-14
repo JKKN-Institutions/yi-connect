@@ -10,7 +10,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, UserPlus } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { inviteMentor } from "@/app/youth-academy/actions/mentors";
 import { Button } from "@/components/ui/button";
 import {

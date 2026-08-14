@@ -42,7 +42,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import {
   CUSTOM_FIELD_TYPES,
   MAX_CUSTOM_FIELDS,

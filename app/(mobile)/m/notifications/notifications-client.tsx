@@ -27,7 +27,7 @@ import {
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { markAsRead, markAllAsRead } from '@/app/actions/notifications'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import type { Notification } from '@/types/notifications'
 
 // Notification type icons

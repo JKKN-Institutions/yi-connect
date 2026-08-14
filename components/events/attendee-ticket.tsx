@@ -25,7 +25,7 @@ import QRCode from 'qrcode';
 import { Download, Printer, Ticket, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface AttendeeTicketProps {
   rsvpId: string;

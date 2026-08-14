@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { Plus, Pencil, Trash2, Eye, EyeOff, HelpCircle } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import {
   Accordion,
   AccordionContent,

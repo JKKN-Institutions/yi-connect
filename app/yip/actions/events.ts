@@ -15,6 +15,11 @@ import {
   orderEventCommittees,
   unnamedCommitteeName,
 } from "@/lib/yip/event-committees";
+import {
+  isValidWhatsappInvite,
+  normalizeWhatsappInvite,
+  withCommitteeWhatsapp,
+} from "@/lib/yip/whatsapp-links";
 import type { Database } from "@/types/yip/database";
 
 // ─── Types ─────────────────────────────────────────────────────────

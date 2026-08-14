@@ -72,11 +72,61 @@ function renderCodeEmail(input: {
   fullName: string;
   accessCode: string;
   eventName: string;
+  /** The student's own party and committee groups, when a link is on file. */
+  partyName?: string | null;
+  partyWhatsapp?: string | null;
+  committeeLabel?: string | null;
+  committeeWhatsapp?: string | null;
 }): { subject: string; html: string; text: string } {
   const name = escapeHtml(input.fullName);
   const code = escapeHtml(input.accessCode);
   const eventName = escapeHtml(input.eventName);
   const subject = `Your Young Indians Parliament login code — ${input.eventName}`;
+
+  // Group links are OPTIONAL. A student whose party or committee has no link on
+  // file still gets their code — the block is simply shorter. Never withhold
+  // the code over a missing group link (Director, 2026-08-14).
+  const groups: Array<{ label: string; url: string }> = [];
+  if (input.partyWhatsapp) {
+    groups.push({
+      label: input.partyName ? `Your party — ${input.partyName}` : "Your party",
+      url: input.partyWhatsapp,
+    });
+  }
+  if (input.committeeWhatsapp) {
+    groups.push({
+      label: input.committeeLabel
+        ? `Your committee — ${input.committeeLabel}`
+        : "Your committee",
+      url: input.committeeWhatsapp,
+    });
+  }
+
+  const groupsText =
+    groups.length === 0
+      ? ""
+      : `\nYOUR WHATSAPP GROUPS\n${groups
+          .map((g) => `${g.label}: ${g.url}`)
+          .join("\n")}\nJoin these so you get updates before and during the event.\n`;
+
+  const groupsHtml =
+    groups.length === 0
+      ? ""
+      : `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px;margin:20px 0">
+        <p style="margin:0 0 10px;color:#166534;font-size:14px;font-weight:600">Your WhatsApp groups</p>
+        ${groups
+          .map(
+            (g) =>
+              `<p style="margin:0 0 8px;font-size:14px"><span style="color:#4b5563">${escapeHtml(
+                g.label
+              )}</span><br><a href="${escapeHtml(
+                g.url
+              )}" style="color:#138808;font-weight:600">Join the group</a></p>`
+          )
+          .join("")}
+        <p style="margin:6px 0 0;color:#4b5563;font-size:12px">Join these so you get updates before and during the event.</p>
+      </div>`;
+
   const text = `Young Indians Parliament 2026
 ${input.eventName}
 
@@ -86,7 +136,7 @@ Your YIP login code is: ${input.accessCode}
 
 Sign in here: ${JOIN_URL}
 Open that link and enter your code to join.
-
+${groupsText}
 IMPORTANT: This code is yours alone. Do NOT share it with anyone — not classmates, friends or family. Anyone who has your code can sign in and act as you at the event.
 
 Young Indians · CII`;

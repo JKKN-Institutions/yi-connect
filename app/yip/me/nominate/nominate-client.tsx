@@ -79,6 +79,28 @@ type Props = {
   loadError: string | null;
 };
 
+/**
+ * A server action can fail at the TRANSPORT layer, not just the business one:
+ * after a deploy the action endpoint this page was built against is gone, and
+ * the call rejects instead of returning { success:false }. Unhandled, that
+ * leaves the spinner clearing with nothing on screen — the student reads
+ * "nothing happened" as "it worked", which for a withdrawal is the dangerous
+ * direction. Turn every throw into the same visible failure shape.
+ */
+async function callAction<T>(
+  run: () => Promise<{ success: true; data: T } | { success: false; error: string }>
+): Promise<{ success: true; data: T } | { success: false; error: string }> {
+  try {
+    return await run();
+  } catch {
+    return {
+      success: false,
+      error:
+        "Could not reach the server. Refresh the page and check before trying again.",
+    };
+  }
+}
+
 /** Selection held in catalogue order so the UI never reorders on toggle. */
 function ordered(roles: readonly SelfNominationRole[]): SelfNominationRole[] {
   const picked = new Set(roles);
@@ -127,7 +149,9 @@ export function NominateClient({
     }
     setError(null);
     startTransition(async () => {
-      const res = await submitSelfNomination(eventId, selected);
+      const res = await callAction(() =>
+        submitSelfNomination(eventId, selected)
+      );
       if (res.success) {
         setSubmittedRoles(res.data.roles);
         setSelected(res.data.roles);
@@ -151,7 +175,7 @@ export function NominateClient({
    * been withdrawn from another device.
    */
   async function resyncFromServer() {
-    const fresh = await getMySelfNomination(eventId);
+    const fresh = await callAction(() => getMySelfNomination(eventId));
     if (!fresh.success) return;
     setOpen(fresh.data.open);
     if (fresh.data.nomination) {
@@ -167,7 +191,7 @@ export function NominateClient({
     setConfirmWithdraw(false);
     setError(null);
     startTransition(async () => {
-      const res = await withdrawSelfNomination(eventId);
+      const res = await callAction(() => withdrawSelfNomination(eventId));
       if (res.success) {
         setSubmittedRoles([]);
         setSelected([]);

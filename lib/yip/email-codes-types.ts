@@ -21,12 +21,23 @@ export type YipEmailRecipient = {
 
 /** The full send plan: counts + ordered recipient list for the confirm screen. */
 export type YipEmailSendPlan = {
-  /** All participants in the event. */
+  /**
+   * Participants IN SCOPE — i.e. the ones currently shown on the Participants
+   * tab. Equal to `eventTotal` when no filter is applied.
+   */
   total: number;
-  /** Participants with a valid email address. */
+  /** In-scope participants with a valid email address. */
   withEmail: number;
   /** Ordered by serialNo. */
   recipients: YipEmailRecipient[];
+  /**
+   * Everyone in the event, filter or no filter. Lets the dialog say plainly
+   * "12 of the 30 students shown (of 200 in this event)" so an organiser can
+   * never mistake a filtered send for an everyone send — or the reverse.
+   */
+  eventTotal: number;
+  /** True when a filter is narrowing the send below the whole event. */
+  filtered: boolean;
 };
 
 /** Per-participant outcome of one send batch. */

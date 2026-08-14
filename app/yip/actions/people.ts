@@ -212,8 +212,32 @@ export async function restorePerson(id: string): Promise<ActionResult> {
 // ─── Find or create (used by registration approval + promotion) ──
 
 /**
- * Idempotent upsert by phone (preferred) or (school_id, normalized name).
+ * Escape a literal string for use as an ILIKE pattern.
+ *
+ * Without this, `_` and `%` inside a student's name or school are treated as
+ * wildcards: "A_ha" would match "Asha" and "Aisha" alike, quietly folding two
+ * children into one person.
+ */
+function ciPattern(literal: string): string {
+  return literal.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+/**
+ * Idempotent upsert by email, else (school, normalized name).
  * Never creates a duplicate: if a match exists, returns that row's id.
+ *
+ * ─── DELIBERATELY NOT MATCHED ON PHONE ────────────────────────────────────
+ * This used to try `phone` first. That is unsafe for schoolchildren: rosters
+ * carry both `phone` and `parent_phone`, and siblings at one school share a
+ * parent's number — so phone-first silently merges two different children into
+ * a single career record, which is the one failure mode with real consequences
+ * here. The youth-academy applicant path made the same call for the same reason
+ * (see app/youth-academy/actions/applications.ts, resolveApplicantPerson).
+ *
+ * A missed match costs one duplicate row, which the people-linking review
+ * screen can merge later. A wrong match puts one child's rounds, scores and
+ * awards inside another child's record. Those are not symmetric, so this errs
+ * toward creating a duplicate.
  */
 export async function findOrCreatePerson(
   input: PersonInput
@@ -225,42 +249,48 @@ export async function findOrCreatePerson(
 
   const supabase = await createServiceClient();
 
-  // Try phone first
-  if (clean.phone) {
-    const { data: byPhone } = await supabase
+  // Each lookup takes the OLDEST active match rather than `.maybeSingle()`.
+  // maybeSingle ERRORS on 2+ rows, and because that error was discarded the old
+  // code fell straight through to "create fresh" — so an existing duplicate
+  // caused a third one. Oldest-wins is also stable under concurrent imports.
+  const namePattern = ciPattern(clean.full_name);
+
+  // 1. Email — the only genuinely per-person identifier on a YIP roster.
+  if (clean.email) {
+    const { data } = await supabase
       .from("contestants")
       .select("id")
-      .eq("phone", clean.phone)
-      .maybeSingle();
-    if (byPhone) {
-      return { success: true, data: { id: byPhone.id, matched: true } };
-    }
+      .eq("is_active", true)
+      .ilike("email", ciPattern(clean.email))
+      .order("created_at", { ascending: true })
+      .limit(1);
+    if (data?.[0]) return { success: true, data: { id: data[0].id, matched: true } };
   }
 
-  // Then school_id + name
+  // 2. school_id + name
   if (clean.school_id) {
-    const { data: bySchool } = await supabase
+    const { data } = await supabase
       .from("contestants")
       .select("id")
+      .eq("is_active", true)
       .eq("school_id", clean.school_id)
-      .ilike("full_name", clean.full_name)
-      .maybeSingle();
-    if (bySchool) {
-      return { success: true, data: { id: bySchool.id, matched: true } };
-    }
+      .ilike("full_name", namePattern)
+      .order("created_at", { ascending: true })
+      .limit(1);
+    if (data?.[0]) return { success: true, data: { id: data[0].id, matched: true } };
   }
 
-  // Else school_name + name
+  // 3. school_name + name
   if (clean.school_name) {
-    const { data: bySchoolName } = await supabase
+    const { data } = await supabase
       .from("contestants")
       .select("id")
-      .ilike("school_name", clean.school_name)
-      .ilike("full_name", clean.full_name)
-      .maybeSingle();
-    if (bySchoolName) {
-      return { success: true, data: { id: bySchoolName.id, matched: true } };
-    }
+      .eq("is_active", true)
+      .ilike("school_name", ciPattern(clean.school_name))
+      .ilike("full_name", namePattern)
+      .order("created_at", { ascending: true })
+      .limit(1);
+    if (data?.[0]) return { success: true, data: { id: data[0].id, matched: true } };
   }
 
   // Create fresh
@@ -278,7 +308,17 @@ export async function findOrCreatePerson(
 export async function getPersonJourney(personId: string): Promise<JourneyStep[]> {
   const supabase = await createServiceClient();
 
-  const { data: parts } = await supabase
+  // `yi_year_id`, NOT `season_id`. yip.events.season_id does not exist — it was
+  // renamed — and PostgREST answers an unknown embedded column with a hard 400
+  // (`42703: column events_1.season_id does not exist`), not a partial row. The
+  // error used to be discarded here, so every journey silently came back empty
+  // and both career pages ("The Record" at /yip/me/journey and the admin person
+  // page) rendered blank for EVERY student, including the linked ones. That read
+  // as "not set up yet" rather than "broken", which is why it survived.
+  //
+  // results_published_at is selected here rather than re-queried per step; the
+  // old per-step lookup was an N+1 over the same rows this join already returns.
+  const { data: parts, error } = await supabase
     .from("participants")
     .select(
       `
@@ -292,12 +332,23 @@ export async function getPersonJourney(personId: string): Promise<JourneyStep[]>
       committee_name,
       constituency_name,
       qualified_for_next,
-      event:events(id, name, level, day1_date, zone, season_id),
+      event:events(id, name, level, day1_date, zone, yi_year_id, results_published_at),
       result:results!results_participant_id_fkey(avg_score, rank, award_category)
     `
     )
     .eq("person_id", personId)
     .order("created_at", { ascending: true });
+
+  // Never swallow this again: an empty journey and a failed query look identical
+  // to the caller, and that is exactly how the bug above stayed invisible.
+  if (error) {
+    console.error("getPersonJourney query failed", {
+      personId,
+      code: error.code,
+      message: error.message,
+    });
+    return [];
+  }
 
   if (!parts) return [];
 
@@ -310,7 +361,8 @@ export async function getPersonJourney(personId: string): Promise<JourneyStep[]>
       level: string;
       day1_date: string;
       zone: string | null;
-      season_id: string | null;
+      yi_year_id: string | null;
+      results_published_at: string | null;
     } | null;
     const resArr = (p.result as Array<{
       avg_score: number | null;
@@ -319,16 +371,8 @@ export async function getPersonJourney(personId: string): Promise<JourneyStep[]>
     }>) ?? [];
     const res = resArr[0];
 
-    // Publish status
-    let publishedAt: string | null = null;
-    if (ev) {
-      const { data: evDetail } = await supabase
-        .from("events")
-        .select("results_published_at")
-        .eq("id", ev.id)
-        .single();
-      publishedAt = evDetail?.results_published_at ?? null;
-    }
+    // Publish status — comes from the join above, no per-step round trip.
+    const publishedAt = ev?.results_published_at ?? null;
 
     // Year
     let year: number | null = null;

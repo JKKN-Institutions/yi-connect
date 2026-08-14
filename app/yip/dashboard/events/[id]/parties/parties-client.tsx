@@ -1,7 +1,6 @@
 "use client";
 
 import { setPartyWhatsappLink } from "@/app/yip/actions/events";
-import { WHATSAPP_INVITE_HINT } from "@/lib/yip/whatsapp-links";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";

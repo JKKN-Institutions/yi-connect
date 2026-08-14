@@ -29,7 +29,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { schoolFormSchema } from '@/lib/validations/stakeholder';
 import { createSchool, updateSchool } from '@/app/actions/stakeholder';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 type SchoolFormValues = z.infer<typeof schoolFormSchema>;
 

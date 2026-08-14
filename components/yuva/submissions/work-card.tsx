@@ -9,7 +9,7 @@
 
 import { useState } from "react";
 import { CalendarClock, Download, Loader2, MessageSquareText } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { getMySubmissionFileUrl } from "@/app/youth-academy/actions/submissions";
 import { SUBMISSION_GRACE_DAYS } from "@/lib/yuva/constants";
 import { formatDate, formatDateTime } from "@/components/yuva/public/format";

@@ -5,7 +5,7 @@ import { Check, Plus, Minus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toggleMemberRSVP, updateGuestCount } from '@/app/actions/quick-rsvp';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import type { PublicMember } from '@/lib/data/public-events';
 
 interface MemberRSVPListProps {

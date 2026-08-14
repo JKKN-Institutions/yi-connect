@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Share2, Copy, Check, Facebook, Twitter, Mail, Download, Smartphone, Zap } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,

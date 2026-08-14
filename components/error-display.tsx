@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { AlertTriangle, Home, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {

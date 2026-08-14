@@ -20,7 +20,7 @@ import {
 } from '@/app/actions/communication';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import { formatDistanceToNow } from 'date-fns';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
@@ -77,15 +77,8 @@ export function NotificationBell({
 
           // Show toast notification
           toast.custom(
-            (t) => (
-              <div
-                className={cn(
-                  'flex items-start gap-3 p-4 rounded-lg shadow-lg bg-card border max-w-md',
-                  t.visible
-                    ? 'animate-in slide-in-from-top'
-                    : 'animate-out slide-out-to-top'
-                )}
-              >
+            (id) => (
+              <div className='flex items-start gap-3 p-4 rounded-lg shadow-lg bg-card border max-w-md'>
                 <div className='p-2 rounded-full bg-primary/10'>
                   <Bell className='h-5 w-5 text-primary' />
                 </div>
@@ -98,7 +91,7 @@ export function NotificationBell({
                   </p>
                 </div>
                 <button
-                  onClick={() => toast.dismiss(t.id)}
+                  onClick={() => toast.dismiss(id)}
                   className='text-muted-foreground hover:text-foreground'
                 >
                   ×

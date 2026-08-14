@@ -379,6 +379,29 @@ export default async function ScoringPage({
     byTeam.get(e.team_id)!.push(e);
   }
 
+  // ─── Scorecards that are OPEN, and therefore NOT counted above ────────
+  //
+  // Only a submitted evaluation counts toward a team's average. A scorecard
+  // that a juror started and never submitted — or that an admin reopened so a
+  // mistake could be corrected — silently drops out of the average, and until
+  // now nothing on this page said so. The team simply appeared to have been
+  // judged by fewer people.
+  //
+  // That is not hypothetical. At the Erode chapter final on 12 Aug, five
+  // scorecards were left unsubmitted and THREE teams ended with no counted
+  // jury score at all. Nobody could see it while it was still fixable.
+  const openByTeam = new Map<string, number>();
+  for (const e of evals) {
+    if (e.status === "submitted") continue;
+    openByTeam.set(e.team_id, (openByTeam.get(e.team_id) ?? 0) + 1);
+  }
+  const teamsWithOpenScores = teams.filter((t) => (openByTeam.get(t.id) ?? 0) > 0);
+  // The sharpest case: a juror has an open card and the team has NO counted
+  // score at all, so it is currently unrankable.
+  const teamsWithNoCountedScore = teamsWithOpenScores.filter(
+    (t) => (byTeam.get(t.id)?.length ?? 0) === 0
+  );
+
   const teamAggregates = teams.map((t) => {
     const list = byTeam.get(t.id) ?? [];
     const agg = aggregateEvaluations(list);

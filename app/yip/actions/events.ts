@@ -10,6 +10,11 @@ import { revalidatePath } from "next/cache";
 import { attachCentralTopicsToEvent } from "./admin-topics";
 import { getComplianceScore } from "./branding";
 import { writeEventAiEnabled } from "@/lib/yip/ai/drafts";
+import { getCommitteeNumbering } from "@/lib/yip/committee-number";
+import {
+  orderEventCommittees,
+  unnamedCommitteeName,
+} from "@/lib/yip/event-committees";
 import type { Database } from "@/types/yip/database";
 
 // ─── Types ─────────────────────────────────────────────────────────
@@ -211,6 +216,230 @@ export async function setEventCommittees(
   revalidatePath(`/yip/dashboard/events/${eventId}/topics`);
   revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);
   return { success: true, data: { count: Object.keys(obj).length } };
+}
+
+// ─── Numbered committees (Director, 2026-08-14) ────────────────────
+//
+// A chapter runs "Committee 1..N" and attributes a ministry to each number
+// LATER, once. These two actions are that flow: set the count now, name them
+// when you know. See lib/yip/event-committees.ts for why renumbering is safe.
+
+/**
+ * Set how many committees this event runs, WITHOUT naming them. Slots that
+ * already have a ministry attributed keep it; the rest become "Committee n".
+ *
+ * Shrinking (say 6 → 4) keeps the first 4 exactly as they are and leaves the
+ * students from the dropped committees UNASSIGNED for the organiser to move by
+ * hand (Director's choice — nobody who was already told their committee gets
+ * silently reshuffled). The count of those students is returned so the UI can
+ * say so plainly.
+ */
+export async function setEventCommitteeCount(
+  eventId: string,
+  count: number
+): Promise<ActionResult<{ count: number; unassigned: number }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  if (!Number.isInteger(count) || count < 1 || count > 40) {
+    return {
+      success: false,
+      error: "Enter how many committees this chapter will run (1–40).",
+    };
+  }
+
+  const supabase = await createServiceClient();
+  const { data: event, error: readErr } = await supabase
+    .from("events")
+    .select("committee_topics, allocation_locked")
+    .eq("id", eventId)
+    .single();
+  if (readErr || !event) return { success: false, error: "Event not found" };
+  if ((event as { allocation_locked?: boolean }).allocation_locked) {
+    return {
+      success: false,
+      error:
+        "Allocation is locked for this event. Unlock it before changing how many committees you run.",
+    };
+  }
+
+  const existing = (event.committee_topics ?? {}) as unknown as
+    | Record<string, string>
+    | string[];
+  const existingNames = Array.isArray(existing)
+    ? existing.map(String)
+    : Object.keys(existing);
+  const topicOf = (name: string): string =>
+    Array.isArray(existing) ? "" : (existing[name] ?? "");
+  const catalogue = await getCommitteeNumbering(supabase);
+  const current = orderEventCommittees(existingNames, catalogue.numberByName);
+  const nameBySlot = new Map(current.map((c) => [c.number, c.name]));
+
+  const obj: Record<string, string> = {};
+  for (let n = 1; n <= count; n++) {
+    const kept = nameBySlot.get(n);
+    const name = kept ?? unnamedCommitteeName(n);
+    obj[name] = kept ? topicOf(kept) : "";
+  }
+
+  // Students sitting in a committee that no longer exists are released rather
+  // than reshuffled. They show as unassigned so the organiser can place them.
+  const droppedNumbers = current
+    .filter((c) => c.number > count)
+    .map((c) => c.number);
+  let unassigned = 0;
+  if (droppedNumbers.length > 0) {
+    const { data: released, error: relErr } = await supabase
+      .from("participants")
+      .update({ committee_name: null, committee_number: null })
+      .eq("event_id", eventId)
+      .in("committee_number", droppedNumbers)
+      .select("id");
+    if (relErr) return { success: false, error: relErr.message };
+    unassigned = released?.length ?? 0;
+  }
+
+  const { error } = await supabase
+    .from("events")
+    .update({ committee_topics: obj, updated_at: new Date().toISOString() })
+    .eq("id", eventId);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/topics`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+  return { success: true, data: { count, unassigned } };
+}
+
+/**
+ * Attribute a ministry (and its topic) to one committee NUMBER. This is the
+ * "name it later" step: Committee 3 becomes Ministry of Health, and every
+ * student already sitting in committee 3 keeps their number and gains the name.
+ *
+ * Pass `null` to clear a ministry and go back to "Committee 3".
+ */
+export async function attributeCommitteeMinistry(
+  eventId: string,
+  committeeNumber: number,
+  ministry: string | null
+): Promise<ActionResult<{ number: number; name: string; moved: number }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  if (!Number.isInteger(committeeNumber) || committeeNumber < 1) {
+    return { success: false, error: "Pick a committee number." };
+  }
+
+  const supabase = await createServiceClient();
+  const { data: event, error: readErr } = await supabase
+    .from("events")
+    .select("committee_topics")
+    .eq("id", eventId)
+    .single();
+  if (readErr || !event) return { success: false, error: "Event not found" };
+
+  const existing = (event.committee_topics ?? {}) as unknown as
+    | Record<string, string>
+    | string[];
+  const existingNames = Array.isArray(existing)
+    ? existing.map(String)
+    : Object.keys(existing);
+  const topicOf = (name: string): string =>
+    Array.isArray(existing) ? "" : (existing[name] ?? "");
+  const catalogue = await getCommitteeNumbering(supabase);
+  const current = orderEventCommittees(existingNames, catalogue.numberByName);
+  const slot = current.find((c) => c.number === committeeNumber);
+  if (!slot) {
+    return {
+      success: false,
+      error: `This event does not run a Committee ${committeeNumber}.`,
+    };
+  }
+
+  let nextName: string;
+  let nextTopic = "";
+  if (ministry === null || ministry.trim() === "") {
+    nextName = unnamedCommitteeName(committeeNumber);
+  } else {
+    const wanted = ministry.trim();
+    const catalog = await listCommitteeTopics();
+    const match = catalog.find((c) => c.committee === wanted);
+    if (!match) {
+      return {
+        success: false,
+        error: `"${wanted}" is not in the committee catalogue.`,
+      };
+    }
+    // One ministry per event — otherwise two committees share a name and the
+    // bills table (unique on event + committee_name) would collide.
+    const clash = current.find(
+      (c) =>
+        c.number !== committeeNumber &&
+        c.name.toLowerCase() === wanted.toLowerCase()
+    );
+    if (clash) {
+      return {
+        success: false,
+        error: `${wanted} is already Committee ${clash.number} in this event.`,
+      };
+    }
+    nextName = match.committee;
+    nextTopic = match.topic ?? "";
+  }
+
+  if (nextName === slot.name) {
+    return {
+      success: true,
+      data: { number: committeeNumber, name: nextName, moved: 0 },
+    };
+  }
+
+  // Rebuild the map with this slot renamed, every other slot untouched.
+  const obj: Record<string, string> = {};
+  for (const c of current) {
+    if (c.number === committeeNumber) obj[nextName] = nextTopic;
+    else obj[c.name] = topicOf(c.name);
+  }
+
+  const { error: evErr } = await supabase
+    .from("events")
+    .update({ committee_topics: obj, updated_at: new Date().toISOString() })
+    .eq("id", eventId);
+  if (evErr) return { success: false, error: evErr.message };
+
+  // Carry the students across. They keep their NUMBER — only the label moves.
+  const { data: movedRows, error: pErr } = await supabase
+    .from("participants")
+    .update({ committee_name: nextName })
+    .eq("event_id", eventId)
+    .eq("committee_number", committeeNumber)
+    .select("id");
+  if (pErr) return { success: false, error: pErr.message };
+
+  // A bill is filed under the committee NAME (bills_event_committee_key is
+  // unique on event + committee_name), so a rename has to take any existing
+  // bill with it or it would be orphaned from its own committee. Naming is
+  // meant to happen before drafting starts, so this normally moves nothing.
+  await supabase
+    .from("bills")
+    .update({ committee_name: nextName } as never)
+    .eq("event_id", eventId)
+    .eq("committee_name" as never, slot.name as never);
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/topics`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+  revalidatePath("/yip/me");
+  return {
+    success: true,
+    data: {
+      number: committeeNumber,
+      name: nextName,
+      moved: movedRows?.length ?? 0,
+    },
+  };
 }
 
 // ─── Setup progress (sidebar checklist) ────────────────────────────

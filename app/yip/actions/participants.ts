@@ -7,6 +7,10 @@ import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
 import { COMMITTEES } from "@/lib/yip/constants";
 import { getCommitteeNumbering } from "@/lib/yip/committee-number";
+import {
+  orderEventCommittees,
+  unnamedCommitteeName,
+} from "@/lib/yip/event-committees";
 import { cleanParticipantName } from "@/lib/yip/name-clean";
 import {
   isGoIndependentClosed,
@@ -703,10 +707,30 @@ export async function importParticipants(
   }
   const supabase = await createServiceClient();
 
-  // Committee numbers are PERMANENT global numbers (the catalogue topic_number),
-  // identical in every event — so an uploaded "6" resolves to the same committee
-  // everywhere. The committee name is filled in from that number.
-  const committeeNumbering = await getCommitteeNumbering(supabase);
+  // Committee numbers are positions WITHIN THIS EVENT — 1..N (Director,
+  // 2026-08-14). An uploaded "6" therefore means "this event's Committee 6",
+  // NOT the same committee in every event. Build the event's own name↔number
+  // map; the catalogue numbering is loaded only to order named committees in
+  // official ministry order. See lib/yip/event-committees.ts.
+  const catalogue = await getCommitteeNumbering(supabase);
+  const { data: importEvent } = await supabase
+    .from("events")
+    .select("committee_topics")
+    .eq("id", eventId)
+    .single();
+  const eventCommitteeNames = committeesFromTopics(
+    (importEvent as { committee_topics?: unknown } | null)?.committee_topics
+  );
+  const eventCommittees = orderEventCommittees(
+    eventCommitteeNames,
+    catalogue.numberByName
+  );
+  const committeeNameByNumber = new Map<number, string>(
+    eventCommittees.map((c) => [c.number, c.name])
+  );
+  const committeeNumberByName = new Map<string, number>(
+    eventCommittees.map((c) => [c.name.toLowerCase(), c.number])
+  );
 
   // Benches (government/opposition): when false, lettered parties import as a
   // FLAT house — the parties are still created (so party names show on the
@@ -864,8 +888,10 @@ export async function importParticipants(
       }
     }
 
-    // Committee: a number is used directly; a NAME is resolved to its global
-    // number. Unmatched names are flagged and left unassigned (never created).
+    // Committee: a number is used directly; a NAME is resolved to this event's
+    // number. Both resolve against THIS EVENT's committee list, so an uploaded
+    // "6" means this event's Committee 6. Unmatched names are flagged and left
+    // unassigned (never created).
     let committee_number: number | null =
       row.committee_number !== undefined && row.committee_number !== null
         ? row.committee_number
@@ -873,17 +899,14 @@ export async function importParticipants(
     let committee_name: string | null = row.committee_name?.trim() || null;
     if (committee_number !== null) {
       committee_name =
-        committeeNumbering.nameByNumber.get(committee_number) ??
+        committeeNameByNumber.get(committee_number) ??
         committee_name ??
-        `Committee ${committee_number}`;
+        unnamedCommitteeName(committee_number);
     } else if (committee_name) {
-      const resolved = committeeNumbering.numberByName.get(
-        committee_name.toLowerCase()
-      );
+      const resolved = committeeNumberByName.get(committee_name.toLowerCase());
       if (resolved != null) {
         committee_number = resolved;
-        committee_name =
-          committeeNumbering.nameByNumber.get(resolved) ?? committee_name;
+        committee_name = committeeNameByNumber.get(resolved) ?? committee_name;
       } else {
         errors.push(
           `Row ${i + 1}: committee "${committee_name}" not found — left unassigned. Add it on the Committees tab, then re-upload.`

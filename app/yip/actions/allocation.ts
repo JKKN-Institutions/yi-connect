@@ -9,10 +9,8 @@ import {
   type AllocationParticipant,
 } from "@/lib/yip/allocation-engine";
 import { planCommitteeAssignment } from "@/lib/yip/committee-assignment";
-import {
-  getCommitteeNumbering,
-  committeeNumberForName,
-} from "@/lib/yip/committee-number";
+import { getCommitteeNumbering } from "@/lib/yip/committee-number";
+import { eventCommitteeNumberByName } from "@/lib/yip/event-committees";
 import { planPartyFill, planFlatPartyFill } from "@/lib/yip/party-formation";
 
 // Gated writes run on the service client AFTER getYipEventAccess() (yip.* tables
@@ -388,10 +386,17 @@ export async function assignCommittees(
   );
 
   // Batch: one UPDATE per committee, plus one UPDATE clearing every office-holder.
-  // Each committee's number is its PERMANENT global number (the catalogue
-  // topic_number) — not a per-event position — so "3" means the same committee
-  // in every event.
+  // Each committee's number is its position WITHIN THIS EVENT — 1..N, always
+  // contiguous, always starting at 1 (Director, 2026-08-14). A chapter running
+  // three committees hands its students Committee 1, 2 and 3, whichever
+  // ministries it later attributes to them. The catalogue numbering is still
+  // loaded, but only to ORDER the named committees in official ministry order —
+  // it no longer supplies the number itself. See lib/yip/event-committees.ts.
   const numbering = await getCommitteeNumbering(supabase);
+  const numberByName = eventCommitteeNumberByName(
+    committeeNames,
+    numbering.numberByName
+  );
   const idsByName = new Map<string, string[]>();
   const cleared: string[] = [];
   for (const a of plan) {
@@ -404,7 +409,7 @@ export async function assignCommittees(
   }
   const byCommittee = new Map<string, { name: string; number: number; ids: string[] }>();
   for (const [name, ids] of idsByName) {
-    const number = (await committeeNumberForName(supabase, numbering, name)) ?? 0;
+    const number = numberByName.get(name.trim().toLowerCase()) ?? 0;
     byCommittee.set(name, { name, number, ids });
   }
 

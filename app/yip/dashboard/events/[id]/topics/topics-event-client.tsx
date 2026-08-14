@@ -8,8 +8,11 @@ import { Button } from "@/components/yip/ui/button";
 import { Card, CardContent } from "@/components/yip/ui/card";
 import {
   setEventCommittees,
+  setEventCommitteeCount,
+  attributeCommitteeMinistry,
   type CommitteeTopicOption,
 } from "@/app/yip/actions/events";
+import type { EventCommittee } from "@/lib/yip/event-committees";
 
 /**
  * Per-chapter committee picker. Each chapter chooses WHICH of the official 15
@@ -22,15 +25,79 @@ export function CommitteePickerClient({
   eventId,
   catalog,
   initialSelected,
+  slots,
+  studentsBySlot,
 }: {
   eventId: string;
   catalog: CommitteeTopicOption[];
   initialSelected: string[];
+  /** This event's committees as numbered slots, 1..N. */
+  slots: EventCommittee[];
+  /** committee number → how many students already sit in it. */
+  studentsBySlot: Record<number, number>;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  const [countInput, setCountInput] = useState(
+    slots.length > 0 ? String(slots.length) : "5"
+  );
+
+  const anyAllocated = Object.values(studentsBySlot).some((n) => n > 0);
+
+  function saveCount() {
+    setError(null);
+    setFlash(null);
+    const n = Number(countInput);
+    if (!Number.isInteger(n) || n < 1 || n > 40) {
+      setError("Enter a whole number of committees between 1 and 40.");
+      return;
+    }
+    startTransition(async () => {
+      const res = await setEventCommitteeCount(eventId, n);
+      if (!res.success) {
+        setError(res.error);
+        return;
+      }
+      setFlash(
+        res.data.unassigned > 0
+          ? `Now running ${res.data.count} committees. ${res.data.unassigned} student${
+              res.data.unassigned === 1 ? " was" : "s were"
+            } in a committee you removed — they are now unassigned, so place them from the Participants tab.`
+          : `Now running ${res.data.count} committees. Students will be split across Committee 1–${res.data.count}.`
+      );
+      router.refresh();
+    });
+  }
+
+  function attribute(number: number, ministry: string) {
+    setError(null);
+    setFlash(null);
+    startTransition(async () => {
+      const res = await attributeCommitteeMinistry(
+        eventId,
+        number,
+        ministry === "" ? null : ministry
+      );
+      if (!res.success) {
+        setError(res.error);
+        return;
+      }
+      setFlash(
+        ministry === ""
+          ? `Committee ${number} has no ministry again.`
+          : `Committee ${number} is now ${res.data.name}${
+              res.data.moved > 0
+                ? ` — ${res.data.moved} student${
+                    res.data.moved === 1 ? "" : "s"
+                  } updated`
+                : ""
+            }.`
+      );
+      router.refresh();
+    });
+  }
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(initialSelected)
   );
@@ -128,6 +195,119 @@ export function CommitteePickerClient({
           {flash}
         </div>
       )}
+
+      {/* ─── 1. HOW MANY ────────────────────────────────────────────
+          The number is what a student is told at allocation; the ministry is
+          attributed to that number later. So a chapter can commit to "we run
+          6 committees" long before it decides what any of them debate. */}
+      <Card>
+        <CardContent className="space-y-3 py-4">
+          <div>
+            <h3 className="text-sm font-bold text-[#1a1a3e]">
+              How many committees will you run?
+            </h3>
+            <p className="mt-0.5 text-xs text-[#1a1a3e]/60">
+              Students are split across Committee 1 to N at allocation. You can
+              decide which ministry each number gets later — nothing here forces
+              you to choose the subjects now.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="number"
+              min={1}
+              max={40}
+              value={countInput}
+              onChange={(e) => setCountInput(e.target.value)}
+              disabled={pending}
+              className="w-24 rounded-lg border border-[#1a1a3e]/20 px-3 py-2 text-sm disabled:opacity-50"
+              aria-label="Number of committees"
+            />
+            <Button variant="outline" onClick={saveCount} disabled={pending}>
+              {pending ? (
+                <Loader2 className="size-4 mr-2 animate-spin" />
+              ) : null}
+              Set number of committees
+            </Button>
+            {anyAllocated && (
+              <span className="text-xs text-[#1a1a3e]/50">
+                Students are already placed — reducing this frees the ones in
+                the committees you drop, and leaves everyone else where they are.
+              </span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ─── 2. THE NUMBERED COMMITTEES ─────────────────────────────── */}
+      {slots.length > 0 && (
+        <Card>
+          <CardContent className="space-y-3 py-4">
+            <div>
+              <h3 className="text-sm font-bold text-[#1a1a3e]">
+                Your committees
+              </h3>
+              <p className="mt-0.5 text-xs text-[#1a1a3e]/60">
+                Attribute a ministry to each number whenever you are ready. The
+                number never changes — students keep the committee they were
+                given.
+              </p>
+            </div>
+            <div className="grid gap-2">
+              {slots.map((s) => {
+                const topic =
+                  catalog.find((c) => c.committee === s.name)?.topic ?? "";
+                const students = studentsBySlot[s.number] ?? 0;
+                return (
+                  <div
+                    key={s.number}
+                    className="flex flex-wrap items-center gap-3 rounded-lg border border-[#1a1a3e]/10 bg-white px-3 py-2.5"
+                  >
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#FF9933]/10 text-sm font-bold text-[#FF9933]">
+                      {s.number}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <select
+                        value={s.unnamed ? "" : s.name}
+                        onChange={(e) => attribute(s.number, e.target.value)}
+                        disabled={pending}
+                        className="w-full max-w-md rounded-lg border border-[#1a1a3e]/20 px-2.5 py-1.5 text-sm disabled:opacity-50"
+                        aria-label={`Ministry for committee ${s.number}`}
+                      >
+                        <option value="">Not decided yet</option>
+                        {catalog.map((c) => (
+                          <option key={c.id} value={c.committee}>
+                            {c.committee}
+                          </option>
+                        ))}
+                      </select>
+                      {topic && (
+                        <p className="mt-1 text-xs text-[#1a1a3e]/60">{topic}</p>
+                      )}
+                    </div>
+                    <span className="shrink-0 text-xs text-[#1a1a3e]/50">
+                      {students === 0
+                        ? "no students yet"
+                        : `${students} student${students === 1 ? "" : "s"}`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ─── 3. PICK THEM ALL AT ONCE (the original flow) ───────────── */}
+      <div className="pt-1">
+        <h3 className="text-sm font-bold text-[#1a1a3e]">
+          Or pick all your ministries at once
+        </h3>
+        <p className="mt-0.5 mb-3 text-xs text-[#1a1a3e]/60">
+          Choose the exact ministries you will run. This replaces the list
+          above, so use it before students are placed into committees.
+        </p>
+      </div>
 
       {catalog.length === 0 ? (
         <Card>

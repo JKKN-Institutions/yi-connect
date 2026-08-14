@@ -408,7 +408,9 @@ export default function NewEventPage() {
               <p className="mt-1 text-xs text-gray-500">
                 {form.level === "chapter"
                   ? "Linking a chapter fills in the city, state and region automatically."
-                  : "The chapter running this round — its chair and organisers get access to manage it. Also fills in the city, state and region."}
+                  : form.level === "regional"
+                    ? "The chapter running this round — its chair and organisers get access to manage it. Also fills in the city, state and region."
+                    : "The chapter hosting the National Final — recorded for the venue and for the record. National admins run this event, so the host chapter's chair and organisers do not get access to manage it. Also fills in the city, state and region."}
               </p>
             </div>
 

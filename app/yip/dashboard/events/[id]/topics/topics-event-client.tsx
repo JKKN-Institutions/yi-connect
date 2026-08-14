@@ -29,6 +29,7 @@ export function CommitteePickerClient({
   initialSelected,
   slots,
   studentsBySlot,
+  committeeWhatsapp,
 }: {
   eventId: string;
   catalog: CommitteeTopicOption[];

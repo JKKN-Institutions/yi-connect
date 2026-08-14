@@ -34,7 +34,28 @@ export default async function EventTopicsPage({
   // Read on the service client (yip.events is RLS read-only for `authenticated`,
   // but the column is non-sensitive and the access gate above already passed).
   const service = await createServiceClient();
-  const { data: row } = await service
+  // committee_whatsapp arrives in migration 20260814170000 and is not in
+  // types/yip/database.ts (never regenerated — the CLI corrupts it), so this
+  // one read is cast. Same narrow-accessor pattern as app/yip/actions/voting.ts.
+  const { data: row } = await (
+    service as unknown as {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (
+            col: string,
+            v: string
+          ) => {
+            single: () => Promise<{
+              data: {
+                committee_topics: unknown;
+                committee_whatsapp: unknown;
+              } | null;
+            }>;
+          };
+        };
+      };
+    }
+  )
     .from("events")
     .select("committee_topics, committee_whatsapp")
     .eq("id", id)
@@ -76,8 +97,7 @@ export default async function EventTopicsPage({
       slots={slots}
       studentsBySlot={studentsBySlot}
       committeeWhatsapp={
-        ((row as { committee_whatsapp?: unknown } | null)
-          ?.committee_whatsapp ?? {}) as Record<string, string>
+        (row?.committee_whatsapp ?? {}) as Record<string, string>
       }
     />
   );

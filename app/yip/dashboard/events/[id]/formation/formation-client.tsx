@@ -579,15 +579,30 @@ export function FormationClient({
 
     setPreflightStep(key);
     void (async () => {
-      const res = await getFormationTurnout(eventId, key);
-      setPreflightStep(null);
-      // A failed read must not stand between the organiser and closing the
-      // step — fall back to the state's own per-step summary, then to no
-      // warning at all.
-      const summary = res.success
-        ? { eligible: res.data.eligible, voted: res.data.voted }
-        : (state?.turnout[key] ?? null);
-      if (!isLowTurnout(summary) || !summary) {
+      // The turnout read is a COURTESY, never a gate. It must not be able to
+      // strand "Close & count": a transport-level rejection (deploy skew while
+      // this page is open, a network blip, a 500) would otherwise leave the
+      // button disabled on "Checking turnout…" forever, with nothing on screen
+      // and only a reload to recover. So: try/finally, a watchdog, and every
+      // failure path falls through to the ordinary confirm.
+      let summary: { eligible: number; voted: number } | null = null;
+      try {
+        const res = await Promise.race([
+          getFormationTurnout(eventId, key),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+        ]);
+        summary =
+          res && res.success
+            ? { eligible: res.data.eligible, voted: res.data.voted }
+            : (state?.turnout[key] ?? null);
+      } catch {
+        // Fall back to the state's own per-step summary; if that is missing
+        // too, close without a warning rather than blocking the organiser.
+        summary = state?.turnout[key] ?? null;
+      } finally {
+        setPreflightStep(null);
+      }
+      if (!summary || !isLowTurnout(summary)) {
         confirm(null);
         return;
       }

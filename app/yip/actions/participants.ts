@@ -12,6 +12,7 @@ import {
   unnamedCommitteeName,
 } from "@/lib/yip/event-committees";
 import { cleanParticipantName } from "@/lib/yip/name-clean";
+import { findOrCreatePerson } from "@/lib/yip/people/find-or-create";
 import {
   isGoIndependentClosed,
   BILL_DRAFTING_SESSION_KEY,
@@ -31,6 +32,86 @@ import type { Database } from "@/types/yip/database";
 // UI import RLS write-block.)
 
 type ParliamentRole = Database["public"]["Enums"]["parliament_role"];
+
+// ─── Person linking ────────────────────────────────────────────────
+//
+// Every participant row is one student's appearance at ONE event. The person
+// behind it lives in yip.contestants, and participants.person_id is the link
+// that lets a student's rounds add up into a career — it is what /yip/me/journey
+// ("The Record") and the admin person page read.
+//
+// findOrCreatePerson has existed since the People entity shipped but had NO
+// callers anywhere in the repo, so person_id sat at 0.9% (and 0% of real
+// students). These three create paths are the entire forward fix; promotion
+// already carries an existing person_id across rounds.
+//
+// LINKING NEVER BLOCKS A ROSTER. If resolution fails we insert the participant
+// with person_id null and move on: the student still gets their code and their
+// seat, and an unlinked row can be linked later. The reverse — refusing an
+// import because identity resolution had a bad day — would be a much worse
+// failure on an event morning.
+type PersonIdentity = {
+  full_name: string;
+  school_name?: string | null;
+  school_id?: string | null;
+  class?: number | null;
+  email?: string | null;
+  city?: string | null;
+  home_state?: string | null;
+};
+
+async function resolvePersonId(input: PersonIdentity): Promise<string | null> {
+  try {
+    const res = await findOrCreatePerson({
+      full_name: input.full_name,
+      // phone/parent_phone deliberately NOT passed — siblings at one school
+      // share a parent's number, and matching on it merges two children into
+      // one career. See findOrCreatePerson's own note.
+      email: input.email ?? null,
+      school_id: input.school_id ?? null,
+      school_name: input.school_name ?? null,
+      class: input.class ?? null,
+      city: input.city ?? null,
+      home_state: input.home_state ?? null,
+    });
+    return res.success ? res.data.id : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve many identities without firing one round trip per row.
+ *
+ * Rows that describe the same student are collapsed FIRST, so a batch resolves
+ * each person once — this both cuts the query count and removes the race where
+ * two rows for one new student each find nothing and each insert a contestant.
+ * Resolution then runs in small concurrent groups; a 200-row roster is an admin
+ * action, but doing it strictly serially would take long enough to risk the
+ * function timeout.
+ */
+async function resolvePersonIdsForBatch(
+  rows: PersonIdentity[]
+): Promise<Array<string | null>> {
+  const keyOf = (r: PersonIdentity) =>
+    r.email?.trim()
+      ? `e:${r.email.trim().toLowerCase()}`
+      : `n:${r.full_name.trim().toLowerCase()}|${(r.school_name ?? "").trim().toLowerCase()}`;
+
+  const unique = new Map<string, PersonIdentity>();
+  for (const r of rows) if (!unique.has(keyOf(r))) unique.set(keyOf(r), r);
+
+  const resolved = new Map<string, string | null>();
+  const entries = [...unique.entries()];
+  const GROUP = 8;
+  for (let i = 0; i < entries.length; i += GROUP) {
+    const group = entries.slice(i, i + GROUP);
+    const ids = await Promise.all(group.map(([, r]) => resolvePersonId(r)));
+    group.forEach(([k], j) => resolved.set(k, ids[j]));
+  }
+
+  return rows.map((r) => resolved.get(keyOf(r)) ?? null);
+}
 
 // ─── Types ─────────────────────────────────────────────────────────
 
@@ -224,12 +305,25 @@ export async function addParticipant(
         ? data.ministry ?? null
         : null;
 
+    // Link to the person behind this participant. Match on the CLEANED name so
+    // "Mr. Arun" and "Arun" resolve to one student, not two.
+    const cleanedName = cleanParticipantName(data.full_name);
+    const personId = await resolvePersonId({
+      full_name: cleanedName,
+      school_name: data.school_name || null,
+      class: data.class ?? null,
+      email: data.email || null,
+      city: data.city || null,
+      home_state: data.home_state || null,
+    });
+
     const { data: participant, error } = await supabase
       .from("participants")
       .insert({
         event_id: eventId,
         // Google-Form rosters arrive with honorifics ("Mr. Arun") — strip them.
-        full_name: cleanParticipantName(data.full_name),
+        full_name: cleanedName,
+        person_id: personId,
         school_name: data.school_name || "",
         class: data.class ?? 9,
         phone: data.phone || null,
@@ -627,12 +721,25 @@ export async function quickAddWalkIn(
     // ── Write the single participant ──
     const accessCode = await generateUniqueCode(supabase, eventId, new Set());
 
+    // A walk-in is very often a student who has played a round before, so this
+    // is the path where linking pays off most.
+    const cleanedName = cleanParticipantName(data.full_name);
+    const personId = await resolvePersonId({
+      full_name: cleanedName,
+      school_name: data.school_name?.trim() || null,
+      class: data.class ?? null,
+      email: data.email?.trim() || null,
+      city: data.city?.trim() || null,
+      home_state: data.home_state?.trim() || null,
+    });
+
     const { data: participant, error } = await supabase
       .from("participants")
       .insert({
         event_id: eventId,
         // Strip honorific prefixes ("Mr. / Dr. …") — same rule as import.
-        full_name: cleanParticipantName(data.full_name),
+        full_name: cleanedName,
+        person_id: personId,
         school_name: data.school_name?.trim() || "",
         class: data.class ?? 9,
         phone: data.phone?.trim() || null,
@@ -954,10 +1061,30 @@ export async function importParticipants(
     };
   }
 
+  // Link every imported row to a person, so this roster starts accumulating
+  // careers from the moment it lands. Resolved as one batch (deduped, small
+  // concurrent groups) rather than a round trip per row — see
+  // resolvePersonIdsForBatch. A null here is survivable: the student is still
+  // imported and can be linked later.
+  const personIds = await resolvePersonIdsForBatch(
+    inserts.map((r) => ({
+      full_name: r.full_name,
+      school_name: r.school_name,
+      class: r.class,
+      email: r.email,
+      city: r.city,
+      home_state: r.home_state,
+    }))
+  );
+  const insertsWithPerson = inserts.map((r, idx) => ({
+    ...r,
+    person_id: personIds[idx],
+  }));
+
   // Batch insert
   const { error: insertError } = await supabase
     .from("participants")
-    .insert(inserts);
+    .insert(insertsWithPerson);
 
   if (insertError) {
     return { success: false, error: insertError.message };
@@ -971,6 +1098,10 @@ export async function importParticipants(
       imported: inserts.length,
       attempted: rows.length,
       errors_count: errors.length,
+      // How many rows actually got linked to a person. Linking is best-effort,
+      // so this is the signal that tells us whether it is working in production
+      // without waiting for someone to notice an empty career page.
+      linked_to_person: personIds.filter(Boolean).length,
       assign_benches: assignBenches,
     },
   });

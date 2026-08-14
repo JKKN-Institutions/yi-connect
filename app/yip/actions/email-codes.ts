@@ -22,6 +22,8 @@
 import { Resend } from "resend";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { committeeWhatsappFor } from "@/lib/yip/whatsapp-links";
+import { isUnnamedCommittee } from "@/lib/yip/event-committees";
 import type {
   YipEmailSendPlan,
   YipEmailRecipient,

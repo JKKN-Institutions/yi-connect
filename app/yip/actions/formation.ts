@@ -23,6 +23,7 @@ import {
   FORMATION_ANCHOR_SESSION_KEY,
   formationStepDef,
   stepDeadlinePassed,
+  isTerminalTieSession,
   maskEmail,
   type FormationStepKey,
   type FormationStepRow,
@@ -45,6 +46,7 @@ import {
 import {
   runAllocationAction,
   lockAllocation,
+  unlockAllocation,
 } from "@/app/yip/actions/allocation";
 import { formParties, listParties } from "@/app/yip/actions/parties";
 import type { Json } from "@/types/yip/database";
@@ -785,7 +787,10 @@ export async function extendFormationStep(
  *
  * On a TIE the step stays OPEN and { tie:true, tiedSessionIds } is returned —
  * the organiser opens a runoff (openFormationRunoff) and closes again after.
- * The organiser-mode 'appointments' step just flips to closed.
+ * A tie on a session that is ITSELF a runoff is TERMINAL (listed in
+ * terminalTiedSessionIds): runoffs stop at one and the organiser assigns that
+ * seat on Positions instead. The organiser-mode 'appointments' step just flips
+ * to closed.
  */
 export async function closeFormationStep(
   eventId: string,
@@ -841,7 +846,12 @@ export async function closeFormationStep(
     revalidatePath(formationPath(eventId));
     return {
       success: true,
-      data: { tie: false, tiedSessionIds: [], runoffOffered: false },
+      data: {
+        tie: false,
+        tiedSessionIds: [],
+        terminalTiedSessionIds: [],
+        runoffOffered: false,
+      },
     };
   }
 
@@ -855,9 +865,17 @@ export async function closeFormationStep(
 
   const { data: sessionRows } = await supabase
     .from("vote_sessions")
-    .select("id, status")
+    .select("id, status, config")
     .in("id", step.session_ids);
   const statusOf = new Map((sessionRows ?? []).map((s) => [s.id, s.status]));
+  // config carries openRunoff's isRunoff/runoffOf markers — a tie on one of
+  // those sessions is a REPEAT tie and gets no further runoff.
+  const configOf = new Map(
+    (sessionRows ?? []).map((s) => [
+      s.id,
+      (s.config ?? {}) as { isRunoff?: unknown; runoffOf?: unknown },
+    ])
+  );
 
   const tiedSessionIds: string[] = [];
 
@@ -876,12 +894,23 @@ export async function closeFormationStep(
   }
 
   if (tiedSessionIds.length > 0) {
-    // Step stays OPEN: the organiser opens a runoff per tied session, then
-    // closes the step again once the runoff windows elapse.
+    // Step stays OPEN: the organiser opens a runoff per tied session that has
+    // not already had one, then closes the step again once those windows
+    // elapse. A ballot that was ITSELF a runoff and tied again is terminal —
+    // the organiser assigns that seat on Positions (Director, 2026-08-11).
+    const terminalTiedSessionIds = tiedSessionIds.filter((id) =>
+      isTerminalTieSession(configOf.get(id))
+    );
     revalidatePath(formationPath(eventId));
     return {
       success: true,
-      data: { tie: true, tiedSessionIds, runoffOffered: true },
+      data: {
+        tie: true,
+        tiedSessionIds,
+        terminalTiedSessionIds,
+        runoffOffered:
+          terminalTiedSessionIds.length < tiedSessionIds.length,
+      },
     };
   }
 
@@ -899,7 +928,12 @@ export async function closeFormationStep(
   revalidatePath(formationPath(eventId));
   return {
     success: true,
-    data: { tie: false, tiedSessionIds: [], runoffOffered: false },
+    data: {
+      tie: false,
+      tiedSessionIds: [],
+      terminalTiedSessionIds: [],
+      runoffOffered: false,
+    },
   };
 }
 
@@ -943,6 +977,26 @@ export async function openFormationRunoff(
   }
   if (!step.session_ids.includes(revealedSessionId)) {
     return { success: false, error: "That ballot does not belong to this step." };
+  }
+
+  // Runoffs stop at ONE (Director, 2026-08-11). A ballot that is itself a
+  // runoff and tied again is terminal — the organiser decides that seat on the
+  // Positions page. Deny explicitly rather than opening runoff after runoff.
+  const { data: tiedSession } = await supabase
+    .from("vote_sessions")
+    .select("id, config")
+    .eq("id", revealedSessionId)
+    .maybeSingle();
+  if (
+    isTerminalTieSession(
+      (tiedSession?.config ?? {}) as { isRunoff?: unknown; runoffOf?: unknown }
+    )
+  ) {
+    return {
+      success: false,
+      error:
+        "This runoff tied again — there is no second runoff. Assign the seat on the Positions page, then press Close & count again.",
+    };
   }
 
   const runoff = await openRunoff(revealedSessionId);
@@ -1163,6 +1217,51 @@ export async function lockFormation(
   const { error: stepErr } = await formationStepsTable(supabase)
     .update({ status: "locked", updated_at: new Date().toISOString() })
     .eq("event_id", eventId);
+  if (stepErr) return { success: false, error: stepErr.message };
+
+  revalidatePath(formationPath(eventId));
+  return { success: true, data: null };
+}
+
+// ─── Unlock ─────────────────────────────────────────────────────────
+
+/**
+ * The way back from lockFormation, for the late change the lock cannot absorb
+ * (a student drops out the night before). Reverses exactly what the lock did:
+ * allocation is unlocked (the existing unlockAllocation) and every 'locked'
+ * step returns to 'closed' — NOT 'pending', so each step keeps its window,
+ * history and session_ids and the organiser re-runs only what they need.
+ *
+ * Unlocking does NOT undo any election: parliament_role rows written at reveal
+ * stay exactly as they are. It reopens the checklist, nothing more.
+ * canManage-gated; refuses when the House is not locked.
+ */
+export async function unlockFormation(
+  eventId: string
+): Promise<ActionResult<null>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
+  const supabase = await createServiceClient();
+  const steps = await loadSteps(supabase, eventId);
+  const lockStep = steps.find((s) => s.step_key === "lock");
+  if (!lockStep || lockStep.status !== "locked") {
+    return {
+      success: false,
+      error: "The House is not locked — there is nothing to unlock.",
+    };
+  }
+
+  const unlocked = await unlockAllocation(eventId);
+  if (!unlocked.success) return { success: false, error: unlocked.error };
+
+  // Only rows the lock itself set are touched (status = 'locked').
+  const { error: stepErr } = await formationStepsTable(supabase)
+    .update({ status: "closed", updated_at: new Date().toISOString() })
+    .eq("event_id", eventId)
+    .eq("status", "locked");
   if (stepErr) return { success: false, error: stepErr.message };
 
   revalidatePath(formationPath(eventId));

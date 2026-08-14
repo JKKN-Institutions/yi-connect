@@ -260,8 +260,63 @@ export type FormationCloseResult = {
   tie: boolean;
   /** Sessions whose reveal surfaced a tie (organiser opens a runoff per one). */
   tiedSessionIds: string[];
+  /**
+   * The subset of tiedSessionIds that are THEMSELVES runoffs — a repeat tie.
+   * Runoffs stop at one (Director, 2026-08-11: "organiser decides per case"),
+   * so no further runoff is offered for these; the organiser assigns the seat
+   * on the Positions page instead.
+   */
+  terminalTiedSessionIds: string[];
   runoffOffered: boolean;
 };
+
+/**
+ * Is this tied ballot a REPEAT tie — i.e. is the session that tied itself a
+ * runoff? A runoff-of-a-runoff is never offered: one runoff, then the
+ * organiser decides on Positions. Reads the runoff markers openRunoff stamps
+ * into vote_sessions.config (voting.ts RunoffConfig). Unknown/absent config
+ * reads as "not a runoff" — a FIRST tie still gets its one runoff.
+ */
+export function isTerminalTieSession(
+  config: { isRunoff?: unknown; runoffOf?: unknown } | null | undefined
+): boolean {
+  if (!config || typeof config !== "object") return false;
+  if (config.isRunoff === true) return true;
+  return typeof config.runoffOf === "string" && config.runoffOf.length > 0;
+}
+
+// ─── Low-turnout warning (organiser confirm, never a block) ─────────
+
+/**
+ * Turnout below HALF of the eligible electorate. Warn-only: the organiser may
+ * still close (they alone know whether the missing students are reachable) —
+ * this only decides whether the confirm dialog spells the numbers out.
+ *
+ * Exactly half is NOT low (2026-08-13 decision: "below half"). A step with no
+ * eligible voters, or with unusable counts, is never flagged — there is no
+ * ratio to judge and nothing to divide by.
+ */
+export function isLowTurnout(
+  turnout: { eligible: number; voted: number } | null | undefined
+): boolean {
+  if (!turnout) return false;
+  const { eligible, voted } = turnout;
+  if (!Number.isFinite(eligible) || eligible <= 0) return false;
+  if (!Number.isFinite(voted) || voted < 0) return false;
+  // voted / eligible < 1/2, done without division (no divide-by-zero path).
+  return voted * 2 < eligible;
+}
+
+/** Whole-number turnout percentage for organiser-facing copy; 0 when there is no electorate. */
+export function turnoutPercent(
+  turnout: { eligible: number; voted: number } | null | undefined
+): number {
+  if (!turnout) return 0;
+  const { eligible, voted } = turnout;
+  if (!Number.isFinite(eligible) || eligible <= 0) return 0;
+  if (!Number.isFinite(voted) || voted <= 0) return 0;
+  return Math.round((voted / eligible) * 100);
+}
 
 export type FormationAnnouncementPerson = {
   id: string;

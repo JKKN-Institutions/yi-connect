@@ -48,6 +48,7 @@ import {
   ScrollText,
   Search,
   Shuffle,
+  Unlock,
   Users,
   Vote,
 } from "lucide-react";
@@ -64,8 +65,11 @@ import {
 } from "@/app/yip/actions/voting";
 import {
   FORMATION_STEPS,
+  isLowTurnout,
+  turnoutPercent,
   type FormationState,
   type FormationStepKey,
+  type FormationStepMode,
   type FormationStepRow,
   type FormationTurnout,
 } from "@/lib/yip/formation";
@@ -78,13 +82,16 @@ import {
   openFormationRunoff,
   openFormationStep,
   runFormationAllocation,
+  unlockFormation,
 } from "@/app/yip/actions/formation";
 import { sendFormationReminders } from "@/app/yip/actions/formation-emails";
 import type { FormationEmailSendPlan as FormationInvitePlan } from "@/lib/yip/formation-email-types";
 
 // A step's unresolved tie: the revealed ballot(s) whose top candidates
 // finished level (party-leader steps can tie in several parties at once).
-type FormationTie = { sessionIds: string[] };
+// terminalSessionIds are the ones that were ALREADY a runoff and tied again —
+// they get no second runoff; the organiser assigns those seats on Positions.
+type FormationTie = { sessionIds: string[]; terminalSessionIds: string[] };
 import { InvitePanel } from "./invite-panel";
 import { AppointmentsPanel } from "./appointments-panel";
 
@@ -219,13 +226,26 @@ export function FormationClient({
     Partial<Record<FormationStepKey, string>>
   >({});
 
-  // Generic confirm dialog (vote-manager idiom).
+  // Generic confirm dialog (vote-manager idiom). `warning` renders as a
+  // highlighted block above the description — used for the low-turnout numbers.
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;
     description: string;
+    warning: string | null;
     action: () => void;
-  }>({ open: false, title: "", description: "", action: () => {} });
+  }>({
+    open: false,
+    title: "",
+    description: "",
+    warning: null,
+    action: () => {},
+  });
+
+  // Step whose close-preflight turnout read is in flight (disables its button).
+  const [preflightStep, setPreflightStep] = useState<FormationStepKey | null>(
+    null
+  );
 
   const refresh = useCallback(async () => {
     const res = await getFormationState(eventId);
@@ -286,9 +306,15 @@ export function FormationClient({
         })()
       : [];
 
+  // The Lock step only counts as done while the House is actually locked —
+  // after an unlock its row is back to 'closed' (history preserved) but the
+  // House is open again, so counting it would read "7 / 7 done" untruthfully.
   const doneCount =
-    state?.steps.filter((s) => s.status === "closed" || s.status === "locked")
-      .length ?? 0;
+    state?.steps.filter((s) =>
+      s.step_key === "lock"
+        ? s.status === "locked"
+        : s.status === "closed" || s.status === "locked"
+    ).length ?? 0;
   const isLocked = state?.steps.some(
     (s) => s.step_key === "lock" && s.status === "locked"
   );
@@ -441,6 +467,7 @@ export function FormationClient({
       open: true,
       title: "Run random allocation",
       description: `Randomly assign benches and form ${partyCount} balanced parties for every participant. Sides (ruling / opposition) are assigned in this same step.`,
+      warning: null,
       action: () => {
         startTransition(async () => {
           const res = await runFormationAllocation(eventId, { partyCount });
@@ -493,34 +520,81 @@ export function FormationClient({
     });
   }
 
-  function handleCloseStep(key: FormationStepKey, label: string) {
-    setConfirmDialog({
-      open: true,
-      title: `Close ${label}`,
-      description:
-        "Stop accepting votes, count the ballots, and record the winners. On a tie you'll be offered a runoff.",
-      action: () => {
-        startTransition(async () => {
-          const res = await closeFormationStep(eventId, key);
-          if (res.success) {
-            if (!res.data.tie) {
-              toast.success(`${label} complete — winners recorded.`);
-              setTieByStep((p) => ({ ...p, [key]: undefined }));
+  // Closing an election step is permanent — a low turnout crowns a winner just
+  // as firmly as a full one. So the confirm is preceded by a LIVE turnout read
+  // (getFormationTurnout, the same figures the turnout bar shows), and when
+  // fewer than half the eligible students have voted the dialog spells the real
+  // numbers out. It never blocks: the organiser may know the rest are
+  // unreachable. Above half, the dialog is exactly as before.
+  function handleCloseStep(
+    key: FormationStepKey,
+    label: string,
+    mode: FormationStepMode
+  ) {
+    const baseDescription =
+      "Stop accepting votes, count the ballots, and record the winners. On a tie you'll be offered a runoff.";
+
+    const confirm = (warning: string | null) =>
+      setConfirmDialog({
+        open: true,
+        title: `Close ${label}`,
+        description: baseDescription,
+        warning,
+        action: () => {
+          startTransition(async () => {
+            const res = await closeFormationStep(eventId, key);
+            if (res.success) {
+              if (!res.data.tie) {
+                toast.success(`${label} complete — winners recorded.`);
+                setTieByStep((p) => ({ ...p, [key]: undefined }));
+              } else {
+                setTieByStep((p) => ({
+                  ...p,
+                  [key]: {
+                    sessionIds: res.data.tiedSessionIds,
+                    terminalSessionIds: res.data.terminalTiedSessionIds,
+                  },
+                }));
+                toast.warning(
+                  res.data.runoffOffered
+                    ? "Tie — open a runoff to break it."
+                    : "Tied again — assign the seat on the Positions page."
+                );
+              }
+              await refresh();
             } else {
-              setTieByStep((p) => ({
-                ...p,
-                [key]: { sessionIds: res.data.tiedSessionIds },
-              }));
-              toast.warning("Tie — open a runoff to break it.");
+              toast.error(res.error);
             }
-            await refresh();
-          } else {
-            toast.error(res.error);
-          }
-          setConfirmDialog((p) => ({ ...p, open: false }));
-        });
-      },
-    });
+            setConfirmDialog((p) => ({ ...p, open: false }));
+          });
+        },
+      });
+
+    // The organiser-mode 'appointments' step has no electorate — nothing to
+    // warn about, and no reason to spend a round trip.
+    if (mode !== "election") {
+      confirm(null);
+      return;
+    }
+
+    setPreflightStep(key);
+    void (async () => {
+      const res = await getFormationTurnout(eventId, key);
+      setPreflightStep(null);
+      // A failed read must not stand between the organiser and closing the
+      // step — fall back to the state's own per-step summary, then to no
+      // warning at all.
+      const summary = res.success
+        ? { eligible: res.data.eligible, voted: res.data.voted }
+        : (state?.turnout[key] ?? null);
+      if (!isLowTurnout(summary) || !summary) {
+        confirm(null);
+        return;
+      }
+      confirm(
+        `Only ${summary.voted} of ${summary.eligible} eligible students voted (${turnoutPercent(summary)}%). Closing now will record the winner permanently.`
+      );
+    })();
   }
 
   // Runoff: openFormationRunoff restricts the fresh ballot to only the tied
@@ -534,8 +608,13 @@ export function FormationClient({
       toast.error("Pick a closing time for the runoff first.");
       return;
     }
+    // Ballots that were already a runoff are skipped — one runoff per seat.
+    const runoffable = tie.sessionIds.filter(
+      (id) => !tie.terminalSessionIds.includes(id)
+    );
+    if (runoffable.length === 0) return;
     startTransition(async () => {
-      for (const sessionId of tie.sessionIds) {
+      for (const sessionId of runoffable) {
         const res = await openFormationRunoff(eventId, key, sessionId, iso);
         if (!res.success) {
           toast.error(res.error);
@@ -545,7 +624,15 @@ export function FormationClient({
       toast.success(
         "Runoff open — only the tied candidates are on the ballot."
       );
-      setTieByStep((p) => ({ ...p, [key]: undefined }));
+      // Any repeat-tie ballots stay on screen: they still need a decision on
+      // the Positions page, and no runoff was opened for them.
+      setTieByStep((p) => ({
+        ...p,
+        [key]:
+          tie.terminalSessionIds.length > 0
+            ? { sessionIds: tie.terminalSessionIds, terminalSessionIds: tie.terminalSessionIds }
+            : undefined,
+      }));
       setRunoffLocal((p) => ({ ...p, [key]: "" }));
       await refresh();
     });
@@ -557,11 +644,40 @@ export function FormationClient({
       title: "Lock the House",
       description:
         "Freeze allocation, parties, and every elected & appointed role. This is the final step — the House arrives on event day fully formed. Locking refuses while any ballot is still open.",
+      warning: null,
       action: () => {
         startTransition(async () => {
           const res = await lockFormation(eventId);
           if (res.success) {
             toast.success("The House is locked and ready for event day.");
+            await refresh();
+          } else {
+            toast.error(res.error);
+          }
+          setConfirmDialog((p) => ({ ...p, open: false }));
+        });
+      },
+    });
+  }
+
+  // The way back from Lock, for a late change the lock cannot absorb (a student
+  // drops out the night before). It reopens the checklist — it does NOT undo
+  // any election.
+  function handleUnlock() {
+    setConfirmDialog({
+      open: true,
+      title: "Unlock the House",
+      description:
+        "This reopens the formation checklist and unlocks allocation, so you can fix a late change — a student dropping out, a wrong bench, a party that needs re-balancing. Every step goes back to done (not blank): each one keeps its window and its ballots, and you re-run only what you need, then lock the House again before event day.",
+      warning:
+        "Nobody loses their seat. Everyone already elected — Speaker, party leaders, PM, LoP — keeps their role exactly as it is. Unlocking reopens the checklist; it does not undo an election.",
+      action: () => {
+        startTransition(async () => {
+          const res = await unlockFormation(eventId);
+          if (res.success) {
+            toast.success(
+              "The House is unlocked — the checklist is open again. Elected roles are unchanged."
+            );
             await refresh();
           } else {
             toast.error(res.error);
@@ -628,6 +744,12 @@ export function FormationClient({
           const status = row?.status ?? "pending";
           const isOpen = status === "open";
           const isDone = status === "closed" || status === "locked";
+          // Same truth as doneCount: an unlocked Lock step is 'closed' in the
+          // database but is NOT done — show it as still to do.
+          const displayDone =
+            def.key === "lock" ? status === "locked" : isDone;
+          const displayStatus =
+            def.key === "lock" && status === "closed" ? "pending" : status;
           const canStart = prevStepClosed(def.key) && status === "pending";
           const tie = tieByStep[def.key];
           const Icon = STEP_ICONS[def.key];
@@ -652,14 +774,18 @@ export function FormationClient({
                   <span
                     className={cn(
                       "flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
-                      isDone
+                      displayDone
                         ? "bg-[#138808]/10 text-[#138808]"
                         : isOpen
                           ? "bg-green-100 text-green-700"
                           : "bg-[#1a1a3e]/5 text-[#1a1a3e]/50"
                     )}
                   >
-                    {isDone ? <CheckCircle2 className="size-4" /> : def.order}
+                    {displayDone ? (
+                      <CheckCircle2 className="size-4" />
+                    ) : (
+                      def.order
+                    )}
                   </span>
                   <CardTitle
                     className="flex flex-1 items-center gap-2 text-sm"
@@ -675,7 +801,7 @@ export function FormationClient({
                         closes {fmtWhen(row.closes_at)}
                       </span>
                     )}
-                    {statusBadge(status)}
+                    {statusBadge(displayStatus)}
                   </div>
                 </button>
               </CardHeader>
@@ -853,71 +979,117 @@ export function FormationClient({
                         <Button
                           size="sm"
                           variant="destructive"
-                          disabled={isPending}
-                          onClick={() => handleCloseStep(def.key, def.label)}
+                          disabled={isPending || preflightStep === def.key}
+                          onClick={() =>
+                            handleCloseStep(def.key, def.label, def.mode)
+                          }
                         >
-                          Close & count
+                          {preflightStep === def.key
+                            ? "Checking turnout…"
+                            : "Close & count"}
                         </Button>
                       </div>
                     </div>
                   )}
 
                   {/* Runoff banner on tie */}
-                  {def.mode === "election" && tie && (
-                    <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
-                      <p className="text-sm font-medium text-amber-800">
-                        Tie — the leading candidates finished on equal votes
-                        {tie.sessionIds.length > 1
-                          ? ` in ${tie.sessionIds.length} ballots`
-                          : ""}
-                        . Open a runoff between only the tied candidates.
-                      </p>
-                      {/* Director edge-case decision 3 (11 Aug): the organiser
-                          may instead resolve the tie DIRECTLY — a tied reveal
-                          writes no role, so assigning the seat on Positions and
-                          closing this step again works cleanly. */}
-                      <p className="text-xs text-amber-700">
-                        Or resolve it directly: assign the seat on the{" "}
-                        <Link
-                          href={`/yip/dashboard/events/${eventId}/positions`}
-                          className="font-medium underline"
-                        >
-                          Positions page
-                        </Link>
-                        , then press Close &amp; count again — the step will
-                        close with your pick standing.
-                      </p>
-                      <div className="flex flex-wrap items-end gap-2">
-                        <div className="space-y-1.5">
-                          <Label
-                            htmlFor={`runoff-${def.key}`}
-                            className="text-xs"
-                          >
-                            Runoff closes at
-                          </Label>
-                          <Input
-                            id={`runoff-${def.key}`}
-                            type="datetime-local"
-                            value={runoffLocal[def.key] ?? ""}
-                            onChange={(e) =>
-                              setRunoffLocal((p) => ({
-                                ...p,
-                                [def.key]: e.target.value,
-                              }))
-                            }
-                            className="h-9 w-56"
-                          />
+                  {def.mode === "election" &&
+                    tie &&
+                    (() => {
+                      // A ballot that was ITSELF a runoff and tied again is
+                      // terminal — runoffs stop at one (Director, 11 Aug:
+                      // "organiser decides per case"). Only the first-time ties
+                      // still get runoff controls.
+                      const runoffable = tie.sessionIds.filter(
+                        (id) => !tie.terminalSessionIds.includes(id)
+                      );
+                      const terminalCount = tie.terminalSessionIds.length;
+                      return (
+                        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
+                          {runoffable.length > 0 ? (
+                            <p className="text-sm font-medium text-amber-800">
+                              Tie — the leading candidates finished on equal
+                              votes
+                              {runoffable.length > 1
+                                ? ` in ${runoffable.length} ballots`
+                                : ""}
+                              . Open a runoff between only the tied candidates.
+                            </p>
+                          ) : (
+                            <p className="text-sm font-medium text-amber-800">
+                              Tied again — the runoff finished level too
+                              {terminalCount > 1
+                                ? ` in ${terminalCount} ballots`
+                                : ""}
+                              . There is no second runoff: this seat is now
+                              yours to decide.
+                            </p>
+                          )}
+
+                          {/* Director edge-case decision 3 (11 Aug): the
+                              organiser may resolve a tie DIRECTLY — a tied
+                              reveal writes no role, so assigning the seat on
+                              Positions and closing this step again works
+                              cleanly. After a repeat tie this is the ONLY
+                              path offered. */}
+                          <p className="text-xs text-amber-700">
+                            {runoffable.length > 0
+                              ? "Or resolve it directly: assign the seat on the "
+                              : "Assign the seat on the "}
+                            <Link
+                              href={`/yip/dashboard/events/${eventId}/positions`}
+                              className="font-medium underline"
+                            >
+                              Positions page
+                            </Link>
+                            , then press Close &amp; count again — the step will
+                            close with your pick standing.
+                          </p>
+
+                          {runoffable.length > 0 && (
+                            <>
+                              {terminalCount > 0 && (
+                                <p className="text-xs text-amber-700">
+                                  {terminalCount} other ballot
+                                  {terminalCount === 1 ? "" : "s"} tied a second
+                                  time and will not get another runoff — decide
+                                  those on Positions.
+                                </p>
+                              )}
+                              <div className="flex flex-wrap items-end gap-2">
+                                <div className="space-y-1.5">
+                                  <Label
+                                    htmlFor={`runoff-${def.key}`}
+                                    className="text-xs"
+                                  >
+                                    Runoff closes at
+                                  </Label>
+                                  <Input
+                                    id={`runoff-${def.key}`}
+                                    type="datetime-local"
+                                    value={runoffLocal[def.key] ?? ""}
+                                    onChange={(e) =>
+                                      setRunoffLocal((p) => ({
+                                        ...p,
+                                        [def.key]: e.target.value,
+                                      }))
+                                    }
+                                    className="h-9 w-56"
+                                  />
+                                </div>
+                                <Button
+                                  size="sm"
+                                  disabled={isPending || !runoffLocal[def.key]}
+                                  onClick={() => handleOpenRunoff(def.key, tie)}
+                                >
+                                  Open runoff
+                                </Button>
+                              </div>
+                            </>
+                          )}
                         </div>
-                        <Button
-                          size="sm"
-                          disabled={isPending || !runoffLocal[def.key]}
-                          onClick={() => handleOpenRunoff(def.key, tie)}
-                        >
-                          Open runoff
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                      );
+                    })()}
 
                   {/* ── Appointments (organiser step 6) ── */}
                   {def.key === "appointments" && (
@@ -932,7 +1104,7 @@ export function FormationClient({
                           size="sm"
                           disabled={isPending || !prevStepClosed("appointments")}
                           onClick={() =>
-                            handleCloseStep("appointments", def.label)
+                            handleCloseStep("appointments", def.label, def.mode)
                           }
                         >
                           <CheckCircle2 className="mr-1.5 size-3.5" />
@@ -946,10 +1118,28 @@ export function FormationClient({
                   {def.key === "lock" && (
                     <div className="space-y-2">
                       {status === "locked" ? (
-                        <p className="flex items-center gap-2 text-sm font-medium text-[#138808]">
-                          <Lock className="size-4" />
-                          The House is locked — ready for event day.
-                        </p>
+                        <>
+                          <p className="flex items-center gap-2 text-sm font-medium text-[#138808]">
+                            <Lock className="size-4" />
+                            The House is locked — ready for event day.
+                          </p>
+                          {/* The way back, for a late change the lock cannot
+                              absorb (a student drops out the night before).
+                              Reopens the checklist; undoes no election. */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={isPending}
+                            onClick={handleUnlock}
+                          >
+                            <Unlock className="mr-1.5 size-3.5" />
+                            Unlock the House
+                          </Button>
+                          <p className="text-xs text-[#1a1a3e]/50">
+                            Reopens the checklist so you can fix a late change.
+                            Everyone already elected keeps their role.
+                          </p>
+                        </>
                       ) : (
                         <>
                           <Button
@@ -1180,6 +1370,11 @@ export function FormationClient({
             <DialogTitle>{confirmDialog.title}</DialogTitle>
             <DialogDescription>{confirmDialog.description}</DialogDescription>
           </DialogHeader>
+          {confirmDialog.warning && (
+            <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm font-medium text-amber-800">
+              {confirmDialog.warning}
+            </p>
+          )}
           <DialogFooter>
             <Button
               variant="outline"

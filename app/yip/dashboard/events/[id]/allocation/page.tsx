@@ -65,6 +65,7 @@ export default async function AllocationPage({
   return (
     <AllocationClient
       eventId={id}
+      eventName={event.name ?? ""}
       participants={participants ?? []}
       parties={parties ?? []}
       allocationLocked={event.allocation_locked ?? false}

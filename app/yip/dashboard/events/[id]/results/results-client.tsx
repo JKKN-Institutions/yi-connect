@@ -61,6 +61,7 @@ import {
 } from "lucide-react";
 import { INK, SAFFRON, SERIF, SectionShell } from "@/app/yip/me/credential-ui";
 
+import { ParticipantNameButton } from "@/components/yip/participant-profile-dialog";
 // Renders "Last computed: <local time>" (or "Not computed yet.") from the max
 // computed_at across the result rows. Hydration-safe: the first render outputs a
 // stable placeholder and the client effect swaps in the locale/timezone-formatted
@@ -754,7 +755,13 @@ export function ResultsClient({
                         winners.map((w) => (
                           <div key={w.participant_id} className="mt-1">
                             <p className="text-base font-bold text-gray-900 truncate">
-                              {w.participant.full_name}
+                              <ParticipantNameButton
+                                eventId={eventId}
+                                eventName={eventName}
+                                participantId={w.participant_id}
+                                name={w.participant.full_name}
+                                className="text-left underline-offset-4 hover:underline"
+                              />
                             </p>
                             {w.participant.constituency_number != null && (
                               <p className="text-xs tabular-nums text-gray-500">
@@ -1009,12 +1016,14 @@ export function ResultsClient({
         <CardContent>
           {resultsView === "scoresheet" ? (
             <StudentScoreSheet
+              eventId={eventId}
               results={results}
               positionBonuses={positionBonuses}
               eventName={eventName}
             />
           ) : resultsView === "leadership" ? (
             <LeadershipTracker
+              eventId={eventId}
               results={results}
               positionBonuses={positionBonuses}
               eventName={eventName}
@@ -1059,7 +1068,13 @@ export function ResultsClient({
                       <TableCell>
                         <div className="flex items-center gap-1.5">
                           <p className="font-medium text-sm">
-                            {r.participant.full_name}
+                            <ParticipantNameButton
+                              eventId={eventId}
+                              eventName={eventName}
+                              participantId={r.participant_id}
+                              name={r.participant.full_name}
+                              className="text-left underline-offset-4 hover:underline"
+                            />
                           </p>
                           {qualifiedIds.has(r.participant_id) && (
                             <Badge

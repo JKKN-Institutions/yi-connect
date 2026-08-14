@@ -52,6 +52,7 @@ import {
 } from "lucide-react";
 import { CsvImport } from "@/components/yip/csv-import";
 import { EmailSendCodes } from "@/components/yip/email-send-codes";
+import { ParticipantProfileDialog } from "@/components/yip/participant-profile-dialog";
 import { exportAllocationRoster } from "@/app/yip/actions/school-export";
 import { toast } from "sonner";
 
@@ -143,6 +144,7 @@ const SELECT_CLASS =
 
 export function ParticipantsClient({
   eventId,
+  eventName,
   participants: initialParticipants,
   allocationLocked,
   canDelete = true,
@@ -151,6 +153,7 @@ export function ParticipantsClient({
   ministries,
 }: {
   eventId: string;
+  eventName: string;
   participants: Participant[];
   allocationLocked: boolean;
   /** Chair/national/regional only. Organisers cannot delete records. */
@@ -170,6 +173,8 @@ export function ParticipantsClient({
   const [sortKey, setSortKey] = useState<SortKey>("full_name");
   const [sortAsc, setSortAsc] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  // Which participant's profile popup is open, if any.
+  const [profileId, setProfileId] = useState<string | null>(null);
   const [checkingIn, setCheckingIn] = useState<Set<string>>(new Set());
   const [checkInFilter, setCheckInFilter] = useState<CheckInFilter>("all");
   // Day the in/out chips are scoped to. Default Day 1 so the counts line up
@@ -1269,11 +1274,11 @@ export function ParticipantsClient({
               {displayedParticipants.map((p) => (
                 <TableRow
                   key={p.id}
-                  onClick={() =>
-                    router.push(
-                      `/yip/dashboard/events/${eventId}/participants/${p.id}`
-                    )
-                  }
+                  /* Opens the profile in a popup rather than navigating to
+                     the profile page — a full navigation threw away whatever
+                     filter, search and sort the organiser was working through,
+                     and they had to rebuild it after every back. */
+                  onClick={() => setProfileId(p.id)}
                   className="cursor-pointer hover:bg-[#1a1a3e]/[0.025]"
                 >
                   <TableCell>
@@ -1753,6 +1758,18 @@ export function ParticipantsClient({
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Profile popup — opened by clicking any row. Mounted once, outside the
+          table, so the open profile survives re-sorts and re-filters. */}
+      <ParticipantProfileDialog
+        eventId={eventId}
+        eventName={eventName}
+        participantId={profileId}
+        open={profileId !== null}
+        onOpenChange={(next) => {
+          if (!next) setProfileId(null);
+        }}
+      />
     </div>
   );
 }

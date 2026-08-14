@@ -13,6 +13,7 @@ import type { ResultWithParticipant } from "@/app/yip/actions/results";
 import { Button } from "@/components/yip/ui/button";
 import { Download } from "lucide-react";
 
+import { ParticipantNameButton } from "@/components/yip/participant-profile-dialog";
 // Bucket columns in workbook order. `parentKey` is the score_breakdown family
 // (null = the Leadership/position column, computed from role bonuses).
 const BUCKET_COLUMNS: { key: string; label: string; parentKey: string | null; max: number }[] = [
@@ -53,10 +54,12 @@ function bucketValue(
 }
 
 export function StudentScoreSheet({
+  eventId,
   results,
   positionBonuses,
   eventName,
 }: {
+  eventId: string;
   results: ResultWithParticipant[];
   positionBonuses: Record<string, number>;
   eventName: string;
@@ -179,7 +182,13 @@ export function StudentScoreSheet({
                     {p.constituency_number ?? ""}
                   </td>
                   <td className="px-2 py-1.5 font-medium text-[#1a1a3e]">
-                    {p.full_name}
+                    <ParticipantNameButton
+                      eventId={eventId}
+                      eventName={eventName}
+                      participantId={r.participant_id}
+                      name={p.full_name}
+                      className="text-left underline-offset-4 hover:underline"
+                    />
                   </td>
                   <td className="px-2 py-1.5 text-[#1a1a3e]/80">
                     {p.constituency_name ?? ""}

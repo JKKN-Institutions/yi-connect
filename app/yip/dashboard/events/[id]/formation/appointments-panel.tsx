@@ -30,6 +30,7 @@ import { SearchablePersonSelect } from "@/components/yip/searchable-person-selec
 import type { MinistryPortfolio } from "@/lib/yip/cabinet";
 import { FORMATION_APPOINTED_ROLES } from "@/lib/yip/formation";
 import { getEventParticipants } from "@/app/yip/actions/participants";
+import { ParticipantNameButton } from "@/components/yip/participant-profile-dialog";
 import {
   appointFormationRole,
   clearFormationRole,
@@ -46,10 +47,12 @@ type ParticipantLite = {
 
 export function AppointmentsPanel({
   eventId,
+  eventName,
   ministries,
   disabled,
 }: {
   eventId: string;
+  eventName: string;
   ministries: MinistryPortfolio[];
   disabled: boolean;
 }) {
@@ -238,7 +241,13 @@ export function AppointmentsPanel({
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-[#1a1a3e]">
-                    {p.full_name}
+                    <ParticipantNameButton
+                      eventId={eventId}
+                      eventName={eventName}
+                      participantId={p.id}
+                      name={p.full_name}
+                      className="text-left underline-offset-4 hover:underline"
+                    />
                   </p>
                   <div className="mt-0.5 flex flex-wrap items-center gap-1">
                     <Badge variant="secondary" className="text-[10px]">

@@ -2,7 +2,11 @@
 
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
-import { mintYipSession } from "@/lib/yip/auth/yip-session";
+import { cookies } from "next/headers";
+import {
+  mintYipSession,
+  YIP_SESSION_COOKIE,
+} from "@/lib/yip/auth/yip-session";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
 
 // ─── Access Code Validation (unauthenticated) ──────────────────────
@@ -189,6 +193,26 @@ export async function loginOrganizer(
   });
 
   return { success: true };
+}
+
+/**
+ * Sign out of an access-code session (participant, jury, volunteer, expert).
+ *
+ * There was NO way to do this. Every access-code surface showed an "Exit"
+ * control that was only a <Link href="/yip/join"> — it navigated away while the
+ * httpOnly `yip_session` cookie stayed live, so the next visit dropped straight
+ * back into /yip/me. A student on a borrowed or shared phone could not get out,
+ * and the next person to use that device was signed in as them. Students are
+ * minors, and the session carries their name, constituency, committee and party.
+ *
+ * Deleting the cookie IS the whole sign-out: the session is stateless and
+ * signed, so there is no server-side record to revoke.
+ */
+export async function signOutYipSession(): Promise<void> {
+  const jar = await cookies();
+  jar.delete(YIP_SESSION_COOKIE);
+  // redirect() throws by design — nothing may follow it, and nothing needs to.
+  redirect("/yip/join");
 }
 
 export async function logoutOrganizer(): Promise<void> {

@@ -596,6 +596,59 @@ export default async function ScoringPage({
         </table>
       </div>
 
+      {/* ─── Open scorecards ───────────────────────────────────────────
+          Named BEFORE the ranking below, because the ranking is computed
+          without them. An admin reading a table of averages has no other way
+          to know a juror is still holding a card. */}
+      {teamsWithOpenScores.length > 0 && (
+        <section
+          role="alert"
+          className="border-2 border-yi-gold/60 bg-yi-gold/5 rounded-lg p-4"
+        >
+          <h3 className="text-sm font-bold text-navy">
+            {teamsWithOpenScores.length}{" "}
+            {teamsWithOpenScores.length === 1 ? "team has" : "teams have"} a
+            juror still editing
+          </h3>
+          <p className="mt-1 text-xs text-navy/70 leading-relaxed">
+            A scorecard only counts once the juror presses Submit. The
+            scorecards below are open — reopened, or started and never
+            finished — so they are <strong>not</strong> included in the
+            averages or the ranking. Ask those jurors to submit before treating
+            any result as final.
+          </p>
+          <ul className="mt-3 space-y-1">
+            {teamsWithOpenScores.map((t) => {
+              const open = openByTeam.get(t.id) ?? 0;
+              const counted = byTeam.get(t.id)?.length ?? 0;
+              return (
+                <li key={t.id} className="text-xs text-navy">
+                  <strong>{t.team_name}</strong> — {counted} counted,{" "}
+                  <span className="font-semibold text-red-600">
+                    {open} still open
+                  </span>
+                  {counted === 0 && (
+                    <span className="font-semibold text-red-600">
+                      {" "}
+                      · no jury score at all yet
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          {teamsWithNoCountedScore.length > 0 && (
+            <p className="mt-3 text-xs font-semibold text-red-600">
+              {teamsWithNoCountedScore.length}{" "}
+              {teamsWithNoCountedScore.length === 1
+                ? "team currently has no counted jury score"
+                : "teams currently have no counted jury score"}{" "}
+              and cannot be ranked fairly until those scorecards are submitted.
+            </p>
+          )}
+        </section>
+      )}
+
       {/* Per-team jury breakdown */}
       {teamAggregates.some((a) => a.count > 0) && (
         <section>

@@ -22,6 +22,8 @@
 import { Resend } from "resend";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { committeeWhatsappFor } from "@/lib/yip/whatsapp-links";
+import { isUnnamedCommittee } from "@/lib/yip/event-committees";
 import type {
   YipEmailSendPlan,
   YipEmailRecipient,
@@ -65,6 +67,33 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+// ─── Untyped reads for the two WhatsApp columns ─────────────────────
+// yip.parties.whatsapp_invite_url and yip.events.committee_whatsapp arrive in
+// migration 20260814170000_yip_whatsapp_group_links, but types/yip/database.ts
+// is not regenerated alongside (the supabase CLI appends a version banner that
+// corrupts the generated file). Narrow, file-local accessors for just these two
+// reads — the app/yip/actions/voting.ts pattern. Everything else stays typed.
+type WaPgError = { message: string };
+type WaRows<T> = {
+  select: (cols: string) => WaRows<T>;
+  eq: (col: string, val: unknown) => WaRows<T>;
+  in: (col: string, vals: readonly unknown[]) => WaRows<T>;
+  single: () => Promise<{ data: T | null; error: WaPgError | null }>;
+  then: Promise<{ data: T[] | null; error: WaPgError | null }>["then"];
+};
+type EventWaRow = { name: string | null; committee_whatsapp: unknown };
+type PartyWaRow = {
+  id: string;
+  name: string | null;
+  whatsapp_invite_url: string | null;
+};
+function waTable<T>(
+  sb: Awaited<ReturnType<typeof createServiceClient>>,
+  table: string
+): WaRows<T> {
+  return (sb as unknown as { from: (t: string) => WaRows<T> }).from(table);
+}
+
 // YIP-branded code email (inline styles only — email clients strip <style>).
 // Saffron header band with dark text (legible), green accent rule, big code box,
 // join CTA. Mirrors the WhatsApp message content so both channels say the same.
@@ -72,11 +101,61 @@ function renderCodeEmail(input: {
   fullName: string;
   accessCode: string;
   eventName: string;
+  /** The student's own party and committee groups, when a link is on file. */
+  partyName?: string | null;
+  partyWhatsapp?: string | null;
+  committeeLabel?: string | null;
+  committeeWhatsapp?: string | null;
 }): { subject: string; html: string; text: string } {
   const name = escapeHtml(input.fullName);
   const code = escapeHtml(input.accessCode);
   const eventName = escapeHtml(input.eventName);
   const subject = `Your Young Indians Parliament login code — ${input.eventName}`;
+
+  // Group links are OPTIONAL. A student whose party or committee has no link on
+  // file still gets their code — the block is simply shorter. Never withhold
+  // the code over a missing group link (Director, 2026-08-14).
+  const groups: Array<{ label: string; url: string }> = [];
+  if (input.partyWhatsapp) {
+    groups.push({
+      label: input.partyName ? `Your party — ${input.partyName}` : "Your party",
+      url: input.partyWhatsapp,
+    });
+  }
+  if (input.committeeWhatsapp) {
+    groups.push({
+      label: input.committeeLabel
+        ? `Your committee — ${input.committeeLabel}`
+        : "Your committee",
+      url: input.committeeWhatsapp,
+    });
+  }
+
+  const groupsText =
+    groups.length === 0
+      ? ""
+      : `\nYOUR WHATSAPP GROUPS\n${groups
+          .map((g) => `${g.label}: ${g.url}`)
+          .join("\n")}\nJoin these so you get updates before and during the event.\n`;
+
+  const groupsHtml =
+    groups.length === 0
+      ? ""
+      : `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px;margin:20px 0">
+        <p style="margin:0 0 10px;color:#166534;font-size:14px;font-weight:600">Your WhatsApp groups</p>
+        ${groups
+          .map(
+            (g) =>
+              `<p style="margin:0 0 8px;font-size:14px"><span style="color:#4b5563">${escapeHtml(
+                g.label
+              )}</span><br><a href="${escapeHtml(
+                g.url
+              )}" style="color:#138808;font-weight:600">Join the group</a></p>`
+          )
+          .join("")}
+        <p style="margin:6px 0 0;color:#4b5563;font-size:12px">Join these so you get updates before and during the event.</p>
+      </div>`;
+
   const text = `Young Indians Parliament 2026
 ${input.eventName}
 
@@ -86,7 +165,7 @@ Your YIP login code is: ${input.accessCode}
 
 Sign in here: ${JOIN_URL}
 Open that link and enter your code to join.
-
+${groupsText}
 IMPORTANT: This code is yours alone. Do NOT share it with anyone — not classmates, friends or family. Anyone who has your code can sign in and act as you at the event.
 
 Young Indians · CII`;
@@ -107,6 +186,7 @@ Young Indians · CII`;
       </div>
       <p style="margin:28px 0 8px"><a href="${JOIN_URL}" style="display:inline-block;background:#138808;color:#ffffff;padding:13px 28px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px">Sign in to YIP</a></p>
       <p style="margin:0 0 20px;color:#6b7280;font-size:13px">Or open <a href="${JOIN_URL}" style="color:#138808">${JOIN_URL}</a> and enter your code.</p>
+      ${groupsHtml}
       <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin:0 0 4px">
         <p style="margin:0;color:#b91c1c;font-size:13px;font-weight:600">Do NOT share this code with anyone — not classmates, friends or family. Anyone who has your code can sign in and act as you at the event.</p>
       </div>
@@ -166,13 +246,20 @@ export async function getYipEmailCodePlan(
 export async function sendYipAccessCodeEmailsBatch(
   eventId: string,
   participantIds: string[]
-): Promise<ActionResult<{ results: YipEmailBatchItemResult[] }>> {
+): Promise<
+  ActionResult<{
+    results: YipEmailBatchItemResult[];
+    /** Parties/committees with no WhatsApp link on file. The codes were still
+     *  sent; this is so the organiser knows what to fill in and re-send. */
+    missingGroups: string[];
+  }>
+> {
   const access = await getYipEventAccess(eventId);
   if (!access.canManage) {
     return { success: false, error: "Not authorized to manage this event" };
   }
   if (participantIds.length === 0) {
-    return { success: true, data: { results: [] } };
+    return { success: true, data: { results: [], missingGroups: [] } };
   }
   if (participantIds.length > EMAIL_BATCH_MAX) {
     return { success: false, error: `Batch too large (max ${EMAIL_BATCH_MAX})` };
@@ -186,20 +273,49 @@ export async function sendYipAccessCodeEmailsBatch(
 
   const supabase = await createServiceClient();
 
-  const { data: event } = await supabase
-    .from("events")
-    .select("name")
+  const { data: event } = await waTable<EventWaRow>(supabase, "events")
+    .select("name, committee_whatsapp")
     .eq("id", eventId)
     .single();
   const eventName = event?.name ?? "Young Indians Parliament";
+  const committeeWhatsapp = event?.committee_whatsapp;
 
   const { data: participants, error } = await supabase
     .from("participants")
-    .select("id, full_name, serial_no, email, access_code")
+    .select(
+      "id, full_name, serial_no, email, access_code, party_id, committee_name, committee_number"
+    )
     .eq("event_id", eventId)
     .in("id", participantIds);
 
   if (error) return { success: false, error: error.message };
+
+  // Each student belongs to one party and one committee, each with its own
+  // WhatsApp group; the email carries whichever links exist so they get the
+  // code and both groups in one message. A missing link is NOT a reason to
+  // withhold the access code (Director's choice) — the line is simply left
+  // out, and the caller is told which parties/committees are still unlinked.
+  const partyIds = [
+    ...new Set(
+      (participants ?? [])
+        .map((p) => (p as { party_id: string | null }).party_id)
+        .filter((v): v is string => !!v)
+    ),
+  ];
+  const partyById = new Map<
+    string,
+    { name: string | null; whatsapp: string | null }
+  >();
+  if (partyIds.length > 0) {
+    const { data: parties } = await waTable<PartyWaRow>(supabase, "parties")
+      .select("id, name, whatsapp_invite_url")
+      .eq("event_id", eventId)
+      .in("id", partyIds);
+    for (const r of parties ?? []) {
+      partyById.set(r.id, { name: r.name, whatsapp: r.whatsapp_invite_url });
+    }
+  }
+  const missingGroups = new Set<string>();
 
   const results: YipEmailBatchItemResult[] = [];
   type Sendable = {
@@ -220,10 +336,39 @@ export async function sendYipAccessCodeEmailsBatch(
       });
       continue;
     }
+    const party = (p as { party_id: string | null }).party_id
+      ? partyById.get((p as { party_id: string }).party_id)
+      : undefined;
+    const committeeNumber = (p as { committee_number: number | null })
+      .committee_number;
+    const committeeName = (p as { committee_name: string | null })
+      .committee_name;
+    const committeeLink = committeeWhatsappFor(
+      committeeWhatsapp,
+      committeeNumber
+    );
+    if (party && !party.whatsapp) {
+      missingGroups.add(`Party ${party.name ?? "(unnamed)"}`);
+    }
+    if (committeeName && !committeeLink) {
+      missingGroups.add(
+        committeeNumber != null ? `Committee ${committeeNumber}` : committeeName
+      );
+    }
+
     const { subject, html, text } = renderCodeEmail({
       fullName: p.full_name,
       accessCode: p.access_code,
       eventName,
+      partyName: party?.name ?? null,
+      partyWhatsapp: party?.whatsapp ?? null,
+      committeeLabel:
+        committeeName && committeeNumber != null
+          ? isUnnamedCommittee(committeeName)
+            ? committeeName
+            : `Committee ${committeeNumber} · ${committeeName}`
+          : committeeName,
+      committeeWhatsapp: committeeLink,
     });
     sendable.push({
       id: p.id,
@@ -234,7 +379,10 @@ export async function sendYipAccessCodeEmailsBatch(
   }
 
   if (sendable.length === 0) {
-    return { success: true, data: { results } };
+    return {
+      success: true,
+      data: { results, missingGroups: [...missingGroups].sort() },
+    };
   }
 
   // One batch request for all valid recipients — sidesteps the per-message
@@ -255,7 +403,10 @@ export async function sendYipAccessCodeEmailsBatch(
           error: batchError.message || "Email send failed",
         });
       }
-      return { success: true, data: { results } };
+      return {
+      success: true,
+      data: { results, missingGroups: [...missingGroups].sort() },
+    };
     }
     for (const s of sendable) {
       results.push({
@@ -276,5 +427,8 @@ export async function sendYipAccessCodeEmailsBatch(
     }
   }
 
-  return { success: true, data: { results } };
+  return {
+      success: true,
+      data: { results, missingGroups: [...missingGroups].sort() },
+    };
 }

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { clauseTexts } from "@/lib/yip/bill-provisions";
+import { committeeWhatsappFor } from "@/lib/yip/whatsapp-links";
 import {
   isGoIndependentClosed,
   BILL_DRAFTING_SESSION_KEY,
@@ -258,6 +259,45 @@ export default async function ParticipantPage() {
     myBill = billData;
   }
 
+  // The student's OWN two WhatsApp groups — their party's and their
+  // committee's. Shown here as well as in the access-code email so a student
+  // who loses the email can still find their groups (Director, 2026-08-14).
+  // Only ever this student's own groups; nothing about anyone else's.
+  let partyWhatsapp: string | null = null;
+  let committeeWhatsappLink: string | null = null;
+  {
+    const untyped = supabase as unknown as {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (
+            col: string,
+            v: unknown
+          ) => {
+            maybeSingle: () => Promise<{ data: Record<string, unknown> | null }>;
+          };
+        };
+      };
+    };
+    if (participant.party_id) {
+      const { data } = await untyped
+        .from("parties")
+        .select("whatsapp_invite_url")
+        .eq("id", participant.party_id)
+        .maybeSingle();
+      const v = data?.whatsapp_invite_url;
+      partyWhatsapp = typeof v === "string" && v.trim() !== "" ? v : null;
+    }
+    const { data: ev } = await untyped
+      .from("events")
+      .select("committee_whatsapp")
+      .eq("id", event.id)
+      .maybeSingle();
+    committeeWhatsappLink = committeeWhatsappFor(
+      ev?.committee_whatsapp,
+      participant.committee_number
+    );
+  }
+
   // Committee topic + linked scheme (yip.topics catalog, same lookup as the bill
   // page) so the dashboard can show "Committee N — topic" + the scheme.
   let committeeTopic: string | null = null;
@@ -446,6 +486,8 @@ export default async function ParticipantPage() {
         committeeNumber={participant.committee_number}
         committeeTopic={committeeTopic}
         committeeScheme={committeeScheme}
+        partyWhatsapp={partyWhatsapp}
+        committeeWhatsapp={committeeWhatsappLink}
         sessionStamp={sessionStamp}
       />
 

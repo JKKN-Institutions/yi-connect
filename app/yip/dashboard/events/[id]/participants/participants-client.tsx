@@ -832,7 +832,11 @@ export function ParticipantsClient({
               WhatsApp Codes button was removed 2026-06-13 while the Railway
               bridge is down (headless-Chrome crash after scan); the
               WhatsAppSendCodes component is kept for when the bridge is fixed. */}
-          <EmailSendCodes eventId={eventId} />
+          <EmailSendCodes
+            eventId={eventId}
+            /* Only what the organiser can actually see gets emailed. */
+            participantIds={displayedParticipants.map((p) => p.id)}
+          />
 
           {/* Quick Add Walk-in — create a single late arrival and auto-assign
               party + constituency + committee in one click. Works even after

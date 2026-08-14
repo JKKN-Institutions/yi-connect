@@ -64,6 +64,12 @@ export function EmailSendCodes({
   );
   const [sendTotal, setSendTotal] = useState(0);
 
+  // The participants table rebuilds this array on every render, so depend on
+  // the ID SET rather than the array identity — otherwise the plan refetches in
+  // a loop. Hoisted to a variable so the dependency list stays statically
+  // checkable (react-hooks/use-memo).
+  const scopeKey = participantIds?.join(",");
+
   const loadPlan = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
@@ -74,10 +80,9 @@ export function EmailSendCodes({
       setLoadError(res.error);
     }
     setLoading(false);
-    // The dependency is the ID SET, not the array identity — the participants
-    // table rebuilds this array on every render, and depending on identity
-    // would refetch the plan in a loop.
-  }, [eventId, participantIds?.join(",")]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- scopeKey IS
+    // participantIds, compared by value; adding the array itself would loop.
+  }, [eventId, scopeKey]);
 
   // Load the plan each time the dialog opens; reset the flow on close.
   useEffect(() => {

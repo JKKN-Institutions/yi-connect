@@ -16,6 +16,7 @@ import type {
   DelegateAnnouncementFeed,
   SentAnnouncement,
 } from "./announcements-types";
+import { safeError } from "@/lib/yi-future/db-error";
 
 // announcements / announcement_reads are not in the generated `future` types,
 // so detach typing on the service client — the established pattern in this
@@ -213,7 +214,7 @@ export async function createChapterAnnouncement(
     .insert(row)
     .select("id")
     .maybeSingle();
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "announcements.createChapterAnnouncement") };
 
   const recipients = await resolveRecipientIds(svc, row);
   await pushToDelegates(
@@ -289,7 +290,7 @@ export async function createNationalAnnouncement(
     .schema("future")
     .from("announcements")
     .insert(row);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "announcements.createNationalAnnouncement") };
 
   const recipients = await resolveRecipientIds(svc, row);
   await pushToDelegates(
@@ -332,7 +333,7 @@ export async function deleteAnnouncement(id: string): Promise<AnnouncementResult
     .from("announcements")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "announcements.deleteAnnouncement") };
 
   revalidatePath("/yi-future/chapter/announcements");
   revalidatePath("/yi-future/national/admin/announcements");
@@ -380,7 +381,7 @@ async function editAnnouncementFields(
     .from("announcements")
     .update({ title, body, url })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "announcements.deleteAnnouncement") };
 
   revalidatePath("/yi-future/chapter/announcements");
   revalidatePath("/yi-future/national/admin/announcements");

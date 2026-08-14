@@ -7,6 +7,7 @@ import type { ActionResult } from "./editions";
 import { TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 import { isInviteExpired } from "@/lib/yi-future/invite-expiry";
+import { safeError } from "@/lib/yi-future/db-error";
 
 // team_invitations isn't in the generated types yet — untyped at the call site.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -135,7 +136,7 @@ export async function inviteMember(
         responded_at: null,
       })
       .eq("id", existing.id);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: safeError(error.message, "members.inviteMember") };
   } else {
     const { error } = await (svc as AnyClient)
       .schema("future")
@@ -146,7 +147,7 @@ export async function inviteMember(
         invited_delegate_id: delegateId,
         status: "pending",
       });
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: safeError(error.message, "members.inviteMember") };
   }
 
   revalidatePath(`/yi-future/chapter/teams/${teamId}`);
@@ -187,7 +188,7 @@ export async function removeMember(
     .delete()
     .eq("team_id", teamId)
     .eq("delegate_id", delegateId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "members.removeMember") };
 
   revalidatePath(`/yi-future/chapter/teams/${teamId}`);
   revalidatePath("/yi-future/me/team");
@@ -213,7 +214,7 @@ export async function setMemberRole(
     .update({ role_in_team: role })
     .eq("team_id", teamId)
     .eq("delegate_id", delegateId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "members.setMemberRole") };
 
   revalidatePath(`/yi-future/chapter/teams/${teamId}`);
   return { ok: true };

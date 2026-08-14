@@ -6,6 +6,7 @@ import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { requireFutureNationalAdmin } from "@/lib/yi-future/auth/require-access";
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
+import { safeError } from "@/lib/yi-future/db-error";
 
 type TrackHostRole = Database["future"]["Enums"]["track_host_role"];
 
@@ -60,7 +61,7 @@ export async function assignChapterToTrack(
       },
       { onConflict: "edition_id,chapter_id,track_id" }
     );
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "assignments.assignChapterToTrack") };
 
   revalidatePath("/national/admin/host-assignments");
   revalidatePath("/national/admin/chapter-assignments");
@@ -83,7 +84,7 @@ export async function removeAssignment(input: {
     .eq("edition_id", input.editionId)
     .eq("chapter_id", input.chapterId)
     .eq("track_id", input.trackId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "assignments.removeAssignment") };
 
   revalidatePath("/national/admin/host-assignments");
   revalidatePath("/national/admin/chapter-assignments");

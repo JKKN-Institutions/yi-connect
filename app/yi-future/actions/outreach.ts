@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { ActionResult } from "./editions";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 /**
  * Chapter-scoped gate for an existing outreach entry — a chair of chapter A
@@ -58,7 +59,7 @@ export async function logOutreachActivity(
       notes,
       logged_by: userId,
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "outreach.logOutreachActivity") };
 
   revalidatePath("/yi-future/chapter/outreach");
   redirect("/yi-future/chapter/outreach");
@@ -73,7 +74,7 @@ export async function deleteOutreachEntry(id: string): Promise<ActionResult> {
     .from("outreach_log")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "outreach.deleteOutreachEntry") };
   revalidatePath("/yi-future/chapter/outreach");
   return { ok: true, message: "Entry removed." };
 }

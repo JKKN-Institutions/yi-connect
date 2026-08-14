@@ -42,8 +42,15 @@ function chunk<T>(items: T[], size: number): T[][] {
  */
 export function EmailSendCodes({
   eventId,
+  participantIds,
 }: {
   eventId: string;
+  /**
+   * IDs of the participants currently SHOWN on the Participants tab. The send
+   * is scoped to exactly these, so a filtered list emails only what the
+   * organiser can see. Omit for the whole event.
+   */
+  participantIds?: string[];
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -60,14 +67,17 @@ export function EmailSendCodes({
   const loadPlan = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
-    const res = await getYipEmailCodePlan(eventId);
+    const res = await getYipEmailCodePlan(eventId, participantIds);
     if (res.success) {
       setPlan(res.data);
     } else {
       setLoadError(res.error);
     }
     setLoading(false);
-  }, [eventId]);
+    // The dependency is the ID SET, not the array identity — the participants
+    // table rebuilds this array on every render, and depending on identity
+    // would refetch the plan in a loop.
+  }, [eventId, participantIds?.join(",")]);
 
   // Load the plan each time the dialog opens; reset the flow on close.
   useEffect(() => {
@@ -162,7 +172,8 @@ export function EmailSendCodes({
                     <span className="font-semibold text-gray-900">
                       {plan.total}
                     </span>{" "}
-                    students have an email on file
+                    {plan.filtered ? "students shown" : "students"} have an
+                    email on file
                     {plan.withEmail < plan.total && (
                       <>
                         {" "}
@@ -175,6 +186,28 @@ export function EmailSendCodes({
                     )}
                   </p>
                 </div>
+
+                {/* A filtered send and an everyone send look identical once the
+                    dialog is open, and picking the wrong one either spams the
+                    whole event or quietly misses students. Say which it is. */}
+                {plan.filtered ? (
+                  <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                    <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                    <span>
+                      Only the{" "}
+                      <span className="font-semibold">{plan.total}</span> student
+                      {plan.total === 1 ? "" : "s"} matching your current filter
+                      will be emailed — not all{" "}
+                      <span className="font-semibold">{plan.eventTotal}</span> in
+                      this event. Clear the filters first to email everyone.
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500">
+                    No filter is applied, so this covers every student in the
+                    event. Filter the list first to email only some of them.
+                  </p>
+                )}
 
                 {(() => {
                   const n = pendingRecipients().length;

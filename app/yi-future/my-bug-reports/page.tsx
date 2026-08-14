@@ -24,8 +24,21 @@ type UserContext = {
 // layout suppresses its own widget on this route (see bug-reporter-wrapper.tsx)
 // so there is exactly one floating button on the page.
 //
-// Visible to anyone signed-in; the underlying API filters by reporter_email
-// server-side via the user context attached below.
+// Visible to anyone signed-in.
+//
+// ⚠️ KNOWN BROKEN in @boobalan_jkkn/bug-reporter-sdk@1.1.0 (audited 2026-08-14).
+// The previous note here claimed "the underlying API filters by reporter_email
+// server-side via the user context attached below". That is FALSE for this SDK
+// version: getMyBugReports() sends only page/limit/status/category/search and
+// never sends reporter_email, so the API answers HTTP 400 "reporter_email is
+// required" and MyBugsPanel can only ever render its error state. Verified with
+// a live read-only GET. Fix belongs upstream in the SDK (append
+// config.userContext.email in getMyBugReports), not here.
+//
+// Also note: this page nests its own BugReporterProvider inside the layout's,
+// and the SDK mounts its react-hot-toast <Toaster> OUTSIDE its `enabled` gate,
+// so two toast roots exist on this route and SDK toasts render twice here. That
+// is cosmetic, confined to this page, and also only fixable upstream.
 export default function MyBugReportsPage() {
   const apiKey = process.env.NEXT_PUBLIC_BUG_REPORTER_API_KEY;
   const apiUrl = process.env.NEXT_PUBLIC_BUG_REPORTER_API_URL;

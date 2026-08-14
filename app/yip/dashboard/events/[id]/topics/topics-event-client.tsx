@@ -287,6 +287,10 @@ export function CommitteePickerClient({
                 number never changes — students keep the committee they were
                 given.
               </p>
+              <p className="mt-1 text-xs text-[#1a1a3e]/45">
+                {WHATSAPP_INVITE_HINT} A student gets their committee&apos;s link
+                with their access code, so add it before you email the codes.
+              </p>
             </div>
             <div className="grid gap-2">
               {slots.map((s) => {

@@ -203,7 +203,17 @@ Young Indians · CII`;
 // Builds the "who will get a code" confirmation: every participant and whether
 // they have a sendable email.
 export async function getYipEmailCodePlan(
-  eventId: string
+  eventId: string,
+  /**
+   * The participants currently SHOWN on the Participants tab. When the
+   * organiser has filtered the list, only these are emailed.
+   *
+   * `undefined` means "no scoping given" → the whole event, which is the
+   * historical behaviour. An EMPTY ARRAY means "the filter matched nobody" and
+   * sends to NOBODY — the distinction matters, because treating an empty
+   * filter result as "everyone" is exactly the accident this guards against.
+   */
+  participantIds?: string[]
 ): Promise<ActionResult<YipEmailSendPlan>> {
   const access = await getYipEventAccess(eventId);
   if (!access.canManage) {
@@ -211,13 +221,64 @@ export async function getYipEmailCodePlan(
   }
 
   const supabase = await createServiceClient();
-  const { data: participants, error } = await supabase
-    .from("participants")
-    .select("id, full_name, serial_no, email, access_code")
-    .eq("event_id", eventId)
-    .order("serial_no");
 
-  if (error) return { success: false, error: error.message };
+  // Everyone in the event, so the dialog can show the filtered count against
+  // the whole — an organiser must be able to see at a glance which they are
+  // about to do.
+  const { count: eventTotal } = await supabase
+    .from("participants")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", eventId);
+
+  const scoped = participantIds !== undefined;
+  if (scoped && participantIds.length === 0) {
+    return {
+      success: true,
+      data: {
+        total: 0,
+        withEmail: 0,
+        recipients: [],
+        eventTotal: eventTotal ?? 0,
+        filtered: true,
+      },
+    };
+  }
+
+  // Chunked so a large event cannot blow the URL length limit on .in().
+  type Row = {
+    id: string;
+    full_name: string;
+    serial_no: number | null;
+    email: string | null;
+    access_code: string | null;
+  };
+  const rows: Row[] = [];
+  let error: { message: string } | null = null;
+  if (scoped) {
+    for (let i = 0; i < participantIds.length; i += 300) {
+      const { data, error: e } = await supabase
+        .from("participants")
+        .select("id, full_name, serial_no, email, access_code")
+        .eq("event_id", eventId)
+        .in("id", participantIds.slice(i, i + 300))
+        .order("serial_no");
+      if (e) {
+        error = e;
+        break;
+      }
+      rows.push(...((data ?? []) as Row[]));
+    }
+    rows.sort((a, b) => (a.serial_no ?? 0) - (b.serial_no ?? 0));
+  } else {
+    const { data, error: e } = await supabase
+      .from("participants")
+      .select("id, full_name, serial_no, email, access_code")
+      .eq("event_id", eventId)
+      .order("serial_no");
+    error = e;
+    rows.push(...((data ?? []) as Row[]));
+  }
+  const participants = rows;
 
   const recipients: YipEmailRecipient[] = (participants ?? []).map((p) => {
     const ok = isValidEmail(p.email) && !!p.access_code;

@@ -43,5 +43,7 @@ export default async function ScoringPage({
     );
   }
 
-  return <ScoringProgress eventId={id} data={progress} />;
+  return (
+    <ScoringProgress eventId={id} eventName={event.name ?? ""} data={progress} />
+  );
 }

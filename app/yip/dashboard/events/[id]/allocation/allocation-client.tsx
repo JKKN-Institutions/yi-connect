@@ -56,6 +56,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { ParticipantNameButton } from "@/components/yip/participant-profile-dialog";
 // ─── Types ─────────────────────────────────────────────────────────
 
 type Participant = {
@@ -78,6 +79,7 @@ type Participant = {
 
 interface AllocationClientProps {
   eventId: string;
+  eventName: string;
   participants: Participant[];
   parties: { party_number: number | null; name: string; side: string | null }[];
   allocationLocked: boolean;
@@ -90,6 +92,7 @@ interface AllocationClientProps {
 
 export function AllocationClient({
   eventId,
+  eventName,
   participants,
   parties,
   allocationLocked,
@@ -519,6 +522,8 @@ export function AllocationClient({
               {/* Speaker Candidates */}
               {leaders.speakers.map((p) => (
                 <LeaderRow
+                  eventId={eventId}
+                  eventName={eventName}
                   key={p.id}
                   participant={p}
                   locked={allocationLocked}
@@ -528,6 +533,8 @@ export function AllocationClient({
               {/* PM */}
               {leaders.pm && (
                 <LeaderRow
+                  eventId={eventId}
+                  eventName={eventName}
                   participant={leaders.pm}
                   locked={allocationLocked}
                   onEdit={() => setEditingParticipant(leaders.pm!)}
@@ -536,6 +543,8 @@ export function AllocationClient({
               {/* LoP */}
               {leaders.lop && (
                 <LeaderRow
+                  eventId={eventId}
+                  eventName={eventName}
                   participant={leaders.lop}
                   locked={allocationLocked}
                   onEdit={() => setEditingParticipant(leaders.lop!)}
@@ -544,6 +553,8 @@ export function AllocationClient({
               {/* Cabinet Ministers */}
               {leaders.cabinetMinisters.map((p) => (
                 <LeaderRow
+                  eventId={eventId}
+                  eventName={eventName}
                   key={p.id}
                   participant={p}
                   locked={allocationLocked}
@@ -553,6 +564,8 @@ export function AllocationClient({
               {/* Shadow Ministers */}
               {leaders.shadowMinisters.map((p) => (
                 <LeaderRow
+                  eventId={eventId}
+                  eventName={eventName}
                   key={p.id}
                   participant={p}
                   locked={allocationLocked}
@@ -712,7 +725,14 @@ export function AllocationClient({
                   <TableCell className="font-mono text-xs tabular-nums text-[#1a1a3e]/70">
                     {p.constituency_number ?? "—"}
                   </TableCell>
-                  <TableCell className="font-medium">{p.full_name}</TableCell>
+                  <TableCell className="font-medium">
+                    <ParticipantNameButton
+                      eventId={eventId}
+                      eventName={eventName}
+                      participantId={p.id}
+                      name={p.full_name}
+                    />
+                  </TableCell>
                   <TableCell className="text-xs">
                     {partyName(p.party_number) ?? (
                       <span className="text-gray-300">—</span>
@@ -879,10 +899,14 @@ function LeaderRow({
   participant,
   locked,
   onEdit,
+  eventId,
+  eventName,
 }: {
   participant: Participant;
   locked: boolean;
   onEdit: () => void;
+  eventId: string;
+  eventName: string;
 }) {
   const ministryLabel = (key: string | null) => {
     if (!key) return "--";
@@ -909,7 +933,14 @@ function LeaderRow({
             : "--"}
         </Badge>
       </TableCell>
-      <TableCell className="font-medium">{participant.full_name}</TableCell>
+      <TableCell className="font-medium">
+        <ParticipantNameButton
+          eventId={eventId}
+          eventName={eventName}
+          participantId={participant.id}
+          name={participant.full_name}
+        />
+      </TableCell>
       <TableCell>
         {participant.party_side ? (
           <Badge

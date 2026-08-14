@@ -1111,6 +1111,7 @@ export function FormationClient({
                     <div className="space-y-4">
                       <AppointmentsPanel
                         eventId={eventId}
+                        eventName={eventName}
                         ministries={ministries}
                         disabled={Boolean(isLocked)}
                       />

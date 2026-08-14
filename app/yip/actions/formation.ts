@@ -1245,6 +1245,30 @@ export async function unlockFormation(
   }
 
   const supabase = await createServiceClient();
+
+  // Refuse once the event has begun. Unlocking calls unlockAllocation, which
+  // clears events.allocation_locked — and that flag guards writes well beyond
+  // formation (allocation.ts, participants.ts, parties.ts). Clearing it mid-
+  // event would silently reopen bench/party editing and re-allocation for the
+  // whole event, so the door closes when Day 1 does.
+  const { data: eventRow } = await supabase
+    .from("events")
+    .select("status")
+    .eq("id", eventId)
+    .maybeSingle();
+  const preEvent = new Set([
+    "draft",
+    "registration_open",
+    "registration_closed",
+  ]);
+  if (!eventRow || !preEvent.has(eventRow.status ?? "")) {
+    return {
+      success: false,
+      error:
+        "The event has already started, so the House can no longer be unlocked. Change an individual seat on the Positions page instead.",
+    };
+  }
+
   const steps = await loadSteps(supabase, eventId);
   const lockStep = steps.find((s) => s.step_key === "lock");
   if (!lockStep || lockStep.status !== "locked") {

@@ -1,5 +1,6 @@
 "use client";
 
+import { setPartyWhatsappLink } from "@/app/yip/actions/events";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -109,6 +110,29 @@ export function PartiesClient({
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // Each party's WhatsApp group invite, saved on blur rather than on every
+  // keystroke. It rides out with the access-code emails, so it lives on the
+  // card next to the party it belongs to rather than behind the edit dialog.
+  const [waDraft, setWaDraft] = useState<Record<string, string>>({});
+  const waValue = (id: string, saved: string | null | undefined) =>
+    waDraft[id] ?? saved ?? "";
+  function saveWa(partyId: string, saved: string | null | undefined) {
+    const next = (waDraft[partyId] ?? "").trim();
+    if (waDraft[partyId] === undefined || next === (saved ?? "")) return;
+    setError(null);
+    startTransition(async () => {
+      const res = await setPartyWhatsappLink(
+        eventId,
+        partyId,
+        next === "" ? null : next
+      );
+      if (!res.success) {
+        setError(res.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
   const [flash, setFlash] = useState<string | null>(null);
   const [assignOpen, setAssignOpen] = useState<string | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -714,6 +738,27 @@ export function PartiesClient({
                         {p.tagline && (
                           <p className="text-xs text-[#1a1a3e]/60 mt-0.5">{p.tagline}</p>
                         )}
+                        <input
+                          type="url"
+                          inputMode="url"
+                          placeholder="WhatsApp group link (optional)"
+                          value={waValue(p.id, p.whatsapp_invite_url)}
+                          onChange={(e) =>
+                            setWaDraft((prev) => ({
+                              ...prev,
+                              [p.id]: e.target.value,
+                            }))
+                          }
+                          onBlur={() => saveWa(p.id, p.whatsapp_invite_url)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              (e.target as HTMLInputElement).blur();
+                            }
+                          }}
+                          className="mt-1.5 w-full max-w-sm rounded-lg border border-[#1a1a3e]/15 px-2.5 py-1.5 text-xs"
+                          aria-label={`WhatsApp group link for ${p.name}`}
+                        />
                       </div>
                     </div>
                     <div className="flex gap-1">

@@ -15,6 +15,11 @@ import {
   orderEventCommittees,
   unnamedCommitteeName,
 } from "@/lib/yip/event-committees";
+import {
+  isValidWhatsappInvite,
+  normalizeWhatsappInvite,
+  withCommitteeWhatsapp,
+} from "@/lib/yip/whatsapp-links";
 import type { Database } from "@/types/yip/database";
 
 // ─── Types ─────────────────────────────────────────────────────────
@@ -440,6 +445,99 @@ export async function attributeCommitteeMinistry(
       moved: movedRows?.length ?? 0,
     },
   };
+}
+
+// ─── WhatsApp group invite links (Director, 2026-08-14) ────────────
+//
+// Every student belongs to one party and one committee, each with its own
+// WhatsApp group. The access-code email carries whichever links exist, so a
+// student gets their code and both groups in one message.
+
+/** Save (or clear, with null/blank) a PARTY's WhatsApp group invite link. */
+export async function setPartyWhatsappLink(
+  eventId: string,
+  partyId: string,
+  url: string | null
+): Promise<ActionResult<{ saved: boolean }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  const value = normalizeWhatsappInvite(url);
+  if (value !== null && !isValidWhatsappInvite(value)) {
+    return {
+      success: false,
+      error:
+        "That is not a WhatsApp group invite link. It should start with https://chat.whatsapp.com/ — use Group info → Invite via link → Copy link.",
+    };
+  }
+
+  const supabase = await createServiceClient();
+  // Scope the write to this event so a party id from another event cannot be
+  // edited by someone who only manages this one.
+  const { data, error } = await supabase
+    .from("parties")
+    .update({ whatsapp_invite_url: value } as never)
+    .eq("id", partyId)
+    .eq("event_id", eventId)
+    .select("id");
+  if (error) return { success: false, error: error.message };
+  if (!data || data.length === 0) {
+    return { success: false, error: "That party is not part of this event." };
+  }
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/parties`);
+  revalidatePath("/yip/me");
+  return { success: true, data: { saved: value !== null } };
+}
+
+/** Save (or clear) a COMMITTEE's WhatsApp link, keyed by its number. */
+export async function setCommitteeWhatsappLink(
+  eventId: string,
+  committeeNumber: number,
+  url: string | null
+): Promise<ActionResult<{ saved: boolean }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  if (!Number.isInteger(committeeNumber) || committeeNumber < 1) {
+    return { success: false, error: "Pick a committee number." };
+  }
+  const value = normalizeWhatsappInvite(url);
+  if (value !== null && !isValidWhatsappInvite(value)) {
+    return {
+      success: false,
+      error:
+        "That is not a WhatsApp group invite link. It should start with https://chat.whatsapp.com/ — use Group info → Invite via link → Copy link.",
+    };
+  }
+
+  const supabase = await createServiceClient();
+  const { data: event, error: readErr } = await supabase
+    .from("events")
+    .select("committee_whatsapp")
+    .eq("id", eventId)
+    .single();
+  if (readErr || !event) return { success: false, error: "Event not found" };
+
+  const next = withCommitteeWhatsapp(
+    (event as { committee_whatsapp?: unknown }).committee_whatsapp,
+    committeeNumber,
+    value
+  );
+  const { error } = await supabase
+    .from("events")
+    .update({
+      committee_whatsapp: next,
+      updated_at: new Date().toISOString(),
+    } as never)
+    .eq("id", eventId);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/topics`);
+  revalidatePath("/yip/me");
+  return { success: true, data: { saved: value !== null } };
 }
 
 // ─── Setup progress (sidebar checklist) ────────────────────────────

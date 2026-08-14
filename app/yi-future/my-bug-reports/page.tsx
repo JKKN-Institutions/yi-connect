@@ -44,6 +44,9 @@ export default function MyBugReportsPage() {
   const apiUrl = process.env.NEXT_PUBLIC_BUG_REPORTER_API_URL;
 
   const [user, setUser] = useState<UserContext | undefined>(undefined);
+  // Distinguishes "still asking Supabase" from "asked, and there is nobody".
+  // Without it an admin would see the signed-out notice flash before the panel.
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -59,6 +62,7 @@ export default function MyBugReportsPage() {
           email: data.user.email ?? "",
         });
       }
+      setAuthChecked(true);
     });
 
     const {
@@ -106,6 +110,25 @@ export default function MyBugReportsPage() {
             <p className="text-sm text-navy/60">
               Bug reporting is not configured in this environment.
             </p>
+          ) : !authChecked ? (
+            <p className="text-sm text-navy/60">Checking your access…</p>
+          ) : !user ? (
+            /* Signed-in admins only (Director, 2026-08-14) — see the note in
+               components/yi-future/bug-reporter-wrapper.tsx. This page mounts
+               its own provider, so without this gate it would hand a working
+               bug widget, screenshot capture and all, to any visitor who typed
+               the URL — including a delegate. Say so explicitly rather than
+               redirecting to a landing page. */
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-navy">
+                Bug reporting is for signed-in Yi-Future admins.
+              </p>
+              <p className="text-sm text-navy/60">
+                If you joined with an access code, there is nothing to show here.
+                Report a problem to your chapter team instead and they will raise
+                it for you.
+              </p>
+            </div>
           ) : (
             <BugReporterProvider
               apiKey={apiKey}

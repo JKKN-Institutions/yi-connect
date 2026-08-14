@@ -26,7 +26,12 @@ export default function TnBudgetAlignmentPage() {
         <h1 className='text-3xl leading-tight font-bold text-balance sm:text-4xl'>
           Fifteen Chapters, One Budget
         </h1>
-        <p className='text-muted-foreground mt-3 max-w-2xl text-base leading-relaxed'>
+        <p className='text-muted-foreground mt-3 max-w-3xl text-base leading-relaxed'>
+          Fifteen departments, what this budget obliges each of them to deliver,
+          what they are short of, and what Yi can hand over &mdash; written from
+          the department&rsquo;s side of the table, not Yi&rsquo;s.
+        </p>
+        <p className='text-muted-foreground mt-3 max-w-3xl text-base leading-relaxed'>
           Every Yi Pathfinder 2026 programme mapped to the scheme in the Tamil
           Nadu Revised Budget 2026-27 that funds the same outcome — scored out of
           8 against a fixed rubric, with the reasoning shown, the budget

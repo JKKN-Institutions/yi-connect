@@ -44,8 +44,18 @@ async function isYipSuperAdmin(): Promise<boolean> {
     };
   }).schema("yi_directory");
 
+  // The people table in yi_directory is `people`, NOT `contestants`. This read
+  // asked for yi_directory.contestants, which does not exist, so the lookup
+  // always came back empty, isYipSuperAdmin() always returned false, and EVERY
+  // visitor — super-admins included — was redirected to /yip/join. The POV
+  // switcher had been unreachable for everyone.
+  //
+  // Careful: `.from("contestants")` is CORRECT everywhere else in app/yip
+  // (people.ts, participant-profile.ts, mock-data.ts) because those run on the
+  // default `yip` schema, where yip.contestants really does exist. Only this
+  // call site switches to yi_directory, and only this one was wrong.
   const { data: person } = await svcDir
-    .from("contestants")
+    .from("people")
     .select("id")
     .eq("email", email)
     .maybeSingle();

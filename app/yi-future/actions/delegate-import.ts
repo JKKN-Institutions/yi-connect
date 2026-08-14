@@ -14,6 +14,10 @@
 //     Unmatched college names leave college_id NULL and are reported.
 //   • Skips duplicates rather than failing. Re-uploading the same file is
 //     something people always do; it must be harmless.
+//   • REFUSES a row with neither an email nor a phone. Every duplicate check
+//     is keyed on one of those two, so such a row passes them all by default
+//     and a re-upload creates that person again — with no key left to
+//     de-duplicate on afterwards. Refused rows are returned by name.
 //   • Sends no email. Every sendEmail writes a notification_log row BEFORE
 //     attempting Resend, and a drain cron retries pending rows — with Resend
 //     currently failing ~98% of sends, queueing mail here would create
@@ -174,6 +178,8 @@ export async function importDelegatesChunk(input: {
   const toInsert: typeof cleaned = [];
   let skipped = 0;
   const errors: string[] = [];
+  /** Rows refused because they carry neither an email nor a phone. */
+  const unverifiable: string[] = [];
 
   for (const r of cleaned) {
     if (!r.full_name) {
@@ -217,7 +223,7 @@ export async function importDelegatesChunk(input: {
   }
 
   if (toInsert.length === 0) {
-    return { ok: true, added: 0, skipped, collegeNotMatched: [], errors, created: [] };
+    return { ok: true, added: 0, skipped, collegeNotMatched: [], unverifiable, errors, created: [] };
   }
 
   // ─── 6. Insert ────────────────────────────────────────────────────────
@@ -321,5 +327,5 @@ export async function importDelegatesChunk(input: {
 
   revalidatePath("/yi-future/chapter/delegates");
 
-  return { ok: true, added, skipped, collegeNotMatched, errors, created };
+  return { ok: true, added, skipped, collegeNotMatched, unverifiable, errors, created };
 }

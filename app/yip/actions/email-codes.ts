@@ -257,10 +257,39 @@ export async function sendYipAccessCodeEmailsBatch(
       });
       continue;
     }
+    const party = (p as { party_id: string | null }).party_id
+      ? partyById.get((p as { party_id: string }).party_id)
+      : undefined;
+    const committeeNumber = (p as { committee_number: number | null })
+      .committee_number;
+    const committeeName = (p as { committee_name: string | null })
+      .committee_name;
+    const committeeLink = committeeWhatsappFor(
+      committeeWhatsapp,
+      committeeNumber
+    );
+    if (party && !party.whatsapp) {
+      missingGroups.add(`Party ${party.name ?? "(unnamed)"}`);
+    }
+    if (committeeName && !committeeLink) {
+      missingGroups.add(
+        committeeNumber != null ? `Committee ${committeeNumber}` : committeeName
+      );
+    }
+
     const { subject, html, text } = renderCodeEmail({
       fullName: p.full_name,
       accessCode: p.access_code,
       eventName,
+      partyName: party?.name ?? null,
+      partyWhatsapp: party?.whatsapp ?? null,
+      committeeLabel:
+        committeeName && committeeNumber != null
+          ? isUnnamedCommittee(committeeName)
+            ? committeeName
+            : `Committee ${committeeNumber} · ${committeeName}`
+          : committeeName,
+      committeeWhatsapp: committeeLink,
     });
     sendable.push({
       id: p.id,

@@ -68,6 +68,7 @@ import { SectionShell, SectionHeading, INK, SAFFRON, GREEN, GOLD, SERIF, inkA } 
 import { CommitteeBillsList, type DashboardCommitteeBill } from "./committee-bills-list";
 import { getMySelfNomination } from "@/app/yip/actions/self-nomination";
 import { selfNominationRoleLabels } from "@/lib/yip/self-nomination";
+import { getMyQuestionnaire } from "@/app/yip/actions/questionnaire";
 
 // ─── Session parsing ─────────────────────────────────────────────
 
@@ -465,6 +466,25 @@ export default async function ParticipantPage() {
     selfNom.success && selfNom.data.nomination
       ? selfNom.data.nomination.roles
       : [];
+
+  // Selection questionnaire. Only the posts this student actually nominated for
+  // matter here, so a student who never put themselves forward sees nothing.
+  // Carries NO score — the action does not return one.
+  const qn = await getMyQuestionnaire(session.eventId);
+  const qnMine = qn.success ? qn.data.posts.filter((p) => p.nominated) : [];
+  const qnOpen = qnMine.filter((p) => p.windowOpen && !p.attempt?.submittedAt);
+  const qnInProgress = qnMine.find((p) => p.attempt && !p.attempt.submittedAt);
+  const qnSubmitted = qnMine.filter((p) => p.attempt?.submittedAt);
+  const qnLine =
+    qnInProgress && qnInProgress.attempt
+      ? `In progress — ${qnInProgress.attempt.answered} of ${qnInProgress.attempt.total} answered`
+      : qnOpen.length > 0
+        ? `${qnOpen.map((p) => p.label).join(", ")} — open now`
+        : qnSubmitted.length === qnMine.length && qnMine.length > 0
+          ? "All submitted"
+          : qnSubmitted.length > 0
+            ? `${qnSubmitted.map((p) => p.label).join(", ")} submitted`
+            : "Not open yet — watch your WhatsApp group";
 
   return (
     <div className="space-y-5">
@@ -937,6 +957,46 @@ export default async function ParticipantPage() {
                 : selfNomOpen
                   ? "Nominate yourself for Administrator, Speaker and/or Party Leader"
                   : "Nominations are closed"}
+            </p>
+          </div>
+        </div>
+      </SectionShell>
+      )}
+
+      {/* ─── SELECTION QUESTIONNAIRE (pre-event; per-post windows) ───
+          Sits directly under Self-Nomination because it is the next step of the
+          same thing. Shown ONLY to a student who actually nominated — everyone
+          else, and every event where no window was ever opened, sees nothing.
+          Carries no score: getMyQuestionnaire does not return one. */}
+      {qnMine.length > 0 && (
+      <SectionShell accent={SAFFRON}>
+        <div className="px-5 py-4">
+          <SectionHeading
+            eyebrow="Selection"
+            title="Selection Questions"
+            icon={FileText}
+            accent={SAFFRON}
+            trailing={
+              <Link
+                href="/yip/me/questionnaire"
+                className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
+                style={{ background: `${SAFFRON}14`, color: SAFFRON }}
+              >
+                {qnInProgress ? "Continue" : qnOpen.length > 0 ? "Start" : "View"}
+                <ChevronRight className="size-4" />
+              </Link>
+            }
+          />
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <span
+              className="size-1.5 shrink-0 rounded-full"
+              style={{
+                background:
+                  qnOpen.length > 0 || qnInProgress ? GREEN : inkA(0.35),
+              }}
+            />
+            <p className="text-xs" style={{ color: inkA(0.55) }}>
+              {qnLine}
             </p>
           </div>
         </div>

@@ -13,7 +13,7 @@ type Row = {
   bytes: number;
 };
 
-async function getRows(): Promise<{ rows: Row[]; linkOnly: number }> {
+async function getRows(): Promise<{ rows: Row[]; submittedDeliverables: number }> {
   const svc = await createServiceClient();
 
   // future.submission_files is not in the generated types → loose client.
@@ -58,21 +58,21 @@ async function getRows(): Promise<{ rows: Row[]; linkOnly: number }> {
   }
   rows.sort((a, b) => b.files - a.files);
 
-  // How much of the corpus is still out of reach: submissions that carry a
-  // link and no uploaded file. Counted so the gap is visible rather than
-  // discovered when the white paper turns out thin.
-  const { count: linkOnly } = await svc
+  // Every submitted deliverable, uploaded or not. Shown next to the file count
+  // so the size of the gap is visible up front, rather than discovered when the
+  // white paper turns out thin.
+  const { count: submittedDeliverables } = await svc
     .schema("future")
     .from("submissions")
     .select("id", { count: "exact", head: true })
     .eq("status", "submitted");
 
-  return { rows, linkOnly: linkOnly ?? 0 };
+  return { rows, submittedDeliverables: submittedDeliverables ?? 0 };
 }
 
 export default async function SubmissionExportPage() {
   await requireFutureNationalAdmin();
-  const { rows, linkOnly } = await getRows();
+  const { rows, submittedDeliverables } = await getRows();
 
   const totalFiles = rows.reduce((n, r) => n + r.files, 0);
   const totalBytes = rows.reduce((n, r) => n + r.bytes, 0);
@@ -102,7 +102,7 @@ export default async function SubmissionExportPage() {
           <strong>Only uploaded files can be collected.</strong> A team that
           submitted a Google Drive link instead of uploading keeps that document
           in their own Google account, and it cannot be gathered here. Of{" "}
-          {linkOnly} submitted deliverables so far, <strong>{totalFiles}</strong>{" "}
+          {submittedDeliverables} submitted deliverables so far, <strong>{totalFiles}</strong>{" "}
           {totalFiles === 1 ? "file has" : "files have"} been uploaded — the rest
           are links.
         </p>

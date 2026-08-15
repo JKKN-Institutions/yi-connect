@@ -379,7 +379,18 @@ export function QuestionnaireClient({
           {mine.map((p) => {
             const submitted = Boolean(p.attempt?.submittedAt);
             const inProgress = Boolean(p.attempt && !p.attempt.submittedAt);
-            const canStart = p.windowOpen && !submitted;
+            // The clock is uniform, so a window can still be `open` after the
+            // cohort's 30 minutes are spent. Starting then is refused by the
+            // server, so don't offer a button that can only fail. Never applies
+            // to a student already writing — their own expires_at governs, and
+            // they are entitled to finish.
+            const timeOver =
+              p.windowOpen &&
+              !inProgress &&
+              !submitted &&
+              p.closesAt !== null &&
+              new Date(p.closesAt).getTime() <= Date.now();
+            const canStart = p.windowOpen && !submitted && !timeOver;
             return (
               <SectionShell key={p.postKey} accent={submitted ? GREEN : SAFFRON}>
                 <div className="flex items-center justify-between gap-3 px-5 py-4">
@@ -391,7 +402,11 @@ export function QuestionnaireClient({
                       <span
                         className="size-1.5 shrink-0 rounded-full"
                         style={{
-                          background: submitted ? GREEN : p.windowOpen ? GREEN : inkA(0.35),
+                          background: submitted
+                            ? GREEN
+                            : p.windowOpen && !timeOver
+                              ? GREEN
+                              : inkA(0.35),
                         }}
                       />
                       <p className="text-xs" style={{ color: inkA(0.55) }}>
@@ -399,9 +414,11 @@ export function QuestionnaireClient({
                           ? "Submitted"
                           : inProgress
                             ? `In progress — ${p.attempt!.answered} of ${p.attempt!.total} answered`
-                            : p.windowOpen
-                              ? "Open now"
-                              : "Not open yet"}
+                            : timeOver
+                              ? "Time is over — speak to your organiser"
+                              : p.windowOpen
+                                ? "Open now"
+                                : "Not open yet"}
                       </p>
                     </div>
                   </div>

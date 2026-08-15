@@ -199,6 +199,35 @@ function windowOpen(windows: readonly WindowDb[], postKey: string): boolean {
 }
 
 /**
+ * The UNIFORM deadline for a post (Director, 2026-08-15).
+ *
+ * Every candidate's 30 minutes runs from the moment the organiser OPENED the
+ * window, not from the moment each student tapped Start — so the whole cohort
+ * writes to one clock and the room can be called to pens-down together. A
+ * student who starts late gets the remainder, not a fresh 30 minutes; that is
+ * the accepted consequence of a uniform start.
+ *
+ * Re-opening a window rewrites `opened_at`, which restarts the 30 minutes for
+ * everyone who has not yet started. That is deliberate: re-opening is how an
+ * organiser runs the post again after a false start.
+ *
+ * Falls back to the student's own clock if `opened_at` is somehow missing on an
+ * open window. Failing that way hands out at most a full 30 minutes rather than
+ * refusing a legitimate candidate over a data gap.
+ */
+function uniformExpiry(
+  windows: readonly WindowDb[],
+  postKey: string,
+  startedAt: Date
+): string {
+  const openedAt = windows.find((w) => w.post_key === postKey)?.opened_at;
+  if (!openedAt) return expiryFor(startedAt);
+  const parsed = new Date(openedAt);
+  if (Number.isNaN(parsed.getTime())) return expiryFor(startedAt);
+  return expiryFor(parsed);
+}
+
+/**
  * The effective question set for a post at an event.
  *
  * If the event has ANY active rows for that post they REPLACE the national set
@@ -310,6 +339,15 @@ export type MyPostState = {
   /** Did this student nominate for this post? */
   nominated: boolean;
   windowOpen: boolean;
+  /**
+   * The cohort's shared deadline for this post — 30 minutes from when the
+   * organiser opened the window. Null when the window has never been opened.
+   *
+   * The clock is uniform, so a window can be `open` while its 30 minutes are
+   * already spent. Without this the card would offer a Start button that can
+   * only ever fail, which is the worst thing to show a candidate who is late.
+   */
+  closesAt: string | null;
   /** Present once started. Carries NO scoring fields, by design. */
   attempt: {
     startedAt: string;
@@ -366,6 +404,9 @@ export async function getMyQuestionnaire(
       label: p.label,
       nominated: nominated.includes(p.key),
       windowOpen: windowOpen(windows, p.key),
+      closesAt: windows.find((w) => w.post_key === p.key)?.opened_at
+        ? uniformExpiry(windows, p.key, new Date())
+        : null,
       attempt: a
         ? {
             startedAt: a.started_at,
@@ -441,6 +482,19 @@ export async function startQuestionnaire(
   const drawn = drawQuestions(questions, questionsPerAttempt(postKey));
   const startedAt = new Date();
 
+  // One clock for the whole cohort, anchored on when the window was opened.
+  const expiresAt = uniformExpiry(windows, postKey, startedAt);
+  if (new Date(expiresAt).getTime() <= startedAt.getTime()) {
+    // The shared 30 minutes are already spent. Refuse rather than hand out a
+    // zero-second paper the student can never complete — and say so plainly,
+    // because "nothing happened" is the one outcome a candidate cannot act on.
+    return {
+      success: false,
+      error:
+        "The 30 minutes for this questionnaire are over. Tell your organiser if you were not able to start.",
+    };
+  }
+
   let attemptId: string;
 
   if (existing) {
@@ -461,7 +515,7 @@ export async function startQuestionnaire(
         participant_id: me.participantId,
         post_key: postKey,
         started_at: startedAt.toISOString(),
-        expires_at: expiryFor(startedAt),
+        expires_at: expiresAt,
       })
       .select("id, expires_at")
       .single();

@@ -398,6 +398,19 @@ export function QuestionnaireAdminClient({
                               {r.scoringStatus === "failed" ? "failed" : "not scored"}
                             </span>
                           )}
+                          {/*
+                            How much of the paper they actually got through. Every
+                            candidate for a post is drawn the same number of
+                            questions, so the percentage above already ranks them
+                            fairly — but a human confirms the shortlist, and
+                            "63% on 4 of 6" is a different candidate from "63% on
+                            6 of 6". Only shown when they ran short.
+                          */}
+                          {r.answered < r.drawn && (
+                            <span className="mt-0.5 block text-[11px] text-[#1a1a3e]/50">
+                              {r.answered} of {r.drawn} answered
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-2 text-right text-xs">
                           {r.redFlagCount > 0 ? (

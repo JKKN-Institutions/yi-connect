@@ -402,8 +402,20 @@ export async function startQuestionnaire(
 
   // Already started? Resume rather than refuse — this is the dropped-connection
   // path, and it must return the SAME paper.
+  //
+  // An attempt with NO questions is a half-written start: the attempt row
+  // inserted and the answer rows did not. Left alone the student gets a screen
+  // reading "Question 1 of 0" that can never be completed, and the unique index
+  // stops them starting again. So repair it by drawing a paper onto the
+  // existing attempt rather than refusing. Their original clock stands.
   const existing = await loadMyAttempt(sb, eventId, me.participantId, postKey);
-  if (existing) return { success: true, data: existing };
+  if (existing && existing.questions.length > 0) {
+    return { success: true, data: existing };
+  }
+  if (existing && existing.submittedAt) {
+    // Submitted with no answers — nothing to repair, and nothing to re-open.
+    return { success: true, data: existing };
+  }
 
   const nominated = await myNominatedPosts(sb, eventId, me.participantId);
   if (!nominated.includes(postKey)) {
@@ -429,31 +441,47 @@ export async function startQuestionnaire(
   const drawn = drawQuestions(questions, questionsPerAttempt(postKey));
   const startedAt = new Date();
 
-  const { data: attempt, error: attemptErr } = await attemptsT(sb)
-    .insert({
-      event_id: eventId,
-      participant_id: me.participantId,
-      post_key: postKey,
-      started_at: startedAt.toISOString(),
-      expires_at: expiryFor(startedAt),
-    })
-    .select("id, expires_at")
-    .single();
+  let attemptId: string;
 
-  if (attemptErr || !attempt) {
-    // Most likely the unique index caught a double-tap or a second tab. Re-read
-    // rather than surface a constraint error to a student.
-    const again = await loadMyAttempt(sb, eventId, me.participantId, postKey);
-    if (again) return { success: true, data: again };
-    return {
-      success: false,
-      error: attemptErr?.message ?? "Could not start the questionnaire.",
-    };
+  if (existing) {
+    // Repair path: reuse the half-written attempt. Do NOT reset the clock —
+    // the student's 30 minutes started when they first pressed Start.
+    const { data: row } = await attemptsT(sb)
+      .select("id")
+      .eq("event_id", eventId)
+      .eq("participant_id", me.participantId)
+      .eq("post_key", postKey)
+      .maybeSingle();
+    if (!row) return { success: false, error: "Could not start the questionnaire." };
+    attemptId = row.id;
+  } else {
+    const { data: attempt, error: attemptErr } = await attemptsT(sb)
+      .insert({
+        event_id: eventId,
+        participant_id: me.participantId,
+        post_key: postKey,
+        started_at: startedAt.toISOString(),
+        expires_at: expiryFor(startedAt),
+      })
+      .select("id, expires_at")
+      .single();
+
+    if (attemptErr || !attempt) {
+      // Most likely the unique index caught a double-tap or a second tab. Re-read
+      // rather than surface a constraint error to a student.
+      const again = await loadMyAttempt(sb, eventId, me.participantId, postKey);
+      if (again && again.questions.length > 0) return { success: true, data: again };
+      return {
+        success: false,
+        error: attemptErr?.message ?? "Could not start the questionnaire.",
+      };
+    }
+    attemptId = attempt.id;
   }
 
   const { error: answersErr } = await answersT(sb).insert(
     drawn.map((qn, i) => ({
-      attempt_id: attempt.id,
+      attempt_id: attemptId,
       question_id: qn.id,
       question_text: qn.body,
       position: i + 1,

@@ -315,6 +315,24 @@ export type QuestionnaireResultRow = {
   drawn: number;
 };
 
+/**
+ * A student who nominated for a post and has no answers to show for it.
+ *
+ * The ranking only ever contained students who handed something in, so a
+ * nominee who never opened the paper was simply absent — an organiser could not
+ * tell "nobody is missing" from "eight people are missing" (Director,
+ * 2026-08-15). `startedButBlank` separates the two cases worth acting on: a
+ * student who never opened it may just need telling, while one who opened it
+ * and wrote nothing may have hit a problem.
+ */
+export type QuestionnaireMissingRow = {
+  participantId: string;
+  fullName: string;
+  constituencyNumber: number | null;
+  postKey: QuestionnairePostKey;
+  startedButBlank: boolean;
+};
+
 export type QuestionnaireActionResult<T = null> =
   | { success: true; data: T }
   | { success: false; error: string };

@@ -6,8 +6,10 @@
  * dispute-proof. So a submitted questionnaire is queued, and the same external
  * routine that services yip.ai_drafts scores it off-platform:
  *
- *   GET  → claims submitted-but-unscored attempts and returns each one's
- *          questions and answers, plus the rubric to score them against.
+ *   GET  → first hands in any paper whose 30 minutes ran out while the
+ *          student's app was closed, then claims submitted-but-unscored
+ *          attempts and returns each one's questions and answers, plus the
+ *          rubric to score them against.
  *   POST → writes back per-answer marks, or records a failure.
  *
  * Auth: the shared secret in `X-Cron-Secret`, compared to
@@ -24,6 +26,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   applyAttemptScores,
   claimScoringWork,
+  finaliseExpiredAttempts,
   markAttemptScoringFailed,
   type ScoredAnswerInput,
 } from "@/lib/yip/questionnaire-scoring";
@@ -54,11 +57,17 @@ export async function GET(request: NextRequest) {
   const limit = Number.isFinite(limitRaw) ? Math.min(50, Math.max(1, limitRaw)) : 25;
 
   try {
+    // Hand in any paper whose 30 minutes ran out while the student's app was
+    // closed — BEFORE claiming work, or those answers are never scored and
+    // never reach the organiser's list at all. See finaliseExpiredAttempts.
+    const finalisedOnTimeout = await finaliseExpiredAttempts();
+
     const work = await claimScoringWork(limit);
     return NextResponse.json({
       rubric: RUBRIC_SYSTEM_INSTRUCTIONS,
       redFlags: RED_FLAGS,
       maxPerAnswer: MAX_PER_ANSWER,
+      finalisedOnTimeout,
       count: work.length,
       work: work.map((w) => ({
         attemptId: w.attemptId,

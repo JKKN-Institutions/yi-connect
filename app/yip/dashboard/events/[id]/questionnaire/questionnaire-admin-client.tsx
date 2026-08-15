@@ -48,6 +48,7 @@ import {
   formatQuestionnaireTime,
   questionnairePostLabel,
   shortlistCutoff,
+  type QuestionnaireMissingRow,
   type QuestionnaireResultRow,
 } from "@/lib/yip/questionnaire";
 
@@ -75,6 +76,7 @@ export function QuestionnaireAdminClient({
   minutes,
   initialRows,
   initialUnscored,
+  initialMissing,
   initialError,
 }: {
   eventId: string;
@@ -84,11 +86,13 @@ export function QuestionnaireAdminClient({
   minutes: number;
   initialRows: QuestionnaireResultRow[];
   initialUnscored: number;
+  initialMissing: QuestionnaireMissingRow[];
   initialError: string | null;
 }) {
   const [posts, setPosts] = useState(initialPosts);
   const [rows, setRows] = useState(initialRows);
   const [unscored, setUnscored] = useState(initialUnscored);
+  const [missing, setMissing] = useState(initialMissing);
   const [error, setError] = useState<string | null>(initialError);
   const [isPending, startTransition] = useTransition();
   const [confirm, setConfirm] = useState<{ postKey: string; open: boolean } | null>(null);
@@ -107,6 +111,7 @@ export function QuestionnaireAdminClient({
     if (r.success) {
       setRows(r.data.rows);
       setUnscored(r.data.unscored);
+      setMissing(r.data.missing);
     }
   }, [eventId]);
 
@@ -511,6 +516,64 @@ export function QuestionnaireAdminClient({
         </p>
       )}
 
+      {/*
+        Who nominated and has nothing to show for it.
+
+        The ranking can only contain students who wrote something, so without
+        this an organiser cannot tell "nobody is missing" from "eight people are
+        missing" — and chasing them is only possible before the post is closed.
+        A blank paper is called out separately from never opening it: the first
+        may mean the student hit a problem, the second usually just means they
+        have not been told.
+      */}
+      {missing.length > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <p className="font-semibold" style={{ color: INK }}>
+              Nominated, nothing answered ({missing.length})
+            </p>
+            <p className="mt-1 text-xs text-[#1a1a3e]/60">
+              These students put their name down but have no answers on record, so they
+              are not in the ranking above.
+            </p>
+            <ul className="mt-3 space-y-1.5">
+              {missing.map((m) => (
+                <li
+                  key={`${m.participantId}:${m.postKey}`}
+                  className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm"
+                >
+                  <ParticipantNameButton
+                    eventId={eventId}
+                    eventName={eventName}
+                    participantId={m.participantId}
+                    name={m.fullName}
+                    className="text-left underline-offset-4 hover:underline"
+                  />
+                  {m.constituencyNumber != null && (
+                    <span className="font-mono text-xs text-[#1a1a3e]/45">
+                      #{m.constituencyNumber}
+                    </span>
+                  )}
+                  <span className="text-xs text-[#1a1a3e]/60">
+                    {questionnairePostLabel(m.postKey)}
+                  </span>
+                  <span
+                    className="rounded px-1.5 py-0.5 text-[11px] font-medium"
+                    style={
+                      m.startedButBlank
+                        ? { background: "#fef3c7", color: "#92400e" }
+                        : { background: "#1a1a3e0d", color: "#1a1a3e99" }
+                    }
+                  >
+                    {m.startedButBlank ? "Opened it, wrote nothing" : "Never opened it"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ── Confirm window toggle ── */}
       <Dialog open={confirm !== null} onOpenChange={(o) => !o && setConfirm(null)}>
         <DialogContent>
@@ -521,7 +584,7 @@ export function QuestionnaireAdminClient({
             </DialogTitle>
             <DialogDescription>
               {confirm?.open
-                ? `Every student who nominated for this post will be able to start. Each gets ${minutes} minutes from the moment they begin.`
+                ? `The ${minutes} minutes start now and run for everyone at once — the post ends at the same moment for the whole group. A student who starts late gets the time that is left, not a fresh ${minutes} minutes.`
                 : "This only stops new students from starting."}
             </DialogDescription>
           </DialogHeader>

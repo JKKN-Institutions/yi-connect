@@ -45,6 +45,7 @@ export default async function QuestionnairePage({
       minutes={overview.success ? overview.data.minutes : 30}
       initialRows={results.success ? results.data.rows : []}
       initialUnscored={results.success ? results.data.unscored : 0}
+      initialMissing={results.success ? results.data.missing : []}
       initialError={
         overview.success ? (results.success ? null : results.error) : overview.error
       }

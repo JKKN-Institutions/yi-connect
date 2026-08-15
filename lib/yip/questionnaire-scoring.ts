@@ -27,6 +27,8 @@ type Q<T> = {
   update: (patch: Record<string, unknown>) => Q<T>;
   eq: (col: string, val: unknown) => Q<T>;
   in: (col: string, vals: readonly unknown[]) => Q<T>;
+  is: (col: string, val: unknown) => Q<T>;
+  lt: (col: string, val: unknown) => Q<T>;
   not: (col: string, op: string, val: unknown) => Q<T>;
   order: (col: string, opts?: { ascending?: boolean }) => Q<T>;
   limit: (n: number) => Q<T>;
@@ -36,6 +38,51 @@ type Q<T> = {
 
 function tbl<T>(sb: SB, name: string): Q<T> {
   return (sb as unknown as { from: (t: string) => Q<T> }).from(name);
+}
+
+/**
+ * Hand in every paper whose 30 minutes are up.
+ *
+ * Before this, the ONLY auto-submit lived in the student's browser and fired
+ * when the countdown hit zero WITH THE TAB STILL OPEN. A student who wrote
+ * three answers and then closed the app — or whose phone died, or who simply
+ * walked off — was never submitted. Scoring skips unsubmitted attempts and so
+ * does the organiser's results view, so their work was invisible to everyone,
+ * including them. On an event day that is the common case, not the rare one
+ * (Director, 2026-08-15: "count them automatically").
+ *
+ * `submitted_at` is stamped with the attempt's own `expires_at`, NOT `now()`:
+ * the paper ended when the clock ran out, not whenever this sweep happened to
+ * run. That keeps the handed-in time honest even if the routine is late or was
+ * down for an hour.
+ *
+ * Safe to run repeatedly — it only ever touches attempts that are still
+ * unsubmitted and already past their deadline.
+ */
+export async function finaliseExpiredAttempts(limit = 500): Promise<number> {
+  const sb = await createServiceClient();
+
+  const { data: stale } = await tbl<{ id: string; expires_at: string }>(
+    sb,
+    "questionnaire_attempts"
+  )
+    .select("id, expires_at")
+    .is("submitted_at", null)
+    .lt("expires_at", new Date().toISOString())
+    .order("expires_at", { ascending: true })
+    .limit(limit);
+
+  let finalised = 0;
+  for (const a of stale ?? []) {
+    // Guarded on submitted_at still being null so a student who hits Submit at
+    // the same moment wins, and their real submit time stands.
+    const { error } = await tbl(sb, "questionnaire_attempts")
+      .update({ submitted_at: a.expires_at, updated_at: new Date().toISOString() })
+      .eq("id", a.id)
+      .is("submitted_at", null);
+    if (!error) finalised += 1;
+  }
+  return finalised;
 }
 
 export type ScoringWorkItem = {

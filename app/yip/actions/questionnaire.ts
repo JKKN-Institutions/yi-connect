@@ -40,6 +40,7 @@ import {
   questionsPerAttempt,
   type QuestionnaireActionResult as R,
   type QuestionnairePostKey,
+  type QuestionnaireMissingRow,
   type QuestionnaireResultRow,
   type ScoringStatus,
   type WindowStatus,
@@ -749,6 +750,37 @@ export async function setQuestionnaireWindow(
   const sb = await createServiceClient();
   await ensureWindows(sb, eventId);
 
+  // ONE POST AT A TIME (Director, 2026-08-15).
+  //
+  // The clock is uniform, so two posts running together means their 30 minutes
+  // overlap. 57% of nominees put their name down for more than one post and 22
+  // for all three — those students would have to write two papers at once and
+  // lose one of them. Refuse, and name the post that is holding the slot so the
+  // organiser knows what to close.
+  //
+  // A post whose 30 minutes are already spent does NOT hold the slot: it is
+  // finished in every way that matters, and making an organiser close it first
+  // would be busywork at exactly the wrong moment.
+  if (open) {
+    const current = await readWindows(sb, eventId);
+    const blocking = current.find(
+      (w) =>
+        w.post_key !== postKeyRaw &&
+        w.status === "open" &&
+        new Date(uniformExpiry(current, w.post_key, new Date())).getTime() > Date.now()
+    );
+    if (blocking) {
+      return {
+        success: false,
+        error: `${questionnairePostLabel(
+          blocking.post_key as QuestionnairePostKey
+        )} is still running. Close it before opening ${questionnairePostLabel(
+          postKeyRaw
+        )} — students who nominated for both cannot sit two at once.`,
+      };
+    }
+  }
+
   const now = new Date().toISOString();
   const status: WindowStatus = open ? "open" : "closed";
   const { error } = await windowsT(sb)
@@ -874,31 +906,43 @@ export async function saveQuestionnaireQuestions(
 
 export async function getQuestionnaireResults(
   eventId: string
-): Promise<R<{ rows: QuestionnaireResultRow[]; unscored: number }>> {
+): Promise<
+  R<{ rows: QuestionnaireResultRow[]; unscored: number; missing: QuestionnaireMissingRow[] }>
+> {
   const access = await getYipEventAccess(eventId);
   if (!access.canView) {
     return { success: false, error: "Not authorized to view this event." };
   }
   const sb = await createServiceClient();
 
-  const attempts = await readAllPaged<AttemptDb>(() =>
-    attemptsT(sb)
-      .select(
-        "id, event_id, participant_id, post_key, started_at, expires_at, submitted_at, scoring_status, total_score, max_score, pct, score_error"
-      )
-      .eq("event_id", eventId)
-      .not("submitted_at", "is", null)
-  );
-  if (attempts.length === 0) return { success: true, data: { rows: [], unscored: 0 } };
+  // Read the nominations too, not just the attempts: the ranking can only ever
+  // show students who handed something in, so without this an organiser cannot
+  // tell "nobody is missing" from "eight people are missing".
+  const [attempts, noms] = await Promise.all([
+    readAllPaged<AttemptDb>(() =>
+      attemptsT(sb)
+        .select(
+          "id, event_id, participant_id, post_key, started_at, expires_at, submitted_at, scoring_status, total_score, max_score, pct, score_error"
+        )
+        .eq("event_id", eventId)
+        .not("submitted_at", "is", null)
+    ),
+    readAllPaged<{ participant_id: string; roles: string[] }>(() =>
+      selfNomsT(sb).select("participant_id, roles").eq("event_id", eventId)
+    ),
+  ]);
 
-  const answers = await readAllPaged<AnswerDb>(() =>
-    answersT(sb)
-      .select("id, attempt_id, position, answer_text, red_flag_penalty, score, flags")
-      .in(
-        "attempt_id",
-        attempts.map((a) => a.id)
-      )
-  );
+  const answers =
+    attempts.length === 0
+      ? []
+      : await readAllPaged<AnswerDb>(() =>
+          answersT(sb)
+            .select("id, attempt_id, position, answer_text, red_flag_penalty, score, flags")
+            .in(
+              "attempt_id",
+              attempts.map((a) => a.id)
+            )
+        );
   const agg = new Map<string, { answered: number; drawn: number; flags: number }>();
   for (const a of answers) {
     const c = agg.get(a.attempt_id) ?? { answered: 0, drawn: 0, flags: 0 };
@@ -908,6 +952,14 @@ export async function getQuestionnaireResults(
     agg.set(a.attempt_id, c);
   }
 
+  // Everyone we need a name for: anyone who sat it, plus anyone who nominated.
+  const needNames = new Set<string>([
+    ...attempts.map((a) => a.participant_id),
+    ...noms.map((n) => n.participant_id),
+  ]);
+  if (needNames.size === 0) {
+    return { success: true, data: { rows: [], unscored: 0, missing: [] } };
+  }
   const people = await readAllPaged<{
     id: string;
     full_name: string;
@@ -915,10 +967,7 @@ export async function getQuestionnaireResults(
   }>(() =>
     participantsT(sb)
       .select("id, full_name, constituency_number")
-      .in(
-        "id",
-        attempts.map((a) => a.participant_id)
-      )
+      .in("id", [...needNames])
   );
   const byId = new Map(people.map((p) => [p.id, p]));
 
@@ -942,8 +991,18 @@ export async function getQuestionnaireResults(
     };
   });
 
+  // A paper with nothing written on it is not a candidacy — decision 9 says no
+  // answers means not considered. Splitting it out here rather than hiding it in
+  // the UI matters: the shortlist cutoff counts scored candidates, so leaving
+  // blanks in would push a post past 15 and widen the shortlist from 5 to 10 on
+  // the strength of students who never wrote a word.
+  const ranked = rows.filter((r) => r.answered > 0);
+  const blankByKey = new Set(
+    rows.filter((r) => r.answered === 0).map((r) => `${r.participantId}:${r.postKey}`)
+  );
+
   // Ranked within post, scored first, best first.
-  rows.sort((x, y) => {
+  ranked.sort((x, y) => {
     if (x.postKey !== y.postKey) return x.postKey.localeCompare(y.postKey);
     const xs = x.scoringStatus === "scored" ? 0 : 1;
     const ys = y.scoringStatus === "scored" ? 0 : 1;
@@ -951,9 +1010,34 @@ export async function getQuestionnaireResults(
     return (y.pct ?? -1) - (x.pct ?? -1);
   });
 
+  const rankedKeys = new Set(ranked.map((r) => `${r.participantId}:${r.postKey}`));
+  const missing: QuestionnaireMissingRow[] = [];
+  for (const n of noms) {
+    for (const role of n.roles ?? []) {
+      if (!isQuestionnairePostKey(role)) continue;
+      const key = `${n.participant_id}:${role}`;
+      if (rankedKeys.has(key)) continue;
+      const p = byId.get(n.participant_id);
+      missing.push({
+        participantId: n.participant_id,
+        fullName: p?.full_name ?? "(removed student)",
+        constituencyNumber: p?.constituency_number ?? null,
+        postKey: role,
+        startedButBlank: blankByKey.has(key),
+      });
+    }
+  }
+  missing.sort(
+    (a, b) => a.postKey.localeCompare(b.postKey) || a.fullName.localeCompare(b.fullName)
+  );
+
   return {
     success: true,
-    data: { rows, unscored: rows.filter((r) => r.scoringStatus !== "scored").length },
+    data: {
+      rows: ranked,
+      unscored: ranked.filter((r) => r.scoringStatus !== "scored").length,
+      missing,
+    },
   };
 }
 

@@ -103,6 +103,17 @@ export function QuestionnaireClient({
   const autoSubmitted = useRef(false);
   useEffect(() => {
     if (!attempt || attempt.submittedAt || !timer.isExpired || autoSubmitted.current) return;
+    // `timer.isExpired` is derived from useTimer's `remaining` STATE, which is
+    // still 0 from the previous (no-attempt) render for exactly one commit
+    // after setAttempt(). For that one commit isExpired reads true on a
+    // brand-new 30-minute attempt, and this effect used to auto-submit a blank
+    // paper the instant the student tapped Start — locking them out for good,
+    // because the unique index allows one attempt per post.
+    //
+    // So re-check the authoritative deadline instead of trusting the UI state:
+    // expires_at is written once at start and is what the server enforces on
+    // every write. A derived value can disagree with reality; this cannot.
+    if (new Date(attempt.expiresAt).getTime() > Date.now()) return;
     autoSubmitted.current = true;
     void (async () => {
       const res = await callAction(() => submitQuestionnaire(eventId, attempt.postKey));

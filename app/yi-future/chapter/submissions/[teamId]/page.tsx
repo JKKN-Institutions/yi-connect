@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
+import { SUBMISSION_BUCKET } from "@/lib/yi-future/submission-files";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
 import { reviewSubmission } from "@/app/yi-future/actions/submissions";
 import { PHASES, PHASE_LABELS, type Phase } from "@/lib/yi-future/constants";
@@ -44,6 +45,53 @@ async function getTeam(id: string): Promise<Team | null> {
   return (data as unknown as Team) ?? null;
 }
 
+type SignedFile = { id: string; file_name: string; signedUrl: string | null };
+
+/**
+ * Uploaded files for these submissions, each with a short-lived signed URL.
+ *
+ * Signed rather than public: the bucket holds students' own documents, and a
+ * public object URL would be permanently replayable by anyone who saw it once.
+ * One hour is plenty for a juror to open and read.
+ */
+async function getSignedFiles(
+  submissionIds: string[]
+): Promise<Map<string, SignedFile[]>> {
+  const out = new Map<string, SignedFile[]>();
+  if (submissionIds.length === 0) return out;
+
+  const svc = await createServiceClient();
+  // future.submission_files is not in the generated types -> loose client.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await (svc as any)
+    .schema("future")
+    .from("submission_files")
+    .select("id, submission_id, slot, file_path, file_name")
+    .in("submission_id", submissionIds)
+    .order("uploaded_at", { ascending: true });
+
+  for (const row of ((data as {
+    id: string;
+    submission_id: string;
+    slot: string;
+    file_path: string;
+    file_name: string;
+  }[] | null) ?? [])) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: signed } = await (svc as any).storage
+      .from(SUBMISSION_BUCKET)
+      .createSignedUrl(row.file_path, 60 * 60);
+    const key = `${row.submission_id}:${row.slot}`;
+    if (!out.has(key)) out.set(key, []);
+    out.get(key)!.push({
+      id: row.id,
+      file_name: row.file_name,
+      signedUrl: (signed as { signedUrl?: string } | null)?.signedUrl ?? null,
+    });
+  }
+  return out;
+}
+
 async function getSubmissions(teamId: string): Promise<Submission[]> {
   const svc = await createServiceClient();
   const { data } = await svc
@@ -59,26 +107,55 @@ async function getSubmissions(teamId: string): Promise<Submission[]> {
 function ArtifactRow({
   label,
   url,
+  files = [],
 }: {
   label: string;
   url: string | null;
+  /** Files the team uploaded for this slot, each with a ready signed URL.
+   *  These open immediately — no Drive access request, which is the whole
+   *  reason uploads exist. */
+  files?: { id: string; file_name: string; signedUrl: string | null }[];
 }): React.JSX.Element {
   return (
-    <div className="flex items-center justify-between py-1.5">
-      <span className="text-xs font-semibold uppercase tracking-widest text-navy/70">
-        {label}
-      </span>
-      {url ? (
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener"
-          className="text-sm font-mono text-yi-gold hover:underline truncate max-w-[300px]"
-        >
-          Open →
-        </a>
-      ) : (
-        <span className="text-xs text-navy/30">—</span>
+    <div className="py-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-widest text-navy/70">
+          {label}
+        </span>
+        {url ? (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener"
+            className="text-sm font-mono text-yi-gold hover:underline truncate max-w-[300px]"
+          >
+            Open link →
+          </a>
+        ) : files.length === 0 ? (
+          <span className="text-xs text-navy/30">—</span>
+        ) : null}
+      </div>
+      {files.length > 0 && (
+        <ul className="mt-1 space-y-0.5">
+          {files.map((f) => (
+            <li key={f.id} className="flex items-center justify-end gap-2">
+              {f.signedUrl ? (
+                <a
+                  href={f.signedUrl}
+                  target="_blank"
+                  rel="noopener"
+                  className="text-sm text-yi-green font-semibold hover:underline truncate max-w-[300px]"
+                >
+                  ⬇ {f.file_name}
+                </a>
+              ) : (
+                <span className="text-xs text-red-600">
+                  {f.file_name} — could not be opened
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
@@ -98,6 +175,9 @@ export default async function AdminSubmissionDetailPage({
   if (team.chapter_id !== ctx.chapterId) redirect("/yi-future/chapter/submissions");
 
   const subs = await getSubmissions(teamId);
+  const signedFiles = await getSignedFiles(subs.map((x) => x.id));
+  const slotFiles = (sub: Submission | undefined, slot: string): SignedFile[] =>
+    sub ? signedFiles.get(`${sub.id}:${slot}`) ?? [] : [];
   const byPhase = new Map<Phase, Submission>();
   for (const s of subs) byPhase.set(s.phase, s);
 
@@ -181,12 +261,14 @@ export default async function AdminSubmissionDetailPage({
                     <ArtifactRow
                       label="Problem Definition"
                       url={s.problem_definition_url}
+                      files={slotFiles(s, "problem_definition")}
                     />
                   )}
                   {p === "phase_b" && (
                     <ArtifactRow
                       label="Draft Solution"
                       url={s.draft_solution_url}
+                      files={slotFiles(s, "draft_solution")}
                     />
                   )}
                   {p === "phase_c" && (
@@ -194,18 +276,22 @@ export default async function AdminSubmissionDetailPage({
                       <ArtifactRow
                         label="Policy Document"
                         url={s.final_policy_document_url}
+                      files={slotFiles(s, "final_policy_document")}
                       />
                       <ArtifactRow
                         label="Execution Plan"
                         url={s.final_execution_plan_url}
+                      files={slotFiles(s, "final_execution_plan")}
                       />
                       <ArtifactRow
                         label="Scalability Model"
                         url={s.final_scalability_model_url}
+                      files={slotFiles(s, "final_scalability_model")}
                       />
                       <ArtifactRow
                         label="Presentation Deck"
                         url={s.final_presentation_deck_url}
+                      files={slotFiles(s, "final_presentation_deck")}
                       />
                     </>
                   )}

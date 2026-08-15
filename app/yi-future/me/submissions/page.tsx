@@ -7,6 +7,7 @@ import {
   submitSubmission,
 } from "@/app/yi-future/actions/submissions";
 import { DeliverableUpload } from "@/components/yi-future/submissions/DeliverableUpload";
+import type { SubmissionFileRow } from "@/lib/yi-future/submission-files";
 import { SopDownloadCard } from "@/components/yi-future/SopDownloadCard";
 import type { Database } from "@/types/yi-future/database";
 
@@ -56,6 +57,30 @@ async function getSubmissions(teamId: string): Promise<Submission[]> {
     )
     .eq("team_id", teamId);
   return (data as unknown as Submission[]) ?? [];
+}
+
+/** Files uploaded against these submissions, grouped by (submission, slot). */
+async function getSubmissionFiles(
+  submissionIds: string[]
+): Promise<Map<string, SubmissionFileRow[]>> {
+  const grouped = new Map<string, SubmissionFileRow[]>();
+  if (submissionIds.length === 0) return grouped;
+  const svc = await createServiceClient();
+  // future.submission_files is not in the generated types (as with every table
+  // added after the last regen) -> loose client, the established pattern.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await (svc as any)
+    .schema("future")
+    .from("submission_files")
+    .select("id, submission_id, slot, file_path, file_name, size_bytes, content_type, uploaded_at")
+    .in("submission_id", submissionIds)
+    .order("uploaded_at", { ascending: true });
+  for (const row of ((data as SubmissionFileRow[] | null) ?? [])) {
+    const key = `${row.submission_id}:${row.slot}`;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(row);
+  }
+  return grouped;
 }
 
 const STATUS_STYLE: Record<string, string> = {
@@ -129,6 +154,17 @@ export default async function MySubmissionsPage() {
   }
 
   const submissions = await getSubmissions(team.id);
+  const filesBySlot = await getSubmissionFiles(submissions.map((s) => s.id));
+
+  /** Files already attached to one deliverable slot. */
+  function slotFiles(sub: Submission | undefined, slot: string): SubmissionFileRow[] {
+    return sub ? filesBySlot.get(`${sub.id}:${slot}`) ?? [] : [];
+  }
+
+  /** A submitted or approved phase is locked, matching the rest of the form. */
+  function locked(sub: Submission | undefined): boolean {
+    return sub?.status === "submitted" || sub?.status === "approved";
+  }
   const byPhase = new Map<DeliverablePhase, Submission>();
   for (const s of submissions) byPhase.set(s.phase, s);
 
@@ -314,6 +350,10 @@ export default async function MySubmissionsPage() {
           label="Problem Definition Note URL"
           name="problem_definition_url"
           defaultValue={subA?.problem_definition_url ?? ""}
+          submissionId={subA?.id ?? null}
+          slot="problem_definition"
+          files={slotFiles(subA, "problem_definition")}
+          readOnly={locked(subA)}
           hint="Public share link (Google Drive, Dropbox, etc.)"
         />
       </PhaseCard>
@@ -329,6 +369,10 @@ export default async function MySubmissionsPage() {
           label="Draft Solution URL"
           name="draft_solution_url"
           defaultValue={subB?.draft_solution_url ?? ""}
+          submissionId={subB?.id ?? null}
+          slot="draft_solution"
+          files={slotFiles(subB, "draft_solution")}
+          readOnly={locked(subB)}
           hint="Public share link."
         />
       </PhaseCard>
@@ -344,24 +388,40 @@ export default async function MySubmissionsPage() {
           label="Final Policy Document"
           name="final_policy_document_url"
           defaultValue={subC?.final_policy_document_url ?? ""}
+          submissionId={subC?.id ?? null}
+          slot="final_policy_document"
+          files={slotFiles(subC, "final_policy_document")}
+          readOnly={locked(subC)}
           required
         />
         <DeliverableUpload
           label="Final Execution Plan"
           name="final_execution_plan_url"
           defaultValue={subC?.final_execution_plan_url ?? ""}
+          submissionId={subC?.id ?? null}
+          slot="final_execution_plan"
+          files={slotFiles(subC, "final_execution_plan")}
+          readOnly={locked(subC)}
           required
         />
         <DeliverableUpload
           label="Scalability Model"
           name="final_scalability_model_url"
           defaultValue={subC?.final_scalability_model_url ?? ""}
+          submissionId={subC?.id ?? null}
+          slot="final_scalability_model"
+          files={slotFiles(subC, "final_scalability_model")}
+          readOnly={locked(subC)}
           required
         />
         <DeliverableUpload
           label="Presentation Deck"
           name="final_presentation_deck_url"
           defaultValue={subC?.final_presentation_deck_url ?? ""}
+          submissionId={subC?.id ?? null}
+          slot="final_presentation_deck"
+          files={slotFiles(subC, "final_presentation_deck")}
+          readOnly={locked(subC)}
           required
         />
       </PhaseCard>

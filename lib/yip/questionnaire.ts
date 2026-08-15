@@ -375,6 +375,76 @@ export function formatQuestionnaireTime(iso: string | null | undefined): string 
 
 // ─── CSV ─────────────────────────────────────────────────────────
 
+/**
+ * One row per QUESTION, not per candidate — the shape you want if the file is
+ * going into a spreadsheet or another model for analysis.
+ *
+ * Carries the student's NAME (Director, 2026-08-15, having been shown the
+ * alternative). Note this is a deliberately different posture from the in-app
+ * scorer, which is sent answers with no name and no id attached because these
+ * are minors — so this file identifies children by name alongside their written
+ * work, and wherever it is uploaded, it goes with them. Organiser-gated for
+ * that reason.
+ *
+ * Every drawn question appears even when the answer is blank: "they skipped
+ * question 4" is a finding, and a file that silently omits it reads as a
+ * shorter paper rather than an unfinished one.
+ */
+export type QuestionnaireResponseRow = {
+  postKey: QuestionnairePostKey;
+  fullName: string;
+  constituencyNumber: number | null;
+  submittedAt: string | null;
+  position: number;
+  question: string;
+  answer: string;
+  score: number | null;
+  grounding: number | null;
+  depth: number | null;
+  voice: number | null;
+  redFlagPenalty: number | null;
+  flags: readonly string[];
+};
+
+export const QUESTIONNAIRE_RESPONSES_CSV_HEADERS = [
+  "Post",
+  "Const. No.",
+  "Student",
+  "Submitted (IST)",
+  "Q No.",
+  "Question",
+  "Answer",
+  "Words",
+  "Score",
+  "Grounding",
+  "Depth",
+  "Voice",
+  "Penalty",
+  "Flags",
+];
+
+export function buildQuestionnaireResponsesCsv(
+  rows: readonly QuestionnaireResponseRow[]
+): string {
+  const body = rows.map((r) => [
+    questionnairePostLabel(r.postKey),
+    r.constituencyNumber ?? "",
+    r.fullName,
+    formatQuestionnaireTime(r.submittedAt),
+    r.position,
+    r.question,
+    r.answer,
+    r.answer.trim() === "" ? 0 : wordCount(r.answer),
+    r.score ?? "",
+    r.grounding ?? "",
+    r.depth ?? "",
+    r.voice ?? "",
+    r.redFlagPenalty ?? "",
+    r.flags.join("; "),
+  ]);
+  return toCsv(QUESTIONNAIRE_RESPONSES_CSV_HEADERS, body);
+}
+
 export const QUESTIONNAIRE_CSV_HEADERS = [
   "Rank",
   "Const. No.",

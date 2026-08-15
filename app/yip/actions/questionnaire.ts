@@ -32,6 +32,7 @@ import {
   QUESTIONNAIRE_POSTS,
   attemptExpired,
   buildQuestionnaireCsv,
+  buildQuestionnaireResponsesCsv,
   drawQuestions,
   expiryFor,
   isQuestionnairePostKey,
@@ -41,6 +42,7 @@ import {
   type QuestionnaireActionResult as R,
   type QuestionnairePostKey,
   type QuestionnaireMissingRow,
+  type QuestionnaireResponseRow,
   type QuestionnaireResultRow,
   type ScoringStatus,
   type WindowStatus,
@@ -1120,6 +1122,119 @@ export async function exportQuestionnaireCsv(
       filename: `yip-questionnaire-${eventId.slice(0, 8)}.csv`,
       csv: buildQuestionnaireCsv(res.data.rows),
       unscored: res.data.unscored,
+    },
+  };
+}
+
+/**
+ * Download every answer, question by question.
+ *
+ * The other export is a scoreboard — rank, score, percent — with no writing in
+ * it, so there was no way to read the cohort's answers anywhere except one
+ * student at a time on screen. This is what lets the shortlist be worked out
+ * off-platform while the in-app scorer is still being wired up; decision 3
+ * already says the AI only advises and a human confirms, so an outside reading
+ * of the same answers is no less legitimate.
+ *
+ * Papers with nothing written on them are left out: a blank has nothing to
+ * analyse and would only pad the file. Within a paper that HAS answers, every
+ * drawn question is included even where the answer is blank.
+ */
+export async function exportQuestionnaireResponsesCsv(
+  eventId: string
+): Promise<R<{ filename: string; csv: string; students: number; answers: number }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to export this event." };
+  }
+  const sb = await createServiceClient();
+
+  const attempts = await readAllPaged<AttemptDb>(() =>
+    attemptsT(sb)
+      .select(
+        "id, event_id, participant_id, post_key, started_at, expires_at, submitted_at, scoring_status, total_score, max_score, pct, score_error"
+      )
+      .eq("event_id", eventId)
+      .not("submitted_at", "is", null)
+  );
+  if (attempts.length === 0) {
+    return { success: false, error: "Nobody has submitted answers for this event yet." };
+  }
+
+  const answers = await readAllPaged<AnswerDb>(() =>
+    answersT(sb)
+      .select(
+        "id, attempt_id, position, question_text, answer_text, grounding, depth, voice, red_flag_penalty, score, flags"
+      )
+      .in(
+        "attempt_id",
+        attempts.map((a) => a.id)
+      )
+  );
+
+  const people = await readAllPaged<{
+    id: string;
+    full_name: string;
+    constituency_number: number | null;
+  }>(() =>
+    participantsT(sb)
+      .select("id, full_name, constituency_number")
+      .in(
+        "id",
+        attempts.map((a) => a.participant_id)
+      )
+  );
+  const byId = new Map(people.map((p) => [p.id, p]));
+
+  const byAttempt = new Map<string, typeof answers>();
+  for (const a of answers) {
+    const list = byAttempt.get(a.attempt_id) ?? [];
+    list.push(a);
+    byAttempt.set(a.attempt_id, list);
+  }
+
+  const rows: QuestionnaireResponseRow[] = [];
+  for (const at of attempts) {
+    const mine = byAttempt.get(at.id) ?? [];
+    // Skip a paper with nothing written on it — see the note above.
+    if (!mine.some((a) => (a.answer_text ?? "").trim() !== "")) continue;
+    const p = byId.get(at.participant_id);
+    for (const a of [...mine].sort((x, y) => x.position - y.position)) {
+      rows.push({
+        postKey: at.post_key as QuestionnairePostKey,
+        fullName: p?.full_name ?? "(removed student)",
+        constituencyNumber: p?.constituency_number ?? null,
+        submittedAt: at.submitted_at,
+        position: a.position,
+        question: a.question_text,
+        answer: a.answer_text ?? "",
+        score: a.score,
+        grounding: a.grounding ?? null,
+        depth: a.depth ?? null,
+        voice: a.voice ?? null,
+        redFlagPenalty: a.red_flag_penalty,
+        flags: toFlags(a.flags),
+      });
+    }
+  }
+  if (rows.length === 0) {
+    return { success: false, error: "Nobody has written an answer for this event yet." };
+  }
+
+  rows.sort(
+    (x, y) =>
+      x.postKey.localeCompare(y.postKey) ||
+      x.fullName.localeCompare(y.fullName) ||
+      x.position - y.position
+  );
+
+  return {
+    success: true,
+    data: {
+      filename: `yip-questionnaire-answers-${eventId.slice(0, 8)}.csv`,
+      csv: buildQuestionnaireResponsesCsv(rows),
+      students: new Set(rows.map((r) => `${r.fullName}:${r.postKey}`)).size,
+      answers: rows.filter((r) => r.answer.trim() !== "").length,
     },
   };
 }

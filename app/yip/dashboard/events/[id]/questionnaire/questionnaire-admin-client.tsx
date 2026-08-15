@@ -35,6 +35,7 @@ import {
 import { ParticipantNameButton } from "@/components/yip/participant-profile-dialog";
 import {
   exportQuestionnaireCsv,
+  exportQuestionnaireResponsesCsv,
   getQuestionnaireAttemptDetail,
   getQuestionnaireOverview,
   getQuestionnaireResults,
@@ -213,6 +214,34 @@ export function QuestionnaireAdminClient({
     });
   }
 
+  /**
+   * Download every answer, question by question — the file you can read
+   * yourself or hand to another model. The other export carries no writing at
+   * all, only ranks and percentages.
+   *
+   * This file has students' names next to their written work, so it is worth a
+   * beat of friction: the toast says how many students are in it.
+   */
+  function doExportResponses() {
+    startTransition(async () => {
+      const res = await callAction(() => exportQuestionnaireResponsesCsv(eventId));
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      const blob = new Blob([res.data.csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.data.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(
+        `Downloaded ${res.data.answers} answers from ${res.data.students} papers, with student names.`
+      );
+    });
+  }
+
   // Scored counts per post drive the shortlist marker.
   const scoredByPost = new Map<string, number>();
   for (const r of rows) {
@@ -245,9 +274,19 @@ export function QuestionnaireAdminClient({
             <RefreshCw className="size-4" /> Refresh
           </Button>
           {canManage && (
-            <Button onClick={doExport} disabled={isPending || rows.length === 0}>
-              <Download className="size-4" /> Export CSV
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                onClick={doExportResponses}
+                disabled={isPending || rows.length === 0}
+                title="Every question and answer, for reading yourself or handing to another tool. Includes student names."
+              >
+                <Download className="size-4" /> Export answers
+              </Button>
+              <Button onClick={doExport} disabled={isPending || rows.length === 0}>
+                <Download className="size-4" /> Export scores
+              </Button>
+            </>
           )}
         </div>
       </div>

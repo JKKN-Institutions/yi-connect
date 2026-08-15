@@ -114,6 +114,10 @@ export function QuestionnaireAdminClient({
       setUnscored(r.data.unscored);
       setMissing(r.data.missing);
     }
+    // A clean reload means whatever the banner was complaining about is no
+    // longer true — but only say so if BOTH reads actually came back, or a
+    // failed refresh would silently wipe a real error off the screen.
+    if (o.success && r.success) setError(null);
   }, [eventId]);
 
   function applyToggle() {
@@ -127,6 +131,11 @@ export function QuestionnaireAdminClient({
         toast.error(res.error);
         return;
       }
+      // Clear any earlier refusal. Without this the banner from a blocked
+      // attempt ("Speaker is still running") stays on screen after you close
+      // Speaker and it succeeds — the page then contradicts itself, telling an
+      // organiser a post is running while showing it as closed.
+      setError(null);
       toast.success(
         open
           ? `${questionnairePostLabel(postKey)} questions are open.`
@@ -265,8 +274,8 @@ export function QuestionnaireAdminClient({
             Selection Questionnaire
           </h2>
           <p className="mt-1 text-sm text-[#1a1a3e]/60">
-            Each post opens on its own window. Every candidate gets {minutes} minutes
-            once they start.
+            One post at a time. The {minutes} minutes start when you open it and run for
+            the whole group at once, so open it with the room already seated.
           </p>
         </div>
         <div className="flex gap-2">

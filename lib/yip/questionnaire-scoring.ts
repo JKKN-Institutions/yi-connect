@@ -38,6 +38,74 @@ function tbl<T>(sb: SB, name: string): Q<T> {
   return (sb as unknown as { from: (t: string) => Q<T> }).from(name);
 }
 
+export type ScoringWorkItem = {
+  attemptId: string;
+  eventId: string;
+  post: string;
+  answers: { position: number; question: string; answer: string }[];
+};
+
+/**
+ * Claim the next batch of submitted-but-unscored attempts.
+ *
+ * Claiming flips them to `scoring` BEFORE returning, so two overlapping drains
+ * cannot both score the same attempt and bill twice. An attempt stuck in
+ * `scoring` (routine died mid-run) is recoverable — an organiser re-queues it
+ * from the results table.
+ *
+ * The payload carries the student's answer text and nothing that identifies
+ * them: no name, no access code, no participant id. The scorer does not need to
+ * know whose paper it is, and these are minors.
+ */
+export async function claimScoringWork(limit = 25): Promise<ScoringWorkItem[]> {
+  const sb = await createServiceClient();
+
+  const { data: pending } = await tbl<{
+    id: string;
+    event_id: string;
+    post_key: string;
+  }>(sb, "questionnaire_attempts")
+    .select("id, event_id, post_key")
+    .eq("scoring_status", "pending")
+    .not("submitted_at", "is", null)
+    .order("submitted_at", { ascending: true })
+    .limit(limit);
+
+  const rows = pending ?? [];
+  if (rows.length === 0) return [];
+
+  const out: ScoringWorkItem[] = [];
+  for (const r of rows) {
+    const { error } = await tbl(sb, "questionnaire_attempts")
+      .update({ scoring_status: "scoring", updated_at: new Date().toISOString() })
+      .eq("id", r.id)
+      .eq("scoring_status", "pending"); // no-op if another drain got there first
+    if (error) continue;
+
+    const { data: answers } = await tbl<{
+      position: number;
+      question_text: string;
+      answer_text: string | null;
+    }>(sb, "questionnaire_answers")
+      .select("position, question_text, answer_text")
+      .eq("attempt_id", r.id)
+      .order("position", { ascending: true })
+      .limit(100);
+
+    out.push({
+      attemptId: r.id,
+      eventId: r.event_id,
+      post: r.post_key,
+      answers: (answers ?? []).map((a) => ({
+        position: a.position,
+        question: a.question_text,
+        answer: a.answer_text ?? "",
+      })),
+    });
+  }
+  return out;
+}
+
 export type ScoredAnswerInput = {
   position: number;
   grounding: number;

@@ -24,6 +24,8 @@ import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { committeeWhatsappFor } from "@/lib/yip/whatsapp-links";
 import { isUnnamedCommittee } from "@/lib/yip/event-committees";
+import { logYipEmails, settleYipEmails } from "@/lib/yip/email-log";
+import type { YipEmailLogEntry } from "@/lib/yip/email-log";
 import type {
   YipEmailSendPlan,
   YipEmailRecipient,
@@ -38,6 +40,9 @@ type ActionResult<T = null> =
 // one API request (one request → no per-message rate-limit churn); we stay well
 // under that and let the client iterate batches so the dialog can show progress.
 const EMAIL_BATCH_MAX = 50;
+
+/** What these rows are, in yip.email_log. */
+const TRIGGER_TYPE = "access_code";
 
 const JOIN_URL = "https://yi-connect-app.vercel.app/yip/join";
 
@@ -389,13 +394,27 @@ export async function sendYipAccessCodeEmailsBatch(
   };
   const sendable: Sendable[] = [];
 
+  // Students who could never be emailed are logged too — "no address on file"
+  // is the answer to half of all "I never got my code" questions.
+  const skipped: YipEmailLogEntry[] = [];
+
   for (const p of participants ?? []) {
     if (!isValidEmail(p.email) || !p.access_code) {
+      const reason = !p.access_code ? "No access code" : "No valid email";
       results.push({
         participantId: p.id,
         fullName: p.full_name,
         success: false,
-        error: !p.access_code ? "No access code" : "No valid email",
+        error: reason,
+      });
+      skipped.push({
+        eventId,
+        participantId: p.id,
+        triggerType: TRIGGER_TYPE,
+        recipientEmail: p.email ?? null,
+        recipientName: p.full_name,
+        status: "skipped",
+        error: reason,
       });
       continue;
     }
@@ -441,12 +460,29 @@ export async function sendYipAccessCodeEmailsBatch(
     });
   }
 
+  await logYipEmails(supabase as never, skipped);
+
   if (sendable.length === 0) {
     return {
       success: true,
       data: { results, missingGroups: [...missingGroups].sort() },
     };
   }
+
+  // Written BEFORE the provider call, so a crash or timeout mid-batch still
+  // leaves a record of who was attempted. Settled to sent/failed below.
+  const pendingIds = await logYipEmails(
+    supabase as never,
+    sendable.map((s) => ({
+      eventId,
+      participantId: s.id,
+      triggerType: TRIGGER_TYPE,
+      recipientEmail: s.email,
+      recipientName: s.fullName,
+      subjectLine: s.payload.subject,
+      status: "pending" as const,
+    }))
+  );
 
   // One batch request for all valid recipients — sidesteps the per-message
   // rate limit a sequential loop would hit. A batch-level failure marks every
@@ -458,14 +494,16 @@ export async function sendYipAccessCodeEmailsBatch(
       sendable.map((s) => s.payload)
     );
     if (batchError) {
+      const reason = batchError.message || "Email send failed";
       for (const s of sendable) {
         results.push({
           participantId: s.id,
           fullName: s.fullName,
           success: false,
-          error: batchError.message || "Email send failed",
+          error: reason,
         });
       }
+      await settleYipEmails(supabase as never, pendingIds, "failed", reason);
       return {
       success: true,
       data: { results, missingGroups: [...missingGroups].sort() },
@@ -478,6 +516,7 @@ export async function sendYipAccessCodeEmailsBatch(
         success: true,
       });
     }
+    await settleYipEmails(supabase as never, pendingIds, "sent");
   } catch (e) {
     const reason = e instanceof Error ? e.message : "Email service error";
     for (const s of sendable) {
@@ -488,6 +527,7 @@ export async function sendYipAccessCodeEmailsBatch(
         error: reason,
       });
     }
+    await settleYipEmails(supabase as never, pendingIds, "failed", reason);
   }
 
   return {

@@ -9,8 +9,14 @@ import { TestLoginClient } from "./test-login-client";
  *
  * Only users with a yi_directory.role_assignments row where
  *   app = 'yip'  AND  role = 'national'  AND  title ILIKE '%super%'
- * can see the one-click demo-account picker. Everyone else is bounced to
- * /yip/join (the public access-code entry).
+ *   AND  is_active = true
+ * can see the one-click demo-account picker. The is_active check matters: a
+ * super-admin who has been deactivated in yi_directory must lose the POV
+ * switcher too, and every other YIP gate (require-super-admin.ts,
+ * event-access.ts) already filters on it — this call site was the only one
+ * that did not.
+ *
+ * Everyone else is bounced to /yip/join (the public access-code entry).
  *
  * Requires an authenticated Supabase session (yi-connect OAuth). Unauth users
  * are also bounced to /yip/join — that page handles the access-code path.
@@ -68,7 +74,11 @@ async function isYipSuperAdmin(): Promise<boolean> {
         select: (c: string) => {
           eq: (k: string, v: string) => {
             eq: (k: string, v: string) => Promise<{
-              data: Array<{ role: string; title: string | null }> | null;
+              data: Array<{
+                role: string;
+                title: string | null;
+                is_active: boolean | null;
+              }> | null;
             }>;
           };
         };
@@ -78,12 +88,16 @@ async function isYipSuperAdmin(): Promise<boolean> {
 
   const { data: assignments } = await svcDirRoles
     .from("role_assignments")
-    .select("role, title")
+    .select("role, title, is_active")
     .eq("person_id", person.id)
     .eq("app", "yip");
 
+  // Fail CLOSED: only an explicit `true` passes, so a null/absent flag denies.
   return (assignments ?? []).some(
-    (a) => a.role === "national" && (a.title ?? "").toLowerCase().includes("super")
+    (a) =>
+      a.is_active === true &&
+      a.role === "national" &&
+      (a.title ?? "").toLowerCase().includes("super")
   );
 }
 

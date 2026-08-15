@@ -274,25 +274,35 @@ export default async function AdminSubmissionDetailPage({
                   {p === "phase_c" && (
                     <>
                       <ArtifactRow
-                        label="Policy Document"
+                        label="Final Report"
                         url={s.final_policy_document_url}
-                      files={slotFiles(s, "final_policy_document")}
-                      />
-                      <ArtifactRow
-                        label="Execution Plan"
-                        url={s.final_execution_plan_url}
-                      files={slotFiles(s, "final_execution_plan")}
-                      />
-                      <ArtifactRow
-                        label="Scalability Model"
-                        url={s.final_scalability_model_url}
-                      files={slotFiles(s, "final_scalability_model")}
+                        files={slotFiles(s, "final_policy_document")}
                       />
                       <ArtifactRow
                         label="Presentation Deck"
                         url={s.final_presentation_deck_url}
-                      files={slotFiles(s, "final_presentation_deck")}
+                        files={slotFiles(s, "final_presentation_deck")}
                       />
+                      {/* Phase C used to ask for four separate documents. These
+                          two rows are shown ONLY where a team actually filled
+                          them, so nothing already submitted disappears from the
+                          jury's view, while new submissions stay to two rows. */}
+                      {(s.final_execution_plan_url ||
+                        slotFiles(s, "final_execution_plan").length > 0) && (
+                        <ArtifactRow
+                          label="Execution Plan (earlier format)"
+                          url={s.final_execution_plan_url}
+                          files={slotFiles(s, "final_execution_plan")}
+                        />
+                      )}
+                      {(s.final_scalability_model_url ||
+                        slotFiles(s, "final_scalability_model").length > 0) && (
+                        <ArtifactRow
+                          label="Scalability Model (earlier format)"
+                          url={s.final_scalability_model_url}
+                          files={slotFiles(s, "final_scalability_model")}
+                        />
+                      )}
                     </>
                   )}
                 </div>

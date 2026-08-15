@@ -380,38 +380,24 @@ export default async function MySubmissionsPage() {
       <PhaseCard
         phase="phase_c"
         title="Phase C · Final"
-        summary="Four artifacts required: policy doc, execution plan, scalability model, and pitch deck."
+        summary="Two things: your final report, and your pitch deck."
         saveAction={saveDraftC}
         submitAction={submitC}
       >
+        {/* One report, not three. Teams were pasting the same link into the
+            policy / execution / scalability fields anyway (26 of 108 used an
+            identical link for all three), and the jury rubric scores criteria
+            rather than artifacts — so a single consolidated report loses
+            nothing and stops the jury opening the same file three times. */}
         <DeliverableUpload
-          label="Final Policy Document"
+          label="Final Report"
           name="final_policy_document_url"
           defaultValue={subC?.final_policy_document_url ?? ""}
           submissionId={subC?.id ?? null}
           slot="final_policy_document"
           files={slotFiles(subC, "final_policy_document")}
           readOnly={locked(subC)}
-          required
-        />
-        <DeliverableUpload
-          label="Final Execution Plan"
-          name="final_execution_plan_url"
-          defaultValue={subC?.final_execution_plan_url ?? ""}
-          submissionId={subC?.id ?? null}
-          slot="final_execution_plan"
-          files={slotFiles(subC, "final_execution_plan")}
-          readOnly={locked(subC)}
-          required
-        />
-        <DeliverableUpload
-          label="Scalability Model"
-          name="final_scalability_model_url"
-          defaultValue={subC?.final_scalability_model_url ?? ""}
-          submissionId={subC?.id ?? null}
-          slot="final_scalability_model"
-          files={slotFiles(subC, "final_scalability_model")}
-          readOnly={locked(subC)}
+          hint="One document covering your policy, how it would be executed, and how it scales."
           required
         />
         <DeliverableUpload
@@ -424,6 +410,51 @@ export default async function MySubmissionsPage() {
           readOnly={locked(subC)}
           required
         />
+
+        {/* Teams who submitted under the old four-artifact format keep those
+            documents; the fields are shown read-only so nothing they uploaded
+            silently disappears from their own view. */}
+        {(subC?.final_execution_plan_url || subC?.final_scalability_model_url) && (
+          <div className="rounded-md border border-navy/10 bg-navy/[0.02] p-3 space-y-2">
+            <p className="text-xs text-navy/50">
+              Submitted earlier, when Phase C asked for four separate documents.
+              These are kept with your submission.
+            </p>
+            {subC?.final_execution_plan_url && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold uppercase tracking-widest text-navy/60">
+                  Execution Plan
+                </span>
+                <a
+                  href={subC.final_execution_plan_url}
+                  target="_blank"
+                  rel="noopener"
+                  className="text-xs text-yi-gold hover:underline truncate max-w-[220px]"
+                >
+                  Open →
+                </a>
+              </div>
+            )}
+            {subC?.final_scalability_model_url && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold uppercase tracking-widest text-navy/60">
+                  Scalability Model
+                </span>
+                <a
+                  href={subC.final_scalability_model_url}
+                  target="_blank"
+                  rel="noopener"
+                  className="text-xs text-yi-gold hover:underline truncate max-w-[220px]"
+                >
+                  Open →
+                </a>
+              </div>
+            )}
+            {/* Preserved on save so switching the form does not erase them. */}
+            <input type="hidden" name="final_execution_plan_url" value={subC?.final_execution_plan_url ?? ""} />
+            <input type="hidden" name="final_scalability_model_url" value={subC?.final_scalability_model_url ?? ""} />
+          </div>
+        )}
       </PhaseCard>
     </div>
   );

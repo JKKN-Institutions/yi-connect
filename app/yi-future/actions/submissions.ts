@@ -62,10 +62,32 @@ async function resolveTeamMemberSession(
 
 const PHASE_A_FIELDS = ["problem_definition_url"] as const;
 const PHASE_B_FIELDS = ["draft_solution_url"] as const;
+// Phase C asks for ONE report and ONE deck.
+//
+// It used to demand four separate artifacts — policy document, execution plan,
+// scalability model, deck. Teams did not work that way: of 108 Phase C
+// submissions, 26 pasted the SAME link into all three report fields, 33 had at
+// least two identical, 7 pasted a Drive folder, and 9 put a deck in the policy
+// field. The four fields were being treated as one document with extra steps,
+// and the jury saw the same file three times.
+//
+// Nothing scored them separately either — the rubric scores criteria
+// (solution_quality, feasibility_scalability, presentation), not artifacts, so
+// asking for one consolidated report changes no scoring.
+//
+// The two retired columns stay in the table and are still WRITTEN if a form
+// posts them, so every one of the 106 already-submitted Phase C rows keeps its
+// data and still displays in full. Only what NEW teams are asked for changes.
 const PHASE_C_FIELDS = [
   "final_policy_document_url",
   "final_execution_plan_url",
   "final_scalability_model_url",
+  "final_presentation_deck_url",
+] as const;
+
+/** What Phase C actually requires now: the report and the deck. */
+const PHASE_C_REQUIRED_FIELDS = [
+  "final_policy_document_url",
   "final_presentation_deck_url",
 ] as const;
 
@@ -182,13 +204,20 @@ export async function submitSubmission(input: {
     };
   }
 
-  // For Phase C require all 4
+  // Phase C requires the report and the deck. The two retired fields are still
+  // accepted if a form sends them, but are no longer demanded.
   if (input.phase === "phase_c") {
-    const missing = PHASE_C_FIELDS.filter((f) => !values[f]);
+    const LABEL: Record<string, string> = {
+      final_policy_document_url: "the final report",
+      final_presentation_deck_url: "the presentation deck",
+    };
+    const missing = PHASE_C_REQUIRED_FIELDS.filter((f) => !values[f]);
     if (missing.length > 0) {
       return {
         ok: false,
-        error: `Phase C requires all 4 artifacts. Missing: ${missing.join(", ")}`,
+        error: `Nothing was submitted. Phase C needs ${missing
+          .map((f) => LABEL[f] ?? f)
+          .join(" and ")}.`,
       };
     }
   }

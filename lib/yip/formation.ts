@@ -243,6 +243,19 @@ export type FormationState = {
    * leaving two screens disagreeing about who the Speaker is.
    */
   winners: Partial<Record<FormationStepKey, FormationWinner[]>>;
+  /**
+   * Every closed ballot's ranked vote counts, for the organiser to read.
+   *
+   * Closing a step reveals the result and then IMMEDIATELY archives the session
+   * (clearVoteResults), because a revealed ballot otherwise stays pinned to the
+   * participants' screens. 'archived' is a terminal, non-displayed status — so
+   * before this the counts vanished from the app the instant a step closed, and
+   * the only function that could return them (getVoteResults) had never been
+   * wired to a screen.
+   *
+   * Organiser-only, and totals only: who voted for whom is never assembled here.
+   */
+  tallies: Partial<Record<FormationStepKey, FormationBallotTally[]>>;
 };
 
 /** One seat filled by an election step. */
@@ -251,6 +264,99 @@ export type FormationWinner = {
   label: string;
   name: string;
 };
+
+/** One candidate's line in a closed ballot's tally. */
+export type FormationTallyEntry = {
+  name: string;
+  constituencyNumber: number | null;
+  partyName: string | null;
+  votes: number;
+  /** Level with the highest count in this ballot — plural on a tie. */
+  isTop: boolean;
+};
+
+/**
+ * One closed ballot's result, ranked highest first.
+ *
+ * A party-leader step opens one of these PER PARTY, so `label` carries the party
+ * name; House-wide (Speaker) and bench (PM / LoP) ballots leave it null.
+ *
+ * `isTop` marks whoever is level on the highest count. It does NOT decide the
+ * seat — who actually won is `FormationState.winners`, read from the roles
+ * written at reveal. Keeping the two separate means this view never
+ * re-implements computeElectionOutcome and so can never quietly disagree with
+ * it: a runoff, a tie-break or a hand-correction shows up in `winners` while the
+ * raw counts here stay exactly what was cast.
+ */
+export type FormationBallotTally = {
+  sessionId: string;
+  label: string | null;
+  totalVotes: number;
+  entries: FormationTallyEntry[];
+};
+
+/**
+ * The tallies as a CSV an organiser can keep or hand on.
+ *
+ * One row per candidate per ballot. Ballots that produced no votes are still
+ * listed, with a zero row, so an empty ballot cannot be mistaken for a missing
+ * one. Rank restarts within each ballot; ties share a rank.
+ */
+export function buildFormationTalliesCsv(
+  eventName: string,
+  tallies: Partial<Record<FormationStepKey, FormationBallotTally[]>>
+): string {
+  const esc = (v: unknown): string => {
+    const s = v == null ? "" : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines: string[] = [
+    ["Event", "Election", "Ballot", "Rank", "Candidate", "Constituency", "Party", "Votes", "Share %"]
+      .map(esc)
+      .join(","),
+  ];
+
+  for (const def of FORMATION_STEPS) {
+    for (const ballot of tallies[def.key] ?? []) {
+      if (ballot.entries.length === 0) {
+        lines.push(
+          [eventName, def.label, ballot.label ?? "All members", "", "(no votes cast)", "", "", 0, ""]
+            .map(esc)
+            .join(",")
+        );
+        continue;
+      }
+      let rank = 0;
+      let lastVotes: number | null = null;
+      ballot.entries.forEach((e, i) => {
+        // Ties share a rank; the next distinct count skips ahead (1,2,2,4).
+        if (lastVotes === null || e.votes !== lastVotes) rank = i + 1;
+        lastVotes = e.votes;
+        const share =
+          ballot.totalVotes > 0
+            ? Math.round((e.votes / ballot.totalVotes) * 1000) / 10
+            : 0;
+        lines.push(
+          [
+            eventName,
+            def.label,
+            ballot.label ?? "All members",
+            rank,
+            e.name,
+            e.constituencyNumber ?? "",
+            e.partyName ?? "",
+            e.votes,
+            share,
+          ]
+            .map(esc)
+            .join(",")
+        );
+      });
+    }
+  }
+
+  return lines.join("\n");
+}
 
 /**
  * The parliament_role values each election step seats.

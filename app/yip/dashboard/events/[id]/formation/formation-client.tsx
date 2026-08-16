@@ -832,6 +832,45 @@ export function FormationClient({
                     </p>
                   )}
 
+                  {/* Who this step seated. Without it a finished election read
+                      as turnout and nothing else, and the organiser had to
+                      leave the page to find out who had won. */}
+                  {isDone && def.mode === "election" && (
+                    <div className="rounded-xl border border-[#1a1a3e]/10 bg-[#1a1a3e]/[0.02] px-4 py-3">
+                      {(state?.winners?.[def.key] ?? []).length > 0 ? (
+                        <>
+                          <p
+                            className="text-[10px] font-bold uppercase tracking-[0.16em]"
+                            style={{ color: SAFFRON }}
+                          >
+                            Elected
+                          </p>
+                          <dl className="mt-1.5 space-y-1">
+                            {(state?.winners?.[def.key] ?? []).map((w, i) => (
+                              <div
+                                key={`${w.label}-${w.name}-${i}`}
+                                className="flex flex-wrap items-baseline gap-x-2"
+                              >
+                                <dt className="text-xs text-[#1a1a3e]/55">{w.label}</dt>
+                                <dd
+                                  className="text-sm font-semibold"
+                                  style={{ color: INK }}
+                                >
+                                  {w.name}
+                                </dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </>
+                      ) : (
+                        <p className="text-xs text-[#1a1a3e]/55">
+                          This step is closed but no one holds its post yet. Check
+                          Positions — the seat may have been cleared by hand.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {/* ── Allocation (organiser step 1) ── */}
                   {def.key === "allocation" && !isDone && (
                     <div className="flex flex-wrap items-end gap-3">

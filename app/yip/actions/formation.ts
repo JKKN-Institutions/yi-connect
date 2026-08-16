@@ -21,6 +21,7 @@ import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import {
   FORMATION_STEPS,
   FORMATION_ANCHOR_SESSION_KEY,
+  FORMATION_STEP_ROLES,
   formationStepDef,
   stepDeadlinePassed,
   isTerminalTieSession,
@@ -35,6 +36,7 @@ import {
   type FormationCloseResult,
   type FormationAnnouncement,
   type FormationAnnouncementPerson,
+  type FormationWinner,
 } from "@/lib/yip/formation";
 import {
   openVote,
@@ -314,6 +316,7 @@ export async function getFormationState(
   const sessions: Record<string, FormationSessionLite> = {};
   const voteCounts: Record<string, number> = {};
   const turnout: FormationState["turnout"] = {};
+  const winners: FormationState["winners"] = {};
 
   if (allSessionIds.length > 0) {
     const { data: sessionRows } = await supabase
@@ -355,9 +358,49 @@ export async function getFormationState(
     // step totals either way. Same eligibility rules as getFormationTurnout.
     const { data: participants } = await supabase
       .from("participants")
-      .select("id, party_id, party_side")
+      .select("id, party_id, party_side, full_name, parliament_role")
       .eq("event_id", eventId);
     const everyone = participants ?? [];
+
+    // Who each closed election step seated. Read from the roles people hold
+    // NOW rather than from a stored tally, so a hand-correction on Positions
+    // shows here too instead of the two screens disagreeing.
+    const nameByRole = new Map<string, string[]>();
+    for (const p of everyone) {
+      const role = (p as { parliament_role?: string | null }).parliament_role;
+      const name = (p as { full_name?: string | null }).full_name;
+      if (!role || !name) continue;
+      nameByRole.set(role, [...(nameByRole.get(role) ?? []), name]);
+    }
+    for (const [stepKey, roles] of Object.entries(FORMATION_STEP_ROLES)) {
+      const seated: FormationWinner[] = [];
+      for (const { role, label } of roles ?? []) {
+        for (const name of nameByRole.get(role) ?? []) {
+          seated.push({ label, name });
+        }
+      }
+      if (seated.length > 0) winners[stepKey as FormationStepKey] = seated;
+    }
+
+    // Party leaders hang off parties.party_leader_id, not a parliament_role.
+    const { data: partyRows } = await supabase
+      .from("parties")
+      .select("id, name, party_number, party_leader_id")
+      .eq("event_id", eventId)
+      .order("party_number");
+    const nameById = new Map(
+      everyone
+        .map((p) => [p.id, (p as { full_name?: string | null }).full_name] as const)
+        .filter((e): e is readonly [string, string] => Boolean(e[1]))
+    );
+    const leaders: FormationWinner[] = [];
+    for (const party of partyRows ?? []) {
+      const leaderName = party.party_leader_id
+        ? nameById.get(party.party_leader_id)
+        : undefined;
+      if (leaderName) leaders.push({ label: party.name, name: leaderName });
+    }
+    if (leaders.length > 0) winners.party_leader_ballots = leaders;
     for (const step of steps) {
       if (step.session_ids.length === 0) continue;
       let eligible = 0;
@@ -393,6 +436,7 @@ export async function getFormationState(
       sessions,
       voteCounts,
       turnout,
+      winners,
     },
   };
 }

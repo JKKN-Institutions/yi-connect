@@ -183,9 +183,25 @@ function cleanFlags(v: unknown): string[] {
  * and the DB CHECK constraints would otherwise reject the whole batch on one
  * bad number.
  */
+/** Cap on the organiser-only note. Long enough to be useful, short enough to read. */
+export const MAX_ANALYSIS_NOTE_CHARS = 1200;
+
 export async function applyAttemptScores(
   attemptId: string,
-  answers: readonly ScoredAnswerInput[]
+  answers: readonly ScoredAnswerInput[],
+  /**
+   * Optional ORGANISER-ONLY note on what this candidate argued, written by the
+   * same routine pass that produced the marks.
+   *
+   * It rides along with the scores rather than living behind its own queue
+   * because the routine already holds these answers when it scores them — a
+   * second claim would re-read the same rows, bill twice, and let the note and
+   * the marks drift onto different versions of the paper.
+   *
+   * Never reaches a participant surface: the student's questionnaire card reads
+   * no scoring field at all.
+   */
+  analysisNote?: string | null
 ): Promise<{ ok: true; total: number; max: number; pct: number } | { ok: false; error: string }> {
   const sb = await createServiceClient();
   const now = new Date().toISOString();
@@ -213,6 +229,18 @@ export async function applyAttemptScores(
       })
       .eq("attempt_id", attemptId)
       .eq("position", a.position);
+    if (error) return { ok: false, error: error.message };
+  }
+
+  // Trimmed and capped rather than trusted: this is free text from an external
+  // caller and it renders straight onto the organiser's screen. A blank or
+  // whitespace-only note is left as NULL so the UI shows "no note" instead of
+  // an empty box pretending to be one.
+  if (typeof analysisNote === "string") {
+    const note = analysisNote.trim().slice(0, MAX_ANALYSIS_NOTE_CHARS);
+    const { error } = await tbl(sb, "questionnaire_attempts")
+      .update({ analysis_note: note === "" ? null : note, updated_at: now })
+      .eq("id", attemptId);
     if (error) return { ok: false, error: error.message };
   }
 

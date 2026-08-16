@@ -22,6 +22,7 @@
  */
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { enqueueAiDraft, getAiDraft } from "@/lib/yip/ai/drafts";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
@@ -113,6 +114,8 @@ type AttemptDb = {
   max_score: number | null;
   pct: number | null;
   score_error: string | null;
+  /** ORGANISER-ONLY AI read of this paper. Never sent to a student surface. */
+  analysis_note: string | null;
 };
 type AnswerDb = {
   id: string;
@@ -1060,6 +1063,12 @@ export async function getQuestionnaireAttemptDetail(
       flags: string[];
     }[];
     maxPerAnswer: number;
+    /**
+     * The routine's organiser-only read of this paper, if it wrote one. Null
+     * until the paper is marked — and null forever if the routine sent marks
+     * without a note, which is a valid response.
+     */
+    analysisNote: string | null;
   }>
 > {
   const access = await getYipEventAccess(eventId);
@@ -1072,7 +1081,7 @@ export async function getQuestionnaireAttemptDetail(
   // another event cannot be read through an event the caller happens to manage.
   const { data: attempt } = await attemptsT(sb)
     .select(
-      "id, event_id, participant_id, post_key, started_at, expires_at, submitted_at, scoring_status, total_score, max_score, pct, score_error"
+      "id, event_id, participant_id, post_key, started_at, expires_at, submitted_at, scoring_status, total_score, max_score, pct, score_error, analysis_note"
     )
     .eq("id", attemptId)
     .eq("event_id", eventId)
@@ -1102,6 +1111,7 @@ export async function getQuestionnaireAttemptDetail(
         flags: toFlags(a.flags),
       })),
       maxPerAnswer: MAX_PER_ANSWER,
+      analysisNote: attempt.analysis_note ?? null,
     },
   };
 }
@@ -1266,4 +1276,81 @@ export async function rescoreQuestionnaireAttempt(
   revalidateAdmin(eventId);
   await pingScoringRoutine();
   return { success: true, data: { queued: true } };
+}
+
+// ─── Question-bank review (organiser-only, out-of-band) ──────────────────
+
+/**
+ * Ask the routine to read this event's questions and write back what it makes
+ * of them.
+ *
+ * WHY THIS EXISTS: some of the bank was AI-drafted in the style of the
+ * originals, and 180 candidates answered it before a human read it back
+ * (Director, 2026-08-16). This is a second reader on the WORDING — ambiguity,
+ * leading phrasing, two questions that ask the same thing, a question that
+ * cannot be answered in the time allowed.
+ *
+ * It reviews the QUESTIONS, never the answers: the grounding payload is built
+ * from yip.questionnaire_questions alone (see
+ * buildQuestionnaireQuestionReviewGrounding), so no candidate's work is in
+ * scope and none can leak.
+ *
+ * Same doctrine as everything else here — the app enqueues and pings; the model
+ * runs outside. `pinged` distinguishes "being written now" from "queued for the
+ * next scheduled run" so the UI can say which.
+ */
+export async function requestQuestionnaireQuestionReview(
+  eventId: string
+): Promise<R<{ id: string; pinged: boolean }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event." };
+  }
+
+  const res = await enqueueAiDraft({
+    eventId,
+    kind: "questionnaire_question_review",
+    subjectId: null,
+    // The organiser pressed the button: redo it even if a review already
+    // exists, because the usual reason to press it is that the questions
+    // changed since the last one.
+    force: true,
+  });
+  if ("error" in res) return { success: false, error: res.error };
+
+  await pingScoringRoutine();
+  revalidateAdmin(eventId);
+  return { success: true, data: { id: res.id, pinged: Boolean(process.env.YIP_AI_LIVE_TRIGGER_URL) } };
+}
+
+/**
+ * The current question-bank review, if there is one.
+ *
+ * `status` is the draft's own lifecycle: 'requested'/'generating' means the
+ * routine has not written it yet, 'ready' means the text below is final. There
+ * is no approval gate — this never reaches a student, only the organiser
+ * reading their own question set.
+ */
+export async function getQuestionnaireQuestionReview(eventId: string): Promise<
+  R<{
+    status: string | null;
+    text: string | null;
+    generatedAt: string | null;
+    modelNote: string | null;
+  }>
+> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) {
+    return { success: false, error: "Not authorized to view this event." };
+  }
+  const row = await getAiDraft(eventId, "questionnaire_question_review", null, null);
+  return {
+    success: true,
+    data: {
+      status: row?.status ?? null,
+      text: row?.draft_text ?? null,
+      generatedAt: row?.generated_at ?? null,
+      modelNote: row?.model_note ?? null,
+    },
+  };
 }

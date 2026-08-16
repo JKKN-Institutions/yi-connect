@@ -341,6 +341,7 @@ export async function getFormationState(
         partyId?: string;
         side?: "ruling" | "opposition";
         closesAt?: string;
+        candidateIds?: string[];
       };
       sessions[s.id] = {
         id: s.id,
@@ -349,6 +350,9 @@ export async function getFormationState(
         partyId: cfg.partyId ?? null,
         side: cfg.side ?? null,
         closesAt: cfg.closesAt ?? null,
+        // Who was ON the ballot, which is NOT the same as who drew a vote —
+        // the tally seeds from this so a nominee on zero still appears.
+        candidateIds: Array.isArray(cfg.candidateIds) ? cfg.candidateIds : [],
       };
     }
 
@@ -433,7 +437,14 @@ export async function getFormationState(
       const ballots: FormationBallotTally[] = [];
       for (const sessionId of step.session_ids) {
         const counts = choicesBySession.get(sessionId) ?? new Map<string, number>();
-        const entries = [...counts.entries()]
+        // Seed every nominee at zero FIRST. Building only from cast votes drops
+        // a candidate who drew none — and a nominee who stood and got nothing
+        // is a result, not an absence. The Speaker ballot had 20 nominees and
+        // 19 with votes; the 20th used to vanish silently.
+        const withZeros = new Map<string, number>();
+        for (const id of sessions[sessionId]?.candidateIds ?? []) withZeros.set(id, 0);
+        for (const [id, n] of counts) withZeros.set(id, n);
+        const entries = [...withZeros.entries()]
           .map(([candidateId, votesFor]) => {
             const p = personById.get(candidateId);
             return {

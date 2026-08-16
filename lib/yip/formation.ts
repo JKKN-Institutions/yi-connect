@@ -208,6 +208,12 @@ export type FormationSessionLite = {
   partyId: string | null;
   side: "ruling" | "opposition" | null;
   closesAt: string | null;
+  /**
+   * Who was ON this ballot, from the session's own config — NOT who drew a
+   * vote. The tally seeds from this so a nominee on zero votes still appears;
+   * standing and getting nothing is a result, not an absence.
+   */
+  candidateIds: string[];
 };
 
 export type FormationState = {

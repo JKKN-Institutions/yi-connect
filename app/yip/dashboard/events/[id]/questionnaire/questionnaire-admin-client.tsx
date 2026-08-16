@@ -20,6 +20,7 @@ import {
   Info,
   Loader2,
   RefreshCw,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/yip/ui/button";
@@ -38,8 +39,10 @@ import {
   exportQuestionnaireResponsesCsv,
   getQuestionnaireAttemptDetail,
   getQuestionnaireOverview,
+  getQuestionnaireQuestionReview,
   getQuestionnaireResults,
   listQuestionnaireQuestions,
+  requestQuestionnaireQuestionReview,
   rescoreQuestionnaireAttempt,
   saveQuestionnaireQuestions,
   setQuestionnaireWindow,
@@ -69,6 +72,14 @@ async function callAction<T>(
 
 type Detail = Awaited<ReturnType<typeof getQuestionnaireAttemptDetail>>;
 
+/** The AI's read of the QUESTION BANK (never of anybody's answers). */
+type QuestionReview = {
+  status: string | null;
+  text: string | null;
+  generatedAt: string | null;
+  modelNote: string | null;
+};
+
 export function QuestionnaireAdminClient({
   eventId,
   eventName,
@@ -79,6 +90,7 @@ export function QuestionnaireAdminClient({
   initialUnscored,
   initialMissing,
   initialError,
+  initialReview,
 }: {
   eventId: string;
   eventName: string;
@@ -89,6 +101,7 @@ export function QuestionnaireAdminClient({
   initialUnscored: number;
   initialMissing: QuestionnaireMissingRow[];
   initialError: string | null;
+  initialReview: QuestionReview;
 }) {
   const [posts, setPosts] = useState(initialPosts);
   const [rows, setRows] = useState(initialRows);
@@ -102,13 +115,16 @@ export function QuestionnaireAdminClient({
   const [editLocked, setEditLocked] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
+  const [review, setReview] = useState<QuestionReview>(initialReview);
 
   const refresh = useCallback(async () => {
-    const [o, r] = await Promise.all([
+    const [o, r, qr] = await Promise.all([
       callAction(() => getQuestionnaireOverview(eventId)),
       callAction(() => getQuestionnaireResults(eventId)),
+      callAction(() => getQuestionnaireQuestionReview(eventId)),
     ]);
     if (o.success) setPosts(o.data.posts);
+    if (qr.success) setReview(qr.data);
     if (r.success) {
       setRows(r.data.rows);
       setUnscored(r.data.unscored);
@@ -179,6 +195,26 @@ export function QuestionnaireAdminClient({
       );
       setEditing(null);
       await refresh();
+    });
+  }
+
+  /**
+   * Ask the routine to read the question bank. The app never calls a model —
+   * this queues the work and pings; the text arrives on a later refresh.
+   */
+  function askForQuestionReview() {
+    startTransition(async () => {
+      const res = await callAction(() => requestQuestionnaireQuestionReview(eventId));
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      setReview((r) => ({ ...r, status: "requested", text: null }));
+      toast.success(
+        res.data.pinged
+          ? "Asked for a read of the questions — it usually lands in a minute or two. Hit Refresh."
+          : "Queued. It will be written on the next scheduled run."
+      );
     });
   }
 
@@ -384,6 +420,55 @@ export function QuestionnaireAdminClient({
         ))}
       </div>
 
+      {/* ── AI read of the QUESTIONS (not of anybody's answers) ── */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p
+                className="text-[10px] font-bold uppercase tracking-[0.16em]"
+                style={{ color: SAFFRON }}
+              >
+                A second reader
+              </p>
+              <p className="font-semibold" style={{ color: INK }}>
+                AI read of the questions
+              </p>
+              <p className="mt-1 max-w-2xl text-sm text-[#1a1a3e]/60">
+                Reads the question set itself — wording that could be taken two ways,
+                questions that lead to an answer, two that ask the same thing, or one
+                nobody could answer in the time. It never sees a student&apos;s answers.
+              </p>
+            </div>
+            {canManage && (
+              <Button variant="outline" onClick={askForQuestionReview} disabled={isPending}>
+                <Sparkles className="size-4" />
+                {review.text ? "Read them again" : "Read the questions"}
+              </Button>
+            )}
+          </div>
+
+          {review.text ? (
+            <div className="mt-3 rounded-xl border border-[#1a1a3e]/10 bg-[#1a1a3e]/[0.02] px-4 py-3">
+              <p className="whitespace-pre-wrap text-sm text-[#1a1a3e]/85">{review.text}</p>
+              <p className="mt-2 text-[11px] text-[#1a1a3e]/50">
+                Advisory. Changing a question is your call — and a post whose first
+                paper is already in stays locked, so those notes are for the next round.
+              </p>
+            </div>
+          ) : review.status === "requested" || review.status === "generating" ? (
+            <p className="mt-3 flex items-center gap-2 text-sm text-[#1a1a3e]/60">
+              <Loader2 className="size-4 animate-spin" />
+              Being written now — press Refresh in a minute or two.
+            </p>
+          ) : (
+            <p className="mt-3 text-sm text-[#1a1a3e]/50">
+              Nothing read yet.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       {/* ── Results ── */}
       <Card>
         <CardContent className="p-0">
@@ -499,6 +584,25 @@ export function QuestionnaireAdminClient({
                     <p className="text-sm text-[#b91c1c]">{detail.error}</p>
                   ) : (
                     <div className="space-y-4">
+                      {detail.data.analysisNote && (
+                        <div
+                          className="rounded-xl border px-4 py-3"
+                          style={{ background: "#fff", borderColor: "#1a1a3e1a" }}
+                        >
+                          <p
+                            className="text-[10px] font-bold uppercase tracking-[0.16em]"
+                            style={{ color: SAFFRON }}
+                          >
+                            What this paper argued · AI read
+                          </p>
+                          <p className="mt-1 whitespace-pre-wrap text-sm text-[#1a1a3e]/80">
+                            {detail.data.analysisNote}
+                          </p>
+                          <p className="mt-2 text-[11px] text-[#1a1a3e]/50">
+                            A second reader, not a verdict. The student never sees this.
+                          </p>
+                        </div>
+                      )}
                       {detail.data.answers.map((a) => (
                         <div key={a.position}>
                           <p className="text-xs font-semibold" style={{ color: INK }}>

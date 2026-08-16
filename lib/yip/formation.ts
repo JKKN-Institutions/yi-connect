@@ -229,6 +229,56 @@ export type FormationState = {
    * partition the electorate, so per-session sums are step totals.
    */
   turnout: Partial<Record<FormationStepKey, { eligible: number; voted: number }>>;
+  /**
+   * Who each election step actually seated, so a closed step can say so.
+   *
+   * Before this the console reported only "155/196 voted" and never named the
+   * winner. The result WAS recorded correctly — roles are written at reveal —
+   * but an organiser had to leave the page for Positions or the Oath
+   * Announcement to find out who had won the election they had just run, which
+   * reads as "nothing happened".
+   *
+   * Read from the CURRENT holders of the roles a step seats, not from a stored
+   * tally, so a later hand-correction on Positions shows here too instead of
+   * leaving two screens disagreeing about who the Speaker is.
+   */
+  winners: Partial<Record<FormationStepKey, FormationWinner[]>>;
+};
+
+/** One seat filled by an election step. */
+export type FormationWinner = {
+  /** The post, e.g. "Speaker", "Deputy Speaker", "Party C". */
+  label: string;
+  name: string;
+};
+
+/**
+ * The parliament_role values each election step seats.
+ *
+ * The Speaker ballot's runner-up becomes Deputy Speaker (see the ballot
+ * subtitle in app/yip/actions/voting.ts), so both belong to step 2.
+ * party_leader_ballots is deliberately absent: its winners hang off
+ * parties.party_leader_id rather than a parliament_role, and are resolved
+ * separately.
+ *
+ * A role listed here that nobody holds is simply not shown — these are the
+ * seats a step CAN fill, not seats it must have filled.
+ */
+export const FORMATION_STEP_ROLES: Partial<
+  Record<FormationStepKey, { role: string; label: string }[]>
+> = {
+  speaker_ballot: [
+    { role: "speaker", label: "Speaker" },
+    { role: "deputy_speaker", label: "Deputy Speaker" },
+  ],
+  pm_ballot: [
+    { role: "prime_minister", label: "Prime Minister" },
+    { role: "deputy_prime_minister", label: "Deputy Prime Minister" },
+  ],
+  lop_ballot: [
+    { role: "leader_of_opposition", label: "Leader of Opposition" },
+    { role: "coalition_leader", label: "Coalition Leader" },
+  ],
 };
 
 export type FormationPendingParticipant = {

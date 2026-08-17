@@ -292,7 +292,30 @@ claude.ai routine. Moving them is a separate decision.
 
 ---
 
-## 8. Open questions before anyone builds
+## 8. Decisions (Director, 2026-08-16)
+
+Taken in a decision interview. Recorded because most cannot be recovered from the
+code, and one overrides my recommendation.
+
+| # | Decision | Why it matters |
+| --- | --- | --- |
+| 1 | **Mark all 180 in one go** — no test batch | **Against my recommendation** (I proposed 10 first). Reasonable on the strength of decision 5: a full re-mark is cheap and non-destructive, so being wrong costs ~30 minutes, not a redone selection. |
+| 2 | **Warn on the questionnaire screen when marking hasn't moved for 30 minutes** | The runner is one machine and a pending job never times out. Without this, a cold lane and a working lane look identical. |
+| 3 | **Keep BOTH routes** — Max lane and the claude.ai routine | The claude.ai routine stays as the fallback for when the seat is off. The cost is two systems to keep in step, which is the thing a shared engine exists to avoid. §1B of `yip-ai-routine.md` therefore stays live rather than being retired. |
+| 4 | **A reply the app can't read flags that paper and marking continues** — no auto-retry | One malformed answer must never hold up the other 179. `markAttemptScoringFailed` and the existing single-paper re-score button already cover recovery. |
+| 5 | **A "clear all marks and re-mark" button, per post** | The safety net that makes decision 1 reasonable. Clears scores ONLY — never touches a student's answers. |
+| 6 | **Flag only the odd papers before the shortlist is read** — no blanket gate | Two cases worth surfacing: a high scorer carrying red flags, and candidates level on points at the shortlist cut-off. Everything else the organiser simply reads. No extra click in the normal path. |
+| 7 | **A blank paper is still marked — zero, and no written note** | So it appears as a real zero instead of going missing, and cannot be confused with a paper that failed to mark. Same principle as the zero-vote fix in #952: standing and scoring nothing is a result, not an absence. |
+| 8 | **Live count while marking** (e.g. "96 of 180 marked") | Over ~30 minutes, a silent screen is indistinguishable from a broken one. Deliberately **no** time estimate — papers queue behind MyJKKN's own work, which the app cannot see, so any ETA would be a guess presented as a fact. |
+
+**What decision 3 unblocks immediately.** Because the claude.ai route is staying
+rather than being replaced, §1B of `yip-ai-routine.md` is still the fastest way to
+get the current 180 papers marked. It needs only the paste and the secret, and
+waits on none of the Max-lane work above.
+
+---
+
+## 9. Open questions before anyone builds
 
 - **Is Yi Connect registered on the AI door at all?** Grepping MyJKKN for
   `yi-connect` / `yip` found only unrelated matches. Step 5.1 may be a

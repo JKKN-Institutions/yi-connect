@@ -8,6 +8,7 @@ import {
 } from "@/lib/yip/go-independent";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { fetchCommitteeTopicForEvent } from "@/lib/yip/committee-topics";
 import {
   getEventSchoolNumbers,
   schoolNumberOf,
@@ -306,13 +307,14 @@ export default async function ParticipantPage() {
   let committeeTopic: string | null = null;
   let committeeScheme: string | null = null;
   if (participant.committee_name) {
-    const { data: ct } = await supabase
-      .from("topics")
-      .select("description, linked_scheme")
-      .eq("category", "committee")
-      .eq("title", participant.committee_name)
-      .eq("is_active", true)
-      .maybeSingle();
+    // Resolved for this event's round level: a ministry name can now be held
+    // by both a shared row and a regional-round row, and .maybeSingle() would
+    // error (and silently blank the topic) the moment two rows matched.
+    const ct = await fetchCommitteeTopicForEvent(
+      supabase as never,
+      participant.event_id,
+      participant.committee_name
+    );
     committeeTopic = ct?.description ?? null;
     committeeScheme = ct?.linked_scheme ?? null;
   }

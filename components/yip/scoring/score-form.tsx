@@ -605,17 +605,15 @@ export function ScoreForm({
     );
   };
 
-  const roleLabel = participant.parliament_role
-    ? ROLE_LABELS[participant.parliament_role] ?? participant.parliament_role
-    : "Participant";
-  const roleColor = participant.parliament_role
-    ? ROLE_COLORS[participant.parliament_role] ?? "bg-gray-500 text-white"
-    : "bg-gray-500 text-white";
-  // Header tint: Ruling/Opposition keep their colour; a benchless party (side
-  // null but a party number) gets a neutral saffron tint; no party = gray.
-  const partyTint = participant.party_side
-    ? `${PARTY_COLORS[participant.party_side as keyof typeof PARTY_COLORS].bg} ${PARTY_COLORS[participant.party_side as keyof typeof PARTY_COLORS].border}`
-    : participant.party_number != null
+  // Header tint, BENCH-BLIND. This used to be PARTY_COLORS[party_side], which
+  // painted the treasury bench and the opposition bench two different colours —
+  // the side was legible at a glance even with every word about it removed. It
+  // is now ONE neutral saffron for any party affiliation (so a delegate who has
+  // been allocated still looks allocated) and gray for none. party_side is
+  // still read by the resolution above and still stored on the mark; it is only
+  // never drawn.
+  const partyTint =
+    participant.party_side || participant.party_number != null
       ? "bg-[#FF9933]/5 border-[#FF9933]/30"
       : null;
 

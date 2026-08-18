@@ -3,13 +3,28 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { revalidatePath } from "next/cache";
+import {
+  normaliseRoundLevels,
+  roundLevelScopeKey,
+  scopesOverlap,
+  describeRoundLevels,
+  type RoundLevel,
+} from "@/lib/yip/round-level";
 
 // Global, CRUDable catalog of named scoring sessions (BUG-385 follow-up).
 //
 // Keyed by a stable session_key so distinct sessions sharing an agenda_type are
-// each their own row. Global — applies to every chapter's events, like rubrics.
-// Flexible JSONB parameters (subset/re-weight of 110 or custom; evaluation +
-// participation). session_weight drives the cross-session weighted average.
+// each their own row. Flexible JSONB parameters (subset/re-weight of 110 or
+// custom; evaluation + participation). session_weight drives the cross-session
+// weighted average.
+//
+// ROUND LEVEL (2026-08)
+// A sheet may now be scoped to chapter / regional / national rounds via
+// `levels`. NULL = every round, which is what every pre-existing sheet means,
+// so nothing changes until a scope is set. Because regional agenda rows already
+// carry the SAME session_key values as chapter ones, two sheets may now share a
+// session_key as long as their level scopes do not overlap — the identity of a
+// row is therefore its `id`, not its session_key.
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -35,11 +50,18 @@ export type SessionParametersConfig = {
   total_max: number;
   session_weight: number;
   is_active: boolean;
+  /** Round levels this sheet applies to. null = every round. */
+  levels: RoundLevel[] | null;
   created_at: string | null;
   updated_at: string | null;
 };
 
 export type SessionParametersInput = {
+  /**
+   * The row being edited. Absent = creating. Identity is the id, not the
+   * session_key, because two sheets may share a key at different levels.
+   */
+  id?: string;
   session_key: string;
   label: string;
   agenda_type?: string | null;
@@ -47,6 +69,8 @@ export type SessionParametersInput = {
   parameters: SessionParameter[];
   session_weight?: number;
   is_active?: boolean;
+  /** Round levels; empty / all three / omitted all mean "every round". */
+  levels?: string[] | null;
 };
 
 const PATH = "/dashboard/admin/session-parameters";
@@ -106,6 +130,7 @@ function rowToConfig(row: {
   total_max: number;
   session_weight: number;
   is_active: boolean | null;
+  levels?: string[] | null;
   created_at: string | null;
   updated_at: string | null;
 }): SessionParametersConfig {
@@ -128,6 +153,8 @@ function rowToConfig(row: {
     total_max: row.total_max,
     session_weight: Number(row.session_weight),
     is_active: row.is_active !== false,
+    // NULL stays NULL — "every round", the meaning of every pre-levels row.
+    levels: normaliseRoundLevels(row.levels),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -142,6 +169,13 @@ export async function listSessionParameters(): Promise<SessionParametersConfig[]
   return (data ?? []).map(rowToConfig);
 }
 
+/**
+ * One sheet by key. A key may now be held by more than one row (same session,
+ * different round levels), so this takes the lowest display_order rather than
+ * .maybeSingle(), which would raise on a second row. Level-aware resolution is
+ * resolveSessionConfig() in lib/yip/session-config-resolution.ts — use that when
+ * the answer must match what a juror marked against.
+ */
 export async function getSessionParametersByKey(
   sessionKey: string
 ): Promise<SessionParametersConfig | null> {
@@ -150,11 +184,18 @@ export async function getSessionParametersByKey(
     .from("session_parameters")
     .select("*")
     .eq("session_key", sessionKey)
-    .maybeSingle();
-  return data ? rowToConfig(data) : null;
+    .order("display_order", { ascending: true })
+    .limit(1);
+  return data?.[0] ? rowToConfig(data[0]) : null;
 }
 
-// Create or update a session (unique on session_key).
+// Create or update a session.
+//
+// Identity is the row `id`. A session_key alone is no longer unique: the same
+// session may have one sheet for chapter rounds and another for regional ones.
+// When no id is supplied we look for the row holding the SAME key at the SAME
+// scope and update it — which is exactly what the previous
+// upsert(onConflict: session_key) did while every sheet was global.
 export async function upsertSessionParameters(
   input: SessionParametersInput
 ): Promise<ActionResult<SessionParametersConfig>> {
@@ -176,25 +217,64 @@ export async function upsertSessionParameters(
     return { success: false, error: "Session weight must be a number >= 0" };
   }
 
+  const levels = normaliseRoundLevels(input.levels);
+
   const supabase = await createServiceClient();
-  const { data, error } = await supabase
+
+  // Every row already holding this key, so we can tell "edit this one" from
+  // "add a second sheet for another level" from "two sheets fighting over the
+  // same level".
+  const { data: siblings } = await supabase
     .from("session_parameters")
-    .upsert(
-      {
-        session_key,
-        label,
-        agenda_type: input.agenda_type ?? null,
-        display_order: Math.round(Number(input.display_order ?? 0)) || 0,
-        parameters: parsed.parameters as unknown as never,
-        total_max: parsed.total_max,
-        session_weight,
-        is_active: input.is_active !== false,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "session_key" }
-    )
-    .select()
-    .single();
+    .select("id, levels")
+    .eq("session_key", session_key);
+
+  const sameKeyRows = (siblings ?? []) as { id: string; levels?: string[] | null }[];
+
+  // The row we are writing: the one named by id, else the one at this exact
+  // scope (the old overwrite-on-same-key behaviour), else a brand new row.
+  const scope = roundLevelScopeKey(levels);
+  const targetId =
+    input.id ??
+    sameKeyRows.find((r) => roundLevelScopeKey(r.levels) === scope)?.id ??
+    null;
+
+  // Two SCOPED sheets must not both claim a level — resolution would be
+  // ambiguous. A global sheet never conflicts: it is the documented fallback
+  // that a level-scoped sheet overrides.
+  const clash = sameKeyRows.find(
+    (r) => r.id !== targetId && scopesOverlap(normaliseRoundLevels(r.levels), levels)
+  );
+  if (clash) {
+    return {
+      success: false,
+      error: `Another sheet with the key "${session_key}" already covers ${describeRoundLevels(
+        levels
+      )}. Change the rounds it applies to, or edit that sheet instead.`,
+    };
+  }
+
+  const values = {
+    session_key,
+    label,
+    agenda_type: input.agenda_type ?? null,
+    display_order: Math.round(Number(input.display_order ?? 0)) || 0,
+    parameters: parsed.parameters as unknown as never,
+    total_max: parsed.total_max,
+    session_weight,
+    is_active: input.is_active !== false,
+    levels: levels as never,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = targetId
+    ? await supabase
+        .from("session_parameters")
+        .update(values)
+        .eq("id", targetId)
+        .select()
+        .single()
+    : await supabase.from("session_parameters").insert(values).select().single();
 
   if (error || !data) {
     return { success: false, error: error?.message ?? "Failed to save session" };
@@ -204,18 +284,17 @@ export async function upsertSessionParameters(
   return { success: true, data: rowToConfig(data) };
 }
 
-// Hard-delete a session (true CRUD — defaults can be removed). Safe: nothing
+// Hard-delete ONE sheet (true CRUD — defaults can be removed). Safe: nothing
 // FK-references session_parameters.
-export async function deleteSessionParameters(
-  sessionKey: string
-): Promise<ActionResult> {
+//
+// Takes the row id, not the session_key: a key may be held by a chapter sheet
+// and a regional sheet, and deleting by key would take both.
+export async function deleteSessionParameters(id: string): Promise<ActionResult> {
   const gate = await requireSuperAdmin();
   if (!gate.ok) return { success: false, error: gate.error };
+  if (!id) return { success: false, error: "No session was specified" };
   const supabase = await createServiceClient();
-  const { error } = await supabase
-    .from("session_parameters")
-    .delete()
-    .eq("session_key", sessionKey);
+  const { error } = await supabase.from("session_parameters").delete().eq("id", id);
   if (error) return { success: false, error: error.message };
   revalidatePath(PATH);
   return { success: true, data: null };

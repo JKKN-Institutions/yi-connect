@@ -3684,6 +3684,7 @@ export type Database = {
           id: string
           is_active: boolean
           label: string
+          levels: Database["public"]["Enums"]["event_level"][] | null
           lock_on_submit: boolean
           parameters: Json
           session_key: string
@@ -3698,6 +3699,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           label: string
+          levels?: Database["public"]["Enums"]["event_level"][] | null
           lock_on_submit?: boolean
           parameters?: Json
           session_key: string
@@ -3712,6 +3714,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           label?: string
+          levels?: Database["public"]["Enums"]["event_level"][] | null
           lock_on_submit?: boolean
           parameters?: Json
           session_key?: string

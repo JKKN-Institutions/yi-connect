@@ -644,57 +644,27 @@ export function ScoreForm({
         </div>
       </div>
 
-      {/* Role-dependent criteria. Only rendered when the sheet actually splits
-          by role — on every unsplit sheet this whole block is absent and the
-          screen is unchanged. */}
-      {sheetIsSplit && (
-        <div
-          className={`rounded-lg border px-4 py-3 text-sm ${
-            roleUnknown
-              ? "border-amber-300 bg-amber-50 text-amber-900"
-              : "border-gray-200 bg-gray-50 text-gray-700"
-          }`}
-        >
-          {roleUnknown ? (
-            <p className="font-semibold">
-              This session is marked differently for each side of the House, and
-              we could not work out this delegate&apos;s side. Choose it to see
-              their criteria — the choice is recorded with the score.
-            </p>
-          ) : (
-            <p>
-              Marked as{" "}
-              <span className="font-semibold">
-                {roleResolution.slugs.map(roleSlugLabel).join(" · ")}
-              </span>
-              {roleResolution.source === "override" && (
-                <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">
-                  changed by you
-                </span>
-              )}
-              . Only their criteria are shown, out of {maxTotal}.
-            </p>
-          )}
-          <div className="mt-2 flex flex-wrap gap-2">
-            {roleResolution.choices.map((c) => (
-              <button
-                key={c.slug}
-                type="button"
-                disabled={isLocked}
-                aria-pressed={roleOverride === c.slug}
-                onClick={() =>
-                  setRoleOverride((prev) => (prev === c.slug ? null : c.slug))
-                }
-                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                  roleOverride === c.slug
-                    ? "border-blue-600 bg-blue-600 text-white"
-                    : "border-gray-300 bg-white text-gray-700"
-                }`}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
+      {/* Role-dependent criteria — BENCH-BLIND. When the sheet splits and the
+          delegate's side IS known, nothing renders here at all: the juror just
+          receives their criteria and the /max in the banner below, with no
+          label, badge or colour telling them which bench the app used.
+
+          The one thing that can appear is the BLOCKED state, and it names no
+          benches either. We do not offer the juror a side to pick — that would
+          both reveal the mechanism and let a guess silently change the
+          denominator. Instead the mark is refused and the fix is the host's:
+          the delegate has no bench on the roster, and getEventBenchReadiness()
+          in app/yip/actions/scoring.ts lists exactly who for the event
+          dashboard. On every unsplit sheet (all 13 in production today) this
+          block is absent and the screen is unchanged. */}
+      {sheetIsSplit && roleUnknown && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">This delegate can&apos;t be marked yet.</p>
+          <p className="mt-1">
+            Their record is incomplete for this session. Please tell the host —
+            they can fix it from the event dashboard and this screen will start
+            working straight away. Carry on with the next delegate meanwhile.
+          </p>
         </div>
       )}
 

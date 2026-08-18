@@ -3,12 +3,10 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/yip/ui/button";
 import { Textarea } from "@/components/yip/ui/textarea";
-import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { criteriaForRole } from "@/lib/yip/rubric";
 import {
   isRoleSplitSheet,
   resolveRoleForSheet,
-  roleSlugLabel,
 } from "@/lib/yip/scoring-roles";
 import { saveToBuffer, getFromBuffer, removeFromBuffer } from "@/lib/yip/score-buffer";
 import { Save, Send, Loader2, CheckCircle2, MessageSquare } from "lucide-react";

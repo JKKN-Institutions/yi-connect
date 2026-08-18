@@ -416,11 +416,26 @@ export function ResultsClient({
       );
       router.refresh();
     } else {
-      // computeResults can time out on heavy events; give a clear, retryable message
-      // rather than surfacing a raw server error string.
+      // Surface the ACTUAL failure. computeResults returns distinguishable,
+      // already-human-readable errors ("Not authorized to manage this event",
+      // "No submitted scores found for this event"). Until now every one of
+      // them was replaced by the timeout copy below, so a host blocked by a
+      // permission problem was told to keep clicking a button that could never
+      // work. The original intent (#764) was only to avoid dumping a RAW server
+      // string, so keep the friendly retry wording for the case it was written
+      // for — a genuine timeout / dropped request with nothing meaningful to
+      // show — and show the real reason otherwise.
+      const raw = (result.error || "").trim();
+      const looksLikeTimeout =
+        raw === "" ||
+        /timeout|timed out|abort|fetch failed|network|econnreset|gateway/i.test(
+          raw
+        );
       setMessage({
         type: "error",
-        text: "Compute took too long or didn't finish — please click Show Results to try again.",
+        text: looksLikeTimeout
+          ? "Compute took too long or didn't finish — please click Show Results to try again."
+          : raw,
       });
     }
     setComputeLoading(false);

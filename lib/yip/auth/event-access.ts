@@ -16,7 +16,17 @@ import { getCurrentPersonRoles } from "@/lib/yi/auth/yi-directory-roles";
  *                control panel, check-in, compute AND publish results.
  *                (Organiser is explicitly allowed to go live and publish.)
  *   canDelete  — delete rows (students/parties/jury/etc.) and delete the
- *                event. CHAIR-ONLY. This is the ONLY thing an organiser cannot do.
+ *                event. CHAIR-ONLY.
+ *   canViewScores — READ the marks/leaderboard/results. Chapter CHAIR +
+ *                super-admin only (product-owner decision 2026-06-13, refined
+ *                the same day in #388: "ordinary chapter_organizer +
+ *                regional_admin stay canViewScores:false"). See the field's own
+ *                doc on the type below before changing it.
+ *
+ * So an organiser cannot do TWO things: delete, and read scores. (This list
+ * previously said delete was "the ONLY thing an organiser cannot do" — written
+ * 2026-05-30, i.e. BEFORE canViewScores existed. That stale sentence has since
+ * been read as proof the score restriction was an oversight; it is not.)
  *
  * Roles (yi_directory.role_assignments, app='yip', scoped by yi_chapter =
  * event.chapter_name):

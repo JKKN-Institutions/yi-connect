@@ -810,9 +810,11 @@ export function ScoreForm({
           {!allScored && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
               {roleUnknown ? (
+                // Bench-blind: names no side, asks the juror for no decision.
+                // The host fixes the roster; the juror moves on.
                 <>
-                  Choose this delegate&apos;s side above before submitting —
-                  their criteria and their maximum depend on it.
+                  This delegate can&apos;t be marked yet — ask the host to
+                  complete their record.
                 </>
               ) : (
                 <>

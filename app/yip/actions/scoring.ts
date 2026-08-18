@@ -59,6 +59,13 @@ export async function getRubricForRole(
 // configured parameters (yip.session_parameters), resolved from the agenda item
 // via its session_key (preferred) or agenda_type. Returns null when the session
 // has no configured parameters (caller falls back to the role rubric).
+//
+// THIS IS THE AUTHORITATIVE RESOLUTION — it is what a human actually marked
+// against. The rule it applies in SQL below (active only; session_key exact,
+// else lowest display_order for the agenda_type) is mirrored in
+// lib/yip/session-config-resolution.ts, which the results engine and the host's
+// scored-sessions panel use. Change one and you must change the other, or the
+// engine will weight marks as a sheet the juror never saw.
 export type SessionScoringParams = {
   criteria: {
     key: string;

@@ -8,6 +8,7 @@ import { parentScoreByKey } from "@/lib/yip/rubric";
 import { getPositionBonusConfigAdmin } from "./positions";
 import { getScoringSettings } from "./scoring-settings";
 import { listSessionParameters } from "./session-parameters";
+import { resolveSessionConfig } from "@/lib/yip/session-config-resolution";
 import { listScoringBuckets } from "./scoring-buckets";
 import { getScoringFlagsConfig } from "./scoring-flags";
 import { getSessionScoringParams } from "./scoring";
@@ -273,37 +274,13 @@ export async function computeResults(
     ? flagsCfgRes.data.deltas
     : { no_confidence_brought: 3, walkout: -5, ruckus: -3, suspension: -10 };
 
-  // Build TWO config lookups from the global session catalog:
-  //   • cfgBySessionKey — 1:1, the PRIMARY key. Each of the 11 handbook
-  //     sessions has its own session_key, so this distinguishes the 3
-  //     duplicated agenda_types (2 Speaker / 2 Opening / 2 Debate sessions).
-  //   • cfgByType — FALLBACK only, for agenda items not yet tagged with a
-  //     session_key. When several configs share an agenda_type we keep the one
-  //     with the LOWEST display_order (iterate in ascending display_order and
-  //     only set on first sight) so the fallback is deterministic.
+  // The global session catalog. listSessionParameters() deliberately returns
+  // INACTIVE sheets too — its other two callers are admin editors that must
+  // list deactivated sheets — so never filter inside it. Anything that has to
+  // agree with the jury screen resolves through resolveSessionConfig(), which
+  // drops inactive sheets. See lib/yip/session-config-resolution.ts.
   const sessionConfigs = await listSessionParameters();
-  const cfgBySessionKey = new Map<
-    string,
-    { total_max: number; session_weight: number }
-  >();
-  const cfgByType = new Map<
-    string,
-    { total_max: number; session_weight: number }
-  >();
-  for (const c of [...sessionConfigs].sort(
-    (a, b) => a.display_order - b.display_order
-  )) {
-    cfgBySessionKey.set(c.session_key, {
-      total_max: c.total_max,
-      session_weight: c.session_weight,
-    });
-    if (c.agenda_type && !cfgByType.has(c.agenda_type)) {
-      cfgByType.set(c.agenda_type, {
-        total_max: c.total_max,
-        session_weight: c.session_weight,
-      });
-    }
-  }
+  const activeSessionConfigs = sessionConfigs.filter((c) => c.is_active);
 
   const { data: agendaRows } = await supabase
     .from("agenda")
@@ -335,6 +312,25 @@ export async function computeResults(
       },
     ])
   );
+
+  // Resolve each agenda item's criteria sheet ONCE, through the same rule the
+  // jury screen uses (active-only; session_key exact, else lowest display_order
+  // for the agenda_type). Previously this file re-implemented the rule inline
+  // and skipped the is_active filter, so a juror could mark against one sheet
+  // while the engine weighted the marks as a different, deactivated one.
+  const cfgByAgendaItem = new Map<
+    string,
+    { total_max: number; session_weight: number }
+  >();
+  for (const [id, meta] of agendaById) {
+    const cfg = resolveSessionConfig(meta, activeSessionConfigs);
+    if (cfg) {
+      cfgByAgendaItem.set(id, {
+        total_max: cfg.total_max,
+        session_weight: cfg.session_weight,
+      });
+    }
+  }
 
   // ── Two-day detection (Director ruling 2026-06-25) ──────────────────
   // For a genuinely TWO-DAY event, a participant must be checked in on BOTH
@@ -386,7 +382,7 @@ export async function computeResults(
       activeBuckets.push(agg);
       for (const sk of b.session_keys) {
         if (!keyToBucket.has(sk)) keyToBucket.set(sk, agg);
-        const sc = sessionConfigs.find((c) => c.session_key === sk);
+        const sc = activeSessionConfigs.find((c) => c.session_key === sk);
         if (sc?.agenda_type && !typeToBucket.has(sc.agenda_type)) {
           typeToBucket.set(sc.agenda_type, agg);
         }
@@ -511,20 +507,15 @@ export async function computeResults(
         );
         const raw =
           perJurorMeans.reduce((a, b) => a + b, 0) / perJurorMeans.length;
-        // Resolve this scored session's config 1:1: session_key FIRST (the
-        // primary key — distinguishes the 3 repeated agenda_types), then fall
-        // back to agenda_type for items not yet tagged with a session_key.
-        // If neither resolves → no config (max=0 → no normalize, weight=1).
+        // This scored session's config, resolved above by the same rule the
+        // jury screen applies. If nothing resolved → no config (max=0 → no
+        // normalize, weight=1).
         const meta =
           agendaItemId === "__none__" ? null : agendaById.get(agendaItemId);
-        let cfg: { total_max: number; session_weight: number } | undefined;
-        if (meta) {
-          if (meta.session_key && cfgBySessionKey.has(meta.session_key)) {
-            cfg = cfgBySessionKey.get(meta.session_key);
-          } else if (meta.agenda_type && cfgByType.has(meta.agenda_type)) {
-            cfg = cfgByType.get(meta.agenda_type);
-          }
-        }
+        const cfg =
+          agendaItemId === "__none__"
+            ? undefined
+            : cfgByAgendaItem.get(agendaItemId);
         const max = cfg && cfg.total_max > 0 ? cfg.total_max : 0;
         // Use RAW component totals unless normalize_per_session is enabled.
         const score =

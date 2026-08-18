@@ -81,10 +81,27 @@ export function ScoredSessionsPanel({
                   <p className="truncate text-sm font-medium text-gray-900">
                     <span className="text-gray-400">D{s.day} ·</span> {s.title}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
+                    {s.criteria_label && (
+                      <span className="text-gray-700">
+                        <span className="font-medium">{s.criteria_label}</span>
+                        {s.criteria_weight !== null && (
+                          <> · weight {s.criteria_weight}</>
+                        )}
+                      </span>
+                    )}
                     {s.score_count > 0 && (
                       <span className="text-gray-600">
                         {s.score_count} score{s.score_count === 1 ? "" : "s"} recorded
+                      </span>
+                    )}
+                    {s.criteria_from_type_fallback && s.criteria_label && (
+                      <span
+                        className="inline-flex items-center gap-1 text-amber-700"
+                        title="This session has no session key, so the sheet was matched on session type. Check the sheet named above is the one your jurors are marking."
+                      >
+                        <AlertTriangle className="size-3" /> matched by type —
+                        check this is the right sheet
                       </span>
                     )}
                     {criteriaGone && (

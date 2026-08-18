@@ -763,6 +763,13 @@ export async function computeResults(
       }
     );
 
+    // Participation (repeat speaking turns). Counted from the SAME map the
+    // averaging above uses, so the two can never disagree about how many times
+    // this delegate was marked. 0 for everyone until a super-admin configures
+    // the two settings, and 0 for any delegate marked once per session.
+    const extraTurns = extraTurnsFrom(bySessionJuror);
+    const participationBonus = participationBonusFor(extraTurns, participationCfg);
+
     // Team Spirit basis (Director ruling 2026-06-25): this participant's individual
     // contribution in the two committee sessions = Σ raw over the committee
     // session_keys (0 when not scored in them). Averaged per committee after the

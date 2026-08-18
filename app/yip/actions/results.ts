@@ -9,6 +9,12 @@ import { getPositionBonusConfigAdmin } from "./positions";
 import { getScoringSettings } from "./scoring-settings";
 import { listSessionParameters } from "./session-parameters";
 import { resolveSessionConfig } from "@/lib/yip/session-config-resolution";
+import {
+  denominatorFor,
+  isRoleSplitSheet,
+  storedRoleSlugs,
+  type RoleScopedCriterion,
+} from "@/lib/yip/scoring-roles";
 import { fetchEventRoundLevel } from "@/lib/yip/round-level";
 import { listScoringBuckets } from "./scoring-buckets";
 import { getScoringFlagsConfig } from "./scoring-flags";
@@ -108,7 +114,48 @@ type RawScore = {
   flag_walkout: boolean;
   flag_ruckus: boolean;
   flag_suspension: boolean;
+  /**
+   * Role-dependent criteria (2026-08): the role slugs this mark was taken
+   * under. Empty on every score written before role scoping and on every
+   * unsplit sheet, which means "no role restriction was in force" — the whole
+   * criteria list applied, and the denominator is the sheet's total_max.
+   */
+  scored_roles: string[];
 };
+
+/**
+ * The role a participant was marked under in ONE session, given the tally of
+ * role-slug sets across the jurors who marked them there.
+ *
+ * Normally every juror records the same role (it is derived from the same
+ * participant record), so the tally has a single entry and this is that entry.
+ * Jurors CAN disagree when one of them overrides the automatic answer — a real
+ * data-quality event, not something to paper over — so the resolution is
+ * explicitly deterministic rather than order-dependent: most-recorded first,
+ * ties broken by the canonical key. Deterministic matters because results are
+ * recomputed on demand and two recomputes of the same data must rank
+ * identically.
+ *
+ * An absent or empty tally means no role was in force -> [] -> every criterion
+ * applies -> the sheet's total_max. That is every score written before role
+ * scoping existed.
+ */
+function dominantRoleSlugs(
+  tally: Map<string, number> | undefined
+): string[] {
+  if (!tally || tally.size === 0) return [];
+  let bestKey = "";
+  let bestCount = -1;
+  for (const [key, count] of Array.from(tally.entries()).sort((a, b) =>
+    a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0
+  )) {
+    if (count > bestCount) {
+      bestCount = count;
+      bestKey = key;
+    }
+  }
+  return bestKey ? bestKey.split("|") : [];
+}
 
 // Disciplinary special-remarks flags (walkout / ruckus / suspension) are
 // OBJECTIVE events. Under the Yi 2026 Evaluation Workbook they NO LONGER alter
@@ -196,7 +243,7 @@ export async function computeResults(
   const { data: scores, error: scoresError } = await supabase
     .from("scores")
     .select(
-      "participant_id, jury_assignment_id, agenda_item_id, total_score, criteria_scores, status, flag_no_confidence_brought, flag_walkout, flag_ruckus, flag_suspension"
+      "participant_id, jury_assignment_id, agenda_item_id, total_score, criteria_scores, status, flag_no_confidence_brought, flag_walkout, flag_ruckus, flag_suspension, scored_roles"
     )
     .eq("event_id", eventId)
     .eq("status", "submitted");
@@ -323,16 +370,31 @@ export async function computeResults(
   // yip.events here and inside getSessionScoringParams (what the juror saw), so
   // both sides pick the same sheet.
   const roundLevel = await fetchEventRoundLevel(supabase as never, eventId);
+  //
+  // ROLE-DEPENDENT CRITERIA (2026-08): the sheet's `parameters` are carried
+  // alongside total_max because a student's denominator is no longer the
+  // sheet's published total — it is the sum of the criteria that apply to
+  // THEIR role. See the per-participant `max` below.
   const cfgByAgendaItem = new Map<
     string,
-    { total_max: number; session_weight: number }
+    {
+      total_max: number;
+      session_weight: number;
+      parameters: RoleScopedCriterion[];
+      roleSplit: boolean;
+    }
   >();
   for (const [id, meta] of agendaById) {
     const cfg = resolveSessionConfig(meta, activeSessionConfigs, roundLevel);
     if (cfg) {
+      const parameters = (cfg.parameters ?? []) as RoleScopedCriterion[];
       cfgByAgendaItem.set(id, {
         total_max: cfg.total_max,
         session_weight: cfg.session_weight,
+        parameters,
+        // Precomputed once per session: false for every sheet in production
+        // today, and when false the denominator below is total_max exactly.
+        roleSplit: isRoleSplitSheet(parameters),
       });
     }
   }
@@ -436,6 +498,7 @@ export async function computeResults(
       flag_walkout: Boolean(s.flag_walkout),
       flag_ruckus: Boolean(s.flag_ruckus),
       flag_suspension: Boolean(s.flag_suspension),
+      scored_roles: storedRoleSlugs(s.scored_roles),
     });
     scoresByParticipant.set(s.participant_id, arr);
   }
@@ -489,8 +552,22 @@ export async function computeResults(
     // juror (the pre-#4 norm) each juror's mean is just that row, so the session
     // mean is identical to the old "mean across jurors".
     const bySessionJuror = new Map<string, Map<string, number[]>>();
+    // Role-dependent criteria: which role this participant was marked under in
+    // each session, tallied across the jurors who marked them. Keyed by a
+    // canonical (sorted, joined) form of the slug list so identical role sets
+    // collapse to one key. Empty list -> "" -> no role restriction.
+    const roleTallyBySession = new Map<string, Map<string, number>>();
     for (const s of pScores) {
       const key = s.agenda_item_id ?? "__none__";
+      {
+        const roleKey = [...s.scored_roles].sort().join("|");
+        let tally = roleTallyBySession.get(key);
+        if (!tally) {
+          tally = new Map();
+          roleTallyBySession.set(key, tally);
+        }
+        tally.set(roleKey, (tally.get(roleKey) ?? 0) + 1);
+      }
       // Each juror's raw total_score stands as-is. The committee-LEVEL (shared
       // /60) swap was removed 2026-06-25 — the two committee sessions are now
       // scored purely on each juror's individual marks.
@@ -521,7 +598,29 @@ export async function computeResults(
           agendaItemId === "__none__"
             ? undefined
             : cfgByAgendaItem.get(agendaItemId);
-        const max = cfg && cfg.total_max > 0 ? cfg.total_max : 0;
+        // THE DENOMINATOR. Before role scoping this was always the sheet's
+        // published total_max. It still is on every UNSPLIT sheet — which is
+        // all 13 in production — because applicableMax() over an untagged
+        // criteria list is Σ max_score, and that is exactly how total_max is
+        // computed when the sheet is saved.
+        //
+        // On a SPLIT sheet the published total spans both sides of the House
+        // (Government Bills: 6 presenter + 4 common + 6 opposition = 16) while
+        // any one student is marked on their own subset (6 + 4 = 10). Dividing
+        // their 10-point mark by 16 would understate every presenter by 37.5%.
+        // So the denominator is the sum of the criteria that applied to THEM,
+        // taken from the role stored on their own score rows.
+        //
+        // The three cases (unsplit / split-with-role / split-without-role) are
+        // decided in ONE place — denominatorFor() — so this file and the jury
+        // screen cannot drift apart on them.
+        const roleSlugs =
+          cfg && cfg.roleSplit
+            ? dominantRoleSlugs(roleTallyBySession.get(agendaItemId))
+            : [];
+        const max = cfg
+          ? denominatorFor(cfg.parameters, roleSlugs, cfg.total_max)
+          : 0;
         // Use RAW component totals unless normalize_per_session is enabled.
         const score =
           settings.normalize_per_session && max > 0 ? (raw / max) * 100 : raw;

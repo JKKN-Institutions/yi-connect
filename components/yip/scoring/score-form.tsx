@@ -5,6 +5,11 @@ import { Button } from "@/components/yip/ui/button";
 import { Textarea } from "@/components/yip/ui/textarea";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { criteriaForRole } from "@/lib/yip/rubric";
+import {
+  isRoleSplitSheet,
+  resolveRoleForSheet,
+  roleSlugLabel,
+} from "@/lib/yip/scoring-roles";
 import { saveToBuffer, getFromBuffer, removeFromBuffer } from "@/lib/yip/score-buffer";
 import { Save, Send, Loader2, CheckCircle2, MessageSquare } from "lucide-react";
 
@@ -77,6 +82,11 @@ interface ScoreFormProps {
     totalScore: number;
     comments: string;
     status: "draft" | "submitted";
+    // Role-dependent criteria: the role this delegate was marked in, and
+    // whether the judge overrode the automatic answer. Null on an unsplit
+    // sheet — nothing to record, because every criterion applied.
+    scoredRoles: string[] | null;
+    scoredRoleSource: "auto" | "override" | null;
   }) => Promise<{ success: boolean; error?: string }>;
 }
 
@@ -94,13 +104,54 @@ export function ScoreForm({
   flags,
   onSubmit,
 }: ScoreFormProps) {
-  // Role-scoped criteria (S2-5): only the criteria that apply to THIS
-  // participant's parliament role are rendered, totalled, required for submit,
-  // and included in the payload. Unrestricted criteria (no `roles`) apply to
-  // everyone; a null/unknown role sees only the unrestricted set.
+  // Role-dependent criteria: only the criteria that apply to THIS delegate are
+  // rendered, totalled, required for submit, and included in the payload — and
+  // the /max in the total banner is theirs, not the sheet's published total.
+  //
+  // A delegate carries several role slugs at once (their parliament role AND
+  // the bench they sit on), because "the presenter" and "the opposition" in a
+  // Government Bill are benches: a ruling MP and an opposition MP both have
+  // parliament_role 'mp'. See lib/yip/scoring-roles.ts.
+  //
+  // The judge may override the worked-out role; when it cannot be worked out at
+  // all, they MUST choose before the criteria appear (roleUnknown below). We
+  // never pick a side for them — a guessed side silently changes the
+  // denominator.
+  const [roleOverride, setRoleOverride] = useState<string | null>(null);
+  const sheetIsSplit = useMemo(
+    () => isRoleSplitSheet(allCriteria),
+    [allCriteria]
+  );
+  const roleResolution = useMemo(
+    () => resolveRoleForSheet(participant, allCriteria, roleOverride),
+    [participant, allCriteria, roleOverride]
+  );
+  // Unsplit sheet (every sheet in production today) -> nothing to choose, and
+  // criteriaForRole over an untagged list returns the whole list unchanged.
+  const roleUnknown = roleResolution.needsChoice;
   const criteria = useMemo(
-    () => criteriaForRole(allCriteria, participant.parliament_role),
-    [allCriteria, participant.parliament_role]
+    () =>
+      roleUnknown
+        ? []
+        : criteriaForRole(allCriteria, roleResolution.slugs),
+    [allCriteria, roleResolution.slugs, roleUnknown]
+  );
+
+  // Reset a judge's override when the delegate or the sheet changes — an
+  // override belongs to one delegate in one session, never leaks to the next.
+  useEffect(() => {
+    setRoleOverride(null);
+  }, [participant.id, agendaItemId]);
+
+  // What every write (server submit AND the offline buffer) records about the
+  // role. Null on an unsplit sheet: no criterion was restricted, so there is no
+  // denominator to reproduce and nothing to store.
+  const scoredRolePayload = useMemo(
+    () => ({
+      scoredRoles: sheetIsSplit ? roleResolution.slugs : null,
+      scoredRoleSource: sheetIsSplit ? roleResolution.source : null,
+    }),
+    [sheetIsSplit, roleResolution]
   );
   // Why: form state must be EXACTLY the current rubric's parent keys. Stale localStorage
   // or older DB rows can carry legacy dotted sub-keys (e.g. "delivery.fluency") alongside
@@ -208,7 +259,12 @@ export function ScoreForm({
   // 0 counts). Prevents the accidental early-Submit that recorded unscored
   // criteria as 0. Save Draft is unaffected — drafts may be partial.
   const scoredCount = criteria.filter((c) => touched.has(c.key)).length;
-  const allScored = scoredCount === criteria.length;
+  // An unknown role on a split sheet yields NO criteria, and "0 of 0 scored"
+  // would otherwise read as complete and let a blank sheet be submitted. The
+  // extra clause is reachable ONLY on a split sheet (roleUnknown is false by
+  // construction on an unsplit one), so no existing round changes. Drafts stay
+  // allowed, as they always have been.
+  const allScored = scoredCount === criteria.length && !roleUnknown;
   const unscoredCount = criteria.length - scoredCount;
   const isSubmitted = existingScore?.status === "submitted";
   // lock_on_submit sessions freeze on submit: a submitted score is read-only,
@@ -242,13 +298,18 @@ export function ScoreForm({
         savedAt: new Date().toISOString(),
         status: prev?.status === "submitted" ? "submitted" : "draft",
         ...(flags ? { flags } : {}),
+        ...scoredRolePayload,
       });
     }, 500);
 
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
-  }, [scores, comments, juryAssignmentId, participant.id, rubricId, eventId, agendaItemId, totalScore, flags]);
+    // scoredRolePayload is a dependency because a judge changing the role must
+    // re-buffer under the new role — otherwise an outage would replay the mark
+    // under the role it was FIRST opened with. Extra fires are free: the
+    // dirtyRef guard above returns before any work when nothing was edited.
+  }, [scores, comments, juryAssignmentId, participant.id, rubricId, eventId, agendaItemId, totalScore, flags, scoredRolePayload]);
 
   // FLUSH-ON-UNMOUNT (BUG-393): when the organiser advances the house, the
   // jury screen auto-switches the session and remounts this form (the `key`
@@ -271,6 +332,7 @@ export function ScoreForm({
       savedAt: new Date().toISOString(),
       status: prev?.status === "submitted" ? "submitted" : "draft",
       ...(flags ? { flags } : {}),
+      ...scoredRolePayload,
     });
   };
   useEffect(() => {
@@ -308,6 +370,11 @@ export function ScoreForm({
         totalScore,
         comments,
         status,
+        // Only a split sheet has a role worth recording. On an unsplit sheet
+        // there is no restriction to reproduce, so this stays null and the
+        // engine reads the sheet's published total as the denominator — the
+        // behaviour every existing round already has.
+        ...scoredRolePayload,
       });
 
       if (result.success) {
@@ -335,6 +402,7 @@ export function ScoreForm({
         savedAt: new Date().toISOString(),
         status,
         ...(flags ? { flags } : {}),
+        ...scoredRolePayload,
       });
       setError(
         status === "submitted"
@@ -577,6 +645,60 @@ export function ScoreForm({
         </div>
       </div>
 
+      {/* Role-dependent criteria. Only rendered when the sheet actually splits
+          by role — on every unsplit sheet this whole block is absent and the
+          screen is unchanged. */}
+      {sheetIsSplit && (
+        <div
+          className={`rounded-lg border px-4 py-3 text-sm ${
+            roleUnknown
+              ? "border-amber-300 bg-amber-50 text-amber-900"
+              : "border-gray-200 bg-gray-50 text-gray-700"
+          }`}
+        >
+          {roleUnknown ? (
+            <p className="font-semibold">
+              This session is marked differently for each side of the House, and
+              we could not work out this delegate&apos;s side. Choose it to see
+              their criteria — the choice is recorded with the score.
+            </p>
+          ) : (
+            <p>
+              Marked as{" "}
+              <span className="font-semibold">
+                {roleResolution.slugs.map(roleSlugLabel).join(" · ")}
+              </span>
+              {roleResolution.source === "override" && (
+                <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">
+                  changed by you
+                </span>
+              )}
+              . Only their criteria are shown, out of {maxTotal}.
+            </p>
+          )}
+          <div className="mt-2 flex flex-wrap gap-2">
+            {roleResolution.choices.map((c) => (
+              <button
+                key={c.slug}
+                type="button"
+                disabled={isLocked}
+                aria-pressed={roleOverride === c.slug}
+                onClick={() =>
+                  setRoleOverride((prev) => (prev === c.slug ? null : c.slug))
+                }
+                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                  roleOverride === c.slug
+                    ? "border-blue-600 bg-blue-600 text-white"
+                    : "border-gray-300 bg-white text-gray-700"
+                }`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Score Total Banner — sticky in landscape */}
       <div className="flex items-center justify-between rounded-lg bg-gray-900 px-5 py-3.5 landscape-sticky-top landscape-small-py">
         <span className="text-sm font-medium text-gray-300">Total Score</span>
@@ -718,10 +840,20 @@ export function ScoreForm({
               (tapping 0 counts). Save Draft stays available for partial sheets. */}
           {!allScored && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
-              Score all {criteria.length} criteria to submit — {unscoredCount}{" "}
-              still {unscoredCount === 1 ? "needs" : "need"} a score. Tap{" "}
-              <span className="font-semibold">0</span> if a criterion earns
-              nothing.
+              {roleUnknown ? (
+                <>
+                  Choose this delegate&apos;s side above before submitting —
+                  their criteria and their maximum depend on it.
+                </>
+              ) : (
+                <>
+                  Score all {criteria.length} criteria to submit —{" "}
+                  {unscoredCount} still{" "}
+                  {unscoredCount === 1 ? "needs" : "need"} a score. Tap{" "}
+                  <span className="font-semibold">0</span> if a criterion earns
+                  nothing.
+                </>
+              )}
             </div>
           )}
           <div className="flex gap-3">

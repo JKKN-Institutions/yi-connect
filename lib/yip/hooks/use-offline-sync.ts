@@ -135,6 +135,11 @@ export function useOfflineSync(juryAssignmentId: string | null): SyncState {
             // Special-Remarks flags captured offline ride along; omitted for
             // legacy entries (submitScore treats them as optional).
             ...(buffered.flags ? { flags: buffered.flags } : {}),
+            // Role-dependent criteria: replay the role the juror marked under.
+            // Absent on legacy entries and on unsplit sheets — submitScore
+            // stores NULL, which is "no role restriction was in force".
+            scoredRoles: buffered.scoredRoles ?? null,
+            scoredRoleSource: buffered.scoredRoleSource ?? null,
             // Mark as a background replay: the server refuses to downgrade a
             // since-SUBMITTED row with a stale buffered draft.
             fromOfflineSync: true,

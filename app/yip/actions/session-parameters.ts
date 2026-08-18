@@ -3,6 +3,7 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { revalidatePath } from "next/cache";
+import { normaliseRoleSlugs } from "@/lib/yip/scoring-roles";
 import {
   normaliseRoundLevels,
   roundLevelScopeKey,
@@ -38,6 +39,16 @@ export type SessionParameter = {
   kind: ParameterKind;
   max_score: number;
   weight: number;
+  /**
+   * Role slugs this criterion applies to (lib/yip/scoring-roles.ts).
+   * Absent / null = applies to EVERYONE, which is what every criterion on all
+   * 13 production sheets means. Set it to split a sheet across the two sides of
+   * the House: the presenter's criteria, the opposition's criteria, and the
+   * common ones left untagged. total_max below stays the sheet's PUBLISHED
+   * total (Σ over every criterion); an individual student's denominator is
+   * applicableMax() over the subset that matches their role.
+   */
+  roles?: string[] | null;
 };
 
 export type SessionParametersConfig = {
@@ -113,7 +124,18 @@ function normaliseParameters(
       return { ok: false, error: `Row ${i + 1}: weight must be a number >= 0` };
     }
 
-    cleaned.push({ key, label, kind, max_score: Math.round(max), weight });
+    // Role scope is optional and stored canonically: null means "everyone",
+    // never []. Unknown/blank entries are dropped rather than rejected — the
+    // scope is a filter, and an unrecognised slug simply matches nobody.
+    const roles = normaliseRoleSlugs(row.roles);
+    cleaned.push({
+      key,
+      label,
+      kind,
+      max_score: Math.round(max),
+      weight,
+      ...(roles ? { roles } : {}),
+    });
   }
 
   const total_max = cleaned.reduce((s, p) => s + p.max_score, 0);
@@ -135,13 +157,19 @@ function rowToConfig(row: {
   updated_at: string | null;
 }): SessionParametersConfig {
   const parameters = Array.isArray(row.parameters)
-    ? (row.parameters as SessionParameter[]).map((p) => ({
-        key: p.key,
-        label: p.label,
-        kind: (KINDS.includes(p.kind) ? p.kind : "evaluation") as ParameterKind,
-        max_score: Number(p.max_score),
-        weight: Number(p.weight),
-      }))
+    ? (row.parameters as SessionParameter[]).map((p) => {
+        const roles = normaliseRoleSlugs(p.roles);
+        return {
+          key: p.key,
+          label: p.label,
+          kind: (KINDS.includes(p.kind) ? p.kind : "evaluation") as ParameterKind,
+          max_score: Number(p.max_score),
+          weight: Number(p.weight),
+          // null stays null — "applies to everyone", the meaning of every
+          // criterion written before role scoping existed.
+          roles,
+        };
+      })
     : [];
   return {
     id: row.id,

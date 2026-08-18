@@ -522,6 +522,10 @@ function JuryScoringClientInner({
       status: "draft" | "submitted";
       flags: FlagsState;
       isNewTurn: boolean;
+      // Role-dependent criteria — mirrored into the optimistic row so an
+      // offline switch-away-and-back shows the same role the juror marked in.
+      scoredRoles: string[] | null;
+      scoredRoleSource: "auto" | "override" | null;
       // The server-assigned id when known (the success path always has one).
       // Omitted on the offline/catch path — falls back to the row being
       // edited's existing id, or a synthetic key-only id for a brand-new row
@@ -566,6 +570,8 @@ function JuryScoringClientInner({
         flag_walkout: input.flags.walkout,
         flag_ruckus: input.flags.ruckus,
         flag_suspension: input.flags.suspension,
+        scored_roles: input.scoredRoles,
+        scored_role_source: input.scoredRoleSource,
         participant: {
           id: input.participant.id,
           full_name: input.participant.full_name,
@@ -1134,6 +1140,10 @@ function JuryScoringClientInner({
     totalScore: number;
     comments: string;
     status: "draft" | "submitted";
+    // Role-dependent criteria: the role ScoreForm marked this delegate in.
+    // Null on an unsplit sheet — nothing was restricted, so nothing to record.
+    scoredRoles: string[] | null;
+    scoredRoleSource: "auto" | "override" | null;
   }) => {
     if (!activeParticipant || !rubric) {
       return { success: false as const, error: "No participant or rubric loaded" };
@@ -1171,6 +1181,8 @@ function JuryScoringClientInner({
         // #4: when capturing an extra turn, the server assigns the next occurrence
         // and inserts a fresh row instead of overwriting turn 1.
         newTurn: addingTurn,
+        scoredRoles: data.scoredRoles,
+        scoredRoleSource: data.scoredRoleSource,
       });
     } catch (err) {
       // Network failure (offline) — submitScore never reached the server.
@@ -1187,6 +1199,8 @@ function JuryScoringClientInner({
         status: data.status,
         flags,
         isNewTurn: addingTurn,
+        scoredRoles: data.scoredRoles,
+        scoredRoleSource: data.scoredRoleSource,
       });
       // Rethrow — ScoreForm's own catch (buffer write + "no internet"
       // message) must run exactly as before; this handler never swallows it.
@@ -1206,6 +1220,8 @@ function JuryScoringClientInner({
         status: data.status,
         flags,
         isNewTurn: addingTurn,
+        scoredRoles: data.scoredRoles,
+        scoredRoleSource: data.scoredRoleSource,
         savedId: result.data.id,
       });
 

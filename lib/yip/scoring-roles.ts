@@ -292,9 +292,14 @@ export type RoleResolution = {
  * inflating their percentage — the exact class of silent mis-scoring #955 was
  * about.
  *
- * `override` is a slug the judge picked on the scoring screen. It is ADDED to
- * the derived slugs rather than replacing them, so choosing "Opposition bench"
- * for an MP still matches any criterion tagged 'mp'.
+ * VISIBLE TO WHOM, THOUGH. Since 2026-08-18 the answer is the ORGANISER, not
+ * the juror: the scoring screen no longer offers a side to pick, because the
+ * jury must not know the app splits by bench at all. `override` therefore has
+ * no caller on the jury path any more. It is kept because it is the correct
+ * shape for an organiser-side correction ("this delegate sits with the
+ * opposition") and because it is additive: the slug is ADDED to the derived
+ * slugs rather than replacing them, so tagging someone "Opposition bench" still
+ * matches any criterion tagged 'mp'. Omitting it yields source 'auto'.
  */
 export function resolveRoleForSheet(
   participant: RoleBearingParticipant,

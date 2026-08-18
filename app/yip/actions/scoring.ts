@@ -362,9 +362,15 @@ export async function submitScore(
       // role on replay, so it is reported as STALE — the flush drops it and the
       // juror re-scores against the live sheet, exactly as it already does for
       // a changed rubric. A live submit gets the plain instruction.
+      // BENCH-BLIND WORDING (National Admin, 2026-08-18). The refusal itself is
+      // unchanged — a role-less mark on a split sheet is still rejected — but
+      // the message no longer tells the juror that the app splits by side of
+      // the House, and no longer asks them to pick one. The missing data is the
+      // delegate's bench on the ROSTER, and the host is the one who can supply
+      // it; getEventBenchReadiness() below lists exactly who is affected.
       error: input.fromOfflineSync
-        ? "STALE_OFFLINE_SCORE: this session is now scored separately for each side of the House — please re-score this participant"
-        : "This session is scored differently for each side of the House — pick the delegate's role before submitting.",
+        ? "STALE_OFFLINE_SCORE: the scoring sheet changed since this was saved offline — please re-score this participant"
+        : "This delegate can't be marked yet — their record is incomplete for this session. Ask the host to complete it.",
     };
   }
 

@@ -969,6 +969,26 @@ export async function computeResults(
         Math.round((criteriaSum[key] / criteriaCount[key]) * 100) / 100;
     }
 
+    // Participation, shown rather than buried. Neither key is a criterion key
+    // and neither belongs to any award family or workbook bucket
+    // (parentScoreByKey matches a key exactly or on a "<family>." prefix, and
+    // no family is called "participation"), so these are read by the results
+    // screen and by nothing that computes a score.
+    //   participation_turns  — extra speaking turns beyond the first, written
+    //                          whenever there were any, EVEN IF the bonus is
+    //                          switched off, so the host can see the repeat
+    //                          participation the averaging is already smoothing.
+    //   participation_bonus  — the points those turns were actually worth.
+    //                          Absent when 0, i.e. absent on every event until
+    //                          the two settings are configured.
+    if (extraTurns > 0) {
+      scoreBreakdown.participation_turns = extraTurns;
+    }
+    if (participationBonus > 0) {
+      scoreBreakdown.participation_bonus =
+        Math.round(participationBonus * 100) / 100;
+    }
+
     // Day-presence gate (Director ruling 2026-06-25). At a two-day event a
     // participant is dayComplete only when checked in on BOTH days (strict
     // === true; NULL/false ⇒ not checked in). At a one-day event everyone is

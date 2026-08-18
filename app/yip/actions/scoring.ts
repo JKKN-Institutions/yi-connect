@@ -2,14 +2,19 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireJurySession } from "@/lib/yip/auth/yip-session";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { isJurorAssignedToSession } from "./jury-sessions";
 import { resolveSessionConfig } from "@/lib/yip/session-config-resolution";
 import { fetchEventRoundLevel } from "@/lib/yip/round-level";
+import { fetchAllRows } from "@/lib/pagination";
 import {
   applicableCriteria,
   applicableMax,
   isRoleSplitSheet,
   normaliseRoleSlugs,
+  resolveRoleForSheet,
+  roleSlugLabel,
+  sheetRoleSlugs,
 } from "@/lib/yip/scoring-roles";
 import type { Tables } from "@/types/yip/database";
 

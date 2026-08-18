@@ -432,6 +432,13 @@ export async function computeResults(
   // screens; nothing hardcoded here).
   const settings = await getScoringSettings();
 
+  // 1d-bis. Participation (repeat speaking turns). Both numbers default to 0,
+  // so this is inert on every event until a super-admin sets them. See the
+  // block above readParticipationBonusConfig for the whole rule.
+  const participationCfg = await readParticipationBonusConfig(
+    supabase as unknown as SupabaseClient
+  );
+
   // 1e. Special-remarks point deltas (admin-configurable, global singleton).
   // Director decision 2026-06-03: each raised remark now adjusts the
   // participant's FINAL /100 total — applied ONCE at full value if ANY juror

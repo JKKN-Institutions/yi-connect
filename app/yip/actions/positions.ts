@@ -22,6 +22,12 @@ import {
 } from "@/lib/yip/ministries";
 import { fetchParticipantMinistryState } from "@/lib/yip/ministries-server";
 import { revalidatePath } from "next/cache";
+import {
+  normaliseRoundLevels,
+  scopeAppliesToLevel,
+  describeRoundLevels,
+  type RoundLevel,
+} from "@/lib/yip/round-level";
 import type { Database } from "@/types/yip/database";
 
 type ParliamentRole = Database["public"]["Enums"]["parliament_role"];
@@ -31,6 +37,20 @@ type ParliamentRole = Database["public"]["Enums"]["parliament_role"];
 export interface PositionBonusConfig {
   bonuses: Record<string, number>;
 }
+
+/**
+ * One LEVEL-SCOPED merit table (a row of yip.position_bonus_config_levels).
+ *
+ * Each row is a COMPLETE role -> points dictionary for the rounds it names, not
+ * a patch over the global one: resolution never mixes the two tiers. See
+ * supabase/migrations/yip_position_bonus_config_round_level.sql.
+ */
+export type PositionBonusScope = {
+  id: string;
+  levels: RoundLevel[];
+  bonuses: Record<string, number>;
+  updated_at: string | null;
+};
 
 export interface PositionParticipant {
   id: string;
@@ -196,24 +216,244 @@ export async function getPositionBonusConfig(): Promise<PositionBonusConfig> {
   return { bonuses };
 }
 
+function coerceBonuses(raw: unknown): Record<string, number> {
+  const bonuses: Record<string, number> = {};
+  for (const [k, v] of Object.entries((raw ?? {}) as Record<string, unknown>)) {
+    bonuses[k] = typeof v === "number" ? v : Number(v) || 0;
+  }
+  return bonuses;
+}
+
 // Service-client read of the SAME merit config. position_bonus_config has RLS
 // enabled with no authenticated policy, so getPositionBonusConfig() (anon/auth
 // client) silently falls back to defaults — wrong values, and a save would
 // overwrite the real config. Admin EDIT screens must use this so the editor
 // shows and writes the true live values.
-export async function getPositionBonusConfigAdmin(): Promise<PositionBonusConfig> {
+//
+// ROUND LEVEL (2026-08). `level` selects the merit table that SCORES a round at
+// that level: a row of yip.position_bonus_config_levels covering it if one
+// exists, otherwise the global singleton. The tiers are never merged — a scoped
+// row is a complete merit table, so a role it omits is worth 0 at that level,
+// which is the point (a chapter round has no Parliamentary Journalist).
+//
+// Omitting `level` — which is what every existing caller does — returns the
+// GLOBAL table only. That is fail-safe in both directions: the overlay table
+// ships empty, so today the answer is byte-identical to before; and once a
+// scope exists, a caller that has not yet been taught about levels keeps using
+// the global table it was written against rather than silently picking up
+// another level's merit values.
+export async function getPositionBonusConfigAdmin(
+  level?: RoundLevel | null
+): Promise<PositionBonusConfig> {
   const supabase = await createServiceClient();
+
+  if (level) {
+    const scoped = await readPositionBonusScopes(supabase);
+    const hit = scoped.find((s) => scopeAppliesToLevel(s.levels, level));
+    if (hit) return { bonuses: hit.bonuses };
+  }
+
   const { data } = await supabase
     .from("position_bonus_config")
     .select("bonuses")
     .eq("id", true)
     .maybeSingle();
-  const raw = (data?.bonuses ?? {}) as Record<string, unknown>;
-  const bonuses: Record<string, number> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    bonuses[k] = typeof v === "number" ? v : Number(v) || 0;
+  return { bonuses: coerceBonuses(data?.bonuses) };
+}
+
+// yip.position_bonus_config_levels is newer than the generated Database types,
+// so it is read through an untyped client view (rows are coerced here).
+async function readPositionBonusScopes(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>
+): Promise<PositionBonusScope[]> {
+  const { data } = await (
+    supabase as unknown as {
+      from: (n: string) => {
+        select: (c: string) => Promise<{ data: unknown[] | null }>;
+      };
+    }
+  )
+    .from("position_bonus_config_levels")
+    .select("id, levels, bonuses, updated_at");
+
+  const rows: PositionBonusScope[] = [];
+  for (const raw of (data ?? []) as Array<Record<string, unknown>>) {
+    const levels = normaliseRoundLevels(raw.levels);
+    // A row here exists BECAUSE it is scoped; a NULL/empty scope would be a
+    // second spelling of the global singleton, so skip it rather than let it
+    // masquerade as an override.
+    if (!levels) continue;
+    rows.push({
+      id: String(raw.id),
+      levels,
+      bonuses: coerceBonuses(raw.bonuses),
+      updated_at: (raw.updated_at as string | null) ?? null,
+    });
   }
-  return { bonuses };
+  return rows;
+}
+
+/** Every level-scoped merit table, for the admin screens. Super-admin only. */
+export async function listPositionBonusScopes(): Promise<PositionBonusScope[]> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return [];
+  const supabase = await createServiceClient();
+  return readPositionBonusScopes(supabase);
+}
+
+// Create or update ONE level-scoped merit table. Super-admin only.
+//
+// Identity is the row `id`; when none is given the row covering this exact
+// scope is updated, else a new one is created. A NEW scope is seeded from the
+// GLOBAL table first and the caller's keys laid over it, so an admin who scopes
+// "regional" and edits two roles does not silently zero every other role — the
+// tiers are not merged at read time, so the copy has to be complete at write
+// time.
+export async function upsertPositionBonusScope(input: {
+  id?: string;
+  levels: string[];
+  bonuses: Record<string, number>;
+}): Promise<{ success: true; data: PositionBonusScope } | { success: false; error: string }> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  const levels = normaliseRoundLevels(input.levels);
+  if (!levels) {
+    return {
+      success: false,
+      error:
+        "Pick at least one round level. To change every round, edit the shared merit points instead.",
+    };
+  }
+
+  // Same 0–10 range the global writer enforces — the security boundary, since
+  // the client check can be bypassed.
+  const clean: Record<string, number> = {};
+  for (const [k, v] of Object.entries(input.bonuses ?? {})) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) {
+      return { success: false, error: `Bonus for "${k}" must be a number.` };
+    }
+    if (n < 0 || n > 10) {
+      return {
+        success: false,
+        error: `Leadership bonuses must be between 0 and 10 — got ${n} for "${k}".`,
+      };
+    }
+    clean[k] = n;
+  }
+
+  const supabase = await createServiceClient();
+  const existingScopes = await readPositionBonusScopes(supabase);
+
+  const target =
+    (input.id
+      ? existingScopes.find((s) => s.id === input.id)
+      : existingScopes.find(
+          (s) => describeRoundLevels(s.levels) === describeRoundLevels(levels)
+        )) ?? null;
+
+  // Two scoped tables must not both claim a level — resolution would be
+  // ambiguous. The global table never conflicts: it is the documented fallback.
+  const clash = existingScopes.find(
+    (s) =>
+      s.id !== target?.id && s.levels.some((l) => levels.includes(l))
+  );
+  if (clash) {
+    return {
+      success: false,
+      error: `Another merit table already covers ${describeRoundLevels(
+        clash.levels
+      )}. Change the rounds this one applies to, or edit that one instead.`,
+    };
+  }
+
+  // Start from the row's own prior values when editing (the three admin screens
+  // each own a different subset of role keys, so a save must never drop a key
+  // it did not list) and from the GLOBAL table when creating.
+  const base = target
+    ? target.bonuses
+    : (await getPositionBonusConfigAdmin()).bonuses;
+  const merged = { ...base, ...clean };
+
+  const db = supabase as unknown as {
+    from: (n: string) => {
+      update: (v: Record<string, unknown>) => {
+        eq: (
+          k: string,
+          v: string
+        ) => { select: (c: string) => Promise<{ data: unknown[] | null; error: { message: string } | null }> };
+      };
+      insert: (v: Record<string, unknown>) => {
+        select: (c: string) => Promise<{ data: unknown[] | null; error: { message: string } | null }>;
+      };
+    };
+  };
+
+  const values = {
+    levels,
+    bonuses: merged,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = target
+    ? await db
+        .from("position_bonus_config_levels")
+        .update(values)
+        .eq("id", target.id)
+        .select("id, levels, bonuses, updated_at")
+    : await db
+        .from("position_bonus_config_levels")
+        .insert(values)
+        .select("id, levels, bonuses, updated_at");
+
+  const row = (data ?? [])[0] as Record<string, unknown> | undefined;
+  if (error || !row) {
+    return { success: false, error: error?.message ?? "Failed to save merit points" };
+  }
+
+  revalidatePath("/dashboard/admin/scoring-rules");
+  revalidatePath("/dashboard/admin/scoring-framework");
+  revalidatePath("/dashboard/admin/scoring-config");
+  return {
+    success: true,
+    data: {
+      id: String(row.id),
+      levels: normaliseRoundLevels(row.levels) ?? levels,
+      bonuses: coerceBonuses(row.bonuses),
+      updated_at: (row.updated_at as string | null) ?? null,
+    },
+  };
+}
+
+// Remove ONE level-scoped merit table. Those rounds fall back to the shared
+// (global) merit points, which is where they were before the scope existed.
+export async function deletePositionBonusScope(
+  id: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  const gate = await requireSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
+  if (!id) return { success: false, error: "No merit table was specified" };
+
+  const supabase = await createServiceClient();
+  const { error } = await (
+    supabase as unknown as {
+      from: (n: string) => {
+        delete: () => {
+          eq: (k: string, v: string) => Promise<{ error: { message: string } | null }>;
+        };
+      };
+    }
+  )
+    .from("position_bonus_config_levels")
+    .delete()
+    .eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/dashboard/admin/scoring-rules");
+  revalidatePath("/dashboard/admin/scoring-framework");
+  revalidatePath("/dashboard/admin/scoring-config");
+  return { success: true };
 }
 
 export async function getParticipantsByRole(

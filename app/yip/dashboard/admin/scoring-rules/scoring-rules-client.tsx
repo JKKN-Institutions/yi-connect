@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   updateScoringSettings,
   type ScoringSettings,
@@ -254,6 +255,16 @@ export function ScoringRulesClient({
         </h2>
         <p className="mt-1 text-xs text-[#1a1a3e]/50">
           Added once to a delegate&apos;s final score based on their parliamentary role.
+          These are the <strong>shared</strong> points — every round uses them unless
+          it has its own set. To give regional or national rounds their own merit
+          points, use{" "}
+          <Link
+            href="/yip/dashboard/admin/scoring-framework"
+            className="font-medium text-[#B35C00] underline"
+          >
+            Scoring Framework
+          </Link>
+          .
         </p>
         <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
           {ROLE_LABELS.map((r) => (

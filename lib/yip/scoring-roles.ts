@@ -261,11 +261,24 @@ export type RoleResolution = {
   source: ScoredRoleSource;
   /**
    * True when the sheet splits by role but this student matches NO restricted
-   * criterion, so we cannot tell which side they are on. The judge MUST choose.
-   * Never guess — a guessed side silently changes the denominator.
+   * criterion, so we cannot tell which side they are on.
+   *
+   * WHO RESOLVES IT CHANGED ON 2026-08-18. It used to be the juror: the scoring
+   * screen showed them the two benches and made them pick. That broke the
+   * National Admin's rule that "the jury need not be aware how the app
+   * evaluates ruling and opposition participants", and a juror's guess silently
+   * changed the student's denominator. It is now resolved by the ORGANISER, in
+   * the roster, before marking: the mark is refused, the juror is told only
+   * that the delegate's record is incomplete, and getEventBenchReadiness() in
+   * app/yip/actions/scoring.ts lists exactly who is missing a bench so the host
+   * can fix it. Still never guessed, in either design.
    */
   needsChoice: boolean;
-  /** The choices to offer when needsChoice — the slugs this sheet actually uses. */
+  /**
+   * The role slugs this sheet actually restricts criteria to — i.e. what the
+   * roster has to supply before the delegate is markable. Read by the
+   * organiser-facing readiness report; NOT shown to the juror.
+   */
   choices: { slug: string; label: string }[];
 };
 

@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import { resolveSessionConfig } from "@/lib/yip/session-config-resolution";
+import { fetchEventRoundLevel } from "@/lib/yip/round-level";
 
 // Per-session scoring (BUG-385): a "session" is a scoreable yip.agenda row.
 // yip.jury_session_assignments maps which juror may score which session.
@@ -236,7 +237,7 @@ export async function getScoringToggleSessions(
     return { success: false, error: "Not authorized to manage this event" };
 
   const supabase = await createServiceClient();
-  const [agendaRes, paramsRes] = await Promise.all([
+  const [agendaRes, paramsRes, level] = await Promise.all([
     supabase
       .from("agenda")
       .select("id, day, sequence_order, title, agenda_type, session_key, is_scoreable")
@@ -245,13 +246,17 @@ export async function getScoringToggleSessions(
       .order("sequence_order"),
     supabase
       .from("session_parameters")
-      .select("session_key, label, agenda_type, display_order, is_active, session_weight")
+      .select(
+        "session_key, label, agenda_type, display_order, is_active, session_weight, levels"
+      )
       .eq("is_active", true),
+    fetchEventRoundLevel(supabase as never, eventId),
   ]);
 
   const agenda = agendaRes.data ?? [];
   // Resolve through the shared rule so this screen, the jury screen and the
-  // results engine always name the SAME sheet.
+  // results engine always name the SAME sheet — including which ROUND LEVEL's
+  // sheet applies to this event.
   const configs = (paramsRes.data ?? []).map((p) => ({
     session_key: p.session_key,
     label: p.label,
@@ -259,12 +264,13 @@ export async function getScoringToggleSessions(
     display_order: Number(p.display_order) || 0,
     is_active: p.is_active !== false,
     session_weight: Number(p.session_weight),
+    levels: p.levels ?? null,
   }));
 
   // Show sessions that CAN be scored (active criteria) or are currently scored
   // (so an already-on session can always be turned off).
   const candidates = agenda.filter(
-    (a) => resolveSessionConfig(a, configs) !== null || a.is_scoreable === true
+    (a) => resolveSessionConfig(a, configs, level) !== null || a.is_scoreable === true
   );
 
   // Tally existing scores per candidate session in one query.
@@ -282,7 +288,7 @@ export async function getScoringToggleSessions(
   }
 
   const sessions: ScoringToggleSession[] = candidates.map((a) => {
-    const cfg = resolveSessionConfig(a, configs);
+    const cfg = resolveSessionConfig(a, configs, level);
     return {
       id: a.id,
       day: a.day,
@@ -326,21 +332,28 @@ export async function setSessionScoreable(
   // Turning ON requires a matching ACTIVE master config — never create a
   // "scored but no criteria" trap.
   if (isScoreable) {
-    const { data: params } = await supabase
-      .from("session_parameters")
-      .select("session_key, agenda_type, display_order, is_active")
-      .eq("is_active", true);
+    const [{ data: params }, level] = await Promise.all([
+      supabase
+        .from("session_parameters")
+        .select("session_key, agenda_type, display_order, is_active, levels")
+        .eq("is_active", true),
+      fetchEventRoundLevel(supabase as never, eventId),
+    ]);
     const configs = (params ?? []).map((p) => ({
       session_key: p.session_key,
       agenda_type: p.agenda_type,
       display_order: Number(p.display_order) || 0,
       is_active: p.is_active !== false,
+      levels: p.levels ?? null,
     }));
-    if (resolveSessionConfig(item, configs) === null) {
+    // Level-aware: a sheet written only for chapter rounds must not let a
+    // regional session be switched on, or its jurors would open the session and
+    // find no criteria.
+    if (resolveSessionConfig(item, configs, level) === null) {
       return {
         success: false,
         error:
-          "No active scoring criteria for this session type. Set them on the master Session Parameters page first.",
+          "No active scoring criteria for this session type at this round level. Set them on the master Session Parameters page first.",
       };
     }
   }

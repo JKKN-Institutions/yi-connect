@@ -9,6 +9,7 @@ import { getPositionBonusConfigAdmin } from "./positions";
 import { getScoringSettings } from "./scoring-settings";
 import { listSessionParameters } from "./session-parameters";
 import { resolveSessionConfig } from "@/lib/yip/session-config-resolution";
+import { fetchEventRoundLevel } from "@/lib/yip/round-level";
 import { listScoringBuckets } from "./scoring-buckets";
 import { getScoringFlagsConfig } from "./scoring-flags";
 import { getSessionScoringParams } from "./scoring";
@@ -314,16 +315,20 @@ export async function computeResults(
   );
 
   // Resolve each agenda item's criteria sheet ONCE, through the same rule the
-  // jury screen uses (active-only; session_key exact, else lowest display_order
-  // for the agenda_type). Previously this file re-implemented the rule inline
-  // and skipped the is_active filter, so a juror could mark against one sheet
-  // while the engine weighted the marks as a different, deactivated one.
+  // jury screen uses (active-only; the event's ROUND LEVEL first, then unscoped
+  // sheets; session_key exact, else lowest display_order for the agenda_type).
+  // Previously this file re-implemented the rule inline and skipped the
+  // is_active filter, so a juror could mark against one sheet while the engine
+  // weighted the marks as a different, deactivated one. The level is read from
+  // yip.events here and inside getSessionScoringParams (what the juror saw), so
+  // both sides pick the same sheet.
+  const roundLevel = await fetchEventRoundLevel(supabase as never, eventId);
   const cfgByAgendaItem = new Map<
     string,
     { total_max: number; session_weight: number }
   >();
   for (const [id, meta] of agendaById) {
-    const cfg = resolveSessionConfig(meta, activeSessionConfigs);
+    const cfg = resolveSessionConfig(meta, activeSessionConfigs, roundLevel);
     if (cfg) {
       cfgByAgendaItem.set(id, {
         total_max: cfg.total_max,

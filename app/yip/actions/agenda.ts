@@ -5,6 +5,8 @@ import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import { modeForAgendaType } from "@/lib/yip/constants";
 import { expireActiveSpeakingRequests } from "@/lib/yip/speaking-floor-expiry";
+import { resolveSessionConfig } from "@/lib/yip/session-config-resolution";
+import { fetchEventRoundLevel } from "@/lib/yip/round-level";
 import type { Json } from "@/types/yip/database";
 import {
   type SubTimer,
@@ -937,26 +939,39 @@ export async function setAgendaItemScoringVoting(
     return { success: false, error: "Agenda item not found for this event." };
 
   // Item 6 guard: no scoring without criteria.
+  // Resolved through the shared rule (level-aware) so this guard agrees with
+  // what a juror will actually see — a sheet written only for chapter rounds
+  // must not let a regional session be switched on.
   if (patch.is_scoreable === true) {
-    let q = supabase
-      .from("session_parameters")
-      .select("parameters")
-      .eq("is_active", true);
-    if (item.session_key) q = q.eq("session_key", item.session_key);
-    else if (item.agenda_type) q = q.eq("agenda_type", item.agenda_type);
-    else
+    if (!item.session_key && !item.agenda_type)
       return {
         success: false,
         error:
           "Cannot score this item: it has no session key, so no criteria can be matched. Set a session key first.",
       };
-    const { data: cfg } = await q.limit(1);
-    const params = cfg?.[0]?.parameters;
+    const [{ data: sheets }, level] = await Promise.all([
+      supabase
+        .from("session_parameters")
+        .select("session_key, agenda_type, display_order, is_active, levels, parameters")
+        .eq("is_active", true),
+      fetchEventRoundLevel(supabase as never, eventId),
+    ]);
+    const cfg = resolveSessionConfig(
+      item,
+      (sheets ?? []).map((s) => ({
+        ...s,
+        display_order: Number(s.display_order) || 0,
+        is_active: s.is_active !== false,
+        levels: s.levels ?? null,
+      })),
+      level
+    );
+    const params = cfg?.parameters;
     if (!Array.isArray(params) || params.length === 0) {
       const ref = item.session_key || item.agenda_type || "(none)";
       return {
         success: false,
-        error: `Cannot turn on scoring: no criteria are configured for session "${ref}". Add criteria under Admin → Session Scoring first.`,
+        error: `Cannot turn on scoring: no criteria are configured for session "${ref}" at this round level. Add criteria under Admin → Session Scoring first.`,
       };
     }
   }

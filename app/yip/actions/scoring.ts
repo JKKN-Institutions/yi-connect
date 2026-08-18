@@ -3,6 +3,8 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireJurySession } from "@/lib/yip/auth/yip-session";
 import { isJurorAssignedToSession } from "./jury-sessions";
+import { resolveSessionConfig } from "@/lib/yip/session-config-resolution";
+import { fetchEventRoundLevel } from "@/lib/yip/round-level";
 import type { Tables } from "@/types/yip/database";
 
 type Score = Tables<{ schema: "yip" }, "scores">;
@@ -61,11 +63,16 @@ export async function getRubricForRole(
 // has no configured parameters (caller falls back to the role rubric).
 //
 // THIS IS THE AUTHORITATIVE RESOLUTION — it is what a human actually marked
-// against. The rule it applies in SQL below (active only; session_key exact,
-// else lowest display_order for the agenda_type) is mirrored in
-// lib/yip/session-config-resolution.ts, which the results engine and the host's
-// scored-sessions panel use. Change one and you must change the other, or the
-// engine will weight marks as a sheet the juror never saw.
+// against. It now calls resolveSessionConfig() from
+// lib/yip/session-config-resolution.ts instead of re-applying the rule in SQL,
+// so the jury screen, the results engine and the host's scored-sessions panel
+// share ONE implementation and cannot drift apart. (Previously the rule lived
+// here in SQL and again in TypeScript; #955 fixed a drift between them.)
+//
+// The event's ROUND LEVEL is part of the resolution: a criteria sheet scoped to
+// regional rounds beats the shared one, and a sheet scoped to a different level
+// is never used. When the level cannot be read the resolver falls back to
+// unscoped sheets only, which is how every sheet behaved before scoping existed.
 export type SessionScoringParams = {
   criteria: {
     key: string;
@@ -87,26 +94,33 @@ export async function getSessionScoringParams(
   const supabase = await createServiceClient();
   const { data: item } = await supabase
     .from("agenda")
-    .select("session_key, agenda_type")
+    .select("session_key, agenda_type, event_id")
     .eq("id", agendaItemId)
     .maybeSingle();
   if (!item) return null;
+  if (!item.session_key && !item.agenda_type) return null;
 
-  let cfgQuery = supabase
+  const level = item.event_id
+    ? await fetchEventRoundLevel(supabase as never, item.event_id)
+    : null;
+
+  const { data: sheets } = await supabase
     .from("session_parameters")
-    .select("parameters, total_max, lock_on_submit")
+    .select(
+      "session_key, agenda_type, display_order, is_active, levels, parameters, total_max, lock_on_submit"
+    )
     .eq("is_active", true);
-  if (item.session_key) {
-    cfgQuery = cfgQuery.eq("session_key", item.session_key);
-  } else if (item.agenda_type) {
-    cfgQuery = cfgQuery
-      .eq("agenda_type", item.agenda_type)
-      .order("display_order", { ascending: true });
-  } else {
-    return null;
-  }
-  const { data: cfgs } = await cfgQuery.limit(1);
-  const cfg = cfgs?.[0];
+
+  const cfg = resolveSessionConfig(
+    { session_key: item.session_key, agenda_type: item.agenda_type },
+    (sheets ?? []).map((s) => ({
+      ...s,
+      display_order: Number(s.display_order) || 0,
+      is_active: s.is_active !== false,
+      levels: s.levels ?? null,
+    })),
+    level
+  );
   if (!cfg || !Array.isArray(cfg.parameters)) return null;
 
   const params = cfg.parameters as {

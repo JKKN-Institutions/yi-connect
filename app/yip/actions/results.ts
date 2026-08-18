@@ -938,9 +938,16 @@ export async function computeResults(
     // the active aggregation (true for the Yi 2026 Workbook 'sum' / 'weighted_90'
     // models, both /100). If a future event uses 'best_n' with a single session
     // max > 90, revisit the cap so a legitimate total isn't silently clipped.
+    // participationBonus is 0 unless BOTH scoring_settings numbers are set, and
+    // is bounded at PARTICIPATION_BONUS_HARD_CAP (3) even when they are — so it
+    // cannot push anyone past a delegate more than 3 points ahead, and the /100
+    // ceiling is unmoved.
     const avgScore = Math.max(
       0,
-      Math.min(100, baseScore + positionPoints + specialRemarksDelta)
+      Math.min(
+        100,
+        baseScore + positionPoints + specialRemarksDelta + participationBonus
+      )
     );
     const minJurorScore = minSession + positionPoints;
 

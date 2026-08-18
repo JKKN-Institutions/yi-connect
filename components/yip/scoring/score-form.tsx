@@ -143,12 +143,6 @@ export function ScoreForm({
     [allCriteria, roleResolution.slugs, roleUnknown]
   );
 
-  // Reset a judge's override when the delegate or the sheet changes — an
-  // override belongs to one delegate in one session, never leaks to the next.
-  useEffect(() => {
-    setRoleOverride(null);
-  }, [participant.id, agendaItemId]);
-
   // What every write (server submit AND the offline buffer) records about the
   // role. Null on an unsplit sheet: no criterion was restricted, so there is no
   // denominator to reproduce and nothing to store.

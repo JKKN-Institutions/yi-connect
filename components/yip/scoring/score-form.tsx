@@ -623,23 +623,24 @@ export function ScoreForm({
       <div
         className={`rounded-xl border-2 p-4 landscape-compact ${partyTint ?? "bg-gray-50 border-gray-200"}`}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            {/* Juror sees only the blind participant label (constituency
-                number, via juryLabel) + constituency. Real name, school, and
-                the roster serial number are intentionally never shown. */}
-            <h2 className="text-lg font-bold text-gray-900 truncate">
-              {participant.full_name}
-            </h2>
-            {participant.constituency_name && (
-              <p className="text-sm text-gray-600 mt-0.5">
-                Constituency: {participant.constituency_name}
-              </p>
-            )}
-          </div>
-          <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${roleColor}`}>
-            {roleLabel}
-          </span>
+        <div className="min-w-0">
+          {/* Juror sees only the blind participant label (constituency
+              number, via juryLabel) + constituency. Real name, school, and
+              the roster serial number are intentionally never shown.
+              The parliament-role pill that used to sit to the right of this
+              was removed on 2026-08-18: on a role-split sheet it is one half
+              of the answer to "which side is this delegate on", and the
+              National Admin's rule is that the juror is shown the session and
+              their criteria, nothing else. parliament_role is still read by
+              the resolution and still stored on the mark. */}
+          <h2 className="text-lg font-bold text-gray-900 truncate">
+            {participant.full_name}
+          </h2>
+          {participant.constituency_name && (
+            <p className="text-sm text-gray-600 mt-0.5">
+              Constituency: {participant.constituency_name}
+            </p>
+          )}
         </div>
       </div>
 

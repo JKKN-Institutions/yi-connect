@@ -4,6 +4,11 @@ import { useState, useRef } from "react";
 import * as XLSX from "xlsx";
 import { importParticipants } from "@/app/yip/actions/participants";
 import { cleanParticipantName } from "@/lib/yip/name-clean";
+import {
+  parsePartySide,
+  describePartySide,
+  BENCH_ACCEPTED_SPELLINGS,
+} from "@/lib/yip/party-side";
 import { Button } from "@/components/yip/ui/button";
 import {
   Dialog,
@@ -47,6 +52,11 @@ interface CsvRow {
   // A party NAME (anything that isn't a single letter) — resolved server-side
   // to an EXISTING party; unmatched names are flagged, never created.
   party_name?: string;
+  // Bench MASTER DATA — the value as written in the sheet, already checked
+  // against lib/yip/party-side.ts. A cell the parser does not recognise makes
+  // the ROW invalid (see the validation below) instead of importing a student
+  // with a guessed or missing bench.
+  party_side?: string;
   constituency_name?: string;
   constituency_number?: number;
   constituency_state?: string;
@@ -87,6 +97,20 @@ const COL_ALIASES: Record<
   home_state_explicit: ["home_state", "home state"],
   constituency_state_explicit: ["constituency_state", "state_constituency", "state / ut", "state ut", "state/ut"],
   party_letter: ["party", "party_letter", "party letter"],
+  // Bench column. "side" is safe here because yip.participants has exactly one
+  // side (ruling/opposition); it is NOT a party letter column, which is
+  // matched by `party` above.
+  party_side: [
+    "bench",
+    "side",
+    "party_side",
+    "party side",
+    "ruling_opposition",
+    "ruling opposition",
+    "ruling/opposition",
+    "govt_opposition",
+    "government/opposition",
+  ],
   constituency_name: ["constituency", "constituency_name", "constituency name"],
   constituency_number: [
     "constituency_number",
@@ -214,6 +238,7 @@ function normalizeXlsxRow(
 
   // Allocation columns
   const partyRaw = pick(COL_ALIASES.party_letter);
+  const partySideRaw = pick(COL_ALIASES.party_side);
   const constituencyNameRaw = pick(COL_ALIASES.constituency_name);
   const committeeNumberRaw = pick(COL_ALIASES.committee_number);
   const committeeNameRaw = pick(COL_ALIASES.committee_name);
@@ -282,10 +307,21 @@ function normalizeXlsxRow(
       ? String(committeeNameRaw).trim() || undefined
       : undefined) ?? committeeNameFromNumberCol;
 
+  // Bench (ruling / opposition). Parsed with the SAME function the server uses,
+  // so the preview can never accept a value the import would reject.
+  const benchParsed = parsePartySide(
+    partySideRaw === undefined ? undefined : String(partySideRaw)
+  );
+  const party_side = benchParsed.ok ? benchParsed.value ?? undefined : undefined;
+
   const errors: string[] = [];
   // Name-only registration: the student's name is the only required field.
   // School and contact are optional — kept only if those columns are present.
   if (!name) errors.push("Name is required");
+  // An unreadable bench invalidates the ROW. Importing the student anyway would
+  // either leave a juror guessing in the hall or mark them on the wrong two
+  // criteria — both worse than making the organiser fix one spreadsheet cell.
+  if (!benchParsed.ok) errors.push(benchParsed.error);
   // Class is NOT collected in the roster (dropped). participants.class is NOT
   // NULL, so we default to 10 internally. If a stray class value is present it
   // must still be 9-12.
@@ -312,6 +348,7 @@ function normalizeXlsxRow(
     constituency_state,
     party_letter,
     party_name,
+    party_side,
     constituency_name,
     constituency_number,
     committee_number,
@@ -345,11 +382,22 @@ function downloadXlsxTemplate() {
   const headers = [
     "Name",
     "Party Letter",
+    // Bench master data. Regional rounds mark a student against the two
+    // criteria for their bench, so this decides how they are scored — fill it
+    // in before the round rather than leaving a juror to guess in the hall.
+    "Bench",
     "Constituency Number",
     "Constituency Name",
     "Committee Number",
   ];
-  const sample = ["Arjun Kumar", "A", "101", "Bangalore South", "3"];
+  const sample = [
+    "Arjun Kumar",
+    "A",
+    "Ruling",
+    "101",
+    "Bangalore South",
+    "3",
+  ];
   const ws = XLSX.utils.aoa_to_sheet([headers, sample]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Participants");
@@ -369,6 +417,12 @@ export function CsvImport({
   const [result, setResult] = useState<{
     imported: number;
     errors: string[];
+    benchesSet: number;
+    benchSample: Array<{
+      full_name: string;
+      access_code: string;
+      party_side: string | null;
+    }>;
   } | null>(null);
   const [parseError, setParseError] = useState("");
   // Government/opposition benches for lettered-party rosters. Reset to the
@@ -498,6 +552,7 @@ export function CsvImport({
           );
           const bareStateIdx = headers.findIndex((h) => h === "state");
           const partyIdx = findColIdx(headers, COL_ALIASES.party_letter);
+          const partySideIdx = findColIdx(headers, COL_ALIASES.party_side);
           const constNameIdx = findColIdx(headers, COL_ALIASES.constituency_name);
           const constNumIdx = findColIdx(headers, COL_ALIASES.constituency_number);
           const committeeNumIdx = findColIdx(headers, COL_ALIASES.committee_number);
@@ -560,6 +615,13 @@ export function CsvImport({
                   errors.push(`Party must be a single letter A-Z (got "${party_letter}")`);
               }
             }
+            // Bench — same parser as the Excel path and the server.
+            let party_side: string | undefined;
+            if (partySideIdx >= 0) {
+              const benchParsed = parsePartySide(cols[partySideIdx]);
+              if (benchParsed.ok) party_side = benchParsed.value ?? undefined;
+              else errors.push(benchParsed.error);
+            }
             const constituency_name =
               constNameIdx >= 0 ? cols[constNameIdx]?.trim() || undefined : undefined;
             let constituency_number: number | undefined;
@@ -610,6 +672,7 @@ export function CsvImport({
               home_state,
               constituency_state,
               party_letter,
+              party_side,
               constituency_name,
               constituency_number,
               committee_number,
@@ -670,6 +733,11 @@ export function CsvImport({
       city: r.city,
       home_state: r.home_state,
       party_letter: r.party_letter,
+      // BUG FIX: party_name was parsed here but never sent, so the server's
+      // "resolve a party by NAME" branch could never run — a roster with real
+      // party names imported every student with no party at all, silently.
+      party_name: r.party_name,
+      party_side: r.party_side,
       constituency_name: r.constituency_name,
       constituency_number: r.constituency_number,
       constituency_state: r.constituency_state,
@@ -718,6 +786,27 @@ export function CsvImport({
                 {result.imported !== 1 ? "s" : ""}
               </span>
             </div>
+            {/* Benches actually written, shown as REAL ROWS read back from the
+                database — a count on its own has been wrong before, and a wrong
+                bench silently marks a student on the wrong two criteria. */}
+            {result.benchesSet > 0 && (
+              <div className="mt-2 text-sm text-green-800">
+                <p className="font-medium">
+                  Bench recorded for {result.benchesSet} student
+                  {result.benchesSet !== 1 ? "s" : ""}.
+                </p>
+                {result.benchSample.length > 0 && (
+                  <ul className="mt-1 list-disc pl-4">
+                    {result.benchSample.map((s) => (
+                      <li key={s.access_code}>
+                        {s.full_name} ({s.access_code}) —{" "}
+                        {describePartySide(s.party_side)}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
             {result.errors.length > 0 && (
               <div className="mt-2 text-sm text-yellow-700">
                 <p className="font-medium">Some rows had issues:</p>
@@ -773,6 +862,16 @@ export function CsvImport({
               </button>
             </div>
 
+            {/* Bench master data — the whole point of loading it here is that
+                the bench is settled before the round, so a juror is never asked
+                to pick one in the hall. */}
+            <p className="text-xs text-gray-500">
+              Add a <strong>Bench</strong> column to record who is on which side
+              before the round. Accepted: {BENCH_ACCEPTED_SPELLINGS}. Leave a
+              cell blank if you do not know yet — a value that is not on that
+              list is rejected rather than guessed.
+            </p>
+
             {parseError && (
               <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                 <AlertCircle className="mt-0.5 size-4 shrink-0" />
@@ -804,6 +903,7 @@ export function CsvImport({
                   const showAllocCols = parsedRows.some(
                     (r) =>
                       r.party_letter ||
+                      r.party_side ||
                       r.constituency_name ||
                       r.committee_number !== undefined ||
                       r.constituency_number !== undefined
@@ -818,6 +918,7 @@ export function CsvImport({
                             {showAllocCols && (
                               <>
                                 <TableHead>Party</TableHead>
+                                <TableHead>Bench</TableHead>
                                 <TableHead>No.</TableHead>
                                 <TableHead>Constituency</TableHead>
                                 <TableHead>Committee</TableHead>
@@ -844,6 +945,11 @@ export function CsvImport({
                                 <>
                                   <TableCell className="text-xs">
                                     {row.party_letter || "--"}
+                                  </TableCell>
+                                  <TableCell className="text-xs">
+                                    {row.party_side
+                                      ? describePartySide(row.party_side)
+                                      : "--"}
                                   </TableCell>
                                   <TableCell className="text-xs tabular-nums">
                                     {row.constituency_number ?? "--"}

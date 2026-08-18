@@ -111,18 +111,26 @@ export function ScoreForm({
   // Government Bill are benches: a ruling MP and an opposition MP both have
   // parliament_role 'mp'. See lib/yip/scoring-roles.ts.
   //
-  // The judge may override the worked-out role; when it cannot be worked out at
-  // all, they MUST choose before the criteria appear (roleUnknown below). We
-  // never pick a side for them — a guessed side silently changes the
-  // denominator.
-  const [roleOverride, setRoleOverride] = useState<string | null>(null);
+  // BENCH-BLIND (National Admin, 2026-08-18): "The jury need not be aware how
+  // the app evaluates ruling and opposition participants. Internally it must be
+  // linked for assessment. Only 2 attributes should be shown each time you want
+  // to score someone: Session name / A - / B -".
+  //
+  // So the resolution below still runs in full and is still recorded on the
+  // mark — it is simply never DRAWN. The juror receives the criteria that apply
+  // to the delegate in front of them and nothing that names, colours or hints
+  // at a side of the House. When the bench cannot be worked out we do NOT ask
+  // the juror to pick one (that would tell them benches exist, and a juror's
+  // guess silently changes the denominator): the mark is refused and the HOST
+  // fixes the roster — see the blocked notice below and
+  // getEventBenchReadiness() in app/yip/actions/scoring.ts.
   const sheetIsSplit = useMemo(
     () => isRoleSplitSheet(allCriteria),
     [allCriteria]
   );
   const roleResolution = useMemo(
-    () => resolveRoleForSheet(participant, allCriteria, roleOverride),
-    [participant, allCriteria, roleOverride]
+    () => resolveRoleForSheet(participant, allCriteria),
+    [participant, allCriteria]
   );
   // Unsplit sheet (every sheet in production today) -> nothing to choose, and
   // criteriaForRole over an untagged list returns the whole list unchanged.

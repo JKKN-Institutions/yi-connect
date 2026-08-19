@@ -571,13 +571,15 @@ export function ResultsClient({
                 <p className="font-semibold">
                   {singleJudgeStudents.length}{" "}
                   {singleJudgeStudents.length === 1 ? "student was" : "students were"}{" "}
-                  marked by only one judge in at least one session
+                  marked by fewer judges than were assigned, in at least one
+                  session
                 </p>
                 <p className="mt-0.5">
-                  Four judges sit on a session, but only one of them put marks on
-                  record for these students. Those marks still count exactly as
-                  they are — nothing here changes a score. If the round is still
-                  running, you may want to send a second judge to watch them.
+                  More judges were assigned to those sessions than actually put
+                  marks on record for these students. Those marks still count
+                  exactly as they are — nothing here changes a score. If the round
+                  is still running, you may want to send another judge to watch
+                  them.
                 </p>
                 <button
                   type="button"
@@ -598,7 +600,12 @@ export function ResultsClient({
                           </span>
                         ) : null}
                         <span className="block text-sky-800/70">
-                          {s.sessions.join(", ")}
+                          {s.sessions
+                            .map(
+                              (x) =>
+                                `${x.label} (${x.marked} of ${x.assigned} judges)`
+                            )
+                            .join(", ")}
                         </span>
                       </li>
                     ))}

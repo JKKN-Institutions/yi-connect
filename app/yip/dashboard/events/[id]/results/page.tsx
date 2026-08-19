@@ -6,6 +6,7 @@ import {
   getDay2CheckinWarning,
   getAwardCandidates,
   getResultsFreshness,
+  getMarkingCoverage,
 } from "@/app/yip/actions/results";
 import { getAwardOverrides } from "@/app/yip/actions/award-overrides";
 import { getPositionBonusConfigAdmin } from "@/app/yip/actions/positions";
@@ -61,6 +62,10 @@ export default async function ResultsPage({
   // (judges-scored count + stale flag + participant count). Cheap counts only —
   // deliberately NOT getScoringProgress (that times out on heavy events).
   const freshness = await getResultsFreshness(id);
+  // Two host-only notes about HOW the marks were taken (Director 2026-08-19):
+  // students a single judge marked, and students whose marks span both benches
+  // after a no-confidence motion. Read-only — changes no score.
+  const markingCoverage = await getMarkingCoverage(id);
 
   return (
     <ResultsClient
@@ -81,6 +86,8 @@ export default async function ResultsPage({
       totalJudges={freshness?.totalJudges ?? 0}
       judgesScored={freshness?.judgesScored ?? 0}
       scoresStale={freshness?.scoresStale ?? false}
+      singleJudgeStudents={markingCoverage?.singleJudgeStudents ?? []}
+      sideChangeStudents={markingCoverage?.sideChangeStudents ?? []}
     />
   );
 }

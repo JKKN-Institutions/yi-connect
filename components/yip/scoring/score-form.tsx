@@ -3,12 +3,10 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/yip/ui/button";
 import { Textarea } from "@/components/yip/ui/textarea";
-import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { criteriaForRole } from "@/lib/yip/rubric";
 import {
   isRoleSplitSheet,
   resolveRoleForSheet,
-  roleSlugLabel,
 } from "@/lib/yip/scoring-roles";
 import { saveToBuffer, getFromBuffer, removeFromBuffer } from "@/lib/yip/score-buffer";
 import { Save, Send, Loader2, CheckCircle2, MessageSquare } from "lucide-react";
@@ -113,18 +111,26 @@ export function ScoreForm({
   // Government Bill are benches: a ruling MP and an opposition MP both have
   // parliament_role 'mp'. See lib/yip/scoring-roles.ts.
   //
-  // The judge may override the worked-out role; when it cannot be worked out at
-  // all, they MUST choose before the criteria appear (roleUnknown below). We
-  // never pick a side for them — a guessed side silently changes the
-  // denominator.
-  const [roleOverride, setRoleOverride] = useState<string | null>(null);
+  // BENCH-BLIND (National Admin, 2026-08-18): "The jury need not be aware how
+  // the app evaluates ruling and opposition participants. Internally it must be
+  // linked for assessment. Only 2 attributes should be shown each time you want
+  // to score someone: Session name / A - / B -".
+  //
+  // So the resolution below still runs in full and is still recorded on the
+  // mark — it is simply never DRAWN. The juror receives the criteria that apply
+  // to the delegate in front of them and nothing that names, colours or hints
+  // at a side of the House. When the bench cannot be worked out we do NOT ask
+  // the juror to pick one (that would tell them benches exist, and a juror's
+  // guess silently changes the denominator): the mark is refused and the HOST
+  // fixes the roster — see the blocked notice below and
+  // getEventBenchReadiness() in app/yip/actions/scoring.ts.
   const sheetIsSplit = useMemo(
     () => isRoleSplitSheet(allCriteria),
     [allCriteria]
   );
   const roleResolution = useMemo(
-    () => resolveRoleForSheet(participant, allCriteria, roleOverride),
-    [participant, allCriteria, roleOverride]
+    () => resolveRoleForSheet(participant, allCriteria),
+    [participant, allCriteria]
   );
   // Unsplit sheet (every sheet in production today) -> nothing to choose, and
   // criteriaForRole over an untagged list returns the whole list unchanged.
@@ -136,12 +142,6 @@ export function ScoreForm({
         : criteriaForRole(allCriteria, roleResolution.slugs),
     [allCriteria, roleResolution.slugs, roleUnknown]
   );
-
-  // Reset a judge's override when the delegate or the sheet changes — an
-  // override belongs to one delegate in one session, never leaks to the next.
-  useEffect(() => {
-    setRoleOverride(null);
-  }, [participant.id, agendaItemId]);
 
   // What every write (server submit AND the offline buffer) records about the
   // role. Null on an unsplit sheet: no criterion was restricted, so there is no
@@ -605,17 +605,15 @@ export function ScoreForm({
     );
   };
 
-  const roleLabel = participant.parliament_role
-    ? ROLE_LABELS[participant.parliament_role] ?? participant.parliament_role
-    : "Participant";
-  const roleColor = participant.parliament_role
-    ? ROLE_COLORS[participant.parliament_role] ?? "bg-gray-500 text-white"
-    : "bg-gray-500 text-white";
-  // Header tint: Ruling/Opposition keep their colour; a benchless party (side
-  // null but a party number) gets a neutral saffron tint; no party = gray.
-  const partyTint = participant.party_side
-    ? `${PARTY_COLORS[participant.party_side as keyof typeof PARTY_COLORS].bg} ${PARTY_COLORS[participant.party_side as keyof typeof PARTY_COLORS].border}`
-    : participant.party_number != null
+  // Header tint, BENCH-BLIND. This used to be PARTY_COLORS[party_side], which
+  // painted the treasury bench and the opposition bench two different colours —
+  // the side was legible at a glance even with every word about it removed. It
+  // is now ONE neutral saffron for any party affiliation (so a delegate who has
+  // been allocated still looks allocated) and gray for none. party_side is
+  // still read by the resolution above and still stored on the mark; it is only
+  // never drawn.
+  const partyTint =
+    participant.party_side || participant.party_number != null
       ? "bg-[#FF9933]/5 border-[#FF9933]/30"
       : null;
 
@@ -625,77 +623,48 @@ export function ScoreForm({
       <div
         className={`rounded-xl border-2 p-4 landscape-compact ${partyTint ?? "bg-gray-50 border-gray-200"}`}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            {/* Juror sees only the blind participant label (constituency
-                number, via juryLabel) + constituency. Real name, school, and
-                the roster serial number are intentionally never shown. */}
-            <h2 className="text-lg font-bold text-gray-900 truncate">
-              {participant.full_name}
-            </h2>
-            {participant.constituency_name && (
-              <p className="text-sm text-gray-600 mt-0.5">
-                Constituency: {participant.constituency_name}
-              </p>
-            )}
-          </div>
-          <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${roleColor}`}>
-            {roleLabel}
-          </span>
+        <div className="min-w-0">
+          {/* Juror sees only the blind participant label (constituency
+              number, via juryLabel) + constituency. Real name, school, and
+              the roster serial number are intentionally never shown.
+              The parliament-role pill that used to sit to the right of this
+              was removed on 2026-08-18: on a role-split sheet it is one half
+              of the answer to "which side is this delegate on", and the
+              National Admin's rule is that the juror is shown the session and
+              their criteria, nothing else. parliament_role is still read by
+              the resolution and still stored on the mark. */}
+          <h2 className="text-lg font-bold text-gray-900 truncate">
+            {participant.full_name}
+          </h2>
+          {participant.constituency_name && (
+            <p className="text-sm text-gray-600 mt-0.5">
+              Constituency: {participant.constituency_name}
+            </p>
+          )}
         </div>
       </div>
 
-      {/* Role-dependent criteria. Only rendered when the sheet actually splits
-          by role — on every unsplit sheet this whole block is absent and the
-          screen is unchanged. */}
-      {sheetIsSplit && (
-        <div
-          className={`rounded-lg border px-4 py-3 text-sm ${
-            roleUnknown
-              ? "border-amber-300 bg-amber-50 text-amber-900"
-              : "border-gray-200 bg-gray-50 text-gray-700"
-          }`}
-        >
-          {roleUnknown ? (
-            <p className="font-semibold">
-              This session is marked differently for each side of the House, and
-              we could not work out this delegate&apos;s side. Choose it to see
-              their criteria — the choice is recorded with the score.
-            </p>
-          ) : (
-            <p>
-              Marked as{" "}
-              <span className="font-semibold">
-                {roleResolution.slugs.map(roleSlugLabel).join(" · ")}
-              </span>
-              {roleResolution.source === "override" && (
-                <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">
-                  changed by you
-                </span>
-              )}
-              . Only their criteria are shown, out of {maxTotal}.
-            </p>
-          )}
-          <div className="mt-2 flex flex-wrap gap-2">
-            {roleResolution.choices.map((c) => (
-              <button
-                key={c.slug}
-                type="button"
-                disabled={isLocked}
-                aria-pressed={roleOverride === c.slug}
-                onClick={() =>
-                  setRoleOverride((prev) => (prev === c.slug ? null : c.slug))
-                }
-                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                  roleOverride === c.slug
-                    ? "border-blue-600 bg-blue-600 text-white"
-                    : "border-gray-300 bg-white text-gray-700"
-                }`}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
+      {/* Role-dependent criteria — BENCH-BLIND. When the sheet splits and the
+          delegate's side IS known, nothing renders here at all: the juror just
+          receives their criteria and the /max in the banner below, with no
+          label, badge or colour telling them which bench the app used.
+
+          The one thing that can appear is the BLOCKED state, and it names no
+          benches either. We do not offer the juror a side to pick — that would
+          both reveal the mechanism and let a guess silently change the
+          denominator. Instead the mark is refused and the fix is the host's:
+          the delegate has no bench on the roster, and getEventBenchReadiness()
+          in app/yip/actions/scoring.ts lists exactly who for the event
+          dashboard. On every unsplit sheet (all 13 in production today) this
+          block is absent and the screen is unchanged. */}
+      {sheetIsSplit && roleUnknown && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">This delegate can&apos;t be marked yet.</p>
+          <p className="mt-1">
+            Their record is incomplete for this session. Please tell the host —
+            they can fix it from the event dashboard and this screen will start
+            working straight away. Carry on with the next delegate meanwhile.
+          </p>
         </div>
       )}
 
@@ -841,9 +810,11 @@ export function ScoreForm({
           {!allScored && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
               {roleUnknown ? (
+                // Bench-blind: names no side, asks the juror for no decision.
+                // The host fixes the roster; the juror moves on.
                 <>
-                  Choose this delegate&apos;s side above before submitting —
-                  their criteria and their maximum depend on it.
+                  This delegate can&apos;t be marked yet — ask the host to
+                  complete their record.
                 </>
               ) : (
                 <>

@@ -168,6 +168,126 @@ function hasDisciplinaryFlag(scores: RawScore[]): boolean {
   );
 }
 
+// ─── Participation (repeat speaking turns) ───────────────────────
+//
+// National Admin, 2026-08-18: "Multiple iterations also can be entered for
+// scoring… eventually averaging out the scores and maybe adding up a bit for
+// participative efforts and involvement" and "Scores must be averages of all
+// scores. Some consideration for repeat participation as well, but not very
+// much."
+//
+// THE AVERAGING HALF ALREADY EXISTS (#462) and is untouched here: a juror's
+// turns average into one per-juror mark, then the session mark is the mean of
+// those per-juror marks. What was missing is the second half — the "bit" for
+// having spoken more than once. This is that bit, and it is deliberately built
+// so it can never become the thing that decides a rank.
+//
+// HOW MANY TIMES DID THEY SPEAK?
+// Turns are recorded per (juror, session). Three jurors each marking the same
+// two speeches is TWO speeches, not six — so a session's turn count is the
+// MOST turns any ONE juror recorded there, never the sum across jurors. Extra
+// turns = Σ over sessions of (that count − 1). A delegate marked once per
+// session by everyone therefore has extraTurns = 0, which is every delegate in
+// 5,543 of the 5,557 submitted marks in production.
+//
+// HOW MUCH IS IT WORTH?
+//   bonus = min(configured_cap, HARD_CAP, per_turn × extraTurns)
+// Both configured numbers live on the yip.scoring_settings singleton and BOTH
+// DEFAULT TO 0, so until a super-admin sets them the bonus is exactly 0 for
+// everyone and every finished round recomputes to the same number it holds now.
+//
+// WHY A HARD CAP IN CODE AS WELL AS A CONFIGURED ONE.
+// "Not very much" has to survive a typo. A configured cap of 30 would let
+// volume beat quality; the in-code ceiling means the most a mistyped setting
+// can move anyone is 3 points on the /100 scale. Stated plainly so nobody has
+// to trust the wording: the bonus can only reorder delegates who are ALREADY
+// within 3 points of each other. It cannot lift a mid-table delegate past a
+// strong one, whatever they do — the maximum reachable total is unchanged at
+// 100 and the gap it can close is bounded by 3.
+//
+// AND IT IS NEVER HIDDEN. Both the turn count and the points awarded are
+// written into the participant's stored score_breakdown, so the host's own
+// results screen shows "participation_turns: 2, participation_bonus: 1" next to
+// the criteria averages rather than an unexplained extra point.
+const PARTICIPATION_BONUS_HARD_CAP = 3;
+
+type ParticipationBonusConfig = { perExtraTurn: number; cap: number };
+
+const PARTICIPATION_BONUS_OFF: ParticipationBonusConfig = {
+  perExtraTurn: 0,
+  cap: 0,
+};
+
+/**
+ * Read the two participation numbers off the global scoring settings.
+ *
+ * Untyped view: the columns are newer than the generated Database types (same
+ * pattern as use_bucket_model in scoring-settings.ts and bills.drafters below).
+ * ANY failure — missing columns because the migration has not been applied yet,
+ * RLS, a bad value — falls back to OFF, so a half-deployed environment scores
+ * exactly as it does today rather than erroring out mid-round.
+ */
+async function readParticipationBonusConfig(
+  supabase: SupabaseClient
+): Promise<ParticipationBonusConfig> {
+  try {
+    const { data, error } = await supabase
+      .from("scoring_settings")
+      .select("participation_bonus_per_turn, participation_bonus_max")
+      .eq("id", true)
+      .maybeSingle();
+    if (error || !data) return PARTICIPATION_BONUS_OFF;
+    const perExtraTurn = Number(
+      (data as { participation_bonus_per_turn?: unknown })
+        .participation_bonus_per_turn
+    );
+    const cap = Number(
+      (data as { participation_bonus_max?: unknown }).participation_bonus_max
+    );
+    return {
+      perExtraTurn:
+        Number.isFinite(perExtraTurn) && perExtraTurn > 0 ? perExtraTurn : 0,
+      cap: Number.isFinite(cap) && cap > 0 ? cap : 0,
+    };
+  } catch {
+    return PARTICIPATION_BONUS_OFF;
+  }
+}
+
+/**
+ * Extra speaking turns beyond the first, across every scored session.
+ *
+ * `bySessionJuror` is session -> juror -> that juror's turn totals, exactly as
+ * the averaging above builds it. Per session we take the MOST turns any one
+ * juror recorded (see the note above on why not the sum), minus the first.
+ */
+function extraTurnsFrom(
+  bySessionJuror: Map<string, Map<string, number[]>>
+): number {
+  let extra = 0;
+  for (const jurorMap of bySessionJuror.values()) {
+    let mostTurnsByOneJuror = 0;
+    for (const vals of jurorMap.values()) {
+      if (vals.length > mostTurnsByOneJuror) mostTurnsByOneJuror = vals.length;
+    }
+    if (mostTurnsByOneJuror > 1) extra += mostTurnsByOneJuror - 1;
+  }
+  return extra;
+}
+
+/** The points a delegate's extra turns are worth, bounded twice. */
+function participationBonusFor(
+  extraTurns: number,
+  cfg: ParticipationBonusConfig
+): number {
+  if (extraTurns <= 0 || cfg.perExtraTurn <= 0 || cfg.cap <= 0) return 0;
+  return Math.min(
+    cfg.cap,
+    PARTICIPATION_BONUS_HARD_CAP,
+    cfg.perExtraTurn * extraTurns
+  );
+}
+
 type ResultRow = {
   event_id: string;
   participant_id: string;
@@ -311,6 +431,13 @@ export async function computeResults(
   // (all set by super-admin in the admin Scoring Rules / Session Scoring
   // screens; nothing hardcoded here).
   const settings = await getScoringSettings();
+
+  // 1d-bis. Participation (repeat speaking turns). Both numbers default to 0,
+  // so this is inert on every event until a super-admin sets them. See the
+  // block above readParticipationBonusConfig for the whole rule.
+  const participationCfg = await readParticipationBonusConfig(
+    supabase as unknown as SupabaseClient
+  );
 
   // 1e. Special-remarks point deltas (admin-configurable, global singleton).
   // Director decision 2026-06-03: each raised remark now adjusts the
@@ -636,6 +763,13 @@ export async function computeResults(
       }
     );
 
+    // Participation (repeat speaking turns). Counted from the SAME map the
+    // averaging above uses, so the two can never disagree about how many times
+    // this delegate was marked. 0 for everyone until a super-admin configures
+    // the two settings, and 0 for any delegate marked once per session.
+    const extraTurns = extraTurnsFrom(bySessionJuror);
+    const participationBonus = participationBonusFor(extraTurns, participationCfg);
+
     // Team Spirit basis (Director ruling 2026-06-25): this participant's individual
     // contribution in the two committee sessions = Σ raw over the committee
     // session_keys (0 when not scored in them). Averaged per committee after the
@@ -804,9 +938,16 @@ export async function computeResults(
     // the active aggregation (true for the Yi 2026 Workbook 'sum' / 'weighted_90'
     // models, both /100). If a future event uses 'best_n' with a single session
     // max > 90, revisit the cap so a legitimate total isn't silently clipped.
+    // participationBonus is 0 unless BOTH scoring_settings numbers are set, and
+    // is bounded at PARTICIPATION_BONUS_HARD_CAP (3) even when they are — so it
+    // cannot push anyone past a delegate more than 3 points ahead, and the /100
+    // ceiling is unmoved.
     const avgScore = Math.max(
       0,
-      Math.min(100, baseScore + positionPoints + specialRemarksDelta)
+      Math.min(
+        100,
+        baseScore + positionPoints + specialRemarksDelta + participationBonus
+      )
     );
     const minJurorScore = minSession + positionPoints;
 
@@ -826,6 +967,26 @@ export async function computeResults(
     for (const key of Object.keys(criteriaSum)) {
       scoreBreakdown[key] =
         Math.round((criteriaSum[key] / criteriaCount[key]) * 100) / 100;
+    }
+
+    // Participation, shown rather than buried. Neither key is a criterion key
+    // and neither belongs to any award family or workbook bucket
+    // (parentScoreByKey matches a key exactly or on a "<family>." prefix, and
+    // no family is called "participation"), so these are read by the results
+    // screen and by nothing that computes a score.
+    //   participation_turns  — extra speaking turns beyond the first, written
+    //                          whenever there were any, EVEN IF the bonus is
+    //                          switched off, so the host can see the repeat
+    //                          participation the averaging is already smoothing.
+    //   participation_bonus  — the points those turns were actually worth.
+    //                          Absent when 0, i.e. absent on every event until
+    //                          the two settings are configured.
+    if (extraTurns > 0) {
+      scoreBreakdown.participation_turns = extraTurns;
+    }
+    if (participationBonus > 0) {
+      scoreBreakdown.participation_bonus =
+        Math.round(participationBonus * 100) / 100;
     }
 
     // Day-presence gate (Director ruling 2026-06-25). At a two-day event a

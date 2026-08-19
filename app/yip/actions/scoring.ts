@@ -2,14 +2,19 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireJurySession } from "@/lib/yip/auth/yip-session";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { isJurorAssignedToSession } from "./jury-sessions";
 import { resolveSessionConfig } from "@/lib/yip/session-config-resolution";
 import { fetchEventRoundLevel } from "@/lib/yip/round-level";
+import { fetchAllRows } from "@/lib/pagination";
 import {
   applicableCriteria,
   applicableMax,
   isRoleSplitSheet,
   normaliseRoleSlugs,
+  resolveRoleForSheet,
+  roleSlugLabel,
+  sheetRoleSlugs,
 } from "@/lib/yip/scoring-roles";
 import type { Tables } from "@/types/yip/database";
 
@@ -362,9 +367,15 @@ export async function submitScore(
       // role on replay, so it is reported as STALE — the flush drops it and the
       // juror re-scores against the live sheet, exactly as it already does for
       // a changed rubric. A live submit gets the plain instruction.
+      // BENCH-BLIND WORDING (National Admin, 2026-08-18). The refusal itself is
+      // unchanged — a role-less mark on a split sheet is still rejected — but
+      // the message no longer tells the juror that the app splits by side of
+      // the House, and no longer asks them to pick one. The missing data is the
+      // delegate's bench on the ROSTER, and the host is the one who can supply
+      // it; getEventBenchReadiness() below lists exactly who is affected.
       error: input.fromOfflineSync
-        ? "STALE_OFFLINE_SCORE: this session is now scored separately for each side of the House — please re-score this participant"
-        : "This session is scored differently for each side of the House — pick the delegate's role before submitting.",
+        ? "STALE_OFFLINE_SCORE: the scoring sheet changed since this was saved offline — please re-score this participant"
+        : "This delegate can't be marked yet — their record is incomplete for this session. Ask the host to complete it.",
     };
   }
 
@@ -801,6 +812,150 @@ export async function getScoreableParticipants(
 
   if (error || !data) return [];
   return data as ScoreableParticipant[];
+}
+
+// ─── Bench readiness (organiser-facing) ───────────────────────────
+//
+// The other half of the bench-blind rule. The jury screen no longer asks a
+// juror which side of the House a delegate sits on — so somebody else has to
+// know, before the session starts, that N delegates cannot be marked at all.
+// That somebody is the host.
+//
+// A delegate is UNMARKABLE in a session when the session's criteria sheet is
+// role-split and the delegate matches none of its restricted criteria (no
+// party_side on the roster, or a parliament_role the sheet does not mention).
+// submitScore() refuses their mark; this lists them by name so the host can
+// fix the roster instead of discovering it mid-round from a confused juror.
+//
+// Read-only. Event-scoped, so the gate is getYipEventAccess — canManage, the
+// same gate the rest of the host's event dashboard uses. Fails CLOSED.
+//
+// ZERO SESSIONS ARE SPLIT IN PRODUCTION TODAY, so this returns
+// { splitSessions: [], unmarkable: [] } for every current event and costs one
+// agenda read. It only has anything to say once an admin splits a sheet.
+
+export type BenchReadinessSession = {
+  agenda_item_id: string;
+  title: string;
+  /** The role slugs this sheet restricts criteria to — what the roster must supply. */
+  required_slugs: { slug: string; label: string }[];
+};
+
+export type BenchReadinessDelegate = {
+  participant_id: string;
+  full_name: string;
+  constituency_name: string | null;
+  parliament_role: string | null;
+  party_side: string | null;
+  /** Titles of the split sessions this delegate cannot be marked in. */
+  blocked_sessions: string[];
+};
+
+export type BenchReadiness = {
+  /** Scoreable sessions whose criteria sheet splits by role. */
+  splitSessions: BenchReadinessSession[];
+  /** Delegates who cannot be marked in at least one of those sessions. */
+  unmarkable: BenchReadinessDelegate[];
+  /** unmarkable.length — the number the host needs to see at a glance. */
+  unmarkableCount: number;
+};
+
+export async function getEventBenchReadiness(
+  eventId: string
+): Promise<ActionResult<BenchReadiness>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
+  const supabase = await createServiceClient();
+
+  const { data: agendaRows } = await supabase
+    .from("agenda")
+    .select("id, title, is_scoreable")
+    .eq("event_id", eventId)
+    .order("display_order", { ascending: true });
+
+  const scoreable = (agendaRows ?? []).filter((a) => a.is_scoreable === true);
+
+  // Which of this event's sessions actually split by role. getSessionScoringParams
+  // applies the SAME resolution the jury screen applies (session_key/agenda_type
+  // + round level), so the host is told about exactly the sheets the jurors get.
+  const splitSessions: BenchReadinessSession[] = [];
+  const criteriaByAgendaItem = new Map<string, SessionScoringParams["criteria"]>();
+  for (const item of scoreable) {
+    const params = await getSessionScoringParams(item.id);
+    if (!params || !isRoleSplitSheet(params.criteria)) continue;
+    criteriaByAgendaItem.set(item.id, params.criteria);
+    splitSessions.push({
+      agenda_item_id: item.id,
+      title: item.title ?? "Untitled session",
+      required_slugs: sheetRoleSlugs(params.criteria).map((slug) => ({
+        slug,
+        label: roleSlugLabel(slug),
+      })),
+    });
+  }
+
+  // Nothing splits -> nothing to report, and no participant read at all.
+  if (splitSessions.length === 0) {
+    return {
+      success: true,
+      data: { splitSessions: [], unmarkable: [], unmarkableCount: 0 },
+    };
+  }
+
+  const participants = await fetchAllRows<{
+    id: string;
+    full_name: string;
+    constituency_name: string | null;
+    parliament_role: string | null;
+    party_side: string | null;
+  }>((from, to) =>
+    supabase
+      .from("participants")
+      .select("id, full_name, constituency_name, parliament_role, party_side")
+      .eq("event_id", eventId)
+      .not("parliament_role", "is", null)
+      .order("id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: {
+        id: string;
+        full_name: string;
+        constituency_name: string | null;
+        parliament_role: string | null;
+        party_side: string | null;
+      }[] | null;
+      error: unknown;
+    }>
+  );
+
+  const unmarkable: BenchReadinessDelegate[] = [];
+  for (const p of participants) {
+    const blocked: string[] = [];
+    for (const s of splitSessions) {
+      const criteria = criteriaByAgendaItem.get(s.agenda_item_id);
+      if (!criteria) continue;
+      // Exactly the resolution the jury screen runs, with no override — if it
+      // says needsChoice, that juror's Submit is refused.
+      if (resolveRoleForSheet(p, criteria).needsChoice) blocked.push(s.title);
+    }
+    if (blocked.length > 0) {
+      unmarkable.push({
+        participant_id: p.id,
+        full_name: p.full_name,
+        constituency_name: p.constituency_name,
+        parliament_role: p.parliament_role,
+        party_side: p.party_side,
+        blocked_sessions: blocked,
+      });
+    }
+  }
+
+  return {
+    success: true,
+    data: { splitSessions, unmarkable, unmarkableCount: unmarkable.length },
+  };
 }
 
 // Compact rubric shape consumed by the jury screen + the bootstrap action.

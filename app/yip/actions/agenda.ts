@@ -280,11 +280,27 @@ export async function reopenLastCompletedSession(
   if (agendaErr) return { success: false, error: agendaErr.message };
 
   // Point the event back at that item and put the matching day live again.
+  const nextStatus = item.day === 2 ? "day2_live" : "day1_live";
+
+  // This route writes day1_live DIRECTLY, bypassing updateEventStatus, so the
+  // go-live rule must be applied here too or it can be routed around
+  // (startAgendaItem -> reopenLastCompletedSession would put a draft regional
+  // round live). Same shared function, same answer.
+  if (nextStatus === "day1_live") {
+    const { data: ev } = await supabase
+      .from("events")
+      .select("level, committee_topics")
+      .eq("id", eventId)
+      .single();
+    const blocked = goLiveBlockReason(ev?.level, ev?.committee_topics);
+    if (blocked) return { success: false, error: blocked };
+  }
+
   const { error: eventErr } = await supabase
     .from("events")
     .update({
       current_agenda_item_id: item.id,
-      status: item.day === 2 ? "day2_live" : "day1_live",
+      status: nextStatus,
     })
     .eq("id", eventId);
   if (eventErr) return { success: false, error: eventErr.message };
@@ -669,6 +685,69 @@ export async function updateAgendaItemSubTimers(
 
 // ─── Update Event Status ──────────────────────────────────────────
 
+/**
+ * THE ONE RULE for "may this round go LIVE?" - do not re-implement it anywhere.
+ *
+ * A regional or national round may not start with no committees picked
+ * (Director, 2026-08-19). Allocation already refuses to run without them, so
+ * going live in that state gives a hall full of unallocated students and a
+ * Control panel with nothing to run. He chose a hard block over auto-filling
+ * the committees or merely warning.
+ *
+ * WHY THIS IS SHARED AND NOT INLINE. It first shipped inline in
+ * updateEventStatus, and review found the block was routable around:
+ * reopenLastCompletedSession writes day1_live DIRECTLY, so a chair could go
+ * startAgendaItem -> reopenLastCompletedSession and put a draft regional round
+ * live without the rule ever running. This repo has been bitten by that exact
+ * shape before - two copies of one rule drifting apart - which is why
+ * lib/yip/session-config-resolution.ts exists. EVERY route that can write
+ * day1_live must call this function.
+ *
+ * SCOPE: regional + national ONLY. Chapter rounds have run all season and must
+ * stay bit-for-bit identical, so a chapter round never blocks.
+ *
+ * FAIL OPEN on anything we cannot positively establish. Six regional rounds run
+ * 22 Aug - 8 Sep; wrongly blocking one on the morning of a round, in a full
+ * hall, is far worse than the gap this closes. So refuse ONLY when we can read
+ * that the level is regional/national AND that the committee map is empty.
+ *
+ * Returns the message to refuse with, or null to allow.
+ */
+function goLiveBlockReason(level: unknown, committeeTopics: unknown): string | null {
+  if (level !== "regional" && level !== "national") return null;
+
+  // The two shapes allocation and the walk-in actions already read: the legacy
+  // array form is a list of committee names; the current form is a
+  // { committee -> topic } map whose KEYS are the committees.
+  const raw = committeeTopics;
+  let hasCommittees: boolean;
+  if (raw === null) {
+    hasCommittees = false; // NULL column = nothing has ever been picked
+  } else if (Array.isArray(raw)) {
+    hasCommittees = raw.some((c) => String(c ?? "").trim().length > 0);
+  } else if (typeof raw === "object") {
+    hasCommittees = Object.keys(raw as Record<string, unknown>).some(
+      (k) => k.trim().length > 0
+    );
+  } else {
+    // undefined (column did not come back) or an unexpected scalar - we cannot
+    // positively say "none picked", so do not block the round.
+    hasCommittees = true;
+  }
+  if (hasCommittees) return null;
+
+  // Say only what is ENFORCED. The check inspects committee KEYS and never the
+  // topic text, so it must not tell a host to "give each one a topic" - SRTN
+  // Regional has ten committees with empty topics and passes. Sending a host
+  // hunting for a condition the code never checks costs minutes they do not
+  // have on the morning of a round.
+  return (
+    "This round has no committees selected, so students cannot be allocated and " +
+    "the Control panel has nothing to run. Open this event's Committees tab, tick " +
+    "the committees for this round, then start the round."
+  );
+}
+
 export async function updateEventStatus(
   eventId: string,
   newStatus: string
@@ -690,7 +769,7 @@ export async function updateEventStatus(
 
   const { data: event } = await supabase
     .from("events")
-    .select("status")
+    .select("status, level, committee_topics")
     .eq("id", eventId)
     .single();
 
@@ -703,6 +782,14 @@ export async function updateEventStatus(
       error: `Cannot transition from ${event.status} to ${newStatus}`,
     };
   }
+
+  // Resolved through the shared rule so every route that can write day1_live
+  // gives the same answer. See goLiveBlockReason above.
+  if (newStatus === "day1_live") {
+    const blocked = goLiveBlockReason(event.level, event.committee_topics);
+    if (blocked) return { success: false, error: blocked };
+  }
+
 
   // If going to day1_live, set the first Day 1 agenda item as current
   const updatePayload: Record<string, unknown> = { status: newStatus };

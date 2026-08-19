@@ -1011,6 +1011,22 @@ export async function updateEvent(
   if (!access.canManage) {
     return { success: false, error: "Not authorized to manage this event" };
   }
+
+  // This is the ordinary EDIT path (name, dates, venue, committees). It must not
+  // be a second way to START a round: UpdateEventData.status admits "day1_live",
+  // and this function applies no transition validation and no readiness check,
+  // so writing it here would route around goLiveBlockReason() in
+  // app/yip/actions/agenda.ts. The YIP edit page never sends `status`, so
+  // refusing it changes no existing screen - it closes a server-side hole.
+  // Every other status stays writable: only going LIVE is gated.
+  if (data.status === "day1_live" || data.status === "day2_live") {
+    return {
+      success: false,
+      error:
+        "A round cannot be put live from the event edit form. Use the Control panel for this event, which checks the round is ready first.",
+    };
+  }
+
   const supabase = await createServiceClient();
 
   // When the caller (re)links a chapter, re-derive the canonical fields from

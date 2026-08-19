@@ -257,6 +257,7 @@ export function ResultsClient({
   day2CheckinWarning = false,
   awardCandidates = [],
   zoneAwardConfig = {},
+  eventAwardLabels = [],
   canQualify = false,
   participantCount = 0,
   totalJudges = 0,
@@ -279,6 +280,10 @@ export function ResultsClient({
   // awards confer advancement (award_key -> qualifies; absence = true), plus
   // whether the current viewer may lock qualifiers (super-admin only).
   zoneAwardConfig?: Record<string, boolean>;
+  // The awards THIS round hands out, in display order, resolved from the event's
+  // round level (yip.award_definitions.levels). Empty = fall back to the
+  // workbook 15, which is what every round showed before awards were scopeable.
+  eventAwardLabels?: string[];
   canQualify?: boolean;
   // Two-day event with ZERO Day-2 check-ins: computing now marks everyone
   // "Not ranked — absent Day 2". Surface a warning so the chair doesn't publish
@@ -501,15 +506,17 @@ export function ResultsClient({
     return a.localeCompare(b);
   });
 
-  // Show ALL 15 workbook awards in canonical order — the ones without a winner
-  // render as "Not awarded yet" with what they need (see AWARD_REQUIREMENT), so
-  // an empty award never silently disappears. Any non-canonical label the engine
-  // emitted (shouldn't happen) is appended after the 15.
+  // Show ALL of THIS ROUND's awards in canonical order — the ones without a
+  // winner render as "Not awarded yet" with what they need (see
+  // AWARD_REQUIREMENT), so an empty award never silently disappears. The list
+  // comes from the database, level-resolved for this event; it falls back to the
+  // workbook 15 when the round has no awards of its own (or the column is not
+  // deployed yet). Any other label the engine emitted is appended after it.
+  const canonicalAwardLabels: readonly string[] =
+    eventAwardLabels.length > 0 ? eventAwardLabels : AWARD_LABELS;
   const allAwardLabels: string[] = [
-    ...AWARD_LABELS,
-    ...awardLabels.filter(
-      (l) => !(AWARD_LABELS as readonly string[]).includes(l)
-    ),
+    ...canonicalAwardLabels,
+    ...awardLabels.filter((l) => !canonicalAwardLabels.includes(l)),
   ];
   const awardsWithWinner = awardWinners.size;
 
@@ -937,7 +944,7 @@ export function ResultsClient({
                   className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
                 >
                   <option value="">Select an award…</option>
-                  {AWARD_LABELS.map((label) => (
+                  {canonicalAwardLabels.map((label) => (
                     <option key={label} value={label}>
                       {label}
                     </option>

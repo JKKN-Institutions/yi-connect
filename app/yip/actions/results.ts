@@ -16,6 +16,7 @@ import {
   type RoleScopedCriterion,
 } from "@/lib/yip/scoring-roles";
 import { fetchEventRoundLevel } from "@/lib/yip/round-level";
+import { resolveAwardsForLevel } from "@/lib/yip/awards";
 import { listScoringBuckets } from "./scoring-buckets";
 import { getScoringFlagsConfig } from "./scoring-flags";
 import { getSessionScoringParams } from "./scoring";
@@ -1225,6 +1226,8 @@ export async function computeResults(
     rank_mode: string | null;
     rank_keys: string[] | null;
     is_team: boolean | null;
+    /** Round levels this award applies to. null/absent = every round. */
+    levels?: string[] | null;
   };
   function eligibilityFn(e: string): (p: ParticipantLite, r: ResultRow) => boolean {
     switch (e) {
@@ -1279,12 +1282,22 @@ export async function computeResults(
   // — else the in-code AWARD_REGISTRY so no award ever silently disappears), with
   // each award's effective recipient count (override ?? default). Untyped client
   // view — the formula columns are newer than the generated types.
-  const { data: awardDefs } = await (supabase as unknown as SupabaseClient)
+  const { data: allAwardDefs } = await (supabase as unknown as SupabaseClient)
     .from("award_definitions")
     .select(
-      "award_key, label, default_recipients, is_active, display_order, eligibility, rank_mode, rank_keys, is_team"
+      "award_key, label, default_recipients, is_active, display_order, eligibility, rank_mode, rank_keys, is_team, levels"
     )
     .order("display_order");
+  // Which awards this ROUND gives out. A round with its own award set uses that
+  // set alone; every other round falls back to the every-round set, which is the
+  // single set every round used before award scoping existed — so a chapter
+  // event resolves exactly the same awards it did before. Uses the same
+  // roundLevel already read above for the criteria sheets, so awards and scoring
+  // can never disagree about what level this round is.
+  const awardDefs = resolveAwardsForLevel(
+    (allAwardDefs ?? []) as AwardConfigRow[],
+    roundLevel
+  );
   const { data: awardCfgRows } = await supabase
     .from("event_award_config")
     .select("award_key, recipients, is_active")
@@ -1322,7 +1335,7 @@ export async function computeResults(
   };
 
   const activeAwards: ActiveAward[] = [];
-  for (const def of (awardDefs ?? []) as AwardConfigRow[]) {
+  for (const def of awardDefs) {
     const spec = def.rank_mode ? buildSpec(def) : AWARD_REGISTRY[def.award_key];
     if (!spec) continue; // unknown key (future-proof) — skip
     const ov = awardOverrideByKey.get(def.award_key);

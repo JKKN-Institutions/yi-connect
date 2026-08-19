@@ -7,7 +7,12 @@ import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { isCurrentUserSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { getRegionalAdminZones } from "@/lib/yi/auth/yi-directory-roles";
 import { revalidatePath } from "next/cache";
-import { attachCentralTopicsToEvent } from "./admin-topics";
+import {
+  attachCentralTopicsToEvent,
+  attachCommitteeTopicsToEvent,
+} from "./admin-topics";
+import { fetchEventRoundLevel, type RoundLevel } from "@/lib/yip/round-level";
+import { committeeCatalogueForLevel } from "@/lib/yip/committee-topics";
 import { getComplianceScore } from "./branding";
 import { writeEventAiEnabled } from "@/lib/yip/ai/drafts";
 import { getCommitteeNumbering } from "@/lib/yip/committee-number";
@@ -81,22 +86,48 @@ export type CommitteeTopicOption = {
   topic_number: number | null;
 };
 
-export async function listCommitteeTopics(): Promise<CommitteeTopicOption[]> {
+export async function listCommitteeTopics(
+  // Which round's committee list to return. Omitted / null = the shared
+  // catalogue only, which is byte-for-byte what this returned before topics
+  // gained a level scope — so every existing caller keeps its exact behaviour.
+  // Pass a level to get that round's own committees where it has them.
+  level: RoundLevel | null = null
+): Promise<CommitteeTopicOption[]> {
   const supabase = await createServiceClient();
   const { data, error } = await supabase
     .from("topics")
-    .select("id, title, description, linked_scheme, topic_number")
+    .select("id, title, description, linked_scheme, topic_number, levels")
     .eq("category", "committee")
     .eq("is_active", true)
     .order("topic_number", { nullsFirst: false });
   if (error || !data) return [];
-  return data.map((r) => ({
+  const resolved = committeeCatalogueForLevel(
+    (data as unknown as Array<{
+      id: string;
+      title: string | null;
+      description: string | null;
+      linked_scheme: string | null;
+      topic_number: number | null;
+      levels?: string[] | null;
+    }>).map((r) => ({ ...r, title: r.title ?? "" })),
+    level
+  );
+  return resolved.map((r) => ({
     id: r.id,
     committee: r.title,
     topic: r.description ?? "",
     scheme: r.linked_scheme ?? "",
     topic_number: r.topic_number,
   }));
+}
+
+/** The committee catalogue as ONE event sees it, resolved from its round level. */
+export async function listCommitteeTopicsForEvent(
+  eventId: string
+): Promise<CommitteeTopicOption[]> {
+  const supabase = await createServiceClient();
+  const level = await fetchEventRoundLevel(supabase as never, eventId);
+  return listCommitteeTopics(level);
 }
 
 /**
@@ -122,7 +153,9 @@ export async function pushCommitteeTopicsToAllChapterEvents(
       error: "Only super-admins can push committee topics to events.",
     };
   }
-  const catalog = await listCommitteeTopics();
+  // Explicitly the CHAPTER catalogue: this writes to chapter events only, and
+  // must never push the regional round's committees onto them.
+  const catalog = await listCommitteeTopics("chapter");
   if (catalog.length === 0) {
     return { success: false, error: "No committee topics in the catalogue to push." };
   }
@@ -198,7 +231,7 @@ export async function setEventCommittees(
   // Resolve each chosen committee to its topic from the live catalogue, so the
   // event always carries an authoritative { committee → topic } map (ignores
   // any name not in the catalogue rather than persisting a stale committee).
-  const catalog = await listCommitteeTopics();
+  const catalog = await listCommitteeTopicsForEvent(eventId);
   const topicByCommittee = new Map(catalog.map((c) => [c.committee, c.topic]));
   const obj: Record<string, string> = {};
   for (const name of committeeNames) {
@@ -369,7 +402,7 @@ export async function attributeCommitteeMinistry(
     nextName = unnamedCommitteeName(committeeNumber);
   } else {
     const wanted = ministry.trim();
-    const catalog = await listCommitteeTopics();
+    const catalog = await listCommitteeTopicsForEvent(eventId);
     const match = catalog.find((c) => c.committee === wanted);
     if (!match) {
       return {
@@ -933,6 +966,21 @@ export async function createEvent(
     if (!attachResult.success) {
       console.error(
         "Failed to auto-attach central topics to chapter event:",
+        attachResult.error
+      );
+    }
+  }
+
+  // Regional events inherit the regional committee set the same way — all
+  // fifteen are attached and the host trims to the ten they will run. Before
+  // this, createEvent inherited nothing for a regional event, which is why
+  // every regional round created so far carries zero topics. Failure here MUST
+  // NOT roll back the event, exactly as above.
+  if (data.level === "regional") {
+    const attachResult = await attachCommitteeTopicsToEvent(event.id, "regional");
+    if (!attachResult.success) {
+      console.error(
+        "Failed to auto-attach committee topics to regional event:",
         attachResult.error
       );
     }

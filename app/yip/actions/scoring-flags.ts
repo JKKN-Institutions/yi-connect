@@ -19,6 +19,24 @@ type ActionResult<T = null> =
 //   , "walkout":               -5
 //   , "ruckus":                -3
 //   , "suspension":           -10 }
+//
+// DELIBERATELY NOT SCOPED BY ROUND LEVEL (2026-08). The scoring criteria
+// (yip.session_parameters), the /100 composition (yip.scoring_buckets) and the
+// position merit table were all given a `levels` scope so a regional round can
+// be marked differently from a chapter round. These deltas were considered and
+// left GLOBAL on purpose: they are a CODE OF CONDUCT, not a difficulty setting.
+// A walkout is a walkout, and a suspension is a suspension, in Erode and in
+// Ahmedabad alike. Making the penalty for a walkout heavier at one level than
+// another says the rules of the house change with the host city, which is the
+// opposite of what a shared decorum standard is for. They are also applied to
+// the FINAL /100 total, so they are already expressed on a scale that every
+// level shares.
+//
+// If this ever does need to vary, note the shape: the row is a HARD singleton
+// (id boolean PRIMARY KEY, CHECK (id = true)), so it cannot hold a second row
+// without dropping its primary key. Follow the overlay-table approach taken in
+// supabase/migrations/yip_position_bonus_config_round_level.sql rather than
+// performing identity surgery on a live table.
 
 export type FlagKey =
   | "no_confidence_brought"

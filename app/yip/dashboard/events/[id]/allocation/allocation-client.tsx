@@ -9,7 +9,10 @@ import {
   lockAllocation,
   unlockAllocation,
   updateParticipantAssignment,
+  previewCommitteeRespread,
+  respreadCommittees,
 } from "@/app/yip/actions/allocation";
+import type { CommitteeRespreadPlan } from "@/app/yip/actions/allocation";
 import {
   MINISTRIES,
   COMMITTEES,
@@ -129,6 +132,12 @@ export function AllocationClient({
   const [confirmRerun, setConfirmRerun] = useState(false);
   const [confirmLock, setConfirmLock] = useState(false);
   const [confirmUnlock, setConfirmUnlock] = useState(false);
+  // Committee re-spread: the preview is fetched first so the confirm dialog can
+  // state how many students actually move before anything is written.
+  const [respreadLoading, setRespreadLoading] = useState(false);
+  const [respreadPlan, setRespreadPlan] = useState<CommitteeRespreadPlan | null>(
+    null
+  );
   const [editingParticipant, setEditingParticipant] = useState<Participant | null>(null);
 
   const committeeNames = customCommittees && customCommittees.length > 0
@@ -204,6 +213,46 @@ export function AllocationClient({
     }
     setLoading(false);
     setConfirmRerun(false);
+  }
+
+  // Re-spread committees only. Step 1: ask the server what would change, so the
+  // host sees the movement count before committing to it.
+  async function handlePreviewRespread() {
+    setRespreadLoading(true);
+    const result = await previewCommitteeRespread(eventId);
+    setRespreadLoading(false);
+    if (!result.success) {
+      toast.error(result.error);
+      return;
+    }
+    setRespreadPlan(result.data);
+  }
+
+  // Step 2: apply it. The plan is recomputed server-side, so the numbers
+  // reported back are what actually happened, not what the preview guessed.
+  async function handleRespread() {
+    setRespreadLoading(true);
+    const result = await respreadCommittees(eventId);
+    setRespreadLoading(false);
+    if (!result.success) {
+      toast.error(result.error);
+      return;
+    }
+    const plan = result.data;
+    const parts: string[] = [];
+    if (plan.moving > 0) parts.push(`${plan.moving} moved`);
+    if (plan.placed > 0)
+      parts.push(
+        `${plan.placed} student${plan.placed === 1 ? "" : "s"} placed who had no committee`
+      );
+    if (plan.removed > 0)
+      parts.push(`${plan.removed} taken off (they preside or are on duty)`);
+    if (parts.length === 0) parts.push("nothing to change — already balanced");
+    toast.success(
+      `Committees re-spread across ${plan.committeeCount} committees — ${parts.join(", ")}`
+    );
+    setRespreadPlan(null);
+    router.refresh();
   }
 
   async function handleLock() {
@@ -423,6 +472,20 @@ export function AllocationClient({
         <div className="flex items-center gap-2">
           {!allocationLocked && (
             <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePreviewRespread}
+                disabled={respreadLoading || loading}
+                title="Spread students evenly across the committees this event has right now. Parties, roles and constituencies are not touched."
+              >
+                {respreadLoading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Shuffle className="size-4" />
+                )}
+                Re-spread Committees
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -807,6 +870,121 @@ export function AllocationClient({
                 <RotateCcw className="size-4" />
               )}
               {loading ? "Running..." : "Re-run Allocation"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Re-spread Committees Confirmation */}
+      <Dialog
+        open={respreadPlan !== null}
+        onOpenChange={(open) => {
+          if (!open) setRespreadPlan(null);
+        }}
+      >
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shuffle className="size-5 text-[#FF9933]" />
+              Re-spread students across {respreadPlan?.committeeCount ?? 0}{" "}
+              committees?
+            </DialogTitle>
+            <DialogDescription>
+              Students are re-dealt across the committees this event has right
+              now, with every party mixed into every committee. Parties, benches,
+              parliament roles and constituencies are not touched.
+            </DialogDescription>
+          </DialogHeader>
+
+          {respreadPlan && (
+            <div className="space-y-3 text-sm">
+              <ul className="space-y-1">
+                <li>
+                  <strong>{respreadPlan.moving}</strong> student
+                  {respreadPlan.moving === 1 ? "" : "s"} move to a different
+                  committee.
+                </li>
+                <li>
+                  <strong>{respreadPlan.staying}</strong> stay where they are.
+                </li>
+                {respreadPlan.placed > 0 && (
+                  <li>
+                    <strong>{respreadPlan.placed}</strong> student
+                    {respreadPlan.placed === 1 ? "" : "s"} who had no committee
+                    will be placed for you.
+                  </li>
+                )}
+                {respreadPlan.removed > 0 && (
+                  <li className="text-amber-700">
+                    <strong>{respreadPlan.removed}</strong> will be taken off
+                    their committee because their role does not sit on one.
+                  </li>
+                )}
+              </ul>
+
+              {respreadPlan.excludedByRole.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Not on any committee by design:{" "}
+                  {respreadPlan.excludedByRole
+                    .map((e) => `${e.count} × ${ROLE_LABELS[e.role] || e.role}`)
+                    .join(", ")}
+                  . The Speaker Panel presides over the House and the duty
+                  officials are officers of it, so they debate in no committee.
+                </p>
+              )}
+
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Committee</TableHead>
+                      <TableHead className="text-right">Now</TableHead>
+                      <TableHead className="text-right">After</TableHead>
+                      <TableHead>Party mix after</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {respreadPlan.committees.map((c) => (
+                      <TableRow key={`${c.number}-${c.name}`}>
+                        <TableCell className="font-medium">
+                          {c.name === `Committee ${c.number}`
+                            ? c.name
+                            : `${c.number} · ${c.name}`}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-muted-foreground">
+                          {c.before}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums font-semibold">
+                          {c.after}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {c.partySpread.length === 0
+                            ? "—"
+                            : c.partySpread
+                                .map((s) => `${s.party}: ${s.count}`)
+                                .join(" · ")}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+            <Button
+              className="bg-[#FF9933] text-white hover:bg-[#E68A2E]"
+              onClick={handleRespread}
+              disabled={respreadLoading}
+            >
+              {respreadLoading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Shuffle className="size-4" />
+              )}
+              {respreadLoading ? "Re-spreading..." : "Re-spread Committees"}
             </Button>
           </DialogFooter>
         </DialogContent>

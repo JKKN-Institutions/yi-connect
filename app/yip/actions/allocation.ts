@@ -5,12 +5,19 @@ import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import {
   runAllocation,
+  placeOrphansInSmallestCommittee,
   type AllocationResult,
   type AllocationParticipant,
 } from "@/lib/yip/allocation-engine";
-import { planCommitteeAssignment } from "@/lib/yip/committee-assignment";
+import {
+  planCommitteeAssignment,
+  isCommitteeEligible,
+} from "@/lib/yip/committee-assignment";
 import { getCommitteeNumbering } from "@/lib/yip/committee-number";
-import { eventCommitteeNumberByName } from "@/lib/yip/event-committees";
+import {
+  eventCommitteeNumberByName,
+  orderEventCommittees,
+} from "@/lib/yip/event-committees";
 import { planPartyFill, planFlatPartyFill } from "@/lib/yip/party-formation";
 
 // Gated writes run on the service client AFTER getYipEventAccess() (yip.* tables
@@ -452,6 +459,302 @@ export async function assignCommittees(
   revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
   revalidatePath(`/yip/dashboard/events/${eventId}/parties`);
   return { success: true, data: { committees: summary, excluded: cleared.length } };
+}
+
+// ─── Re-spread Committees Only ─────────────────────────────────────
+// The host trims (or adds to) the committee list AFTER allocation has run —
+// e.g. attaches 15 regional committees, then cuts to 10 — and the students are
+// still sitting in the committees they were given on the old list. Re-running
+// the full allocation would fix the committees but would also reshuffle
+// parties, benches, constituencies and parliament roles, which is exactly what
+// a host at that point must NOT lose.
+//
+// This re-spreads students across the committees CURRENTLY on the event and
+// touches nothing else: party_id, party_number, party_side, parliament_role,
+// ministry and constituency are all left alone (Director, 2026-08-19).
+//
+// The committee list comes from events.committee_topics — the { committee →
+// topic } map the organiser edits on the Committees tab. That is the same store
+// allocation reads (see the note above), NOT yip.event_topics, which is the
+// topic CONTENT catalogue.
+//
+// Deterministic: participants are read in id order and the plan is a pure
+// function of that order, so pressing the button twice reports zero moves the
+// second time and writes nothing.
+
+export type CommitteeRespreadPlan = {
+  /** How many committees are on the event right now. */
+  committeeCount: number;
+  committees: Array<{
+    number: number;
+    name: string;
+    /** Members before the re-spread. */
+    before: number;
+    /** Members after it. */
+    after: number;
+    /** Party mix after it — the point of the exercise. */
+    partySpread: Array<{ party: string; count: number }>;
+  }>;
+  /** Students who move from one committee to a different one. */
+  moving: number;
+  /** Students who stay exactly where they are. */
+  staying: number;
+  /** Students who had NO committee and get seated by this run. */
+  placed: number;
+  /**
+   * Students who currently hold a committee but are excluded from committees
+   * by role, so this run takes it away. The Speaker Panel presides over the
+   * House and the duty officials are officers of it — neither sits on a
+   * committee (handbook p.19), and for the Speaker Panel a database trigger
+   * clears it regardless of what the app writes.
+   */
+  removed: number;
+  /** Every role excluded from committees, with its head count. */
+  excludedByRole: Array<{ role: string; count: number }>;
+  /** False for a preview (nothing written), true once applied. */
+  applied: boolean;
+};
+
+async function planCommitteeRespread(
+  eventId: string,
+  apply: boolean
+): Promise<ActionResult<CommitteeRespreadPlan>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  const supabase = await createServiceClient();
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("id, allocation_locked, committee_topics")
+    .eq("id", eventId)
+    .single();
+  if (!event) return { success: false, error: "Event not found" };
+  if (event.allocation_locked) {
+    return {
+      success: false,
+      error:
+        "Allocation is locked for this event, so committees cannot be re-spread. Unlock the allocation first, then try again.",
+    };
+  }
+
+  // The event's CURRENT committee list (object keys, or the legacy array form).
+  let committeeNames: string[] = [];
+  const ct = event.committee_topics as unknown;
+  if (Array.isArray(ct) && ct.length > 0) {
+    committeeNames = ct.map(String);
+  } else if (ct && typeof ct === "object") {
+    committeeNames = Object.keys(ct as Record<string, unknown>);
+  }
+  committeeNames = [
+    ...new Set(committeeNames.map((n) => n.trim()).filter(Boolean)),
+  ];
+  if (committeeNames.length === 0) {
+    return {
+      success: false,
+      error:
+        "No committees are set for this event. Pick them on the Committees tab first, then re-spread.",
+    };
+  }
+
+  // Read in id order so the plan below is reproducible. Without an explicit
+  // order PostgREST may hand back rows in any order, and the tie-breaks inside
+  // the planner depend on that order — the button would then move students on
+  // every press even when nothing had changed.
+  const { data: participants, error: fetchError } = await supabase
+    .from("participants")
+    .select(
+      "id, party_id, party_number, parliament_role, school_name, committee_name, committee_number"
+    )
+    .eq("event_id", eventId)
+    .order("id");
+  if (fetchError) return { success: false, error: fetchError.message };
+  if (!participants || participants.length === 0) {
+    return { success: false, error: "No participants registered for this event" };
+  }
+
+  const byId = new Map(participants.map((p) => [p.id, p]));
+
+  // Balanced plan: every committee draws evenly from every party AND every
+  // school, so no committee is one party arguing with itself.
+  const plan = planCommitteeAssignment(
+    participants.map((p) => ({
+      id: p.id,
+      partyId: p.party_id,
+      parliamentRole: p.parliament_role,
+      schoolName: p.school_name,
+    })),
+    committeeNames
+  );
+
+  const numbering = await getCommitteeNumbering(supabase);
+  const ordered = orderEventCommittees(committeeNames, numbering.numberByName);
+  const numberByName = new Map(
+    ordered.map((c) => [c.name.trim().toLowerCase(), c.number])
+  );
+
+  const target = new Map<string, { name: string; number: number }>();
+  const excludedIds: string[] = [];
+  for (const a of plan) {
+    if (!a.committeeName) {
+      excludedIds.push(a.participantId);
+      continue;
+    }
+    const number = numberByName.get(a.committeeName.trim().toLowerCase()) ?? 0;
+    target.set(a.participantId, { name: a.committeeName, number });
+  }
+
+  // Stragglers: committee-eligible students the plan left unseated. Normally
+  // none, but the Director's rule is explicit — seat them in the smallest
+  // committee rather than leaving a host to spot them by hand.
+  const orphanIds = participants
+    .filter((p) => isCommitteeEligible(p.parliament_role) && !target.has(p.id))
+    .map((p) => p.id);
+  if (orphanIds.length > 0) {
+    const sizes = new Map<string, number>(ordered.map((c) => [c.name, 0]));
+    for (const t of target.values()) {
+      sizes.set(t.name, (sizes.get(t.name) ?? 0) + 1);
+    }
+    for (const seat of placeOrphansInSmallestCommittee(
+      orphanIds,
+      ordered.map((c) => ({ name: c.name, number: c.number })),
+      sizes
+    )) {
+      target.set(seat.participantId, {
+        name: seat.committeeName,
+        number: seat.committeeNumber,
+      });
+    }
+  }
+
+  // What changes, so the host is told before pressing.
+  let moving = 0;
+  let staying = 0;
+  let placed = 0;
+  const toClear: string[] = [];
+  const changedByCommittee = new Map<string, { number: number; ids: string[] }>();
+  for (const p of participants) {
+    const t = target.get(p.id);
+    if (!t) {
+      if (p.committee_name || p.committee_number != null) toClear.push(p.id);
+      continue;
+    }
+    const unchanged =
+      p.committee_name === t.name && p.committee_number === t.number;
+    if (unchanged) {
+      staying += 1;
+      continue;
+    }
+    if (!p.committee_name) placed += 1;
+    else moving += 1;
+    if (!changedByCommittee.has(t.name)) {
+      changedByCommittee.set(t.name, { number: t.number, ids: [] });
+    }
+    changedByCommittee.get(t.name)!.ids.push(p.id);
+  }
+
+  const excludedByRole = [
+    ...excludedIds
+      .reduce((acc, id) => {
+        const role = byId.get(id)?.parliament_role ?? "unknown";
+        acc.set(role, (acc.get(role) ?? 0) + 1);
+        return acc;
+      }, new Map<string, number>())
+      .entries(),
+  ]
+    .map(([role, count]) => ({ role, count }))
+    .sort((a, b) => b.count - a.count || a.role.localeCompare(b.role));
+
+  const beforeByName = new Map<string, number>();
+  for (const p of participants) {
+    if (!p.committee_name) continue;
+    beforeByName.set(p.committee_name, (beforeByName.get(p.committee_name) ?? 0) + 1);
+  }
+  const afterIdsByName = new Map<string, string[]>();
+  for (const [participantId, t] of target) {
+    if (!afterIdsByName.has(t.name)) afterIdsByName.set(t.name, []);
+    afterIdsByName.get(t.name)!.push(participantId);
+  }
+  const committees = ordered.map((c) => {
+    const ids = afterIdsByName.get(c.name) ?? [];
+    const spread = new Map<string, number>();
+    for (const id of ids) {
+      const pn = byId.get(id)?.party_number;
+      const key = pn == null ? "No party" : `Party ${pn}`;
+      spread.set(key, (spread.get(key) ?? 0) + 1);
+    }
+    return {
+      number: c.number,
+      name: c.name,
+      before: beforeByName.get(c.name) ?? 0,
+      after: ids.length,
+      partySpread: [...spread.entries()]
+        .map(([party, count]) => ({ party, count }))
+        .sort((a, b) => a.party.localeCompare(b.party, undefined, { numeric: true })),
+    };
+  });
+
+  const summary: CommitteeRespreadPlan = {
+    committeeCount: ordered.length,
+    committees,
+    moving,
+    staying,
+    placed,
+    removed: toClear.length,
+    excludedByRole,
+    applied: false,
+  };
+
+  if (!apply) return { success: true, data: summary };
+
+  // Write committee_name / committee_number ONLY — one statement per committee
+  // that actually has movers, plus one that clears the office-holders. Rows
+  // that already hold the right committee are not touched, so a second press
+  // writes nothing at all.
+  const errors: string[] = [];
+  for (const [name, { number, ids }] of changedByCommittee) {
+    if (ids.length === 0) continue;
+    const { error } = await supabase
+      .from("participants")
+      .update({ committee_name: name, committee_number: number })
+      .in("id", ids)
+      .eq("event_id", eventId);
+    if (error) errors.push(error.message);
+  }
+  if (toClear.length > 0) {
+    const { error } = await supabase
+      .from("participants")
+      .update({ committee_name: null, committee_number: null })
+      .in("id", toClear)
+      .eq("event_id", eventId);
+    if (error) errors.push(error.message);
+  }
+  if (errors.length > 0) {
+    return {
+      success: false,
+      error: `Committee re-spread partly failed: ${errors[0]}`,
+    };
+  }
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/parties`);
+  return { success: true, data: { ...summary, applied: true } };
+}
+
+/** Dry run: what a re-spread would do. Writes nothing. */
+export async function previewCommitteeRespread(
+  eventId: string
+): Promise<ActionResult<CommitteeRespreadPlan>> {
+  return planCommitteeRespread(eventId, false);
+}
+
+/** Re-spread students across the event's current committees, and nothing else. */
+export async function respreadCommittees(
+  eventId: string
+): Promise<ActionResult<CommitteeRespreadPlan>> {
+  return planCommitteeRespread(eventId, true);
 }
 
 // ─── Lock Allocation ───────────────────────────────────────────────

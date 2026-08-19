@@ -3,6 +3,7 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
+import { createHash } from "crypto";
 import {
   runAllocation,
   placeOrphansInSmallestCommittee,
@@ -513,11 +514,20 @@ export type CommitteeRespreadPlan = {
   excludedByRole: Array<{ role: string; count: number }>;
   /** False for a preview (nothing written), true once applied. */
   applied: boolean;
+  /**
+   * Identifies this exact plan AND the roster it came from. The client hands it
+   * back when applying; a mismatch means the roster moved under the host and the
+   * apply is refused rather than writing a plan they never saw.
+   */
+  fingerprint: string;
 };
 
 async function planCommitteeRespread(
   eventId: string,
-  apply: boolean
+  apply: boolean,
+  // The fingerprint of the plan the host actually approved in the confirm
+  // dialog. Required when applying: see the check further down.
+  expectedFingerprint?: string
 ): Promise<ActionResult<CommitteeRespreadPlan>> {
   const access = await getYipEventAccess(eventId);
   if (!access.canManage) {
@@ -527,7 +537,7 @@ async function planCommitteeRespread(
 
   const { data: event } = await supabase
     .from("events")
-    .select("id, allocation_locked, committee_topics")
+    .select("id, level, allocation_locked, committee_topics")
     .eq("id", eventId)
     .single();
   if (!event) return { success: false, error: "Event not found" };
@@ -536,6 +546,25 @@ async function planCommitteeRespread(
       success: false,
       error:
         "Allocation is locked for this event, so committees cannot be re-spread. Unlock the allocation first, then try again.",
+    };
+  }
+
+  // REGIONAL AND NATIONAL ROUNDS ONLY, enforced HERE and not merely by hiding
+  // the button. The first version scoped this only in the UI, and review found
+  // 15 non-mock, UNLOCKED, chapter-level events with committees already
+  // assigned - 1,944 students whose committees this could have re-dealt,
+  // including "Erode Chapter Round 2026". The re-spread is a fresh balanced
+  // plan, not a repair, so it moves most students: one mis-click would have
+  // reshuffled a round that already ran. Chapter rounds must stay bit-for-bit
+  // unchanged, and a hidden button is not a guard.
+  //
+  // FAIL CLOSED, unlike the go-live guard in app/yip/actions/agenda.ts. Refusing
+  // here costs a host one message; nobody is waiting in a hall on it.
+  if (event.level !== "regional" && event.level !== "national") {
+    return {
+      success: false,
+      error:
+        "Re-spreading committees is for regional and national rounds. A chapter round's committees are set when it is allocated, and re-dealing them after the round has run would move most of its students.",
     };
   }
 
@@ -605,9 +634,21 @@ async function planCommitteeRespread(
     target.set(a.participantId, { name: a.committeeName, number });
   }
 
-  // Stragglers: committee-eligible students the plan left unseated. Normally
-  // none, but the Director's rule is explicit — seat them in the smallest
-  // committee rather than leaving a host to spot them by hand.
+  // Stragglers: committee-eligible students the plan left unseated.
+  //
+  // THIS IS CURRENTLY UNREACHABLE, and that is worth stating rather than
+  // implying otherwise. planCommitteeAssignment() seats EVERY committee-eligible
+  // participant whenever the committee list is non-empty, and the empty case
+  // already returned above - so orphanIds is always []. It is kept as a net in
+  // case that planner ever changes, but `placed` will read 0 on every event
+  // today, and the dialog must not promise the host an auto-placement that
+  // cannot fire.
+  //
+  // The students a host actually notices as "in no committee" are the Speaker
+  // Panel: excluded from committees by the handbook AND cleared by the database
+  // trigger participants_clear_committee_presiding on every write. No
+  // application code can seat them. `excludedByRole` below tells the host that
+  // truth instead.
   const orphanIds = participants
     .filter((p) => isCommitteeEligible(p.parliament_role) && !target.has(p.id))
     .map((p) => p.id);
@@ -625,6 +666,54 @@ async function planCommitteeRespread(
         name: seat.committeeName,
         number: seat.committeeNumber,
       });
+    }
+  }
+
+  // THE PLAN THE HOST APPROVES MUST BE THE PLAN THAT GETS WRITTEN.
+  //
+  // Preview and apply are two separate server round-trips, and apply recomputes
+  // from scratch. If a participant is imported or deleted, or any party, role or
+  // school changes in between, the applied re-deal would differ from the
+  // before/after table the host approved - the confirm dialog would be advisory
+  // rather than binding. So the preview returns a fingerprint over BOTH the
+  // resulting seating AND the roster it was computed from, and apply refuses
+  // unless the fingerprint still matches.
+  const fingerprint = createHash("sha256")
+    .update(
+      JSON.stringify({
+        // The seating this plan produces.
+        seats: [...target.entries()]
+          .map(([pid, t]) => `${pid}:${t.number}`)
+          .sort(),
+        // The roster it was computed FROM. Any change to the inputs the planner
+        // reads must invalidate the plan, not just a change to its output.
+        roster: participants
+          .map(
+            (p) =>
+              `${p.id}|${p.party_id ?? ""}|${p.parliament_role ?? ""}|${
+                p.school_name ?? ""
+              }`
+          )
+          .sort(),
+      })
+    )
+    .digest("hex")
+    .slice(0, 32);
+
+  if (apply) {
+    if (!expectedFingerprint) {
+      return {
+        success: false,
+        error:
+          "This re-spread was not previewed, so there is nothing to confirm. Press Re-spread Committees to see the plan first.",
+      };
+    }
+    if (expectedFingerprint !== fingerprint) {
+      return {
+        success: false,
+        error:
+          "The roster changed since you previewed this re-spread, so the plan you approved is no longer the plan that would be applied. Nothing has been changed. Press Re-spread Committees again to see the new plan.",
+      };
     }
   }
 
@@ -704,6 +793,7 @@ async function planCommitteeRespread(
     removed: toClear.length,
     excludedByRole,
     applied: false,
+    fingerprint,
   };
 
   if (!apply) return { success: true, data: summary };
@@ -752,9 +842,12 @@ export async function previewCommitteeRespread(
 
 /** Re-spread students across the event's current committees, and nothing else. */
 export async function respreadCommittees(
-  eventId: string
+  eventId: string,
+  // The fingerprint from the preview the host approved. Without it the apply is
+  // refused - the confirm step is binding, not advisory.
+  expectedFingerprint: string
 ): Promise<ActionResult<CommitteeRespreadPlan>> {
-  return planCommitteeRespread(eventId, true);
+  return planCommitteeRespread(eventId, true, expectedFingerprint);
 }
 
 // ─── Lock Allocation ───────────────────────────────────────────────

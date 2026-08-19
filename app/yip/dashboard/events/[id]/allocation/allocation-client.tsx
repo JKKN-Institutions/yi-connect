@@ -86,6 +86,14 @@ interface AllocationClientProps {
   participants: Participant[];
   parties: { party_number: number | null; name: string; side: string | null }[];
   allocationLocked: boolean;
+  /**
+   * The event's round level. Re-spreading committees is offered ONLY on regional
+   * and national rounds: a chapter round's committees are set at allocation and
+   * re-dealing them afterwards would move most of its students. The server
+   * enforces this too (planCommitteeRespread) - hiding the button is the
+   * courtesy, not the guard.
+   */
+  eventLevel: string | null;
   customCommittees?: string[];
   rulingPartyCount: number;
   oppositionPartyCount: number;
@@ -99,11 +107,14 @@ export function AllocationClient({
   participants,
   parties,
   allocationLocked,
+  eventLevel,
   customCommittees,
   rulingPartyCount,
   oppositionPartyCount,
 }: AllocationClientProps) {
   const router = useRouter();
+  // Re-spread is a regional/national tool. Unknown level = do not offer it.
+  const isAboveChapter = eventLevel === "regional" || eventLevel === "national";
   // Map a participant's party_number → its named party, so the allocation view
   // can show WHO is in WHICH party (not just a bare number).
   const partyByNumber = new Map(
@@ -228,11 +239,17 @@ export function AllocationClient({
     setRespreadPlan(result.data);
   }
 
-  // Step 2: apply it. The plan is recomputed server-side, so the numbers
-  // reported back are what actually happened, not what the preview guessed.
+  // Step 2: apply the plan the host just approved - and ONLY that plan.
+  //
+  // The server recomputes from scratch, so we hand back the fingerprint the
+  // preview returned. If the roster moved in between (a student imported or
+  // deleted, a party or role changed), the fingerprint no longer matches and the
+  // server refuses instead of writing a re-deal the host never saw. Without this
+  // the confirm dialog would be advisory rather than binding.
   async function handleRespread() {
+    if (!respreadPlan) return;
     setRespreadLoading(true);
-    const result = await respreadCommittees(eventId);
+    const result = await respreadCommittees(eventId, respreadPlan.fingerprint);
     setRespreadLoading(false);
     if (!result.success) {
       toast.error(result.error);
@@ -470,7 +487,7 @@ export function AllocationClient({
           )}
         </div>
         <div className="flex items-center gap-2">
-          {!allocationLocked && (
+          {!allocationLocked && isAboveChapter && (
             <>
               <Button
                 variant="outline"

@@ -12,6 +12,8 @@ import { resolveSessionConfig } from "@/lib/yip/session-config-resolution";
 import {
   denominatorFor,
   isRoleSplitSheet,
+  isSideSlug,
+  roleSlugLabel,
   storedRoleSlugs,
   type RoleScopedCriterion,
 } from "@/lib/yip/scoring-roles";
@@ -2494,4 +2496,317 @@ export async function getMissingResultsNotice(
     submittedScoreCount: submittedScoreCount ?? 0,
     resultRowCount: resultRowCount ?? 0,
   });
+}
+
+// ─── Host honesty flags: marking coverage ─────────────────────────
+//
+// Two things a host needs to SEE but that must never change a score
+// (Director, 2026-08-19):
+//
+//   1. Four judges sit on a session, but sometimes only one of them actually
+//      marks a given student. That single mark is still the student's score —
+//      that decision stands. What the host wants is to KNOW, so a second judge
+//      can be sent to watch that student while the round is still running.
+//
+//   2. At the end of Day 1 a no-confidence motion can bring the government
+//      down, and the students swap sides for Day 2. Marks already given stay
+//      exactly as given — each one records the side the student was on at the
+//      time, in yip.scores.scored_roles. So two students sitting on the same
+//      side today can legitimately have been marked on different criteria.
+//      Surfacing that up front stops it being read later as a marking error.
+//
+// Read-only. Nothing here feeds computeResults, the leaderboard, awards or
+// publishing — it only reports on marks that already exist.
+
+/** One student who has at least one session marked by a single judge. */
+export type SingleJudgeStudent = {
+  participantId: string;
+  participantName: string;
+  constituencyName: string | null;
+  /**
+   * Sessions where FEWER judges marked this student than were assigned to that
+   * session. Both numbers are carried so "1 of 1" is visibly not a gap: being
+   * marked by one judge only matters when more judges were there to mark.
+   */
+  sessions: Array<{ label: string; marked: number; assigned: number }>;
+};
+
+/** One student whose saved marks were taken on more than one side. */
+export type SideChangeStudent = {
+  participantId: string;
+  participantName: string;
+  constituencyName: string | null;
+  /** Plain-English bench names, e.g. "Treasury bench (ruling)". */
+  sideLabels: string[];
+};
+
+export type MarkingCoverage = {
+  singleJudgeStudents: SingleJudgeStudent[];
+  sideChangeStudents: SideChangeStudent[];
+  /**
+   * Set when a read failed or came back short, so this panel CANNOT be trusted.
+   * An integrity panel that degrades into a confident wrong answer is worse than
+   * one that says it could not check: a short read makes students look
+   * under-marked when they were not, and a failed agenda read empties the panel
+   * entirely, which a host reads as "all clear".
+   */
+  couldNotCheck: string | null;
+};
+
+/**
+ * Which students in this event were marked by only one judge, and which were
+ * marked on more than one side during the round.
+ *
+ * Host-facing only: gated on the same `canViewScores` as the Results page
+ * itself, and fails CLOSED (null) for anyone else — a juror must never see
+ * another student's marking picture. Returns no marks and no scores, only the
+ * two facts above.
+ *
+ * "Marked by one judge" means one distinct JUDGE, not one score row: a judge
+ * may mark the same student several times in one session (repeat speakers),
+ * which yip.scores.occurrence exists for. So the count is over distinct
+ * jury_assignment_id, never over rows.
+ */
+export async function getMarkingCoverage(
+  eventId: string
+): Promise<MarkingCoverage | null> {
+  const access = await getYipEventAccess(eventId);
+  // canManage, NOT canViewScores (Director, 2026-08-19).
+  //
+  // canViewScores is true for super-admins ONLY, deliberately, to protect named
+  // minor students' scores — that safeguard is NOT touched here and must never
+  // be widened. But it meant the chapter chair standing in the chamber, the only
+  // person who can actually send a second judge to a student, was 403'd off this
+  // information entirely.
+  //
+  // This payload is COVERAGE, not scores: names, constituency, session titles,
+  // and how many judges marked. No score, mark, total, average or rank, and
+  // nothing from which one could be inferred. That is what makes it safe for the
+  // chair, and it is why nothing below may ever select a score column.
+  if (!access.canManage) return null;
+
+  const supabase = await createServiceClient();
+
+  // fetchAllRows() returns whatever it collected BEFORE an error, silently. So
+  // ask each table for its exact row count first and compare afterwards: that is
+  // the only way to tell a complete read from a truncated one.
+  const [participantCountRes, scoreCountRes] = await Promise.all([
+    supabase
+      .from("participants")
+      .select("id", { count: "exact", head: true })
+      .eq("event_id", eventId),
+    supabase
+      .from("scores")
+      .select("id", { count: "exact", head: true })
+      .eq("event_id", eventId)
+      .eq("status", "submitted"),
+  ]);
+
+  const [
+    { data: agendaRows, error: agendaErr },
+    { data: sessionAssignRows, error: assignErr },
+    participantRows,
+    scoreRows,
+  ] = await Promise.all([
+    supabase
+      .from("agenda")
+      .select("id, title, day, session_key, agenda_type, is_scoreable")
+      .eq("event_id", eventId),
+    // How many judges were ASSIGNED to each session — the denominator. Without
+    // it every student at an event with one judge reads as a gap: Salem showed
+    // 109 of 109 students flagged, which is not an actionable list.
+    supabase
+      .from("jury_session_assignments")
+      .select("jury_assignment_id, agenda_item_id")
+      .eq("event_id", eventId),
+    // Bounded per event (a round seats a few hundred students), but paged
+    // anyway — a plain select is silently capped by PostgREST.
+    fetchAllRows<{
+      id: string;
+      full_name: string | null;
+      constituency_name: string | null;
+    }>((from, to) =>
+      supabase
+        .from("participants")
+        .select("id, full_name, constituency_name")
+        .eq("event_id", eventId)
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: {
+          id: string;
+          full_name: string | null;
+          constituency_name: string | null;
+        }[] | null;
+        error: unknown;
+      }>
+    ),
+    // Scores run into the thousands on a full round — always paged.
+    fetchAllRows<{
+      participant_id: string;
+      jury_assignment_id: string | null;
+      agenda_item_id: string | null;
+      scored_roles: unknown;
+    }>((from, to) =>
+      supabase
+        .from("scores")
+        .select("participant_id, jury_assignment_id, agenda_item_id, scored_roles")
+        .eq("event_id", eventId)
+        .eq("status", "submitted")
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: {
+          participant_id: string;
+          jury_assignment_id: string | null;
+          agenda_item_id: string | null;
+          scored_roles: unknown;
+        }[] | null;
+        error: unknown;
+      }>
+    ),
+  ]);
+
+  // Did we actually see everything? Any "no" makes the panel untrustworthy.
+  let couldNotCheck: string | null = null;
+  if (agendaErr) {
+    couldNotCheck = "The session list could not be read, so coverage cannot be checked.";
+  } else if (assignErr) {
+    couldNotCheck =
+      "The judge assignments could not be read, so coverage cannot be checked.";
+  } else if (participantCountRes.error || scoreCountRes.error) {
+    couldNotCheck = "The roster or the marks could not be counted, so coverage cannot be checked.";
+  } else if (
+    typeof participantCountRes.count === "number" &&
+    participantRows.length !== participantCountRes.count
+  ) {
+    couldNotCheck = `Only ${participantRows.length} of ${participantCountRes.count} students could be read, so coverage cannot be checked.`;
+  } else if (
+    typeof scoreCountRes.count === "number" &&
+    scoreRows.length !== scoreCountRes.count
+  ) {
+    couldNotCheck = `Only ${scoreRows.length} of ${scoreCountRes.count} marks could be read, so coverage cannot be checked.`;
+  }
+  if (couldNotCheck) {
+    return { singleJudgeStudents: [], sideChangeStudents: [], couldNotCheck };
+  }
+
+  // Judges assigned per session — the denominator for "1 of 4".
+  const judgesAssignedPerSession = new Map<string, Set<string>>();
+  for (const r of sessionAssignRows ?? []) {
+    const item = r.agenda_item_id as string | null;
+    const jury = r.jury_assignment_id as string | null;
+    if (!item || !jury) continue;
+    let set = judgesAssignedPerSession.get(item);
+    if (!set) {
+      set = new Set();
+      judgesAssignedPerSession.set(item, set);
+    }
+    set.add(jury);
+  }
+
+  // Only sessions judges are actually assigned to mark. A stray mark on a
+  // non-scoreable item would otherwise read as a "one judge only" session.
+  const scoreableSessionLabel = new Map<string, string>();
+  for (const a of agendaRows ?? []) {
+    if (a.is_scoreable !== true) continue;
+    const name =
+      (a.title as string | null)?.trim() ||
+      (a.session_key as string | null) ||
+      (a.agenda_type as string | null) ||
+      "Session";
+    const day = a.day as number | null;
+    scoreableSessionLabel.set(
+      a.id as string,
+      day ? `Day ${day}: ${name}` : name
+    );
+  }
+
+  const personById = new Map(participantRows.map((p) => [p.id, p]));
+
+  // (participant, session) → the distinct judges who marked it.
+  const judgesPerStudentSession = new Map<string, Set<string>>();
+  // participant → the distinct benches their saved marks were taken on.
+  const sidesPerStudent = new Map<string, Set<string>>();
+
+  for (const s of scoreRows) {
+    // Bench tally is per ROUND, not per session — a swap after the
+    // no-confidence motion shows up as marks on both benches across the event.
+    // Rows from before role scoping existed carry no bench and are ignored:
+    // absence of a recorded side is not evidence of a side change.
+    for (const slug of storedRoleSlugs(s.scored_roles)) {
+      if (!isSideSlug(slug)) continue;
+      let sides = sidesPerStudent.get(s.participant_id);
+      if (!sides) {
+        sides = new Set();
+        sidesPerStudent.set(s.participant_id, sides);
+      }
+      sides.add(slug);
+    }
+
+    if (!s.agenda_item_id || !s.jury_assignment_id) continue;
+    if (!scoreableSessionLabel.has(s.agenda_item_id)) continue;
+    const key = `${s.participant_id}|${s.agenda_item_id}`;
+    let judges = judgesPerStudentSession.get(key);
+    if (!judges) {
+      judges = new Set();
+      judgesPerStudentSession.set(key, judges);
+    }
+    judges.add(s.jury_assignment_id);
+  }
+
+  const singleJudgeSessions = new Map<
+    string,
+    Array<{ label: string; marked: number; assigned: number }>
+  >();
+  for (const [key, judges] of judgesPerStudentSession) {
+    const sep = key.indexOf("|");
+    const participantId = key.slice(0, sep);
+    const agendaItemId = key.slice(sep + 1);
+    const label = scoreableSessionLabel.get(agendaItemId);
+    if (!label) continue;
+
+    const marked = judges.size;
+    const assigned = judgesAssignedPerSession.get(agendaItemId)?.size ?? 0;
+
+    // A gap is "fewer judges marked than were assigned to mark". Being seen by
+    // one judge out of one is complete coverage, not a gap — flagging it names
+    // every student at the event and gives the host nothing to act on.
+    if (assigned <= marked) continue;
+
+    const list = singleJudgeSessions.get(participantId) ?? [];
+    list.push({ label, marked, assigned });
+    singleJudgeSessions.set(participantId, list);
+  }
+
+  const singleJudgeStudents: SingleJudgeStudent[] = [];
+  for (const [participantId, sessions] of singleJudgeSessions) {
+    const person = personById.get(participantId);
+    if (!person) continue;
+    singleJudgeStudents.push({
+      participantId,
+      participantName: person.full_name ?? "Unnamed student",
+      constituencyName: person.constituency_name,
+      sessions: sessions.sort((x, y) => x.label.localeCompare(y.label)),
+    });
+  }
+  singleJudgeStudents.sort((a, b) =>
+    a.participantName.localeCompare(b.participantName)
+  );
+
+  const sideChangeStudents: SideChangeStudent[] = [];
+  for (const [participantId, sides] of sidesPerStudent) {
+    if (sides.size < 2) continue;
+    const person = personById.get(participantId);
+    if (!person) continue;
+    sideChangeStudents.push({
+      participantId,
+      participantName: person.full_name ?? "Unnamed student",
+      constituencyName: person.constituency_name,
+      sideLabels: Array.from(sides).sort().map(roleSlugLabel),
+    });
+  }
+  sideChangeStudents.sort((a, b) =>
+    a.participantName.localeCompare(b.participantName)
+  );
+
+  return { singleJudgeStudents, sideChangeStudents, couldNotCheck: null };
 }

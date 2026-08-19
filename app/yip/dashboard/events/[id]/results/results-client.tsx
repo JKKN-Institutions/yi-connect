@@ -10,6 +10,8 @@ import {
 import type {
   ResultWithParticipant,
   AwardCandidateGroup,
+  SingleJudgeStudent,
+  SideChangeStudent,
 } from "@/app/yip/actions/results";
 import {
   setAwardWinner,
@@ -58,6 +60,8 @@ import {
   Calculator,
   RefreshCw,
   Info,
+  ArrowLeftRight,
+  UserCheck,
 } from "lucide-react";
 import { INK, SAFFRON, SERIF, SectionShell } from "@/app/yip/me/credential-ui";
 
@@ -263,6 +267,8 @@ export function ResultsClient({
   totalJudges = 0,
   judgesScored = 0,
   scoresStale = false,
+  singleJudgeStudents = [],
+  sideChangeStudents = [],
 }: {
   eventId: string;
   eventName: string;
@@ -299,6 +305,12 @@ export function ResultsClient({
   totalJudges?: number;
   judgesScored?: number;
   scoresStale?: boolean;
+  // Two host-only honesty flags (Director 2026-08-19). Neither changes a score:
+  // students with a session only one judge marked (send a second judge to watch
+  // them), and students whose saved marks were taken on more than one bench
+  // after a no-confidence motion. See getMarkingCoverage.
+  singleJudgeStudents?: SingleJudgeStudent[];
+  sideChangeStudents?: SideChangeStudent[];
 }) {
   const router = useRouter();
 
@@ -306,6 +318,11 @@ export function ResultsClient({
   const [resultsView, setResultsView] = useState<
     "leaderboard" | "scoresheet" | "leadership"
   >("leaderboard");
+
+  // Name lists behind the two marking notes stay collapsed until asked for —
+  // on a full round either list can run to dozens of students.
+  const [showSingleJudge, setShowSingleJudge] = useState(false);
+  const [showSideChanges, setShowSideChanges] = useState(false);
 
   // Manual award override (chair's final say)
   const [overrideAward, setOverrideAward] = useState<string>("");
@@ -538,6 +555,117 @@ export function ResultsClient({
     </div>
   ) : null;
 
+  // Two host-only notes about how the marks were taken (Director 2026-08-19).
+  // Both are read-only: no score is changed, withheld or re-weighted by either.
+  // Shown above the leaderboard AND in the empty state, because they are facts
+  // about the marks themselves and are useful before results are computed —
+  // while there is still time to send a second judge into the chamber.
+  const markingNotes =
+    singleJudgeStudents.length > 0 || sideChangeStudents.length > 0 ? (
+      <div className="space-y-3">
+        {singleJudgeStudents.length > 0 && (
+          <div className="rounded-lg border border-sky-300 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+            <div className="flex items-start gap-2">
+              <UserCheck className="mt-0.5 size-4 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold">
+                  {singleJudgeStudents.length}{" "}
+                  {singleJudgeStudents.length === 1 ? "student was" : "students were"}{" "}
+                  marked by fewer judges than were assigned, in at least one
+                  session
+                </p>
+                <p className="mt-0.5">
+                  More judges were assigned to those sessions than actually put
+                  marks on record for these students. Those marks still count
+                  exactly as they are — nothing here changes a score. If the round
+                  is still running, you may want to send another judge to watch
+                  them.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowSingleJudge((v) => !v)}
+                  className="mt-1.5 text-xs font-medium underline underline-offset-4"
+                >
+                  {showSingleJudge ? "Hide the list" : "See who"}
+                </button>
+                {showSingleJudge && (
+                  <ul className="mt-2 space-y-1.5 border-t border-sky-200 pt-2">
+                    {singleJudgeStudents.map((s) => (
+                      <li key={s.participantId} className="text-xs">
+                        <span className="font-medium">{s.participantName}</span>
+                        {s.constituencyName ? (
+                          <span className="text-sky-800/70">
+                            {" "}
+                            — {s.constituencyName}
+                          </span>
+                        ) : null}
+                        <span className="block text-sky-800/70">
+                          {s.sessions
+                            .map(
+                              (x) =>
+                                `${x.label} (${x.marked} of ${x.assigned} judges)`
+                            )
+                            .join(", ")}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        {sideChangeStudents.length > 0 && (
+          <div className="rounded-lg border border-violet-300 bg-violet-50 px-4 py-3 text-sm text-violet-900">
+            <div className="flex items-start gap-2">
+              <ArrowLeftRight className="mt-0.5 size-4 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold">
+                  Sides changed part-way through this round
+                </p>
+                <p className="mt-0.5">
+                  {sideChangeStudents.length}{" "}
+                  {sideChangeStudents.length === 1 ? "student was" : "students were"}{" "}
+                  marked on the government side in some sessions and on the
+                  opposition side in others — this is what happens after a
+                  no-confidence motion. Every mark was kept exactly as the judge
+                  gave it, against the criteria for the side that student was on
+                  at that time. So two students who sit on the same side today
+                  may have been marked on different criteria, and that is
+                  correct, not a mistake.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowSideChanges((v) => !v)}
+                  className="mt-1.5 text-xs font-medium underline underline-offset-4"
+                >
+                  {showSideChanges ? "Hide the list" : "See who"}
+                </button>
+                {showSideChanges && (
+                  <ul className="mt-2 space-y-1.5 border-t border-violet-200 pt-2">
+                    {sideChangeStudents.map((s) => (
+                      <li key={s.participantId} className="text-xs">
+                        <span className="font-medium">{s.participantName}</span>
+                        {s.constituencyName ? (
+                          <span className="text-violet-800/70">
+                            {" "}
+                            — {s.constituencyName}
+                          </span>
+                        ) : null}
+                        <span className="block text-violet-800/70">
+                          Marked on: {s.sideLabels.join(" and ")}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    ) : null;
+
   // Shared message banner (success/error) — rendered in both the empty and the
   // populated views so a recompute error is visible even before any results exist.
   const messageBanner = message ? (
@@ -618,6 +746,7 @@ export function ResultsClient({
     return (
       <div className="space-y-6">
         {day2Banner}
+        {markingNotes}
         {messageBanner}
         {recomputeBlock}
         <SectionShell accent={SAFFRON} className="flex flex-col items-center justify-center py-16 text-center">
@@ -640,6 +769,8 @@ export function ResultsClient({
   return (
     <div className="space-y-6">
       {day2Banner}
+      {/* How the marks were taken (shared with the empty state) */}
+      {markingNotes}
       {/* Message banner (shared with the empty state) */}
       {messageBanner}
 
@@ -1042,6 +1173,8 @@ export function ResultsClient({
               results={results}
               positionBonuses={positionBonuses}
               eventName={eventName}
+              singleJudgeStudents={singleJudgeStudents}
+              sideChangeStudents={sideChangeStudents}
             />
           ) : resultsView === "leadership" ? (
             <LeadershipTracker

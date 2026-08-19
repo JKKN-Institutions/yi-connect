@@ -690,7 +690,7 @@ export async function updateEventStatus(
 
   const { data: event } = await supabase
     .from("events")
-    .select("status")
+    .select("status, level, committee_topics")
     .eq("id", eventId)
     .single();
 
@@ -702,6 +702,55 @@ export async function updateEventStatus(
       success: false,
       error: `Cannot transition from ${event.status} to ${newStatus}`,
     };
+  }
+
+  // A regional or national round may not START with no committees picked
+  // (Director, 2026-08-19). Allocation already refuses to run without them, so
+  // going live in that state gives a hall full of unallocated students and a
+  // Control panel with nothing to run. He chose a hard block here over
+  // auto-filling the committees or showing a warning.
+  //
+  // SCOPE: regional + national ONLY. Chapter rounds have run all season and
+  // must stay bit-for-bit identical, so `level === "chapter"` never reaches
+  // this block.
+  //
+  // FAIL OPEN on anything we cannot positively establish. Six regional rounds
+  // run 22 Aug – 8 Sep and wrongly blocking one on the morning of the round,
+  // in a full hall, is far worse than the gap this closes. So we refuse ONLY
+  // when we can read that the level is regional/national AND that the
+  // committee map is genuinely empty. An unreadable level, or a
+  // committee_topics value we do not recognise, lets the round start.
+  if (newStatus === "day1_live") {
+    const raw: unknown = event.committee_topics;
+
+    // Same two shapes the allocation and walk-in actions already read: the
+    // legacy array form is a list of committee names, the current form is a
+    // { committee → topic } map whose KEYS are the committees.
+    let hasCommittees: boolean;
+    if (raw === null) {
+      hasCommittees = false; // NULL column = nothing has ever been picked
+    } else if (Array.isArray(raw)) {
+      hasCommittees = raw.some((c) => String(c ?? "").trim().length > 0);
+    } else if (typeof raw === "object") {
+      hasCommittees = Object.keys(raw as Record<string, unknown>).some(
+        (k) => k.trim().length > 0
+      );
+    } else {
+      // undefined (column did not come back) or an unexpected scalar — we
+      // cannot positively say "none picked", so do not block the round.
+      hasCommittees = true;
+    }
+
+    const isAboveChapter =
+      event.level === "regional" || event.level === "national";
+
+    if (isAboveChapter && !hasCommittees) {
+      return {
+        success: false,
+        error:
+          "This round has no committees selected, so students cannot be allocated and the Control panel has nothing to run. Open this event's Committees tab, tick the committees for this round and give each one a topic, then start the round.",
+      };
+    }
   }
 
   // If going to day1_live, set the first Day 1 agenda item as current

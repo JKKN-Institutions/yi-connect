@@ -1,7 +1,10 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { clauseTexts } from "@/lib/yip/bill-provisions";
-import { committeeWhatsappFor } from "@/lib/yip/whatsapp-links";
+import {
+  committeeWhatsappFor,
+  benchWhatsappFor,
+} from "@/lib/yip/whatsapp-links";
 import {
   isGoIndependentClosed,
   BILL_DRAFTING_SESSION_KEY,
@@ -269,6 +272,9 @@ export default async function ParticipantPage() {
   // Only ever this student's own groups; nothing about anyone else's.
   let partyWhatsapp: string | null = null;
   let committeeWhatsappLink: string | null = null;
+  // The bench group, resolved from THIS student's side. A student with no bench
+  // recorded sees no bench group — never a guessed one.
+  let benchWhatsappLink: string | null = null;
   {
     const untyped = supabase as unknown as {
       from: (t: string) => {
@@ -293,12 +299,16 @@ export default async function ParticipantPage() {
     }
     const { data: ev } = await untyped
       .from("events")
-      .select("committee_whatsapp")
+      .select("committee_whatsapp, bench_whatsapp")
       .eq("id", event.id)
       .maybeSingle();
     committeeWhatsappLink = committeeWhatsappFor(
       ev?.committee_whatsapp,
       participant.committee_number
+    );
+    benchWhatsappLink = benchWhatsappFor(
+      ev?.bench_whatsapp,
+      participant.party_side
     );
   }
 
@@ -522,6 +532,8 @@ export default async function ParticipantPage() {
         committeeScheme={committeeScheme}
         partyWhatsapp={partyWhatsapp}
         committeeWhatsapp={committeeWhatsappLink}
+        benchWhatsapp={benchWhatsappLink}
+        benchSide={participant.party_side as "ruling" | "opposition" | null}
         sessionStamp={sessionStamp}
       />
 

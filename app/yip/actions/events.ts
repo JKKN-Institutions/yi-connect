@@ -24,6 +24,8 @@ import {
   isValidWhatsappInvite,
   normalizeWhatsappInvite,
   withCommitteeWhatsapp,
+  withBenchWhatsapp,
+  type BenchSide,
 } from "@/lib/yip/whatsapp-links";
 import type { Database } from "@/types/yip/database";
 
@@ -518,6 +520,81 @@ export async function setPartyWhatsappLink(
   if (!data || data.length === 0) {
     return { success: false, error: "That party is not part of this event." };
   }
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/parties`);
+  revalidatePath("/yip/me");
+  return { success: true, data: { saved: value !== null } };
+}
+
+/**
+ * Set (or clear) the WhatsApp group invite for one BENCH of an event.
+ *
+ * A regional round splits the House into a ruling and an opposition bench, each
+ * with its own group. Unlike a party (a real row) or a committee (a numbered
+ * key), there are exactly two benches per event, so both links live in one
+ * jsonb column keyed by the side.
+ *
+ * A student is shown the link for THEIR side only, resolved from
+ * yip.participants.party_side. A student with no bench set sees no bench group
+ * rather than a guessed one — the same refusal-to-guess the jury screen makes.
+ *
+ * events.bench_whatsapp is newer than types/yip/database.ts (which is not
+ * regenerated — the CLI corrupts it), so the read and write are cast once, the
+ * same narrow-accessor pattern committee_whatsapp already uses in
+ * app/yip/dashboard/events/[id]/topics/page.tsx.
+ */
+export async function setBenchWhatsappLink(
+  eventId: string,
+  side: BenchSide,
+  url: string | null
+): Promise<ActionResult<{ saved: boolean }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  if (side !== "ruling" && side !== "opposition") {
+    return { success: false, error: "Unknown bench." };
+  }
+  const value = normalizeWhatsappInvite(url);
+  if (value !== null && !isValidWhatsappInvite(value)) {
+    return {
+      success: false,
+      error:
+        "That is not a WhatsApp group invite link. It should start with https://chat.whatsapp.com/ — use Group info → Invite via link → Copy link.",
+    };
+  }
+
+  const supabase = await createServiceClient();
+  // Read-modify-write the map: the two sides are independent, and writing the
+  // whole column from one input would silently wipe the other bench's link.
+  const { data: row, error: readErr } = await (
+    supabase as unknown as {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (k: string, v: string) => {
+            maybeSingle: () => Promise<{
+              data: { bench_whatsapp: unknown } | null;
+              error: { message: string } | null;
+            }>;
+          };
+        };
+      };
+    }
+  )
+    .from("events")
+    .select("bench_whatsapp")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (readErr) return { success: false, error: readErr.message };
+  if (!row) return { success: false, error: "Event not found" };
+
+  const next = withBenchWhatsapp(row.bench_whatsapp, side, value);
+
+  const { error } = await supabase
+    .from("events")
+    .update({ bench_whatsapp: next } as never)
+    .eq("id", eventId);
+  if (error) return { success: false, error: error.message };
 
   revalidatePath(`/yip/dashboard/events/${eventId}/parties`);
   revalidatePath("/yip/me");

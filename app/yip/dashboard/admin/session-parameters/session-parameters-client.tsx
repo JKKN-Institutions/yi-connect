@@ -14,7 +14,30 @@ import {
   describeRoundLevels,
   type RoundLevel,
 } from "@/lib/yip/round-level";
+import {
+  applicableMax,
+  roleSlugLabel,
+  roleSlugOptions,
+  sheetRoleSlugs,
+} from "@/lib/yip/scoring-roles";
 import { Plus, Trash2, Save, Loader2, Sparkles, X, Pencil } from "lucide-react";
+
+// The role tags offered on each criterion row. Deliberately the SHORT list —
+// the two benches plus the offices that actually differ within a session (a
+// minister answers in Question Hour; the chair presides). The full
+// parliament-role vocabulary is still accepted by the data layer for anything
+// more specific; this is the set worth a one-tap chip.
+const ROLE_TAG_SLUGS = [
+  "side:ruling",
+  "side:opposition",
+  "cabinet_minister",
+  "shadow_minister",
+  "speaker",
+] as const;
+
+const ROLE_TAG_OPTIONS = roleSlugOptions().filter((o) =>
+  (ROLE_TAG_SLUGS as readonly string[]).includes(o.slug)
+);
 
 // agenda_type is a non-unique REFERENCE (used later to map event agenda items
 // to a session). Optional; multiple sessions may share a type.
@@ -41,6 +64,8 @@ type DraftParam = {
   kind: ParameterKind;
   max_score: string;
   weight: string;
+  /** Role slugs this criterion applies to. Empty = everyone. */
+  roles: string[];
 };
 
 const blankParam = (): DraftParam => ({
@@ -49,6 +74,7 @@ const blankParam = (): DraftParam => ({
   kind: "evaluation",
   max_score: "10",
   weight: "1",
+  roles: [],
 });
 
 function slugify(s: string): string {
@@ -67,6 +93,7 @@ function toDraft(c: SessionParametersConfig): DraftParam[] {
     kind: p.kind,
     max_score: String(p.max_score),
     weight: String(p.weight),
+    roles: p.roles ?? [],
   }));
 }
 
@@ -139,7 +166,26 @@ export function SessionParametersClient({
         kind: "evaluation" as ParameterKind,
         max_score: String(c.max_score),
         weight: "1",
+        roles: [],
       }))
+    );
+  }
+
+  // Role-dependent criteria: tick the sides/roles a criterion applies to.
+  // Nothing ticked = applies to everyone, which is what every criterion on
+  // every existing sheet means and how they must stay.
+  function toggleParamRole(i: number, slug: string) {
+    setParams((prev) =>
+      prev.map((p, idx) =>
+        idx === i
+          ? {
+              ...p,
+              roles: p.roles.includes(slug)
+                ? p.roles.filter((r) => r !== slug)
+                : [...p.roles, slug],
+            }
+          : p
+      )
     );
   }
 
@@ -151,6 +197,31 @@ export function SessionParametersClient({
     const n = Number(p.max_score);
     return s + (Number.isFinite(n) ? n : 0);
   }, 0);
+
+  // Role-dependent criteria: the maximum each tagged side is actually marked
+  // out of — Σ(their own criteria) + Σ(untagged criteria). This is exactly the
+  // denominator applicableMax() will compute at result time, shown here so the
+  // admin can see "presenter 10 / opposition 10" while the sheet publishes 16.
+  const perRoleMaxes = sheetRoleSlugs(
+    params.map((p) => ({
+      key: p.key,
+      label: p.label,
+      max_score: Number(p.max_score) || 0,
+      roles: p.roles,
+    }))
+  ).map((slug) => ({
+    slug,
+    label: roleSlugLabel(slug),
+    max: applicableMax(
+      params.map((p) => ({
+        key: p.key,
+        label: p.label,
+        max_score: Number(p.max_score) || 0,
+        roles: p.roles,
+      })),
+      [slug]
+    ),
+  }));
 
   async function save() {
     setSaving(true);
@@ -170,6 +241,7 @@ export function SessionParametersClient({
         kind: p.kind,
         max_score: Number(p.max_score),
         weight: Number(p.weight),
+        roles: p.roles.length > 0 ? p.roles : null,
       })),
     });
     setSaving(false);
@@ -369,8 +441,9 @@ export function SessionParametersClient({
             {params.map((p, i) => (
               <div
                 key={i}
-                className="grid grid-cols-2 gap-2 rounded-lg border border-gray-200 p-2 sm:grid-cols-[1fr_1fr_140px_90px_90px_40px] sm:items-center sm:border-0 sm:p-0"
+                className="rounded-lg border border-gray-200 p-2 sm:border-0 sm:p-0"
               >
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1fr_140px_90px_90px_40px] sm:items-center">
                 <input
                   placeholder="key_snake_case"
                   value={p.key}
@@ -416,8 +489,58 @@ export function SessionParametersClient({
                   <Trash2 className="size-4" />
                 </button>
               </div>
+
+                {/* Role-dependent criteria. Nothing ticked = applies to
+                    everyone, which is what every criterion on all 13 existing
+                    sheets means — so leaving this alone changes nothing.
+                    Ticking a side restricts the criterion to it, and a student
+                    is then marked (and divided) only by their own subset. */}
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] font-medium text-gray-500">
+                    Applies to
+                  </span>
+                  {p.roles.length === 0 && (
+                    <span className="text-[11px] text-gray-400">everyone</span>
+                  )}
+                  {ROLE_TAG_OPTIONS.map((opt) => {
+                    const on = p.roles.includes(opt.slug);
+                    return (
+                      <button
+                        key={opt.slug}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => toggleParamRole(i, opt.slug)}
+                        className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                          on
+                            ? "border-blue-600 bg-blue-600 text-white"
+                            : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             ))}
           </div>
+
+          {/* What a student is actually marked out of. The published total
+              spans BOTH sides of the House once a sheet is split, and nobody
+              is ever marked out of it — so show each side's own maximum, which
+              is the denominator the results engine will use. */}
+          {params.some((p) => p.roles.length > 0) && (
+            <div className="mt-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+              <span className="font-semibold">Split sheet.</span> Published total{" "}
+              {totalMax}, but each delegate is marked out of their own subset:
+              {perRoleMaxes.map((r) => (
+                <span key={r.slug} className="ml-2 font-medium">
+                  {r.label} {r.max}
+                </span>
+              ))}
+              . Untagged criteria count for everyone.
+            </div>
+          )}
 
           <button
             type="button"
@@ -549,6 +672,11 @@ export function SessionParametersClient({
                         }`}
                       >
                         {p.label} · {p.max_score} (w{p.weight})
+                        {p.roles && p.roles.length > 0 && (
+                          <span className="ml-1 font-semibold text-amber-700">
+                            · {p.roles.map(roleSlugLabel).join(" / ")}
+                          </span>
+                        )}
                       </span>
                     ))}
                   </div>

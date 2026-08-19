@@ -6,6 +6,8 @@
 // criteria. Speaker / Deputy Speaker rubrics are flat. This module papers
 // over both shapes with one set of helpers.
 
+import { criterionAppliesTo } from "@/lib/yip/scoring-roles";
+
 export interface SubCriterion {
   key: string; // dotted, e.g. "content.relevance"
   label: string;
@@ -30,15 +32,25 @@ export interface RubricCriterionShape {
  * A criterion with no `roles` restriction applies to everyone; an unknown or
  * null role sees ONLY the unrestricted criteria (fail closed — a restricted
  * criterion is never shown to a role it wasn't scoped to).
+ *
+ * A participant may hold SEVERAL role slugs at once — their parliament_role and
+ * the bench they sit on (see lib/yip/scoring-roles.ts) — so this accepts either
+ * one slug or a list, and matches if ANY of them is named. Passing a single
+ * slug is the original signature and returns the original answer: with one slug
+ * `slugs.includes(r)` over `[slug]` is `r === slug`. The match itself is
+ * delegated to criterionAppliesTo() so there is exactly ONE implementation of
+ * "does this criterion apply", shared with the jury screen, the submit
+ * validator and the results engine.
  */
 export function criteriaForRole<T extends { roles?: string[] | null }>(
   criteria: T[],
-  roleSlug: string | null | undefined
+  roleSlug: string | readonly string[] | null | undefined
 ): T[] {
-  return criteria.filter((c) => {
-    if (!Array.isArray(c.roles) || c.roles.length === 0) return true;
-    return roleSlug != null && c.roles.includes(roleSlug);
-  });
+  const slugs =
+    roleSlug == null ? [] : typeof roleSlug === "string" ? [roleSlug] : roleSlug;
+  return criteria.filter((c) =>
+    criterionAppliesTo({ key: "", label: "", max_score: 0, roles: c.roles }, slugs)
+  );
 }
 
 /** Does this criterion expose sub-criteria? */
@@ -109,7 +121,7 @@ export function computeTotal(
 export function validateScoresAgainstRubric(
   criteria: RubricCriterionShape[],
   scores: Record<string, unknown>,
-  roleSlug?: string | null
+  roleSlug?: string | readonly string[] | null
 ): string | null {
   const applicable =
     roleSlug === undefined ? criteria : criteriaForRole(criteria, roleSlug);
@@ -159,7 +171,7 @@ export function allSubCriteria(criteria: RubricCriterionShape[]): SubCriterion[]
  */
 export function scorableSlotCount(
   criteria: RubricCriterionShape[],
-  roleSlug?: string | null
+  roleSlug?: string | readonly string[] | null
 ): number {
   const applicable =
     roleSlug === undefined ? criteria : criteriaForRole(criteria, roleSlug);

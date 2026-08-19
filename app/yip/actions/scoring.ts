@@ -5,6 +5,12 @@ import { requireJurySession } from "@/lib/yip/auth/yip-session";
 import { isJurorAssignedToSession } from "./jury-sessions";
 import { resolveSessionConfig } from "@/lib/yip/session-config-resolution";
 import { fetchEventRoundLevel } from "@/lib/yip/round-level";
+import {
+  applicableCriteria,
+  applicableMax,
+  isRoleSplitSheet,
+  normaliseRoleSlugs,
+} from "@/lib/yip/scoring-roles";
 import type { Tables } from "@/types/yip/database";
 
 type Score = Tables<{ schema: "yip" }, "scores">;
@@ -73,12 +79,25 @@ export async function getRubricForRole(
 // regional rounds beats the shared one, and a sheet scoped to a different level
 // is never used. When the level cannot be read the resolver falls back to
 // unscoped sheets only, which is how every sheet behaved before scoping existed.
+//
+// ROLE-DEPENDENT CRITERIA (2026-08)
+// A sheet's criteria list may span BOTH sides of the House, with each criterion
+// tagged with the roles it applies to. The FULL list is returned here, tags
+// included, and the per-student subset is taken by the caller through
+// lib/yip/scoring-roles.ts — deliberately, because getJuryScreenBootstrap caches
+// this payload per SESSION (and mirrors it into the offline cache), not per
+// participant. Filtering here would need a participant argument and would break
+// both caches; filtering from the tags is a pure function of data the jury
+// screen already holds, so it also works offline. `total_max` remains the
+// sheet's PUBLISHED total; a student's own maximum is applicableMax().
 export type SessionScoringParams = {
   criteria: {
     key: string;
     label: string;
     max_score: number;
     kind: "evaluation" | "participation";
+    /** Role slugs this criterion applies to. null = everyone. */
+    roles: string[] | null;
   }[];
   total_max: number;
   // When true, this session is scored ONCE per juror and locked on submit: no
@@ -128,18 +147,17 @@ export async function getSessionScoringParams(
     label: string;
     max_score: number;
     kind?: "evaluation" | "participation";
+    roles?: string[] | null;
   }[];
   const criteria = params.map((p) => ({
     key: p.key,
     label: p.label,
     max_score: Number(p.max_score),
     kind: p.kind === "participation" ? "participation" : "evaluation",
-  })) as {
-    key: string;
-    label: string;
-    max_score: number;
-    kind: "evaluation" | "participation";
-  }[];
+    // Carried through untouched. Every criterion on every production sheet has
+    // no tag, so this is null everywhere until an admin splits a sheet.
+    roles: normaliseRoleSlugs(p.roles),
+  })) as SessionScoringParams["criteria"];
   if (criteria.length === 0) return null;
   return {
     criteria,
@@ -184,6 +202,18 @@ interface SubmitScoreInput {
   // Backward-compatible: callers that pass neither behave exactly as before.
   occurrence?: number;
   newTurn?: boolean;
+  // Role-dependent criteria (2026-08). The role slugs this mark was taken
+  // under, and whether the judge overrode the automatic answer. Both optional:
+  // omitted (every existing caller, and every unsplit sheet) is stored as NULL,
+  // which the results engine reads as "no role restriction was in force" — the
+  // pre-role denominator exactly.
+  //
+  // Stored rather than re-derived because a recompute must be able to reproduce
+  // the denominator a human actually marked against. participants.party_side is
+  // editable after the fact; if a student's bench is corrected next week, a
+  // re-derived role would silently change their historical maximum.
+  scoredRoles?: string[] | null;
+  scoredRoleSource?: "auto" | "override" | null;
 }
 
 export async function submitScore(
@@ -263,7 +293,9 @@ export async function submitScore(
   // below INSERTs it; editing an existing turn finds + updates that exact row.
   const { data: existing } = await supabase
     .from("scores")
-    .select("id, criteria_scores, total_score, comments, status")
+    .select(
+      "id, criteria_scores, total_score, comments, status, scored_roles, scored_role_source"
+    )
     .eq("jury_assignment_id", input.juryAssignmentId)
     .eq("participant_id", input.participantId)
     .eq("event_id", input.eventId)
@@ -313,6 +345,29 @@ export async function submitScore(
   // replayed POST with a valid session) from writing out-of-range values that
   // distort the award ranking. (Previously this guard ran only when
   // fromOfflineSync was set, leaving the live path unbounded.)
+  // Role-dependent criteria: a SPLIT sheet cannot be marked without knowing
+  // which side of the House this student was marked as. Refuse rather than
+  // assume — an assumed side silently changes the denominator, and a score
+  // written without a role could not be reproduced by a later recompute. On an
+  // unsplit sheet (every sheet in production today) this never fires, so it
+  // adds no failure mode to any existing round.
+  if (
+    sessionParams &&
+    isRoleSplitSheet(sessionParams.criteria) &&
+    (normaliseRoleSlugs(input.scoredRoles) ?? []).length === 0
+  ) {
+    return {
+      success: false,
+      // A buffered mark taken before the sheet was split can never acquire a
+      // role on replay, so it is reported as STALE — the flush drops it and the
+      // juror re-scores against the live sheet, exactly as it already does for
+      // a changed rubric. A live submit gets the plain instruction.
+      error: input.fromOfflineSync
+        ? "STALE_OFFLINE_SCORE: this session is now scored separately for each side of the House — please re-score this participant"
+        : "This session is scored differently for each side of the House — pick the delegate's role before submitting.",
+    };
+  }
+
   {
     const entries = Object.entries(input.criteriaScores ?? {});
     // Universal numeric sanity: finite, non-negative — applies even when the
@@ -329,10 +384,20 @@ export async function submitScore(
     let rangeBad = false;
     const params = sessionParams; // loaded once above
     if (params && params.criteria.length > 0) {
-      const maxByKey = new Map(params.criteria.map((c) => [c.key, c.max_score]));
+      // Role-dependent criteria: a student is only marked on the subset that
+      // applies to them, so validate against THAT subset and THAT maximum. On
+      // an unsplit sheet (every sheet in production today) the subset is the
+      // whole list and applicableMax === total_max, so this is byte-identical
+      // to the previous check. On a split sheet it is strictly TIGHTER: a
+      // presenter can no longer post the opposition's criteria, and their total
+      // is bounded by their own 10 rather than the sheet's published 16.
+      const roleSlugs = normaliseRoleSlugs(input.scoredRoles) ?? [];
+      const scoped = applicableCriteria(params.criteria, roleSlugs);
+      const maxByKey = new Map(scoped.map((c) => [c.key, c.max_score]));
+      const boundedMax = applicableMax(params.criteria, roleSlugs);
       foreignKey = entries.some(([k]) => !maxByKey.has(k));
       rangeBad =
-        input.totalScore > params.total_max ||
+        input.totalScore > boundedMax ||
         entries.some(([k, v]) => v > (maxByKey.get(k) ?? Infinity));
     } else {
       // Role-rubric fallback (no session parameters configured): still bound the
@@ -380,6 +445,17 @@ export async function submitScore(
     flag_walkout: input.flags?.walkout ?? false,
     flag_ruckus: input.flags?.ruckus ?? false,
     flag_suspension: input.flags?.suspension ?? false,
+    // Role-dependent criteria: the role this mark was taken under, so a later
+    // recompute can reproduce the same denominator. NULL on every unsplit sheet
+    // and on every caller that does not pass one — which the results engine
+    // reads as "no role restriction", i.e. the sheet's full total_max.
+    scored_roles: normaliseRoleSlugs(input.scoredRoles),
+    scored_role_source:
+      input.scoredRoleSource === "override"
+        ? "override"
+        : normaliseRoleSlugs(input.scoredRoles)
+          ? "auto"
+          : null,
   };
 
   let scoreId: string;
@@ -406,6 +482,13 @@ export async function submitScore(
           total_score: existing.total_score,
           comments: existing.comments,
           prior_status: existing.status,
+          // The role the REPLACED mark was taken under — without it the
+          // superseded total could not be re-derived from its own denominator.
+          scored_roles: (existing as { scored_roles?: string[] | null })
+            .scored_roles,
+          scored_role_source: (
+            existing as { scored_role_source?: string | null }
+          ).scored_role_source,
         });
       } catch {
         // Swallowed by design — the revision log is an audit convenience; the

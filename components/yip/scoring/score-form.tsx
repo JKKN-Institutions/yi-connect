@@ -67,6 +67,13 @@ interface ScoreFormProps {
   // 90-second Constituency Speech): a submitted score becomes read-only, reusing
   // the existing isLocked machinery. Drafts stay editable.
   lockAfterSubmit?: boolean;
+  // Which session this sheet marks, shown at the very top of the form
+  // (juror feedback 2026-08-21: "have Session Name on top" — a juror scoring
+  // back-to-back sessions could not tell from the sheet alone which one they
+  // were marking). Presentation only: it names the session already selected by
+  // the parent, and never affects criteria, totals or the submit payload.
+  // Optional so existing callers that don't pass it keep compiling.
+  sessionLabel?: string | null;
   // Special-Remarks flags from the parent panel — included in every buffer
   // write so flags ticked during an outage survive to the sync.
   flags?: {
@@ -99,6 +106,7 @@ export function ScoreForm({
   juryAssignmentId,
   existingScore,
   lockAfterSubmit,
+  sessionLabel,
   flags,
   onSubmit,
 }: ScoreFormProps) {
@@ -619,6 +627,16 @@ export function ScoreForm({
 
   return (
     <div className="space-y-5 landscape-gap-2">
+      {/* Session name (juror feedback 2026-08-21) — which session this sheet
+          marks, above the participant. Sits outside the participant card so it
+          reads as context for the whole sheet, not as a property of the
+          delegate. Renders nothing when the parent passes no label. */}
+      {sessionLabel && (
+        <p className="text-xs font-bold uppercase tracking-wide text-gray-500 truncate">
+          {sessionLabel}
+        </p>
+      )}
+
       {/* Participant Header */}
       <div
         className={`rounded-xl border-2 p-4 landscape-compact ${partyTint ?? "bg-gray-50 border-gray-200"}`}
@@ -667,15 +685,6 @@ export function ScoreForm({
           </p>
         </div>
       )}
-
-      {/* Score Total Banner — sticky in landscape */}
-      <div className="flex items-center justify-between rounded-lg bg-gray-900 px-5 py-3.5 landscape-sticky-top landscape-small-py">
-        <span className="text-sm font-medium text-gray-300">Total Score</span>
-        <span className="text-2xl font-bold text-white tabular-nums landscape-text-sm">
-          {totalScore}
-          <span className="text-sm font-normal text-gray-400">/{maxTotal}</span>
-        </span>
-      </div>
 
       {/* Compact/Detailed toggle — render-layer only; same scores, same keys,
           same buffer/autosave underneath either mode. */}
@@ -755,26 +764,6 @@ export function ScoreForm({
           </>
         );
       })()}
-
-      {/* Comments */}
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <label className="flex items-center gap-2 text-sm font-semibold text-gray-900 mb-2">
-          <MessageSquare className="size-4" />
-          Comments (optional)
-        </label>
-        <Textarea
-          value={comments}
-          onChange={(e) => {
-            dirtyRef.current = true;
-            setComments(e.target.value);
-            setError(null);
-          }}
-          disabled={isLocked}
-          placeholder="Notes about this participant's performance..."
-          className="min-h-[80px] text-base"
-          rows={3}
-        />
-      </div>
 
       {/* Status Messages */}
       {error && (
@@ -858,6 +847,42 @@ export function ScoreForm({
           </div>
         </div>
       )}
+
+      {/* Comments + Total Score (juror feedback 2026-08-21: "move Comments &
+          Total Score below"). Both sit AFTER the action buttons so the juror
+          scores and submits without scrolling past an optional free-text box.
+          Comments is still bound to the same `comments` state, so it is saved
+          by Save Draft / Submit and buffered offline exactly as before —
+          only its position on screen changed. */}
+      <div className="space-y-3 pt-1">
+        <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <label className="flex items-center gap-2 text-sm font-semibold text-gray-900 mb-2">
+            <MessageSquare className="size-4" />
+            Comments (optional)
+          </label>
+          <Textarea
+            value={comments}
+            onChange={(e) => {
+              dirtyRef.current = true;
+              setComments(e.target.value);
+              setError(null);
+            }}
+            disabled={isLocked}
+            placeholder="Notes about this participant's performance..."
+            className="min-h-[80px] text-base"
+            rows={3}
+          />
+        </div>
+
+        {/* Score Total Banner */}
+        <div className="flex items-center justify-between rounded-lg bg-gray-900 px-5 py-3.5 landscape-small-py">
+          <span className="text-sm font-medium text-gray-300">Total Score</span>
+          <span className="text-2xl font-bold text-white tabular-nums landscape-text-sm">
+            {totalScore}
+            <span className="text-sm font-normal text-gray-400">/{maxTotal}</span>
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { Scale, History, LogOut, ClipboardList } from "lucide-react";
 import { signOutYipSession } from "@/app/yip/actions/auth";
 import { GuideLauncher } from "@/components/yip/guide";
 import { GUIDES } from "@/lib/yip/guide/content";
+import { SearchTrigger } from "@/components/yip/search/search-trigger";
 
 interface JurySession {
   type: "jury";
@@ -64,6 +65,10 @@ export default async function JuryLayout({
           </div>
 
           <nav className="flex items-center gap-1">
+            {/* Search — icon-sized: this header is phone-width and already
+                carries the lane title plus four nav actions. The palette shows
+                a juror their sessions and the blind participant labels only. */}
+            <SearchTrigger variant="icon" />
             {/* Score nav — min 44×44 touch target */}
             <Link
               href="/yip/jury"

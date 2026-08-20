@@ -86,6 +86,12 @@ export type ImportChunkResult =
       skipped: number;
       /** Inserted, but the college name matched nothing — left unlinked. */
       collegeNotMatched: string[];
+      /**
+       * Names of rows REFUSED because they had neither an email nor a phone.
+       * Every duplicate check is keyed on one of those two, so such a row
+       * cannot be checked and would be created afresh on every re-upload.
+       */
+      unverifiable: string[];
       /** Human-readable problems, addressed by name. */
       errors: string[];
       created: ImportedDelegate[];

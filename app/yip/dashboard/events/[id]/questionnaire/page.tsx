@@ -3,6 +3,7 @@ import { getEvent } from "@/app/yip/actions/events";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import {
   getQuestionnaireOverview,
+  getQuestionnaireQuestionReview,
   getQuestionnaireResults,
 } from "@/app/yip/actions/questionnaire";
 import { QuestionnaireAdminClient } from "./questionnaire-admin-client";
@@ -30,10 +31,11 @@ export default async function QuestionnairePage({
     );
   }
 
-  const [overview, results, event] = await Promise.all([
+  const [overview, results, event, review] = await Promise.all([
     getQuestionnaireOverview(id),
     getQuestionnaireResults(id),
     getEvent(id),
+    getQuestionnaireQuestionReview(id),
   ]);
 
   return (
@@ -46,6 +48,11 @@ export default async function QuestionnairePage({
       initialRows={results.success ? results.data.rows : []}
       initialUnscored={results.success ? results.data.unscored : 0}
       initialMissing={results.success ? results.data.missing : []}
+      initialReview={
+        review.success
+          ? review.data
+          : { status: null, text: null, generatedAt: null, modelNote: null }
+      }
       initialError={
         overview.success ? (results.success ? null : results.error) : overview.error
       }

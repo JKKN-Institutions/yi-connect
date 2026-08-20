@@ -84,13 +84,17 @@ export default function NewEventPage() {
   const [chapterGroups, setChapterGroups] = useState<ChapterGroup[]>([]);
   const [chaptersLoading, setChaptersLoading] = useState(true);
 
-  // The official 15 committee topics come from the yip.topics catalog (managed
-  // at /yip/dashboard/admin/topics). The organiser picks ~5 (more if they want)
-  // for this round; committee_topics holds ONLY the selected committees → topic.
+  // The committee topics come from the yip.topics catalog (managed at
+  // /yip/dashboard/admin/topics) and are LEVEL-SCOPED: a regional round runs
+  // its own fifteen committees, chapter and national rounds run the shared
+  // list. So the catalogue offered here follows the Level chosen in Step 1.
+  // The organiser picks the ones this round will run; committee_topics holds
+  // ONLY the selected committees → topic.
   const [committeeCatalog, setCommitteeCatalog] = useState<
     CommitteeTopicOption[]
   >([]);
   const [committeesLoading, setCommitteesLoading] = useState(true);
+  const [committeesError, setCommitteesError] = useState(false);
 
   const [form, setForm] = useState<EventFormData>({
     name: "",
@@ -107,19 +111,35 @@ export default function NewEventPage() {
     committee_topics: {},
   });
 
-  // Load the committee catalog on mount. Committees start UNSELECTED — the
-  // organiser consciously picks the ones their event will run (2026-06-19).
-  // (Previously all 15 were auto-selected, which made the in-event Committees
-  // tab open showing "15 selected" and the setup tick meaningless.)
+  // Load the committee catalog for the level currently chosen in Step 1, and
+  // reload it whenever that level changes.
+  //
+  // This call used to pass no level, which returns the SHARED catalogue only.
+  // A host creating a regional round was therefore shown the chapter
+  // committees and could never reach the fifteen regional ones, so the
+  // "each host picks their own committees" rule was impossible to follow.
+  //
+  // A stale response from a level the host has already moved off must never
+  // win: `active` is per-effect-run, so the previous run's response (and its
+  // loading flag) is discarded when the level changes again mid-flight.
+  //
+  // Committees start UNSELECTED — the organiser consciously picks the ones
+  // their event will run (2026-06-19). (Previously all 15 were auto-selected,
+  // which made the in-event Committees tab open showing "15 selected" and the
+  // setup tick meaningless.)
   useEffect(() => {
     let active = true;
-    listCommitteeTopics()
+    listCommitteeTopics(form.level)
       .then((catalog) => {
         if (!active) return;
         setCommitteeCatalog(catalog);
+        setCommitteesError(false);
       })
       .catch(() => {
-        /* catalog load failed — organiser can still create with no committees */
+        // Say the load failed rather than letting an empty list read as "this
+        // level has no committees configured" — the organiser can still create
+        // the event and choose its committees from inside it afterwards.
+        if (active) setCommitteesError(true);
       })
       .finally(() => {
         if (active) setCommitteesLoading(false);
@@ -127,7 +147,7 @@ export default function NewEventPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [form.level]);
 
   // Load the canonical chapter list (grouped by region) on mount.
   useEffect(() => {
@@ -167,6 +187,24 @@ export default function NewEventPage() {
     value: EventFormData[K]
   ) {
     setForm((prev) => ({ ...prev, [key]: value }));
+    setError("");
+  }
+
+  // Changing the round level changes WHICH committees exist, so the old
+  // level's catalogue and every tick made against it are dropped in the same
+  // update. Nothing from the previous level survives into the new round —
+  // carrying a chapter committee into a regional round is the same bug wearing
+  // a different hat, and a committee that exists under both names can still
+  // carry a different topic, which would be written to the event unnoticed.
+  // Clearing here (not after the fetch returns) means there is no window in
+  // which Step 2 shows the old level's list or count as though it were current;
+  // it shows its loading state until the new list lands.
+  function handleLevelChange(level: EventFormData["level"]) {
+    if (level === form.level) return;
+    setCommitteesLoading(true);
+    setCommitteesError(false);
+    setCommitteeCatalog([]);
+    setForm((prev) => ({ ...prev, level, committee_topics: {} }));
     setError("");
   }
 
@@ -365,10 +403,7 @@ export default function NewEventPage() {
                 id="level"
                 value={form.level}
                 onChange={(e) =>
-                  updateField(
-                    "level",
-                    e.target.value as "chapter" | "regional" | "national"
-                  )
+                  handleLevelChange(e.target.value as EventFormData["level"])
                 }
                 className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               >
@@ -503,7 +538,12 @@ export default function NewEventPage() {
               <Label className="mb-3">Committee Topics</Label>
               <p className="mb-4 text-xs text-gray-500">
                 Pick the committees for this round from the official YIP 2026
-                list. Recommended: choose <strong>5</strong> — you can pick more.
+                list for{" "}
+                <strong>
+                  {LEVEL_OPTIONS.find((o) => o.value === form.level)?.label ??
+                    form.level}
+                </strong>
+                . Recommended: choose <strong>5</strong> — you can pick more.
                 Each committee&apos;s topic is fixed — students draft bills on it.{" "}
                 <span className="font-medium text-[#1a1a3e]">
                   Selected: {Object.keys(form.committee_topics).length}
@@ -511,12 +551,19 @@ export default function NewEventPage() {
               </p>
               {committeesLoading ? (
                 <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <Loader2 className="size-4 animate-spin" /> Loading committee
-                  topics…
+                  <Loader2 className="size-4 animate-spin" /> Loading the
+                  committee list for this level…
                 </div>
+              ) : committeesError ? (
+                <p className="text-sm text-red-600">
+                  Could not load the committee list for this level. Please
+                  refresh the page — or create the event now and choose its
+                  committees from inside it.
+                </p>
               ) : committeeCatalog.length === 0 ? (
                 <p className="text-sm text-gray-500">
-                  No committee topics found. Add them under Admin → Topics.
+                  No committee topics found for this level. Add them under Admin
+                  → Topics.
                 </p>
               ) : (
                 <div className="space-y-2">

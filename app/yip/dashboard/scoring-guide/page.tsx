@@ -1,9 +1,26 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/yip/supabase/server";
-import { isAnyYipAdmin } from "@/lib/yip/auth/event-access";
+import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
+import { isAnyYipAdmin, getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import { Card, CardContent } from "@/components/yip/ui/card";
+import {
+  ROUND_LEVELS,
+  ROUND_LEVEL_LABELS,
+  toRoundLevel,
+  describeRoundLevels,
+  type RoundLevel,
+} from "@/lib/yip/round-level";
+import {
+  fetchGuideConfigRows,
+  fetchGuideEventContext,
+  resolveGuideSheets,
+  summariseGuideScope,
+  sheetsDisagreeingWithStatedRule,
+  statedPerStudentMax,
+  roundLevelNoun,
+} from "@/lib/yip/scoring-guide-levels";
 import {
   Users,
   Calculator,
@@ -19,6 +36,8 @@ import {
   Sparkles,
   HelpCircle,
   ArrowRight,
+  AlertTriangle,
+  Layers,
 } from "lucide-react";
 import { PrintButton } from "./print-button";
 
@@ -99,7 +118,51 @@ function Faq({ q, children }: { q: string; children: React.ReactNode }) {
   );
 }
 
-export default async function ScoringGuidePage() {
+/**
+ * A plain amber "read this before you believe the numbers" box. Used wherever
+ * the page would otherwise state something as settled that is not.
+ */
+function Caution({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex gap-2 rounded-lg border border-[#FF9933]/40 bg-[#FF9933]/[0.08] px-4 py-3 text-sm text-[#7c3a00]">
+      <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[#FF9933]" />
+      <div className="space-y-1">{children}</div>
+    </div>
+  );
+}
+
+/** Chapter / Regional / National picker. Plain links, so no client JS. */
+function LevelSwitch({ current }: { current: RoundLevel }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 print:hidden">
+      {ROUND_LEVELS.map((l) => {
+        const on = l === current;
+        return (
+          <Link
+            key={l}
+            href={`/yip/dashboard/scoring-guide?level=${l}`}
+            aria-current={on ? "page" : undefined}
+            className={
+              on
+                ? "rounded-lg bg-[#1a1a3e] px-3 py-1.5 text-sm font-semibold text-white"
+                : "rounded-lg border border-[#1a1a3e]/15 bg-white px-3 py-1.5 text-sm font-medium text-[#1a1a3e] hover:border-[#FF9933]/50"
+            }
+          >
+            {ROUND_LEVEL_LABELS[l]}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+type GuideSearchParams = { level?: string; event?: string };
+
+export default async function ScoringGuidePage({
+  searchParams,
+}: {
+  searchParams?: Promise<GuideSearchParams>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -111,6 +174,42 @@ export default async function ScoringGuidePage() {
       <Forbidden403 reason="The Scoring & Awards Guide is for YIP admins, chairs and organisers. Your role doesn't include event management." />
     );
   }
+
+  // ── which round's rules are we showing? ──────────────────────────────────
+  // Two ways in. `?event=` reads the level off a real event, so a link from an
+  // event lands on that event's rules; `?level=` is the manual switch. The
+  // event path is gated with the EVENT-scoped helper (the page itself stays on
+  // isAnyYipAdmin, which is the platform-wide gate) — and when that gate says
+  // no, the page says so out loud instead of quietly showing other rules.
+  const params = (await searchParams) ?? {};
+  const svc = await createServiceClient();
+
+  let eventContext: { id: string; name: string; level: RoundLevel | null } | null =
+    null;
+  let eventDenied = false;
+  if (params.event) {
+    const access = await getYipEventAccess(params.event);
+    if (access.canView) {
+      eventContext = await fetchGuideEventContext(svc, params.event);
+      if (!eventContext) eventDenied = true;
+    } else {
+      eventDenied = true;
+    }
+  }
+
+  // Default is Chapter: it is far and away the commonest round and the level
+  // every word of the walkthrough below was written for. The banner names the
+  // level in the heading and the switch sits directly under it, so nobody reads
+  // regional marking off the chapter page by accident.
+  const level: RoundLevel =
+    eventContext?.level ?? toRoundLevel(params.level) ?? "chapter";
+
+  const sheets = resolveGuideSheets(await fetchGuideConfigRows(svc), level);
+  const scope = summariseGuideScope(sheets);
+  const statedPerStudent = statedPerStudentMax(level);
+  const disagreeing = sheetsDisagreeingWithStatedRule(sheets, level);
+  const levelNoun = roundLevelNoun(level);
+  const levelWord = ROUND_LEVEL_LABELS[level].toLowerCase();
 
   const thCls =
     "border border-[#1a1a3e]/10 bg-[#1a1a3e]/[0.03] px-3 py-2 text-left font-semibold text-[#1a1a3e]";
@@ -165,6 +264,9 @@ export default async function ScoringGuidePage() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-[#FF9933]">
+            {ROUND_LEVEL_LABELS[level]} rounds
+          </p>
           <h1 className="text-2xl font-bold text-[#1a1a3e]">
             How YIP Scoring &amp; Awards Work
           </h1>
@@ -175,6 +277,219 @@ export default async function ScoringGuidePage() {
         </div>
         <PrintButton />
       </div>
+
+      {/* Which round's rules am I reading? */}
+      <Card className="border-[#1a1a3e]/15">
+        <CardContent className="space-y-3 p-6">
+          <div className="flex items-start gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#1a1a3e]/[0.06] text-[#1a1a3e]">
+              <Layers className="size-5" />
+            </span>
+            <div className="space-y-1">
+              <h2 className="text-base font-bold text-[#1a1a3e]">
+                You are reading the rules for a{" "}
+                <span className="text-[#FF9933]">
+                  {ROUND_LEVEL_LABELS[level]} round
+                </span>
+              </h2>
+              <p className="text-sm text-gray-600">
+                {eventContext ? (
+                  <>
+                    Set from the event <strong>{eventContext.name}</strong>, which
+                    is a {levelNoun}.
+                  </>
+                ) : (
+                  <>
+                    Chapter rules are shown unless you pick another level.{" "}
+                    <strong>Running one of the regional rounds?</strong> Switch to
+                    Regional before you share or print this.
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+          <LevelSwitch current={level} />
+          {eventDenied ? (
+            <Caution>
+              <p>
+                <strong>That event could not be opened.</strong> Either it
+                doesn&apos;t exist or your role doesn&apos;t cover it, so the
+                guide is showing the {levelNoun} rules you picked instead of that
+                event&apos;s. Nothing here is specific to that event.
+              </p>
+            </Caution>
+          ) : null}
+          {scope.total > 0 && !scope.anyLevelScoped ? (
+            <Caution>
+              <p>
+                <strong>
+                  {`No criteria sheet has been written for ${levelWord} rounds yet.`}
+                </strong>{" "}
+                {`All ${scope.total} sheets below are the shared ones used by every level — they are not ${levelWord}-specific. Treat them as the general rules, not as this round's.`}
+              </p>
+              <p>
+                A super-admin creates a level-specific sheet under{" "}
+                <strong>Admin → Session Parameters</strong>. As soon as one
+                exists, this page shows it here instead.
+              </p>
+            </Caution>
+          ) : null}
+          {scope.anyLevelScoped ? (
+            <div className="flex gap-2 rounded-lg border border-[#138808]/25 bg-[#138808]/[0.05] px-4 py-3 text-sm text-[#14532d]">
+              <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[#138808]" />
+              <p>
+                <strong>
+                  {scope.levelScoped} of {scope.total} sheets
+                </strong>{" "}
+                {`are written for ${levelWord} rounds. The other ${scope.shared} are the shared sheets used by every level — each row below says which it is.`}
+              </p>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      {/* The criteria sheets that apply at this level */}
+      <Card>
+        <CardContent className="space-y-4 p-6">
+          <div className="flex items-start gap-3 border-b border-[#1a1a3e]/10 pb-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#FF9933]/12 text-[#FF9933]">
+              <ScrollText className="size-5" />
+            </span>
+            <div>
+              <h2 className="text-base font-bold text-[#1a1a3e]">
+                The criteria sheets for a {levelNoun}
+              </h2>
+              <p className="mt-0.5 text-xs text-gray-500">
+                Live from the app&apos;s scoring setup — not typed into this page
+              </p>
+            </div>
+          </div>
+
+          {statedPerStudent !== null ? (
+            <Caution>
+              <p>
+                <strong>
+                  The national scoring note of 18 August 2026 sets every session
+                  at {statedPerStudent} points per student
+                </strong>{" "}
+                for the regional rounds. A sheet may list more than that — e.g.
+                16 points made of 6 for the ruling bench, 4 for everyone and 6
+                for the opposition — because it carries <em>both</em> benches&apos;
+                criteria. Any one student is still marked out of{" "}
+                {statedPerStudent}.
+              </p>
+              {disagreeing.length > 0 ? (
+                <p>
+                  <strong>
+                    That is not what the app is set up with yet.
+                  </strong>{" "}
+                  {disagreeing.length === sheets.length
+                    ? `All ${sheets.length} sheets below`
+                    : `${disagreeing.length} of the ${sheets.length} sheets below`}{" "}
+                  work out to a different per-student total. Mark to the written
+                  note, not to the numbers in this table, until a super-admin has
+                  entered the regional sheets.
+                </p>
+              ) : (
+                <p>
+                  Every sheet below matches that: {statedPerStudent} points per
+                  student.
+                </p>
+              )}
+            </Caution>
+          ) : null}
+
+          {sheets.length === 0 ? (
+            <p className="text-sm text-gray-700">
+              No active criteria sheet applies to a {levelNoun}. Judges will see
+              the role rubric instead. A super-admin can add sheets under{" "}
+              <strong>Admin → Session Parameters</strong>.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-gray-700">
+                These are the sessions a judge can be asked to mark at this
+                level. <strong>Sheet total</strong> is every criterion on the
+                sheet added together — what an admin sees while editing it.{" "}
+                <strong>Per student</strong> is what one student is actually
+                marked out of. They differ only when a sheet is split by bench.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr>
+                      <th className={thCls}>Session</th>
+                      <th className={thCls}>Sheet total</th>
+                      <th className={thCls}>Per student</th>
+                      <th className={thCls}>Counts for</th>
+                      <th className={thCls}>Written for</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sheets.map((s) => (
+                      <tr key={s.id}>
+                        <td className={`${tdCls} font-medium text-[#1a1a3e]`}>
+                          {s.label}
+                          <span className="block text-[11px] text-gray-500">
+                            {s.criteria.length} criteria
+                            {s.benchSplit
+                              ? ` · ${s.benchSplit.shared} for everyone, ${s.benchSplit.ruling} ruling, ${s.benchSplit.opposition} opposition`
+                              : " · not split by bench"}
+                          </span>
+                        </td>
+                        <td className={tdCls}>{s.sheetTotal}</td>
+                        <td className={`${tdCls} font-semibold text-[#FF9933]`}>
+                          {s.perStudentMax}
+                        </td>
+                        <td className={tdCls}>
+                          weight {s.sessionWeight}
+                        </td>
+                        <td className={tdCls}>
+                          {s.source === "level" ? (
+                            <span className="rounded-full bg-[#138808]/10 px-2 py-0.5 text-[11px] font-semibold text-[#14532d]">
+                              {describeRoundLevels(s.levels)}
+                            </span>
+                          ) : (
+                            <span className="rounded-full bg-[#1a1a3e]/[0.06] px-2 py-0.5 text-[11px] font-semibold text-gray-600">
+                              Shared — every round
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {!scope.anyBenchSplit ? (
+                <p className="text-xs text-gray-500">
+                  None of these sheets is split by bench in the app, so every
+                  criterion on them is marked for every student and{" "}
+                  <strong>per student equals the sheet total</strong>. Once a
+                  sheet is split, this column will show the smaller figure and
+                  the split underneath each session.
+                </p>
+              ) : (
+                <p className="text-xs text-gray-500">
+                  Where a sheet is split by bench, a judge marks only the
+                  criteria that apply to the student in front of them — the
+                  shared criteria plus that student&apos;s own bench.{" "}
+                  <strong>
+                    The bench itself is not shown to the judge on purpose
+                  </strong>
+                  , so the mark cannot be coloured by which side the app placed
+                  the student on.
+                </p>
+              )}
+            </>
+          )}
+
+          <p className="text-xs text-gray-500">
+            Only the per-session criteria sheets can differ by level today. The
+            leadership bonus table, the awards and the /100 model in the
+            walkthrough below are still the same at every level.
+          </p>
+        </CardContent>
+      </Card>
 
       {/* This is a REAL demo */}
       <Card className="border-[#FF9933]/30 bg-[#FF9933]/[0.05]">
@@ -194,6 +509,13 @@ export default async function ScoringGuidePage() {
             computes. A super-admin can open it any time under{" "}
             <strong>Admin → Mock Data</strong> to see the same figures. So this is
             a real simulation, not a hypothetical.
+          </p>
+          <p className="text-sm text-gray-700">
+            <strong>It is a chapter-shaped demo.</strong> Everything from here
+            down — the /100 walkthrough, the leadership bonuses and the awards —
+            is the same at every level today, but the per-session marks in it come
+            from the shared sheets. For what a judge is handed at a {levelNoun},
+            read the table above, not these worked examples.
           </p>
         </CardContent>
       </Card>

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
-import { getEvent, listCommitteeTopics } from "@/app/yip/actions/events";
+import { getEvent, listCommitteeTopicsForEvent } from "@/app/yip/actions/events";
 import { CommitteePickerClient } from "./topics-event-client";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import { getCommitteeNumbering } from "@/lib/yip/committee-number";
@@ -27,8 +27,10 @@ export default async function EventTopicsPage({
     );
   }
 
-  // The official 15-committee catalogue (admin-managed at /yip/dashboard/admin/topics).
-  const catalog = await listCommitteeTopics();
+  // The official committee catalogue for THIS event's round level
+  // (admin-managed at /yip/dashboard/admin/topics): the chapter set for a
+  // chapter round, the fifteen regional committees for a regional one.
+  const catalog = await listCommitteeTopicsForEvent(id);
 
   // This event's currently-selected committees = the keys of committee_topics.
   // Read on the service client (yip.events is RLS read-only for `authenticated`,

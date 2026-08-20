@@ -9,7 +9,11 @@
 
 import { parentScoreByKey } from "@/lib/yip/rubric";
 import { ROLE_LABELS } from "@/lib/yip/constants";
-import type { ResultWithParticipant } from "@/app/yip/actions/results";
+import type {
+  ResultWithParticipant,
+  SingleJudgeStudent,
+  SideChangeStudent,
+} from "@/app/yip/actions/results";
 import { Button } from "@/components/yip/ui/button";
 import { Download } from "lucide-react";
 
@@ -58,12 +62,31 @@ export function StudentScoreSheet({
   results,
   positionBonuses,
   eventName,
+  singleJudgeStudents = [],
+  sideChangeStudents = [],
 }: {
   eventId: string;
   results: ResultWithParticipant[];
   positionBonuses: Record<string, number>;
   eventName: string;
+  // Host-only notes on HOW a row was marked (Director 2026-08-19). Presentation
+  // only — no score in this grid is changed, hidden or re-weighted by them.
+  singleJudgeStudents?: SingleJudgeStudent[];
+  sideChangeStudents?: SideChangeStudent[];
 }) {
+  // participant_id -> the short note shown in the "How it was marked" column.
+  const markingNoteById = new Map<string, string>();
+  for (const s of singleJudgeStudents) {
+    markingNoteById.set(s.participantId, "Only one judge marked");
+  }
+  for (const s of sideChangeStudents) {
+    const existing = markingNoteById.get(s.participantId);
+    markingNoteById.set(
+      s.participantId,
+      existing ? `${existing}; changed sides` : "Changed sides mid-round"
+    );
+  }
+
   function exportCsv() {
     const esc = (v: string | number | null) => {
       const s = v == null ? "" : String(v);
@@ -80,6 +103,7 @@ export function StudentScoreSheet({
       ...BUCKET_COLUMNS.map((b) => `${b.label} (${b.max})`),
       "Total Score (100)",
       "Remarks",
+      "How it was marked",
     ];
     const lines = results.map((r) => {
       const p = r.participant;
@@ -96,6 +120,7 @@ export function StudentScoreSheet({
         ...BUCKET_COLUMNS.map((b) => bucketValue(r, b.parentKey, positionBonuses)),
         r.avg_score ?? "",
         r.award_category ?? "",
+        markingNoteById.get(r.participant_id) ?? "",
       ]
         .map(esc)
         .join(",");
@@ -139,7 +164,9 @@ export function StudentScoreSheet({
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-[#1a1a3e]/10">
-        <table className="w-full min-w-[1100px] border-collapse text-xs">
+        {/* +120px over the old 1100 for the new "How it was marked" column, so
+            it does not squeeze Remarks. The wrapper already scrolls sideways. */}
+        <table className="w-full min-w-[1220px] border-collapse text-xs">
           <thead>
             <tr className="bg-[#1a1a3e] text-white">
               <th className="px-2 py-2 text-center font-semibold">#</th>
@@ -163,6 +190,12 @@ export function StudentScoreSheet({
               ))}
               <th className="px-2 py-2 text-right font-bold">Total /100</th>
               <th className="px-2 py-2 text-left font-semibold">Remarks</th>
+              <th
+                className="px-2 py-2 text-left font-semibold"
+                title="Notes about how the marks were taken. These never change the score."
+              >
+                How it was marked
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -227,6 +260,9 @@ export function StudentScoreSheet({
                     }`}
                   >
                     {r.award_category ?? ""}
+                  </td>
+                  <td className="px-2 py-1.5 text-[11px] text-[#1a1a3e]/60">
+                    {markingNoteById.get(r.participant_id) ?? ""}
                   </td>
                 </tr>
               );

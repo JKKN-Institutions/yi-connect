@@ -41,6 +41,7 @@ import {
   Circle,
   Clock,
   Crown,
+  Download,
   Loader2,
   Lock,
   Mail,
@@ -54,7 +55,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/yip/utils";
-import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
+import { GREEN, INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 import type { MinistryPortfolio } from "@/lib/yip/cabinet";
 // Existing, already-shipped vote machinery — real imports, reused untouched.
 import {
@@ -75,6 +76,7 @@ import {
 } from "@/lib/yip/formation";
 import {
   closeFormationStep,
+  exportFormationTalliesCsv,
   extendFormationStep,
   getFormationState,
   getFormationTurnout,
@@ -309,6 +311,36 @@ export function FormationClient({
   // The Lock step only counts as done while the House is actually locked —
   // after an unlock its row is back to 'closed' (history preserved) but the
   // House is open again, so counting it would read "7 / 7 done" untruthfully.
+  /**
+   * Download every closed ballot's counts. The ballots are archived on close,
+   * so without this an election result has no durable record outside the DB.
+   */
+  function doExportTallies() {
+    startTransition(async () => {
+      const res = await exportFormationTalliesCsv(eventId).catch(() => null);
+      if (!res || !res.success) {
+        toast.error(res?.error ?? "Could not reach the server. Refresh and try again.");
+        return;
+      }
+      const blob = new Blob([res.data.csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.data.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(
+        `Downloaded ${res.data.ballots} ballot${res.data.ballots === 1 ? "" : "s"}.`
+      );
+    });
+  }
+
+  /** How many closed ballots exist — the Export button is pointless without one. */
+  const closedBallotCount = Object.values(state?.tallies ?? {}).reduce(
+    (n, list) => n + (list?.length ?? 0),
+    0
+  );
+
   const doneCount =
     state?.steps.filter((s) =>
       s.step_key === "lock"
@@ -742,6 +774,18 @@ export function FormationClient({
             <ScrollText className="size-4 text-[#FF9933]" />
             Oath Announcement
           </Link>
+          {closedBallotCount > 0 && (
+            <button
+              type="button"
+              onClick={doExportTallies}
+              disabled={isPending}
+              title="Every candidate's vote count, for every election closed so far"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#1a1a3e]/10 bg-white px-3 py-1.5 text-sm font-medium text-[#1a1a3e] transition-colors hover:bg-[#1a1a3e]/5 disabled:opacity-50"
+            >
+              <Download className="size-4 text-[#FF9933]" />
+              Export votes
+            </button>
+          )}
         </div>
       </div>
 
@@ -831,6 +875,105 @@ export function FormationClient({
                         ` · ${summary.voted}/${summary.eligible} voted`}
                     </p>
                   )}
+
+                  {/* Who this step seated. Without it a finished election read
+                      as turnout and nothing else, and the organiser had to
+                      leave the page to find out who had won. */}
+                  {isDone && def.mode === "election" && (
+                    <div className="rounded-xl border border-[#1a1a3e]/10 bg-[#1a1a3e]/[0.02] px-4 py-3">
+                      {(state?.winners?.[def.key] ?? []).length > 0 ? (
+                        <>
+                          <p
+                            className="text-[10px] font-bold uppercase tracking-[0.16em]"
+                            style={{ color: SAFFRON }}
+                          >
+                            Elected
+                          </p>
+                          <dl className="mt-1.5 space-y-1">
+                            {(state?.winners?.[def.key] ?? []).map((w, i) => (
+                              <div
+                                key={`${w.label}-${w.name}-${i}`}
+                                className="flex flex-wrap items-baseline gap-x-2"
+                              >
+                                <dt className="text-xs text-[#1a1a3e]/55">{w.label}</dt>
+                                <dd
+                                  className="text-sm font-semibold"
+                                  style={{ color: INK }}
+                                >
+                                  {w.name}
+                                </dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </>
+                      ) : (
+                        <p className="text-xs text-[#1a1a3e]/55">
+                          This step is closed but no one holds its post yet. Check
+                          Positions — the seat may have been cleared by hand.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* The counts. Closing a step archives the ballot, so before
+                      this the numbers left the app the moment it closed. */}
+                  {isDone &&
+                    def.mode === "election" &&
+                    (state?.tallies?.[def.key] ?? []).length > 0 && (
+                      <details className="rounded-xl border border-[#1a1a3e]/10 px-4 py-3">
+                        <summary
+                          className="cursor-pointer text-xs font-medium"
+                          style={{ color: SAFFRON }}
+                        >
+                          Votes cast
+                        </summary>
+                        <div className="mt-3 space-y-4">
+                          {(state?.tallies?.[def.key] ?? []).map((ballot) => (
+                            <div key={ballot.sessionId}>
+                              <p className="text-xs font-semibold" style={{ color: INK }}>
+                                {ballot.label ?? "All members"}
+                                <span className="ml-2 font-normal text-[#1a1a3e]/50">
+                                  {ballot.totalVotes} vote
+                                  {ballot.totalVotes === 1 ? "" : "s"}
+                                </span>
+                              </p>
+                              {ballot.entries.length === 0 ? (
+                                <p className="mt-1 text-xs text-[#1a1a3e]/55">
+                                  No votes were cast in this ballot.
+                                </p>
+                              ) : (
+                                <ul className="mt-1.5 space-y-1">
+                                  {ballot.entries.map((e) => (
+                                    <li
+                                      key={`${ballot.sessionId}-${e.name}-${e.constituencyNumber ?? ""}`}
+                                      className="flex items-baseline gap-2 text-sm"
+                                    >
+                                      <span
+                                        className="w-8 shrink-0 text-right font-semibold tabular-nums"
+                                        style={{ color: e.isTop ? GREEN : INK }}
+                                      >
+                                        {e.votes}
+                                      </span>
+                                      <span style={{ color: INK }}>{e.name}</span>
+                                      <span className="text-xs text-[#1a1a3e]/45">
+                                        {e.constituencyNumber != null &&
+                                          `#${e.constituencyNumber}`}
+                                        {e.partyName && ` · ${e.partyName}`}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <p className="mt-3 text-[11px] text-[#1a1a3e]/45">
+                          Totals only — how any individual voted is not recorded here.
+                          A count level with the top is highlighted; who took the seat is
+                          shown above, since a runoff or tie-break can decide it.
+                        </p>
+                      </details>
+                    )}
 
                   {/* ── Allocation (organiser step 1) ── */}
                   {def.key === "allocation" && !isDone && (

@@ -22,6 +22,9 @@ export interface HeroCredentialProps {
   /** The student's OWN group invites — never anyone else's. */
   partyWhatsapp?: string | null;
   committeeWhatsapp?: string | null;
+  /** The student's own bench group, or null when they have no bench yet. */
+  benchWhatsapp?: string | null;
+  benchSide?: "ruling" | "opposition" | null;
   committeeScheme: string | null;
   /** Masthead session stamp — e.g. "ERODE · 2026". */
   sessionStamp: string;
@@ -117,6 +120,8 @@ export function HeroCredential({
   committeeTopic,
   partyWhatsapp,
   committeeWhatsapp,
+  benchWhatsapp,
+  benchSide,
   committeeScheme,
   sessionStamp,
 }: HeroCredentialProps) {
@@ -294,7 +299,7 @@ export function HeroCredential({
           {/* This student's OWN group invites, the same links their access-code
               email carried, so losing the email does not lose the groups. Never
               anyone else's groups. */}
-          {(partyWhatsapp || committeeWhatsapp) && (
+          {(partyWhatsapp || committeeWhatsapp || benchWhatsapp) && (
             <Field label="Your WhatsApp groups" wide>
               <div className="flex flex-wrap gap-2">
                 {partyWhatsapp && (
@@ -319,6 +324,20 @@ export function HeroCredential({
                   >
                     <Users className="size-3" />
                     Join your committee group
+                  </a>
+                )}
+                {benchWhatsapp && (
+                  <a
+                    href={benchWhatsapp}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold"
+                    style={{ background: `${GREEN}14`, color: GREEN }}
+                  >
+                    <Users className="size-3" />
+                    Join your{" "}
+                    {benchSide === "opposition" ? "Opposition" : "Treasury"} bench
+                    group
                   </a>
                 )}
               </div>

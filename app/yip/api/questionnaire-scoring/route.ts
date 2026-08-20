@@ -87,6 +87,8 @@ type PostBody = {
   attemptId?: unknown;
   error?: unknown;
   answers?: unknown;
+  /** Optional ORGANISER-ONLY read of this paper. Never shown to the student. */
+  note?: unknown;
 };
 
 export async function POST(request: NextRequest) {
@@ -139,7 +141,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "no scorable answers" }, { status: 400 });
   }
 
-  const res = await applyAttemptScores(attemptId, answers);
+  const note = typeof body.note === "string" ? body.note : null;
+  const res = await applyAttemptScores(attemptId, answers, note);
   if (!res.ok) {
     await markAttemptScoringFailed(attemptId, res.error);
     return NextResponse.json({ error: res.error }, { status: 500 });

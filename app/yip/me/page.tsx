@@ -1,13 +1,17 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { clauseTexts } from "@/lib/yip/bill-provisions";
-import { committeeWhatsappFor } from "@/lib/yip/whatsapp-links";
+import {
+  committeeWhatsappFor,
+  benchWhatsappFor,
+} from "@/lib/yip/whatsapp-links";
 import {
   isGoIndependentClosed,
   BILL_DRAFTING_SESSION_KEY,
 } from "@/lib/yip/go-independent";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { fetchCommitteeTopicForEvent } from "@/lib/yip/committee-topics";
 import {
   getEventSchoolNumbers,
   schoolNumberOf,
@@ -268,6 +272,9 @@ export default async function ParticipantPage() {
   // Only ever this student's own groups; nothing about anyone else's.
   let partyWhatsapp: string | null = null;
   let committeeWhatsappLink: string | null = null;
+  // The bench group, resolved from THIS student's side. A student with no bench
+  // recorded sees no bench group — never a guessed one.
+  let benchWhatsappLink: string | null = null;
   {
     const untyped = supabase as unknown as {
       from: (t: string) => {
@@ -292,12 +299,16 @@ export default async function ParticipantPage() {
     }
     const { data: ev } = await untyped
       .from("events")
-      .select("committee_whatsapp")
+      .select("committee_whatsapp, bench_whatsapp")
       .eq("id", event.id)
       .maybeSingle();
     committeeWhatsappLink = committeeWhatsappFor(
       ev?.committee_whatsapp,
       participant.committee_number
+    );
+    benchWhatsappLink = benchWhatsappFor(
+      ev?.bench_whatsapp,
+      participant.party_side
     );
   }
 
@@ -306,13 +317,14 @@ export default async function ParticipantPage() {
   let committeeTopic: string | null = null;
   let committeeScheme: string | null = null;
   if (participant.committee_name) {
-    const { data: ct } = await supabase
-      .from("topics")
-      .select("description, linked_scheme")
-      .eq("category", "committee")
-      .eq("title", participant.committee_name)
-      .eq("is_active", true)
-      .maybeSingle();
+    // Resolved for this event's round level: a ministry name can now be held
+    // by both a shared row and a regional-round row, and .maybeSingle() would
+    // error (and silently blank the topic) the moment two rows matched.
+    const ct = await fetchCommitteeTopicForEvent(
+      supabase as never,
+      participant.event_id,
+      participant.committee_name
+    );
     committeeTopic = ct?.description ?? null;
     committeeScheme = ct?.linked_scheme ?? null;
   }
@@ -520,6 +532,8 @@ export default async function ParticipantPage() {
         committeeScheme={committeeScheme}
         partyWhatsapp={partyWhatsapp}
         committeeWhatsapp={committeeWhatsappLink}
+        benchWhatsapp={benchWhatsappLink}
+        benchSide={participant.party_side as "ruling" | "opposition" | null}
         sessionStamp={sessionStamp}
       />
 

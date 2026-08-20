@@ -8,6 +8,12 @@ import {
   EX_PARLIAMENT_ROLES,
   type ParliamentRole,
 } from "@/lib/yip/constants";
+import { roleSlugOptions } from "@/lib/yip/scoring-roles";
+import {
+  normaliseRoundLevels,
+  describeRoundLevels,
+  type RoundLevel,
+} from "@/lib/yip/round-level";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -45,6 +51,11 @@ export type Rubric = {
   total_max: number;
   is_default: boolean;
   is_active: boolean;
+  /**
+   * Round levels this rubric applies to (yip.rubrics.levels).
+   * null = every level — how all three production rubrics behave today.
+   */
+  levels: RoundLevel[] | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -55,14 +66,26 @@ export type RubricInput = {
   criteria: RubricCriterion[];
   is_default?: boolean;
   is_active?: boolean;
+  /** Round level scope. Omitted / null / all three = every level. */
+  levels?: RoundLevel[] | null;
 };
 
 const RUBRICS_PATH = "/dashboard/admin/rubrics";
-// All slugs a criterion may be scoped to — assignable roles plus the
-// system-assigned ex- roles (a participant can hold one at scoring time).
+// All slugs a criterion may be scoped to — assignable roles, the
+// system-assigned ex- roles (a participant can hold one at scoring time), and
+// the BENCH pseudo-slugs from lib/yip/scoring-roles.ts.
+//
+// The benches are the addition. "The presenter" and "the opposition" in a
+// Government Bill are benches, not parliament roles — a ruling MP and an
+// opposition MP both have parliament_role = 'mp' — so without them the national
+// admin's 6 (ruling) + 4 (both) + 6 (opposition) split is INEXPRESSIBLE on a
+// rubric, and this action rejected the tag outright. roleSlugOptions() is the
+// same list the editor renders, so the screen and the validator cannot drift.
+// This is strictly a WIDENING: every slug accepted before is still accepted.
 const KNOWN_ROLE_SLUGS = new Set<string>([
   ...PARLIAMENT_ROLES,
   ...EX_PARLIAMENT_ROLES,
+  ...roleSlugOptions().map((o) => o.slug),
 ]);
 const KEY_PATTERN = /^[a-z][a-z0-9_]*$/;
 // Sub-criterion keys are dotted: "<parentKey>.<childKey>"
@@ -232,7 +255,14 @@ function normaliseCriteria(
 function validateInput(
   input: RubricInput
 ):
-  | { ok: true; clean: Omit<RubricInput, "criteria"> & { criteria: RubricCriterion[]; total_max: number } }
+  | {
+      ok: true;
+      clean: Omit<RubricInput, "criteria"> & {
+        criteria: RubricCriterion[];
+        total_max: number;
+        levels: RoundLevel[] | null;
+      };
+    }
   | { ok: false; error: string } {
   const name = (input.name ?? "").trim();
   if (name.length < 3) {
@@ -247,17 +277,79 @@ function validateInput(
 
   const total_max = parsed.criteria.reduce((sum, c) => sum + c.max_score, 0);
 
+  // Round-level scope. normaliseRoundLevels() drops unknown values, de-dupes,
+  // orders chapter -> regional -> national, and collapses both "nothing chosen"
+  // and "all three chosen" to null = every level, so one scope always stores as
+  // one array and the unique index can compare arrays literally.
+  const levels = normaliseRoundLevels(input.levels ?? null);
+  const is_default = !!input.is_default;
+
+  // A level-scoped rubric wins by SCOPE, never by the default flag. Enforced in
+  // the database too (rubrics_scoped_never_default), and it is what keeps the
+  // as-yet-unmigrated consumer correct: getRubricForRole() in
+  // app/yip/actions/scoring.ts still runs `.eq(is_default,true).single()` with
+  // no level filter, and `.single()` errors the moment two rows come back.
+  // Rejecting here rather than silently clearing the flag, so nobody's "make
+  // this the default" click disappears without explanation.
+  if (levels !== null && is_default) {
+    return {
+      ok: false,
+      error: `A rubric limited to ${describeRoundLevels(levels)} cannot also be the role default. The level scope already decides when it is used — clear the default tick, or remove the level scope to make it the shared rubric for every round.`,
+    };
+  }
+
   return {
     ok: true,
     clean: {
       name,
       target_role: input.target_role,
-      is_default: !!input.is_default,
+      is_default,
       is_active: input.is_active !== false,
       criteria: parsed.criteria,
       total_max,
+      levels,
     },
   };
+}
+
+/**
+ * Read the `levels` column off a rubrics row.
+ *
+ * types/yip/database.ts is GENERATED and does not carry this column yet.
+ * Regenerating it is not this change's file to own — several level-scoping
+ * branches are in flight against that one file at the same time — so the column
+ * is read through a narrow cast instead. normaliseRoundLevels() doubles as the
+ * guard against an unexpected value arriving from the database.
+ */
+/**
+ * Turn the database's uniqueness complaints into something a non-technical
+ * super-admin can act on. Both indexes are new in the round-level migration, so
+ * without this the only feedback would be a raw Postgres 23505 string.
+ */
+function friendlyWriteError(
+  error: { code?: string | null; message: string } | null,
+  fallback: string
+): string {
+  if (!error) return fallback;
+  const msg = error.message ?? "";
+  if (error.code === "23505" || msg.includes("duplicate key")) {
+    if (msg.includes("rubrics_one_active_scoped_per_role")) {
+      return "Another active rubric already covers this role at this round level. Deactivate that one first, then activate this.";
+    }
+    if (msg.includes("rubrics_one_global_default_per_role")) {
+      return "Another rubric is already the default for this role. Clear that default first.";
+    }
+  }
+  if (msg.includes("rubrics_scoped_never_default")) {
+    return "A rubric limited to certain round levels cannot also be the role default — the level scope already decides when it is used.";
+  }
+  return msg || fallback;
+}
+
+function readLevels(row: unknown): RoundLevel[] | null {
+  return normaliseRoundLevels(
+    (row as { levels?: unknown } | null)?.levels ?? null
+  );
 }
 
 function rowToRubric(row: {
@@ -268,6 +360,7 @@ function rowToRubric(row: {
   total_max: number;
   is_default: boolean | null;
   is_active: boolean | null;
+  levels: RoundLevel[] | null;
   created_at: string | null;
   updated_at: string | null;
 }): Rubric {
@@ -298,6 +391,7 @@ function rowToRubric(row: {
     total_max: row.total_max,
     is_default: !!row.is_default,
     is_active: row.is_active !== false,
+    levels: row.levels,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -326,6 +420,7 @@ export async function listRubrics(
       total_max: r.total_max,
       is_default: r.is_default,
       is_active: r.is_active,
+      levels: readLevels(r),
       created_at: r.created_at,
       updated_at: r.updated_at,
     })
@@ -348,11 +443,27 @@ export async function getRubric(id: string): Promise<Rubric | null> {
     total_max: data.total_max,
     is_default: data.is_default,
     is_active: data.is_active,
+    levels: readLevels(data),
     created_at: data.created_at,
     updated_at: data.updated_at,
   });
 }
 
+/**
+ * Clear the "default" flag from the GLOBAL rubric(s) of one role.
+ *
+ * `.is("levels", null)` is the round-level fix, and it is step 2 of the recipe
+ * in lib/yip/round-level.ts: this write addresses rows by KEY (target_role +
+ * is_default), not by row id, so once a second dimension exists the key has to
+ * grow with it. Without the filter, saving a REGIONAL rubric would reach across
+ * and un-default the shared rubric that every chapter round still marks
+ * against — a silent scoring change to rounds nobody touched.
+ *
+ * In practice a scoped rubric can never be a default at all (see validateInput
+ * and the rubrics_scoped_never_default constraint), so this filter is belt and
+ * braces — but it is the belt that makes the invariant hold no matter which
+ * side is edited first.
+ */
 async function clearDefaultForRole(
   supabase: Awaited<ReturnType<typeof createServiceClient>>,
   role: ParliamentRole,
@@ -362,7 +473,8 @@ async function clearDefaultForRole(
     .from("rubrics")
     .update({ is_default: false })
     .eq("target_role", role)
-    .eq("is_default", true);
+    .eq("is_default", true)
+    .is("levels", null);
   if (exceptId) q = q.neq("id", exceptId);
   await q;
 }
@@ -391,12 +503,18 @@ export async function createRubric(
       total_max: clean.total_max,
       is_default: clean.is_default,
       is_active: clean.is_active,
+      // Cast for the same reason as readLevels(): the generated row type does
+      // not carry `levels` yet and that file is not this change's to regenerate.
+      levels: clean.levels as unknown as never,
     })
     .select()
     .single();
 
   if (error || !data) {
-    return { success: false, error: error?.message ?? "Failed to create rubric" };
+    return {
+      success: false,
+      error: friendlyWriteError(error, "Failed to create rubric"),
+    };
   }
 
   revalidatePath(RUBRICS_PATH);
@@ -410,6 +528,7 @@ export async function createRubric(
       total_max: data.total_max,
       is_default: data.is_default,
       is_active: data.is_active,
+      levels: readLevels(data),
       created_at: data.created_at,
       updated_at: data.updated_at,
     }),
@@ -441,6 +560,7 @@ export async function updateRubric(
       total_max: clean.total_max,
       is_default: clean.is_default,
       is_active: clean.is_active,
+      levels: clean.levels as unknown as never,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
@@ -448,7 +568,10 @@ export async function updateRubric(
     .single();
 
   if (error || !data) {
-    return { success: false, error: error?.message ?? "Failed to update rubric" };
+    return {
+      success: false,
+      error: friendlyWriteError(error, "Failed to update rubric"),
+    };
   }
 
   revalidatePath(RUBRICS_PATH);
@@ -462,15 +585,23 @@ export async function updateRubric(
       total_max: data.total_max,
       is_default: data.is_default,
       is_active: data.is_active,
+      levels: readLevels(data),
       created_at: data.created_at,
       updated_at: data.updated_at,
     }),
   };
 }
 
+/**
+ * Copy a rubric. The copy inherits the source's ROUND-LEVEL SCOPE unless the
+ * caller overrides it — a "copy" that silently applied to every round when the
+ * original was regional-only would be a different rubric, not a copy. When an
+ * active rubric already occupies that role at that scope, createRubric surfaces
+ * the plain-English clash message from friendlyWriteError().
+ */
 export async function cloneRubric(
   id: string,
-  opts: { newName: string; newRole?: ParliamentRole }
+  opts: { newName: string; newRole?: ParliamentRole; newLevels?: RoundLevel[] | null }
 ): Promise<ActionResult<Rubric>> {
   const gate = await requireSuperAdmin();
   if (!gate.ok) return { success: false, error: gate.error };
@@ -494,6 +625,12 @@ export async function cloneRubric(
     })),
     is_default: false,
     is_active: true,
+    levels:
+      opts.newLevels !== undefined
+        ? opts.newLevels
+        : source.levels
+          ? [...source.levels]
+          : null,
   });
 }
 
@@ -512,11 +649,16 @@ export async function deactivateRubric(id: string): Promise<ActionResult> {
 
   if (target.is_default) {
     // Refuse to deactivate a default if no active alternative exists for the role.
+    //
+    // `.is("levels", null)` matters: a rubric scoped to regional rounds is NOT a
+    // replacement for the shared default, because chapter and national rounds
+    // would then resolve to nothing at all. Only another GLOBAL rubric counts.
     const { data: alternatives } = await supabase
       .from("rubrics")
       .select("id")
       .eq("target_role", target.target_role)
       .eq("is_active", true)
+      .is("levels", null)
       .neq("id", id);
 
     if (!alternatives || alternatives.length === 0) {
@@ -552,7 +694,14 @@ export async function reactivateRubric(id: string): Promise<ActionResult> {
     .update({ is_active: true, updated_at: new Date().toISOString() })
     .eq("id", id);
 
-  if (error) return { success: false, error: error.message };
+  // Reactivating a level-scoped rubric can collide with the one already active
+  // for that role and level — say so in plain English rather than leaking 23505.
+  if (error) {
+    return {
+      success: false,
+      error: friendlyWriteError(error, "Failed to reactivate rubric"),
+    };
+  }
   revalidatePath(RUBRICS_PATH);
   return { success: true, data: null };
 }
@@ -564,11 +713,26 @@ export async function setAsDefault(id: string): Promise<ActionResult> {
 
   const { data: target } = await supabase
     .from("rubrics")
-    .select("id, target_role")
+    // "*" rather than a column list: `levels` is not in the generated row type
+    // yet (see readLevels), and naming it explicitly would not type-check.
+    .select("*")
     .eq("id", id)
     .single();
 
   if (!target) return { success: false, error: "Rubric not found" };
+
+  // "Default" is a property of the SHARED rubric only. A level-scoped rubric is
+  // already chosen by its scope, and flagging it would put two is_default rows
+  // under one role — which the still-unmigrated
+  // app/yip/actions/scoring.ts#getRubricForRole reads with `.single()`, so it
+  // would return NOTHING and every juror would lose their fallback sheet.
+  const targetLevels = readLevels(target);
+  if (targetLevels !== null) {
+    return {
+      success: false,
+      error: `This rubric only applies to ${describeRoundLevels(targetLevels)} rounds, so it cannot be the role default. It is already used automatically for those rounds.`,
+    };
+  }
 
   // Clear previous default(s) for this role…
   await clearDefaultForRole(supabase, target.target_role, id);

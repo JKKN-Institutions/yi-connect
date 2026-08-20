@@ -1,6 +1,13 @@
 "use client";
 
-import { setPartyWhatsappLink } from "@/app/yip/actions/events";
+import {
+  setPartyWhatsappLink,
+  setBenchWhatsappLink,
+} from "@/app/yip/actions/events";
+import {
+  WHATSAPP_INVITE_HINT,
+  BENCH_LABEL,
+} from "@/lib/yip/whatsapp-links";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -91,6 +98,7 @@ export function PartiesClient({
   canDelete = true,
   canManage = false,
   allocationLocked = false,
+  benchWhatsapp,
 }: {
   eventId: string;
   eventName: string;
@@ -102,6 +110,11 @@ export function PartiesClient({
   canManage?: boolean;
   /** When locked, party changes are disabled. */
   allocationLocked?: boolean;
+  /**
+   * The two bench WhatsApp groups. A student is shown the one matching THEIR
+   * side, so a bench with no link simply shows the student nothing.
+   */
+  benchWhatsapp?: { ruling: string | null; opposition: string | null };
 }) {
   const router = useRouter();
   const [parties, setParties] = useState(initialParties);
@@ -133,6 +146,31 @@ export function PartiesClient({
       router.refresh();
     });
   }
+  // The two BENCH group links. Same save-on-blur behaviour as the per-party
+  // link above; the difference is that there are exactly two per event rather
+  // than one per party, so they live above the list, not on a card.
+  const [benchDraft, setBenchDraft] = useState<Record<string, string>>({});
+  const benchValue = (side: "ruling" | "opposition") =>
+    benchDraft[side] ?? benchWhatsapp?.[side] ?? "";
+  function saveBench(side: "ruling" | "opposition") {
+    const saved = benchWhatsapp?.[side] ?? "";
+    const next = (benchDraft[side] ?? "").trim();
+    if (benchDraft[side] === undefined || next === saved) return;
+    setError(null);
+    startTransition(async () => {
+      const res = await setBenchWhatsappLink(
+        eventId,
+        side,
+        next === "" ? null : next
+      );
+      if (!res.success) {
+        setError(res.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
   const [flash, setFlash] = useState<string | null>(null);
   const [assignOpen, setAssignOpen] = useState<string | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -397,6 +435,52 @@ export function PartiesClient({
           </Button>
         )}
       </div>
+
+      {/* Bench WhatsApp groups. Shown to the student whose side matches, on
+          their /yip/me card and in their access-code email. A student with no
+          bench set sees no bench group rather than a guessed one. */}
+      {canManage && (
+        <div className="rounded-xl border border-[#1a1a3e]/10 bg-white p-4">
+          <p className="text-sm font-semibold text-[#1a1a3e]">
+            Bench WhatsApp groups
+          </p>
+          <p className="mt-0.5 text-xs text-[#1a1a3e]/60">
+            Each student is shown the group for the bench they sit on, on their
+            own page and in their access-code email. {WHATSAPP_INVITE_HINT}
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {(["ruling", "opposition"] as const).map((side) => (
+              <div key={side}>
+                <label
+                  htmlFor={`bench-wa-${side}`}
+                  className="text-xs font-medium text-[#1a1a3e]/70"
+                >
+                  {BENCH_LABEL[side]}
+                </label>
+                <input
+                  id={`bench-wa-${side}`}
+                  type="url"
+                  inputMode="url"
+                  placeholder="WhatsApp group link (optional)"
+                  value={benchValue(side)}
+                  onChange={(e) =>
+                    setBenchDraft((prev) => ({ ...prev, [side]: e.target.value }))
+                  }
+                  onBlur={() => saveBench(side)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      (e.target as HTMLInputElement).blur();
+                    }
+                  }}
+                  className="mt-1 w-full rounded-lg border border-[#1a1a3e]/15 px-2.5 py-1.5 text-xs"
+                  aria-label={`WhatsApp group link for the ${BENCH_LABEL[side]}`}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {flash && (
         <div className="rounded-lg bg-[#138808]/8 border border-[#138808]/15 px-4 py-2 text-sm text-[#138808]">

@@ -165,6 +165,34 @@ export async function adminListTeam(filters?: {
   });
 }
 
+/**
+ * Find the auth account for an email, or null when nobody has signed up yet.
+ *
+ * Paginates auth.admin.listUsers because there is no lookup-by-email API. Same
+ * scan adminLinkUser() does; extracted so creating a member and linking one
+ * cannot disagree about what counts as a match.
+ */
+async function findAuthUserByEmail(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  email: string
+): Promise<{ id: string; email: string | null } | null> {
+  const target = email.trim().toLowerCase();
+  if (!target) return null;
+  const perPage = 1000;
+  for (let page = 1; page <= 10; page++) {
+    const { data, error } = await supabase.auth.admin.listUsers({
+      page,
+      perPage,
+    });
+    if (error) return null;
+    const users = data?.users ?? [];
+    const match = users.find((u) => (u.email ?? "").toLowerCase() === target);
+    if (match) return { id: match.id, email: match.email ?? null };
+    if (users.length < perPage) break;
+  }
+  return null;
+}
+
 export async function adminCreateMember(
   input: MemberInput
 ): Promise<ActionResult<TeamMember>> {
@@ -199,10 +227,41 @@ export async function adminCreateMember(
     .single();
 
   if (error) return { success: false, error: error.message };
+
+  // LINK THEM TO THEIR LOGIN NOW, if they already have one.
+  //
+  // Without this the member is created with user_id NULL, the
+  // yi_directory.sync_from_organizer_profile trigger copies that NULL into
+  // yi_directory.people.user_id, and getCurrentPersonRoles() - which resolves
+  // auth.users.id -> people.user_id -> role_assignments - finds no person and
+  // hands them zero roles. They sign in successfully and see an EMPTY APP, with
+  // no error to explain it. That happened to a real national admin on
+  // 2026-08-20 and needed a manual database fix to undo.
+  //
+  // Best-effort: a failure here must NOT fail the create. The member still
+  // exists, their row shows "No login" and the Link button sits beside it.
+  // Someone who has not signed up yet is simply linked later.
+  let created = data as Omit<TeamMember, "yi_year">;
+  if (normalized.email) {
+    const authUser = await findAuthUserByEmail(supabase, normalized.email);
+    if (authUser) {
+      const { data: relinked } = await supabase
+        .from("organizers")
+        .update({
+          user_id: authUser.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", (data as { id: string }).id)
+        .select("*")
+        .single();
+      if (relinked) created = relinked as Omit<TeamMember, "yi_year">;
+    }
+  }
+
   revalidatePath("/yip/dashboard/admin/team");
   return {
     success: true,
-    data: { ...(data as Omit<TeamMember, "yi_year">), yi_year: null },
+    data: { ...created, yi_year: null },
   };
 }
 

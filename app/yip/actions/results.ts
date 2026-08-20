@@ -8,10 +8,26 @@ import { parentScoreByKey } from "@/lib/yip/rubric";
 import { getPositionBonusConfigAdmin } from "./positions";
 import { getScoringSettings } from "./scoring-settings";
 import { listSessionParameters } from "./session-parameters";
+import { resolveSessionConfig } from "@/lib/yip/session-config-resolution";
+import {
+  denominatorFor,
+  isRoleSplitSheet,
+  isSideSlug,
+  roleSlugLabel,
+  storedRoleSlugs,
+  type RoleScopedCriterion,
+} from "@/lib/yip/scoring-roles";
+import { fetchEventRoundLevel } from "@/lib/yip/round-level";
+import { resolveAwardsForLevel } from "@/lib/yip/awards";
 import { listScoringBuckets } from "./scoring-buckets";
 import { getScoringFlagsConfig } from "./scoring-flags";
 import { getSessionScoringParams } from "./scoring";
 import { fetchAllRows } from "@/lib/pagination";
+import {
+  buildMissingResultsNotice,
+  isRoundOver,
+  type MissingResultsNotice,
+} from "@/lib/yip/results-missing";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -101,7 +117,48 @@ type RawScore = {
   flag_walkout: boolean;
   flag_ruckus: boolean;
   flag_suspension: boolean;
+  /**
+   * Role-dependent criteria (2026-08): the role slugs this mark was taken
+   * under. Empty on every score written before role scoping and on every
+   * unsplit sheet, which means "no role restriction was in force" — the whole
+   * criteria list applied, and the denominator is the sheet's total_max.
+   */
+  scored_roles: string[];
 };
+
+/**
+ * The role a participant was marked under in ONE session, given the tally of
+ * role-slug sets across the jurors who marked them there.
+ *
+ * Normally every juror records the same role (it is derived from the same
+ * participant record), so the tally has a single entry and this is that entry.
+ * Jurors CAN disagree when one of them overrides the automatic answer — a real
+ * data-quality event, not something to paper over — so the resolution is
+ * explicitly deterministic rather than order-dependent: most-recorded first,
+ * ties broken by the canonical key. Deterministic matters because results are
+ * recomputed on demand and two recomputes of the same data must rank
+ * identically.
+ *
+ * An absent or empty tally means no role was in force -> [] -> every criterion
+ * applies -> the sheet's total_max. That is every score written before role
+ * scoping existed.
+ */
+function dominantRoleSlugs(
+  tally: Map<string, number> | undefined
+): string[] {
+  if (!tally || tally.size === 0) return [];
+  let bestKey = "";
+  let bestCount = -1;
+  for (const [key, count] of Array.from(tally.entries()).sort((a, b) =>
+    a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0
+  )) {
+    if (count > bestCount) {
+      bestCount = count;
+      bestKey = key;
+    }
+  }
+  return bestKey ? bestKey.split("|") : [];
+}
 
 // Disciplinary special-remarks flags (walkout / ruckus / suspension) are
 // OBJECTIVE events. Under the Yi 2026 Evaluation Workbook they NO LONGER alter
@@ -111,6 +168,126 @@ type RawScore = {
 function hasDisciplinaryFlag(scores: RawScore[]): boolean {
   return scores.some(
     (s) => s.flag_walkout || s.flag_ruckus || s.flag_suspension
+  );
+}
+
+// ─── Participation (repeat speaking turns) ───────────────────────
+//
+// National Admin, 2026-08-18: "Multiple iterations also can be entered for
+// scoring… eventually averaging out the scores and maybe adding up a bit for
+// participative efforts and involvement" and "Scores must be averages of all
+// scores. Some consideration for repeat participation as well, but not very
+// much."
+//
+// THE AVERAGING HALF ALREADY EXISTS (#462) and is untouched here: a juror's
+// turns average into one per-juror mark, then the session mark is the mean of
+// those per-juror marks. What was missing is the second half — the "bit" for
+// having spoken more than once. This is that bit, and it is deliberately built
+// so it can never become the thing that decides a rank.
+//
+// HOW MANY TIMES DID THEY SPEAK?
+// Turns are recorded per (juror, session). Three jurors each marking the same
+// two speeches is TWO speeches, not six — so a session's turn count is the
+// MOST turns any ONE juror recorded there, never the sum across jurors. Extra
+// turns = Σ over sessions of (that count − 1). A delegate marked once per
+// session by everyone therefore has extraTurns = 0, which is every delegate in
+// 5,543 of the 5,557 submitted marks in production.
+//
+// HOW MUCH IS IT WORTH?
+//   bonus = min(configured_cap, HARD_CAP, per_turn × extraTurns)
+// Both configured numbers live on the yip.scoring_settings singleton and BOTH
+// DEFAULT TO 0, so until a super-admin sets them the bonus is exactly 0 for
+// everyone and every finished round recomputes to the same number it holds now.
+//
+// WHY A HARD CAP IN CODE AS WELL AS A CONFIGURED ONE.
+// "Not very much" has to survive a typo. A configured cap of 30 would let
+// volume beat quality; the in-code ceiling means the most a mistyped setting
+// can move anyone is 3 points on the /100 scale. Stated plainly so nobody has
+// to trust the wording: the bonus can only reorder delegates who are ALREADY
+// within 3 points of each other. It cannot lift a mid-table delegate past a
+// strong one, whatever they do — the maximum reachable total is unchanged at
+// 100 and the gap it can close is bounded by 3.
+//
+// AND IT IS NEVER HIDDEN. Both the turn count and the points awarded are
+// written into the participant's stored score_breakdown, so the host's own
+// results screen shows "participation_turns: 2, participation_bonus: 1" next to
+// the criteria averages rather than an unexplained extra point.
+const PARTICIPATION_BONUS_HARD_CAP = 3;
+
+type ParticipationBonusConfig = { perExtraTurn: number; cap: number };
+
+const PARTICIPATION_BONUS_OFF: ParticipationBonusConfig = {
+  perExtraTurn: 0,
+  cap: 0,
+};
+
+/**
+ * Read the two participation numbers off the global scoring settings.
+ *
+ * Untyped view: the columns are newer than the generated Database types (same
+ * pattern as use_bucket_model in scoring-settings.ts and bills.drafters below).
+ * ANY failure — missing columns because the migration has not been applied yet,
+ * RLS, a bad value — falls back to OFF, so a half-deployed environment scores
+ * exactly as it does today rather than erroring out mid-round.
+ */
+async function readParticipationBonusConfig(
+  supabase: SupabaseClient
+): Promise<ParticipationBonusConfig> {
+  try {
+    const { data, error } = await supabase
+      .from("scoring_settings")
+      .select("participation_bonus_per_turn, participation_bonus_max")
+      .eq("id", true)
+      .maybeSingle();
+    if (error || !data) return PARTICIPATION_BONUS_OFF;
+    const perExtraTurn = Number(
+      (data as { participation_bonus_per_turn?: unknown })
+        .participation_bonus_per_turn
+    );
+    const cap = Number(
+      (data as { participation_bonus_max?: unknown }).participation_bonus_max
+    );
+    return {
+      perExtraTurn:
+        Number.isFinite(perExtraTurn) && perExtraTurn > 0 ? perExtraTurn : 0,
+      cap: Number.isFinite(cap) && cap > 0 ? cap : 0,
+    };
+  } catch {
+    return PARTICIPATION_BONUS_OFF;
+  }
+}
+
+/**
+ * Extra speaking turns beyond the first, across every scored session.
+ *
+ * `bySessionJuror` is session -> juror -> that juror's turn totals, exactly as
+ * the averaging above builds it. Per session we take the MOST turns any one
+ * juror recorded (see the note above on why not the sum), minus the first.
+ */
+function extraTurnsFrom(
+  bySessionJuror: Map<string, Map<string, number[]>>
+): number {
+  let extra = 0;
+  for (const jurorMap of bySessionJuror.values()) {
+    let mostTurnsByOneJuror = 0;
+    for (const vals of jurorMap.values()) {
+      if (vals.length > mostTurnsByOneJuror) mostTurnsByOneJuror = vals.length;
+    }
+    if (mostTurnsByOneJuror > 1) extra += mostTurnsByOneJuror - 1;
+  }
+  return extra;
+}
+
+/** The points a delegate's extra turns are worth, bounded twice. */
+function participationBonusFor(
+  extraTurns: number,
+  cfg: ParticipationBonusConfig
+): number {
+  if (extraTurns <= 0 || cfg.perExtraTurn <= 0 || cfg.cap <= 0) return 0;
+  return Math.min(
+    cfg.cap,
+    PARTICIPATION_BONUS_HARD_CAP,
+    cfg.perExtraTurn * extraTurns
   );
 }
 
@@ -189,7 +366,7 @@ export async function computeResults(
   const { data: scores, error: scoresError } = await supabase
     .from("scores")
     .select(
-      "participant_id, jury_assignment_id, agenda_item_id, total_score, criteria_scores, status, flag_no_confidence_brought, flag_walkout, flag_ruckus, flag_suspension"
+      "participant_id, jury_assignment_id, agenda_item_id, total_score, criteria_scores, status, flag_no_confidence_brought, flag_walkout, flag_ruckus, flag_suspension, scored_roles"
     )
     .eq("event_id", eventId)
     .eq("status", "submitted");
@@ -258,6 +435,13 @@ export async function computeResults(
   // screens; nothing hardcoded here).
   const settings = await getScoringSettings();
 
+  // 1d-bis. Participation (repeat speaking turns). Both numbers default to 0,
+  // so this is inert on every event until a super-admin sets them. See the
+  // block above readParticipationBonusConfig for the whole rule.
+  const participationCfg = await readParticipationBonusConfig(
+    supabase as unknown as SupabaseClient
+  );
+
   // 1e. Special-remarks point deltas (admin-configurable, global singleton).
   // Director decision 2026-06-03: each raised remark now adjusts the
   // participant's FINAL /100 total — applied ONCE at full value if ANY juror
@@ -268,37 +452,13 @@ export async function computeResults(
     ? flagsCfgRes.data.deltas
     : { no_confidence_brought: 3, walkout: -5, ruckus: -3, suspension: -10 };
 
-  // Build TWO config lookups from the global session catalog:
-  //   • cfgBySessionKey — 1:1, the PRIMARY key. Each of the 11 handbook
-  //     sessions has its own session_key, so this distinguishes the 3
-  //     duplicated agenda_types (2 Speaker / 2 Opening / 2 Debate sessions).
-  //   • cfgByType — FALLBACK only, for agenda items not yet tagged with a
-  //     session_key. When several configs share an agenda_type we keep the one
-  //     with the LOWEST display_order (iterate in ascending display_order and
-  //     only set on first sight) so the fallback is deterministic.
+  // The global session catalog. listSessionParameters() deliberately returns
+  // INACTIVE sheets too — its other two callers are admin editors that must
+  // list deactivated sheets — so never filter inside it. Anything that has to
+  // agree with the jury screen resolves through resolveSessionConfig(), which
+  // drops inactive sheets. See lib/yip/session-config-resolution.ts.
   const sessionConfigs = await listSessionParameters();
-  const cfgBySessionKey = new Map<
-    string,
-    { total_max: number; session_weight: number }
-  >();
-  const cfgByType = new Map<
-    string,
-    { total_max: number; session_weight: number }
-  >();
-  for (const c of [...sessionConfigs].sort(
-    (a, b) => a.display_order - b.display_order
-  )) {
-    cfgBySessionKey.set(c.session_key, {
-      total_max: c.total_max,
-      session_weight: c.session_weight,
-    });
-    if (c.agenda_type && !cfgByType.has(c.agenda_type)) {
-      cfgByType.set(c.agenda_type, {
-        total_max: c.total_max,
-        session_weight: c.session_weight,
-      });
-    }
-  }
+  const activeSessionConfigs = sessionConfigs.filter((c) => c.is_active);
 
   const { data: agendaRows } = await supabase
     .from("agenda")
@@ -330,6 +490,44 @@ export async function computeResults(
       },
     ])
   );
+
+  // Resolve each agenda item's criteria sheet ONCE, through the same rule the
+  // jury screen uses (active-only; the event's ROUND LEVEL first, then unscoped
+  // sheets; session_key exact, else lowest display_order for the agenda_type).
+  // Previously this file re-implemented the rule inline and skipped the
+  // is_active filter, so a juror could mark against one sheet while the engine
+  // weighted the marks as a different, deactivated one. The level is read from
+  // yip.events here and inside getSessionScoringParams (what the juror saw), so
+  // both sides pick the same sheet.
+  const roundLevel = await fetchEventRoundLevel(supabase as never, eventId);
+  //
+  // ROLE-DEPENDENT CRITERIA (2026-08): the sheet's `parameters` are carried
+  // alongside total_max because a student's denominator is no longer the
+  // sheet's published total — it is the sum of the criteria that apply to
+  // THEIR role. See the per-participant `max` below.
+  const cfgByAgendaItem = new Map<
+    string,
+    {
+      total_max: number;
+      session_weight: number;
+      parameters: RoleScopedCriterion[];
+      roleSplit: boolean;
+    }
+  >();
+  for (const [id, meta] of agendaById) {
+    const cfg = resolveSessionConfig(meta, activeSessionConfigs, roundLevel);
+    if (cfg) {
+      const parameters = (cfg.parameters ?? []) as RoleScopedCriterion[];
+      cfgByAgendaItem.set(id, {
+        total_max: cfg.total_max,
+        session_weight: cfg.session_weight,
+        parameters,
+        // Precomputed once per session: false for every sheet in production
+        // today, and when false the denominator below is total_max exactly.
+        roleSplit: isRoleSplitSheet(parameters),
+      });
+    }
+  }
 
   // ── Two-day detection (Director ruling 2026-06-25) ──────────────────
   // For a genuinely TWO-DAY event, a participant must be checked in on BOTH
@@ -381,7 +579,7 @@ export async function computeResults(
       activeBuckets.push(agg);
       for (const sk of b.session_keys) {
         if (!keyToBucket.has(sk)) keyToBucket.set(sk, agg);
-        const sc = sessionConfigs.find((c) => c.session_key === sk);
+        const sc = activeSessionConfigs.find((c) => c.session_key === sk);
         if (sc?.agenda_type && !typeToBucket.has(sc.agenda_type)) {
           typeToBucket.set(sc.agenda_type, agg);
         }
@@ -430,6 +628,7 @@ export async function computeResults(
       flag_walkout: Boolean(s.flag_walkout),
       flag_ruckus: Boolean(s.flag_ruckus),
       flag_suspension: Boolean(s.flag_suspension),
+      scored_roles: storedRoleSlugs(s.scored_roles),
     });
     scoresByParticipant.set(s.participant_id, arr);
   }
@@ -483,8 +682,22 @@ export async function computeResults(
     // juror (the pre-#4 norm) each juror's mean is just that row, so the session
     // mean is identical to the old "mean across jurors".
     const bySessionJuror = new Map<string, Map<string, number[]>>();
+    // Role-dependent criteria: which role this participant was marked under in
+    // each session, tallied across the jurors who marked them. Keyed by a
+    // canonical (sorted, joined) form of the slug list so identical role sets
+    // collapse to one key. Empty list -> "" -> no role restriction.
+    const roleTallyBySession = new Map<string, Map<string, number>>();
     for (const s of pScores) {
       const key = s.agenda_item_id ?? "__none__";
+      {
+        const roleKey = [...s.scored_roles].sort().join("|");
+        let tally = roleTallyBySession.get(key);
+        if (!tally) {
+          tally = new Map();
+          roleTallyBySession.set(key, tally);
+        }
+        tally.set(roleKey, (tally.get(roleKey) ?? 0) + 1);
+      }
       // Each juror's raw total_score stands as-is. The committee-LEVEL (shared
       // /60) swap was removed 2026-06-25 — the two committee sessions are now
       // scored purely on each juror's individual marks.
@@ -506,21 +719,38 @@ export async function computeResults(
         );
         const raw =
           perJurorMeans.reduce((a, b) => a + b, 0) / perJurorMeans.length;
-        // Resolve this scored session's config 1:1: session_key FIRST (the
-        // primary key — distinguishes the 3 repeated agenda_types), then fall
-        // back to agenda_type for items not yet tagged with a session_key.
-        // If neither resolves → no config (max=0 → no normalize, weight=1).
+        // This scored session's config, resolved above by the same rule the
+        // jury screen applies. If nothing resolved → no config (max=0 → no
+        // normalize, weight=1).
         const meta =
           agendaItemId === "__none__" ? null : agendaById.get(agendaItemId);
-        let cfg: { total_max: number; session_weight: number } | undefined;
-        if (meta) {
-          if (meta.session_key && cfgBySessionKey.has(meta.session_key)) {
-            cfg = cfgBySessionKey.get(meta.session_key);
-          } else if (meta.agenda_type && cfgByType.has(meta.agenda_type)) {
-            cfg = cfgByType.get(meta.agenda_type);
-          }
-        }
-        const max = cfg && cfg.total_max > 0 ? cfg.total_max : 0;
+        const cfg =
+          agendaItemId === "__none__"
+            ? undefined
+            : cfgByAgendaItem.get(agendaItemId);
+        // THE DENOMINATOR. Before role scoping this was always the sheet's
+        // published total_max. It still is on every UNSPLIT sheet — which is
+        // all 13 in production — because applicableMax() over an untagged
+        // criteria list is Σ max_score, and that is exactly how total_max is
+        // computed when the sheet is saved.
+        //
+        // On a SPLIT sheet the published total spans both sides of the House
+        // (Government Bills: 6 presenter + 4 common + 6 opposition = 16) while
+        // any one student is marked on their own subset (6 + 4 = 10). Dividing
+        // their 10-point mark by 16 would understate every presenter by 37.5%.
+        // So the denominator is the sum of the criteria that applied to THEM,
+        // taken from the role stored on their own score rows.
+        //
+        // The three cases (unsplit / split-with-role / split-without-role) are
+        // decided in ONE place — denominatorFor() — so this file and the jury
+        // screen cannot drift apart on them.
+        const roleSlugs =
+          cfg && cfg.roleSplit
+            ? dominantRoleSlugs(roleTallyBySession.get(agendaItemId))
+            : [];
+        const max = cfg
+          ? denominatorFor(cfg.parameters, roleSlugs, cfg.total_max)
+          : 0;
         // Use RAW component totals unless normalize_per_session is enabled.
         const score =
           settings.normalize_per_session && max > 0 ? (raw / max) * 100 : raw;
@@ -535,6 +765,13 @@ export async function computeResults(
         };
       }
     );
+
+    // Participation (repeat speaking turns). Counted from the SAME map the
+    // averaging above uses, so the two can never disagree about how many times
+    // this delegate was marked. 0 for everyone until a super-admin configures
+    // the two settings, and 0 for any delegate marked once per session.
+    const extraTurns = extraTurnsFrom(bySessionJuror);
+    const participationBonus = participationBonusFor(extraTurns, participationCfg);
 
     // Team Spirit basis (Director ruling 2026-06-25): this participant's individual
     // contribution in the two committee sessions = Σ raw over the committee
@@ -704,9 +941,16 @@ export async function computeResults(
     // the active aggregation (true for the Yi 2026 Workbook 'sum' / 'weighted_90'
     // models, both /100). If a future event uses 'best_n' with a single session
     // max > 90, revisit the cap so a legitimate total isn't silently clipped.
+    // participationBonus is 0 unless BOTH scoring_settings numbers are set, and
+    // is bounded at PARTICIPATION_BONUS_HARD_CAP (3) even when they are — so it
+    // cannot push anyone past a delegate more than 3 points ahead, and the /100
+    // ceiling is unmoved.
     const avgScore = Math.max(
       0,
-      Math.min(100, baseScore + positionPoints + specialRemarksDelta)
+      Math.min(
+        100,
+        baseScore + positionPoints + specialRemarksDelta + participationBonus
+      )
     );
     const minJurorScore = minSession + positionPoints;
 
@@ -726,6 +970,26 @@ export async function computeResults(
     for (const key of Object.keys(criteriaSum)) {
       scoreBreakdown[key] =
         Math.round((criteriaSum[key] / criteriaCount[key]) * 100) / 100;
+    }
+
+    // Participation, shown rather than buried. Neither key is a criterion key
+    // and neither belongs to any award family or workbook bucket
+    // (parentScoreByKey matches a key exactly or on a "<family>." prefix, and
+    // no family is called "participation"), so these are read by the results
+    // screen and by nothing that computes a score.
+    //   participation_turns  — extra speaking turns beyond the first, written
+    //                          whenever there were any, EVEN IF the bonus is
+    //                          switched off, so the host can see the repeat
+    //                          participation the averaging is already smoothing.
+    //   participation_bonus  — the points those turns were actually worth.
+    //                          Absent when 0, i.e. absent on every event until
+    //                          the two settings are configured.
+    if (extraTurns > 0) {
+      scoreBreakdown.participation_turns = extraTurns;
+    }
+    if (participationBonus > 0) {
+      scoreBreakdown.participation_bonus =
+        Math.round(participationBonus * 100) / 100;
     }
 
     // Day-presence gate (Director ruling 2026-06-25). At a two-day event a
@@ -964,6 +1228,8 @@ export async function computeResults(
     rank_mode: string | null;
     rank_keys: string[] | null;
     is_team: boolean | null;
+    /** Round levels this award applies to. null/absent = every round. */
+    levels?: string[] | null;
   };
   function eligibilityFn(e: string): (p: ParticipantLite, r: ResultRow) => boolean {
     switch (e) {
@@ -1018,12 +1284,22 @@ export async function computeResults(
   // — else the in-code AWARD_REGISTRY so no award ever silently disappears), with
   // each award's effective recipient count (override ?? default). Untyped client
   // view — the formula columns are newer than the generated types.
-  const { data: awardDefs } = await (supabase as unknown as SupabaseClient)
+  const { data: allAwardDefs } = await (supabase as unknown as SupabaseClient)
     .from("award_definitions")
     .select(
-      "award_key, label, default_recipients, is_active, display_order, eligibility, rank_mode, rank_keys, is_team"
+      "award_key, label, default_recipients, is_active, display_order, eligibility, rank_mode, rank_keys, is_team, levels"
     )
     .order("display_order");
+  // Which awards this ROUND gives out. A round with its own award set uses that
+  // set alone; every other round falls back to the every-round set, which is the
+  // single set every round used before award scoping existed — so a chapter
+  // event resolves exactly the same awards it did before. Uses the same
+  // roundLevel already read above for the criteria sheets, so awards and scoring
+  // can never disagree about what level this round is.
+  const awardDefs = resolveAwardsForLevel(
+    (allAwardDefs ?? []) as AwardConfigRow[],
+    roundLevel
+  );
   const { data: awardCfgRows } = await supabase
     .from("event_award_config")
     .select("award_key, recipients, is_active")
@@ -1061,7 +1337,7 @@ export async function computeResults(
   };
 
   const activeAwards: ActiveAward[] = [];
-  for (const def of (awardDefs ?? []) as AwardConfigRow[]) {
+  for (const def of awardDefs) {
     const spec = def.rank_mode ? buildSpec(def) : AWARD_REGISTRY[def.award_key];
     if (!spec) continue; // unknown key (future-proof) — skip
     const ov = awardOverrideByKey.get(def.award_key);
@@ -2157,4 +2433,380 @@ export async function submitAllDraftsForJury(
   }
   revalidatePath(`/yip/dashboard/events/${eventId}/scoring`);
   return { success: true, data: { submitted, skipped } };
+}
+
+/**
+ * POST-EVENT ONLY — "this round has scores but nobody ever computed results".
+ *
+ * Returns null unless every condition in buildMissingResultsNotice holds (see
+ * lib/yip/results-missing.ts for the rule and why it is time-gated). Rendered
+ * on the event's own overview page; deliberately NOT wired into
+ * getEventReadiness / the Control panel, whose live "your next step" pointer a
+ * prior attempt hijacked mid-event (PR #915, rejected).
+ *
+ * Cost: one event row + two head-only counts. Read-only.
+ */
+export async function getMissingResultsNotice(
+  eventId: string
+): Promise<MissingResultsNotice | null> {
+  // Same audience as the Results page itself — no point telling someone to
+  // press a button on a page they cannot open.
+  const access = await getYipEventAccess(eventId);
+  if (!access.canViewScores) return null;
+
+  const supabase = await createServiceClient();
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("status, day1_date, day2_date, is_mock")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (!event) return null;
+
+  // Cheap gate first: if the round is not over, skip the counts entirely.
+  if (
+    !isRoundOver(
+      event.status as string,
+      event.day1_date as string | null,
+      event.day2_date as string | null
+    )
+  ) {
+    return null;
+  }
+
+  const [{ count: submittedScoreCount }, { count: resultRowCount }] =
+    await Promise.all([
+      supabase
+        .from("scores")
+        .select("id", { count: "exact", head: true })
+        .eq("event_id", eventId)
+        .eq("status", "submitted"),
+      supabase
+        .from("results")
+        .select("id", { count: "exact", head: true })
+        .eq("event_id", eventId),
+    ]);
+
+  return buildMissingResultsNotice({
+    eventId,
+    status: event.status as string,
+    day1Date: event.day1_date as string | null,
+    day2Date: event.day2_date as string | null,
+    isMock: Boolean(event.is_mock),
+    submittedScoreCount: submittedScoreCount ?? 0,
+    resultRowCount: resultRowCount ?? 0,
+  });
+}
+
+// ─── Host honesty flags: marking coverage ─────────────────────────
+//
+// Two things a host needs to SEE but that must never change a score
+// (Director, 2026-08-19):
+//
+//   1. Four judges sit on a session, but sometimes only one of them actually
+//      marks a given student. That single mark is still the student's score —
+//      that decision stands. What the host wants is to KNOW, so a second judge
+//      can be sent to watch that student while the round is still running.
+//
+//   2. At the end of Day 1 a no-confidence motion can bring the government
+//      down, and the students swap sides for Day 2. Marks already given stay
+//      exactly as given — each one records the side the student was on at the
+//      time, in yip.scores.scored_roles. So two students sitting on the same
+//      side today can legitimately have been marked on different criteria.
+//      Surfacing that up front stops it being read later as a marking error.
+//
+// Read-only. Nothing here feeds computeResults, the leaderboard, awards or
+// publishing — it only reports on marks that already exist.
+
+/** One student who has at least one session marked by a single judge. */
+export type SingleJudgeStudent = {
+  participantId: string;
+  participantName: string;
+  constituencyName: string | null;
+  /**
+   * Sessions where FEWER judges marked this student than were assigned to that
+   * session. Both numbers are carried so "1 of 1" is visibly not a gap: being
+   * marked by one judge only matters when more judges were there to mark.
+   */
+  sessions: Array<{ label: string; marked: number; assigned: number }>;
+};
+
+/** One student whose saved marks were taken on more than one side. */
+export type SideChangeStudent = {
+  participantId: string;
+  participantName: string;
+  constituencyName: string | null;
+  /** Plain-English bench names, e.g. "Treasury bench (ruling)". */
+  sideLabels: string[];
+};
+
+export type MarkingCoverage = {
+  singleJudgeStudents: SingleJudgeStudent[];
+  sideChangeStudents: SideChangeStudent[];
+  /**
+   * Set when a read failed or came back short, so this panel CANNOT be trusted.
+   * An integrity panel that degrades into a confident wrong answer is worse than
+   * one that says it could not check: a short read makes students look
+   * under-marked when they were not, and a failed agenda read empties the panel
+   * entirely, which a host reads as "all clear".
+   */
+  couldNotCheck: string | null;
+};
+
+/**
+ * Which students in this event were marked by only one judge, and which were
+ * marked on more than one side during the round.
+ *
+ * Host-facing only: gated on the same `canViewScores` as the Results page
+ * itself, and fails CLOSED (null) for anyone else — a juror must never see
+ * another student's marking picture. Returns no marks and no scores, only the
+ * two facts above.
+ *
+ * "Marked by one judge" means one distinct JUDGE, not one score row: a judge
+ * may mark the same student several times in one session (repeat speakers),
+ * which yip.scores.occurrence exists for. So the count is over distinct
+ * jury_assignment_id, never over rows.
+ */
+export async function getMarkingCoverage(
+  eventId: string
+): Promise<MarkingCoverage | null> {
+  const access = await getYipEventAccess(eventId);
+  // canManage, NOT canViewScores (Director, 2026-08-19).
+  //
+  // canViewScores is true for super-admins ONLY, deliberately, to protect named
+  // minor students' scores — that safeguard is NOT touched here and must never
+  // be widened. But it meant the chapter chair standing in the chamber, the only
+  // person who can actually send a second judge to a student, was 403'd off this
+  // information entirely.
+  //
+  // This payload is COVERAGE, not scores: names, constituency, session titles,
+  // and how many judges marked. No score, mark, total, average or rank, and
+  // nothing from which one could be inferred. That is what makes it safe for the
+  // chair, and it is why nothing below may ever select a score column.
+  if (!access.canManage) return null;
+
+  const supabase = await createServiceClient();
+
+  // fetchAllRows() returns whatever it collected BEFORE an error, silently. So
+  // ask each table for its exact row count first and compare afterwards: that is
+  // the only way to tell a complete read from a truncated one.
+  const [participantCountRes, scoreCountRes] = await Promise.all([
+    supabase
+      .from("participants")
+      .select("id", { count: "exact", head: true })
+      .eq("event_id", eventId),
+    supabase
+      .from("scores")
+      .select("id", { count: "exact", head: true })
+      .eq("event_id", eventId)
+      .eq("status", "submitted"),
+  ]);
+
+  const [
+    { data: agendaRows, error: agendaErr },
+    { data: sessionAssignRows, error: assignErr },
+    participantRows,
+    scoreRows,
+  ] = await Promise.all([
+    supabase
+      .from("agenda")
+      .select("id, title, day, session_key, agenda_type, is_scoreable")
+      .eq("event_id", eventId),
+    // How many judges were ASSIGNED to each session — the denominator. Without
+    // it every student at an event with one judge reads as a gap: Salem showed
+    // 109 of 109 students flagged, which is not an actionable list.
+    supabase
+      .from("jury_session_assignments")
+      .select("jury_assignment_id, agenda_item_id")
+      .eq("event_id", eventId),
+    // Bounded per event (a round seats a few hundred students), but paged
+    // anyway — a plain select is silently capped by PostgREST.
+    fetchAllRows<{
+      id: string;
+      full_name: string | null;
+      constituency_name: string | null;
+    }>((from, to) =>
+      supabase
+        .from("participants")
+        .select("id, full_name, constituency_name")
+        .eq("event_id", eventId)
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: {
+          id: string;
+          full_name: string | null;
+          constituency_name: string | null;
+        }[] | null;
+        error: unknown;
+      }>
+    ),
+    // Scores run into the thousands on a full round — always paged.
+    fetchAllRows<{
+      participant_id: string;
+      jury_assignment_id: string | null;
+      agenda_item_id: string | null;
+      scored_roles: unknown;
+    }>((from, to) =>
+      supabase
+        .from("scores")
+        .select("participant_id, jury_assignment_id, agenda_item_id, scored_roles")
+        .eq("event_id", eventId)
+        .eq("status", "submitted")
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{
+        data: {
+          participant_id: string;
+          jury_assignment_id: string | null;
+          agenda_item_id: string | null;
+          scored_roles: unknown;
+        }[] | null;
+        error: unknown;
+      }>
+    ),
+  ]);
+
+  // Did we actually see everything? Any "no" makes the panel untrustworthy.
+  let couldNotCheck: string | null = null;
+  if (agendaErr) {
+    couldNotCheck = "The session list could not be read, so coverage cannot be checked.";
+  } else if (assignErr) {
+    couldNotCheck =
+      "The judge assignments could not be read, so coverage cannot be checked.";
+  } else if (participantCountRes.error || scoreCountRes.error) {
+    couldNotCheck = "The roster or the marks could not be counted, so coverage cannot be checked.";
+  } else if (
+    typeof participantCountRes.count === "number" &&
+    participantRows.length !== participantCountRes.count
+  ) {
+    couldNotCheck = `Only ${participantRows.length} of ${participantCountRes.count} students could be read, so coverage cannot be checked.`;
+  } else if (
+    typeof scoreCountRes.count === "number" &&
+    scoreRows.length !== scoreCountRes.count
+  ) {
+    couldNotCheck = `Only ${scoreRows.length} of ${scoreCountRes.count} marks could be read, so coverage cannot be checked.`;
+  }
+  if (couldNotCheck) {
+    return { singleJudgeStudents: [], sideChangeStudents: [], couldNotCheck };
+  }
+
+  // Judges assigned per session — the denominator for "1 of 4".
+  const judgesAssignedPerSession = new Map<string, Set<string>>();
+  for (const r of sessionAssignRows ?? []) {
+    const item = r.agenda_item_id as string | null;
+    const jury = r.jury_assignment_id as string | null;
+    if (!item || !jury) continue;
+    let set = judgesAssignedPerSession.get(item);
+    if (!set) {
+      set = new Set();
+      judgesAssignedPerSession.set(item, set);
+    }
+    set.add(jury);
+  }
+
+  // Only sessions judges are actually assigned to mark. A stray mark on a
+  // non-scoreable item would otherwise read as a "one judge only" session.
+  const scoreableSessionLabel = new Map<string, string>();
+  for (const a of agendaRows ?? []) {
+    if (a.is_scoreable !== true) continue;
+    const name =
+      (a.title as string | null)?.trim() ||
+      (a.session_key as string | null) ||
+      (a.agenda_type as string | null) ||
+      "Session";
+    const day = a.day as number | null;
+    scoreableSessionLabel.set(
+      a.id as string,
+      day ? `Day ${day}: ${name}` : name
+    );
+  }
+
+  const personById = new Map(participantRows.map((p) => [p.id, p]));
+
+  // (participant, session) → the distinct judges who marked it.
+  const judgesPerStudentSession = new Map<string, Set<string>>();
+  // participant → the distinct benches their saved marks were taken on.
+  const sidesPerStudent = new Map<string, Set<string>>();
+
+  for (const s of scoreRows) {
+    // Bench tally is per ROUND, not per session — a swap after the
+    // no-confidence motion shows up as marks on both benches across the event.
+    // Rows from before role scoping existed carry no bench and are ignored:
+    // absence of a recorded side is not evidence of a side change.
+    for (const slug of storedRoleSlugs(s.scored_roles)) {
+      if (!isSideSlug(slug)) continue;
+      let sides = sidesPerStudent.get(s.participant_id);
+      if (!sides) {
+        sides = new Set();
+        sidesPerStudent.set(s.participant_id, sides);
+      }
+      sides.add(slug);
+    }
+
+    if (!s.agenda_item_id || !s.jury_assignment_id) continue;
+    if (!scoreableSessionLabel.has(s.agenda_item_id)) continue;
+    const key = `${s.participant_id}|${s.agenda_item_id}`;
+    let judges = judgesPerStudentSession.get(key);
+    if (!judges) {
+      judges = new Set();
+      judgesPerStudentSession.set(key, judges);
+    }
+    judges.add(s.jury_assignment_id);
+  }
+
+  const singleJudgeSessions = new Map<
+    string,
+    Array<{ label: string; marked: number; assigned: number }>
+  >();
+  for (const [key, judges] of judgesPerStudentSession) {
+    const sep = key.indexOf("|");
+    const participantId = key.slice(0, sep);
+    const agendaItemId = key.slice(sep + 1);
+    const label = scoreableSessionLabel.get(agendaItemId);
+    if (!label) continue;
+
+    const marked = judges.size;
+    const assigned = judgesAssignedPerSession.get(agendaItemId)?.size ?? 0;
+
+    // A gap is "fewer judges marked than were assigned to mark". Being seen by
+    // one judge out of one is complete coverage, not a gap — flagging it names
+    // every student at the event and gives the host nothing to act on.
+    if (assigned <= marked) continue;
+
+    const list = singleJudgeSessions.get(participantId) ?? [];
+    list.push({ label, marked, assigned });
+    singleJudgeSessions.set(participantId, list);
+  }
+
+  const singleJudgeStudents: SingleJudgeStudent[] = [];
+  for (const [participantId, sessions] of singleJudgeSessions) {
+    const person = personById.get(participantId);
+    if (!person) continue;
+    singleJudgeStudents.push({
+      participantId,
+      participantName: person.full_name ?? "Unnamed student",
+      constituencyName: person.constituency_name,
+      sessions: sessions.sort((x, y) => x.label.localeCompare(y.label)),
+    });
+  }
+  singleJudgeStudents.sort((a, b) =>
+    a.participantName.localeCompare(b.participantName)
+  );
+
+  const sideChangeStudents: SideChangeStudent[] = [];
+  for (const [participantId, sides] of sidesPerStudent) {
+    if (sides.size < 2) continue;
+    const person = personById.get(participantId);
+    if (!person) continue;
+    sideChangeStudents.push({
+      participantId,
+      participantName: person.full_name ?? "Unnamed student",
+      constituencyName: person.constituency_name,
+      sideLabels: Array.from(sides).sort().map(roleSlugLabel),
+    });
+  }
+  sideChangeStudents.sort((a, b) =>
+    a.participantName.localeCompare(b.participantName)
+  );
+
+  return { singleJudgeStudents, sideChangeStudents, couldNotCheck: null };
 }

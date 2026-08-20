@@ -72,7 +72,7 @@ import {
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface RSVPFormProps {
   event: EventWithDetails;

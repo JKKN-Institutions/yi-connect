@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import { MIN_TEAMS_PER_PROBLEM } from "@/lib/yi-future/constants";
 import type { ActionResult } from "./editions";
+import { safeError } from "@/lib/yi-future/db-error";
 
 // ─── TYPES ──────────────────────────────────────────────────────────
 export type MatrixTeam = {
@@ -258,7 +259,7 @@ export async function allocateProblem(
       updated_at: new Date().toISOString(),
     })
     .eq("id", teamId);
-  if (updErr) return { ok: false, error: updErr.message };
+  if (updErr) return { ok: false, error: safeError(updErr.message, "allocations.allocateProblem") };
 
   // Notification log entry per member with email
   const emails = new Set<string>();

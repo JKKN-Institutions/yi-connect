@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getEvent } from "@/app/yip/actions/events";
 import { getChiefGuests } from "@/app/yip/actions/reporting-extras";
+import { getMissingResultsNotice } from "@/app/yip/actions/results";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { createClient } from "@/lib/yip/supabase/server";
 import { isPreEventLive, PRE_EVENT_STATUS_LABEL } from "@/lib/yip/constants";
@@ -17,6 +18,7 @@ import {
   Radio,
   Upload,
   Pencil,
+  AlertTriangle,
 } from "lucide-react";
 
 // Status badge mapping with premium styling
@@ -109,6 +111,9 @@ export default async function EventOverviewPage({
     : baseStatus;
   const access = await getYipEventAccess(id);
   const chiefGuests = await getChiefGuests(id);
+  // POST-EVENT ONLY. Null while the round is running, null for anyone who
+  // cannot open the Results page. See lib/yip/results-missing.ts.
+  const missingResults = await getMissingResultsNotice(id);
 
   // Determine action cards based on status
   const actionCards: Array<{
@@ -173,6 +178,36 @@ export default async function EventOverviewPage({
 
   return (
     <div className="space-y-6">
+      {/* Round finished, scores submitted, nothing ever computed. Shown only
+          after the round is over — never during a live event. */}
+      {missingResults && (
+        <div className="overflow-hidden rounded-xl border border-[#D4A843]/30 bg-[#D4A843]/8 shadow-sm">
+          <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-start sm:gap-4">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#D4A843]/15">
+              <AlertTriangle className="size-5 text-[#B08A24]" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="font-[family-name:var(--font-heading)] text-base font-semibold text-[#1a1a3e]">
+                This event has scores, but its results were never computed
+              </h3>
+              <p className="mt-1 text-sm text-[#1a1a3e]/70">
+                {missingResults.scoreCount} scores have been submitted for this
+                event and no results have been computed from them, so nobody is
+                ranked and no awards or promotions can be decided. Open the
+                Results page and press <strong>Show Results</strong> to compute
+                them &mdash; the scores are safe until then.
+              </p>
+              <Link
+                href={missingResults.href}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[#1a1a3e] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#1a1a3e]/85"
+              >
+                Go to Results
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Event Details Card */}
       <div className="overflow-hidden rounded-xl border border-[#1a1a3e]/5 bg-white shadow-sm">
         <div className="flex items-start justify-between p-5 pb-0 sm:p-6 sm:pb-0">

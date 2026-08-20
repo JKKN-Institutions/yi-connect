@@ -39,7 +39,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { ApproachResponseBadge } from '../displays/succession-status-badges'
 import { updateApproachResponse, deleteApproach } from '@/app/actions/succession'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 
 interface ApproachesTableProps {
   approaches: any[]

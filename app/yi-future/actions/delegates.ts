@@ -9,6 +9,7 @@ import {
   requireFutureAdmin,
   requireChapterAdmin,
 } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 async function requireAuth(): Promise<void> {
   await requireFutureAdmin();
@@ -90,7 +91,7 @@ export async function createDelegate(
       access_code,
       is_active: true,
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "delegates.createDelegate") };
 
   // Create Supabase Auth account (email-only, no password — admin can set later)
   if (email) {
@@ -156,7 +157,7 @@ export async function updateDelegate(
       home_state,
     })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "delegates.updateDelegate") };
 
   revalidatePath("/yi-future/chapter/delegates");
   redirect("/yi-future/chapter/delegates");
@@ -172,7 +173,7 @@ export async function regenerateAccessCode(id: string): Promise<ActionResult> {
     .from("delegates")
     .update({ access_code })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "delegates.regenerateAccessCode") };
   revalidatePath("/yi-future/chapter/delegates");
   return { ok: true, message: `New code: ${access_code}` };
 }
@@ -198,7 +199,7 @@ export async function deleteDelegate(id: string): Promise<ActionResult> {
     .from("delegates")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "delegates.deleteDelegate") };
   revalidatePath("/yi-future/chapter/delegates");
   return { ok: true, message: "Delegate removed." };
 }

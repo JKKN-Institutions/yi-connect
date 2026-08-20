@@ -1,0 +1,25 @@
+-- Drop future.evaluation_unlocks — a table that was created and never used.
+--
+-- WHY IT EXISTED
+-- It was added while building the "reopen a submitted jury scorecard" feature,
+-- before noticing that future.evaluation_audit_log already existed and was
+-- already this codebase's home for changes to a scorecard. That is exactly the
+-- parallel-mechanism mistake CLAUDE.md #26 warns about: a new table invented
+-- alongside a canonical one that already answered the question.
+--
+-- WHY IT IS SAFE TO DROP
+-- The reopen feature shipped in #894 writing to future.evaluation_audit_log,
+-- so nothing ever wrote here. Verified immediately before the DROP was applied
+-- on 2026-08-12:
+--
+--   select count(*) from future.evaluation_unlocks            -> 0 rows
+--   inbound foreign keys referencing the table                -> 0
+--   grep -rn "evaluation_unlocks" over *.ts / *.tsx / *.sql   -> no references
+--
+-- It was left in place rather than dropped on the morning of a live chapter
+-- final; this migration records the cleanup that followed.
+--
+-- This file is a RECORD of a change already applied to the live database via
+-- the Supabase Management API, kept so the schema history stays readable.
+
+drop table if exists future.evaluation_unlocks;

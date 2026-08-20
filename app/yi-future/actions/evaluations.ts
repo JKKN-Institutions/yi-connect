@@ -18,6 +18,7 @@ import {
 import { sendPushToSubject } from "@/lib/yi-future/push";
 import { readSession } from "./auth";
 import { resolveFutureAccessOrNull } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 type EvaluationStatus = Database["future"]["Enums"]["evaluation_status"];
 
@@ -211,7 +212,7 @@ export async function saveMemberEvaluations(input: {
         },
         { onConflict: "jury_id,team_id,delegate_id,event_id" }
       );
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: safeError(error.message, "evaluations.saveMemberEvaluations") };
   }
 
   revalidatePath(`/yi-future/jury/${input.teamId}`);
@@ -325,7 +326,7 @@ export async function saveEvaluation(input: {
       .from("evaluations")
       .update(payload)
       .eq("id", ex.id);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: safeError(error.message, "evaluations.saveEvaluation") };
     evaluationId = ex.id;
   } else {
     const { data: ins, error } = await svc
@@ -334,7 +335,7 @@ export async function saveEvaluation(input: {
       .insert(payload)
       .select("id")
       .maybeSingle();
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: safeError(error.message, "evaluations.saveEvaluation") };
     evaluationId = (ins as { id: string } | null)?.id ?? "";
   }
 

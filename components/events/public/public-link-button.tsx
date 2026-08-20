@@ -13,7 +13,7 @@
 import { useState } from 'react';
 import { Copy, Check, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface PublicLinkButtonProps {
   publicSlug: string | null | undefined;

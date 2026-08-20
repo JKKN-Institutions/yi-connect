@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { ActionResult } from "./editions";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 /**
  * Chapter-scoped gate. An internship slot hangs off a corporate partner, which
@@ -98,7 +99,7 @@ export async function createInternship(
       slots_available,
       is_active: true,
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "internships.createInternship") };
 
   revalidatePath("/yi-future/host/internships");
   redirect("/yi-future/host/internships");
@@ -141,7 +142,7 @@ export async function updateInternship(
       slots_available,
     })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "internships.updateInternship") };
 
   revalidatePath("/yi-future/host/internships");
   redirect("/yi-future/host/internships");
@@ -158,7 +159,7 @@ export async function toggleInternshipActive(
     .from("internship_slots")
     .update({ is_active: next })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "internships.toggleInternshipActive") };
   revalidatePath("/yi-future/host/internships");
   return { ok: true };
 }
@@ -171,7 +172,7 @@ export async function deleteInternship(id: string): Promise<ActionResult> {
     .from("internship_slots")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "internships.deleteInternship") };
   revalidatePath("/yi-future/host/internships");
   return { ok: true, message: "Slot removed." };
 }

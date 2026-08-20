@@ -6,6 +6,7 @@ import { createClient, createServiceClient } from "@/lib/yi-future/supabase/serv
 import { generateAccessCode } from "@/lib/yi-future/access-code";
 import type { ActionResult } from "./editions";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 /**
  * Partners hang off an EVENT, and the event carries the chapter — so the gate
@@ -109,7 +110,7 @@ export async function createPartner(
       is_jury,
       access_code,
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "partners.createPartner") };
 
   revalidatePath("/yi-future/host/partners");
   redirect("/yi-future/host/partners");
@@ -156,7 +157,7 @@ export async function updatePartner(
       is_jury,
     })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "partners.updatePartner") };
 
   revalidatePath("/yi-future/host/partners");
   redirect("/yi-future/host/partners");
@@ -172,7 +173,7 @@ export async function regeneratePartnerCode(id: string): Promise<ActionResult> {
     .from("corporate_partners")
     .update({ access_code })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "partners.regeneratePartnerCode") };
   revalidatePath("/yi-future/host/partners");
   return { ok: true, message: `New code: ${access_code}` };
 }
@@ -192,7 +193,7 @@ export async function deletePartner(id: string): Promise<ActionResult> {
     .from("corporate_partners")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "partners.deletePartner") };
   revalidatePath("/yi-future/host/partners");
   return { ok: true, message: "Partner removed." };
 }

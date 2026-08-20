@@ -41,6 +41,7 @@ import {
   Circle,
   Clock,
   Crown,
+  Download,
   Loader2,
   Lock,
   Mail,
@@ -48,12 +49,13 @@ import {
   ScrollText,
   Search,
   Shuffle,
+  Unlock,
   Users,
   Vote,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/yip/utils";
-import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
+import { GREEN, INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 import type { MinistryPortfolio } from "@/lib/yip/cabinet";
 // Existing, already-shipped vote machinery — real imports, reused untouched.
 import {
@@ -64,13 +66,17 @@ import {
 } from "@/app/yip/actions/voting";
 import {
   FORMATION_STEPS,
+  isLowTurnout,
+  turnoutPercent,
   type FormationState,
   type FormationStepKey,
+  type FormationStepMode,
   type FormationStepRow,
   type FormationTurnout,
 } from "@/lib/yip/formation";
 import {
   closeFormationStep,
+  exportFormationTalliesCsv,
   extendFormationStep,
   getFormationState,
   getFormationTurnout,
@@ -78,13 +84,16 @@ import {
   openFormationRunoff,
   openFormationStep,
   runFormationAllocation,
+  unlockFormation,
 } from "@/app/yip/actions/formation";
 import { sendFormationReminders } from "@/app/yip/actions/formation-emails";
 import type { FormationEmailSendPlan as FormationInvitePlan } from "@/lib/yip/formation-email-types";
 
 // A step's unresolved tie: the revealed ballot(s) whose top candidates
 // finished level (party-leader steps can tie in several parties at once).
-type FormationTie = { sessionIds: string[] };
+// terminalSessionIds are the ones that were ALREADY a runoff and tied again —
+// they get no second runoff; the organiser assigns those seats on Positions.
+type FormationTie = { sessionIds: string[]; terminalSessionIds: string[] };
 import { InvitePanel } from "./invite-panel";
 import { AppointmentsPanel } from "./appointments-panel";
 
@@ -107,6 +116,16 @@ function localToIso(local: string): string | null {
   if (!local) return null;
   const t = Date.parse(local);
   return Number.isFinite(t) ? new Date(t).toISOString() : null;
+}
+
+/** ISO string → datetime-local input value ("" when empty/invalid). */
+function isoToLocal(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "";
+  const d = new Date(t);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 const STEP_ICONS: Record<FormationStepKey, typeof Vote> = {
@@ -209,13 +228,26 @@ export function FormationClient({
     Partial<Record<FormationStepKey, string>>
   >({});
 
-  // Generic confirm dialog (vote-manager idiom).
+  // Generic confirm dialog (vote-manager idiom). `warning` renders as a
+  // highlighted block above the description — used for the low-turnout numbers.
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;
     description: string;
+    warning: string | null;
     action: () => void;
-  }>({ open: false, title: "", description: "", action: () => {} });
+  }>({
+    open: false,
+    title: "",
+    description: "",
+    warning: null,
+    action: () => {},
+  });
+
+  // Step whose close-preflight turnout read is in flight (disables its button).
+  const [preflightStep, setPreflightStep] = useState<FormationStepKey | null>(
+    null
+  );
 
   const refresh = useCallback(async () => {
     const res = await getFormationState(eventId);
@@ -245,21 +277,91 @@ export function FormationClient({
     [stepRow]
   );
 
+  // Parties that got NO ballot in an open party_leader_ballots step. The
+  // server enumerates every party but records a failure for any it cannot
+  // open (e.g. "no members"), leaving the step open with parties silently
+  // missing — they are absent from the turnout denominator too, so without
+  // this the gap is invisible outside the database.
+  const partyLeaderRow = stepRow("party_leader_ballots");
+  const partyLeaderOpen = partyLeaderRow?.status === "open";
+  const [partyList, setPartyList] = useState<PartyLite[] | null>(null);
+  useEffect(() => {
+    if (!partyLeaderOpen) return;
+    let alive = true;
+    void getEventParties(eventId).then((p) => {
+      if (alive) setPartyList(p);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [eventId, partyLeaderOpen]);
+
+  const partiesWithoutBallot: PartyLite[] =
+    partyLeaderOpen && partyList && state
+      ? (() => {
+          const covered = new Set<string>();
+          for (const sid of partyLeaderRow?.session_ids ?? []) {
+            const pid = state.sessions[sid]?.partyId;
+            if (pid) covered.add(pid);
+          }
+          return partyList.filter((p) => !covered.has(p.id));
+        })()
+      : [];
+
+  // The Lock step only counts as done while the House is actually locked —
+  // after an unlock its row is back to 'closed' (history preserved) but the
+  // House is open again, so counting it would read "7 / 7 done" untruthfully.
+  /**
+   * Download every closed ballot's counts. The ballots are archived on close,
+   * so without this an election result has no durable record outside the DB.
+   */
+  function doExportTallies() {
+    startTransition(async () => {
+      const res = await exportFormationTalliesCsv(eventId).catch(() => null);
+      if (!res || !res.success) {
+        toast.error(res?.error ?? "Could not reach the server. Refresh and try again.");
+        return;
+      }
+      const blob = new Blob([res.data.csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.data.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(
+        `Downloaded ${res.data.ballots} ballot${res.data.ballots === 1 ? "" : "s"}.`
+      );
+    });
+  }
+
+  /** How many closed ballots exist — the Export button is pointless without one. */
+  const closedBallotCount = Object.values(state?.tallies ?? {}).reduce(
+    (n, list) => n + (list?.length ?? 0),
+    0
+  );
+
   const doneCount =
-    state?.steps.filter((s) => s.status === "closed" || s.status === "locked")
-      .length ?? 0;
+    state?.steps.filter((s) =>
+      s.step_key === "lock"
+        ? s.status === "locked"
+        : s.status === "closed" || s.status === "locked"
+    ).length ?? 0;
   const isLocked = state?.steps.some(
     (s) => s.step_key === "lock" && s.status === "locked"
   );
 
   // ─── Ballot dialog (open an election step) ──────────────────────
 
-  function handleOpenBallotDialog(stepKey: FormationStepKey) {
+  function handleOpenBallotDialog(
+    stepKey: FormationStepKey,
+    opts?: { onlyPartyIds?: string[]; closesAtLocal?: string }
+  ) {
     setNomineeSearch("");
     setBallotDialog({
       open: true,
       stepKey,
-      closesAtLocal: "",
+      closesAtLocal: opts?.closesAtLocal ?? "",
       groups: [],
       selectedIds: [],
       loading: true,
@@ -267,18 +369,27 @@ export function FormationClient({
     getEventParties(eventId).then(async (parties) => {
       // PM = ruling bench only; LoP = opposition bench only; speaker + party
       // leaders draw from the whole House (grouped by party).
+      const scoped = opts?.onlyPartyIds
+        ? parties.filter((p) => opts.onlyPartyIds!.includes(p.id))
+        : parties;
       const pool =
         stepKey === "pm_ballot"
-          ? parties.filter((p) => p.side === "ruling")
+          ? scoped.filter((p) => p.side === "ruling")
           : stepKey === "lop_ballot"
-            ? parties.filter((p) => p.side === "opposition")
-            : parties;
+            ? scoped.filter((p) => p.side === "opposition")
+            : scoped;
       const lists = await Promise.all(
         pool.map((p) => getPartyMembers(eventId, p.id))
       );
+      // party_leader_ballots opens one ballot PER party server-side, so an
+      // empty party is a hard failure there — keep it visible as a blocker
+      // instead of hiding it and manufacturing a partial open. Other steps
+      // open a single house/bench ballot, so empty parties are just noise.
       const groups = pool
         .map((party, i) => ({ party, members: lists[i] ?? [] }))
-        .filter((g) => g.members.length > 0);
+        .filter(
+          (g) => stepKey === "party_leader_ballots" || g.members.length > 0
+        );
       setBallotDialog((prev) =>
         prev.open && prev.stepKey === stepKey
           ? { ...prev, groups, loading: false }
@@ -327,6 +438,17 @@ export function FormationClient({
         : { ok: false, hint: "Nominate at least 2 candidates." };
     }
     if (key === "party_leader_ballots") {
+      // A party with no members cannot get a ballot at all — the server would
+      // open the rest and return a partial failure. Block BEFORE that happens.
+      const empty = ballotDialog.groups.filter((g) => g.members.length === 0);
+      if (empty.length > 0) {
+        return {
+          ok: false,
+          hint: `No members in: ${empty
+            .map((g) => g.party.name)
+            .join(", ")} — add members (or delete the party) on the Parties tab first.`,
+        };
+      }
       // Every party with ≥2 members needs ≥2 nominees (its own ballot).
       const short = ballotDialog.groups.filter(
         (g) =>
@@ -377,6 +499,7 @@ export function FormationClient({
       open: true,
       title: "Run random allocation",
       description: `Randomly assign benches and form ${partyCount} balanced parties for every participant. Sides (ruling / opposition) are assigned in this same step.`,
+      warning: null,
       action: () => {
         startTransition(async () => {
           const res = await runFormationAllocation(eventId, { partyCount });
@@ -429,34 +552,96 @@ export function FormationClient({
     });
   }
 
-  function handleCloseStep(key: FormationStepKey, label: string) {
-    setConfirmDialog({
-      open: true,
-      title: `Close ${label}`,
-      description:
-        "Stop accepting votes, count the ballots, and record the winners. On a tie you'll be offered a runoff.",
-      action: () => {
-        startTransition(async () => {
-          const res = await closeFormationStep(eventId, key);
-          if (res.success) {
-            if (!res.data.tie) {
-              toast.success(`${label} complete — winners recorded.`);
-              setTieByStep((p) => ({ ...p, [key]: undefined }));
+  // Closing an election step is permanent — a low turnout crowns a winner just
+  // as firmly as a full one. So the confirm is preceded by a LIVE turnout read
+  // (getFormationTurnout, the same figures the turnout bar shows), and when
+  // fewer than half the eligible students have voted the dialog spells the real
+  // numbers out. It never blocks: the organiser may know the rest are
+  // unreachable. Above half, the dialog is exactly as before.
+  function handleCloseStep(
+    key: FormationStepKey,
+    label: string,
+    mode: FormationStepMode
+  ) {
+    const baseDescription =
+      "Stop accepting votes, count the ballots, and record the winners. On a tie you'll be offered a runoff.";
+
+    const confirm = (warning: string | null) =>
+      setConfirmDialog({
+        open: true,
+        title: `Close ${label}`,
+        description: baseDescription,
+        warning,
+        action: () => {
+          startTransition(async () => {
+            const res = await closeFormationStep(eventId, key);
+            if (res.success) {
+              if (!res.data.tie) {
+                toast.success(`${label} complete — winners recorded.`);
+                setTieByStep((p) => ({ ...p, [key]: undefined }));
+              } else {
+                setTieByStep((p) => ({
+                  ...p,
+                  [key]: {
+                    sessionIds: res.data.tiedSessionIds,
+                    terminalSessionIds: res.data.terminalTiedSessionIds,
+                  },
+                }));
+                toast.warning(
+                  res.data.runoffOffered
+                    ? "Tie — open a runoff to break it."
+                    : "Tied again — assign the seat on the Positions page."
+                );
+              }
+              await refresh();
             } else {
-              setTieByStep((p) => ({
-                ...p,
-                [key]: { sessionIds: res.data.tiedSessionIds },
-              }));
-              toast.warning("Tie — open a runoff to break it.");
+              toast.error(res.error);
             }
-            await refresh();
-          } else {
-            toast.error(res.error);
-          }
-          setConfirmDialog((p) => ({ ...p, open: false }));
-        });
-      },
-    });
+            setConfirmDialog((p) => ({ ...p, open: false }));
+          });
+        },
+      });
+
+    // The organiser-mode 'appointments' step has no electorate — nothing to
+    // warn about, and no reason to spend a round trip.
+    if (mode !== "election") {
+      confirm(null);
+      return;
+    }
+
+    setPreflightStep(key);
+    void (async () => {
+      // The turnout read is a COURTESY, never a gate. It must not be able to
+      // strand "Close & count": a transport-level rejection (deploy skew while
+      // this page is open, a network blip, a 500) would otherwise leave the
+      // button disabled on "Checking turnout…" forever, with nothing on screen
+      // and only a reload to recover. So: try/finally, a watchdog, and every
+      // failure path falls through to the ordinary confirm.
+      let summary: { eligible: number; voted: number } | null = null;
+      try {
+        const res = await Promise.race([
+          getFormationTurnout(eventId, key),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+        ]);
+        summary =
+          res && res.success
+            ? { eligible: res.data.eligible, voted: res.data.voted }
+            : (state?.turnout[key] ?? null);
+      } catch {
+        // Fall back to the state's own per-step summary; if that is missing
+        // too, close without a warning rather than blocking the organiser.
+        summary = state?.turnout[key] ?? null;
+      } finally {
+        setPreflightStep(null);
+      }
+      if (!summary || !isLowTurnout(summary)) {
+        confirm(null);
+        return;
+      }
+      confirm(
+        `Only ${summary.voted} of ${summary.eligible} eligible students voted (${turnoutPercent(summary)}%). Closing now will record the winner permanently.`
+      );
+    })();
   }
 
   // Runoff: openFormationRunoff restricts the fresh ballot to only the tied
@@ -470,8 +655,13 @@ export function FormationClient({
       toast.error("Pick a closing time for the runoff first.");
       return;
     }
+    // Ballots that were already a runoff are skipped — one runoff per seat.
+    const runoffable = tie.sessionIds.filter(
+      (id) => !tie.terminalSessionIds.includes(id)
+    );
+    if (runoffable.length === 0) return;
     startTransition(async () => {
-      for (const sessionId of tie.sessionIds) {
+      for (const sessionId of runoffable) {
         const res = await openFormationRunoff(eventId, key, sessionId, iso);
         if (!res.success) {
           toast.error(res.error);
@@ -481,7 +671,15 @@ export function FormationClient({
       toast.success(
         "Runoff open — only the tied candidates are on the ballot."
       );
-      setTieByStep((p) => ({ ...p, [key]: undefined }));
+      // Any repeat-tie ballots stay on screen: they still need a decision on
+      // the Positions page, and no runoff was opened for them.
+      setTieByStep((p) => ({
+        ...p,
+        [key]:
+          tie.terminalSessionIds.length > 0
+            ? { sessionIds: tie.terminalSessionIds, terminalSessionIds: tie.terminalSessionIds }
+            : undefined,
+      }));
       setRunoffLocal((p) => ({ ...p, [key]: "" }));
       await refresh();
     });
@@ -493,11 +691,40 @@ export function FormationClient({
       title: "Lock the House",
       description:
         "Freeze allocation, parties, and every elected & appointed role. This is the final step — the House arrives on event day fully formed. Locking refuses while any ballot is still open.",
+      warning: null,
       action: () => {
         startTransition(async () => {
           const res = await lockFormation(eventId);
           if (res.success) {
             toast.success("The House is locked and ready for event day.");
+            await refresh();
+          } else {
+            toast.error(res.error);
+          }
+          setConfirmDialog((p) => ({ ...p, open: false }));
+        });
+      },
+    });
+  }
+
+  // The way back from Lock, for a late change the lock cannot absorb (a student
+  // drops out the night before). It reopens the checklist — it does NOT undo
+  // any election.
+  function handleUnlock() {
+    setConfirmDialog({
+      open: true,
+      title: "Unlock the House",
+      description:
+        "This reopens the formation checklist and unlocks allocation, so you can fix a late change — a student dropping out, a wrong bench, a party that needs re-balancing. Every step goes back to done (not blank): each one keeps its window and its ballots, and you re-run only what you need, then lock the House again before event day.",
+      warning:
+        "Nobody loses their seat. Everyone already elected — Speaker, party leaders, PM, LoP — keeps their role exactly as it is. Unlocking reopens the checklist; it does not undo an election. It also reopens allocation for the whole event, so benches, parties and seat numbers become editable again until you lock. Only possible before the event starts.",
+      action: () => {
+        startTransition(async () => {
+          const res = await unlockFormation(eventId);
+          if (res.success) {
+            toast.success(
+              "The House is unlocked — the checklist is open again. Elected roles are unchanged."
+            );
             await refresh();
           } else {
             toast.error(res.error);
@@ -547,6 +774,18 @@ export function FormationClient({
             <ScrollText className="size-4 text-[#FF9933]" />
             Oath Announcement
           </Link>
+          {closedBallotCount > 0 && (
+            <button
+              type="button"
+              onClick={doExportTallies}
+              disabled={isPending}
+              title="Every candidate's vote count, for every election closed so far"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#1a1a3e]/10 bg-white px-3 py-1.5 text-sm font-medium text-[#1a1a3e] transition-colors hover:bg-[#1a1a3e]/5 disabled:opacity-50"
+            >
+              <Download className="size-4 text-[#FF9933]" />
+              Export votes
+            </button>
+          )}
         </div>
       </div>
 
@@ -564,6 +803,12 @@ export function FormationClient({
           const status = row?.status ?? "pending";
           const isOpen = status === "open";
           const isDone = status === "closed" || status === "locked";
+          // Same truth as doneCount: an unlocked Lock step is 'closed' in the
+          // database but is NOT done — show it as still to do.
+          const displayDone =
+            def.key === "lock" ? status === "locked" : isDone;
+          const displayStatus =
+            def.key === "lock" && status === "closed" ? "pending" : status;
           const canStart = prevStepClosed(def.key) && status === "pending";
           const tie = tieByStep[def.key];
           const Icon = STEP_ICONS[def.key];
@@ -588,14 +833,18 @@ export function FormationClient({
                   <span
                     className={cn(
                       "flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
-                      isDone
+                      displayDone
                         ? "bg-[#138808]/10 text-[#138808]"
                         : isOpen
                           ? "bg-green-100 text-green-700"
                           : "bg-[#1a1a3e]/5 text-[#1a1a3e]/50"
                     )}
                   >
-                    {isDone ? <CheckCircle2 className="size-4" /> : def.order}
+                    {displayDone ? (
+                      <CheckCircle2 className="size-4" />
+                    ) : (
+                      def.order
+                    )}
                   </span>
                   <CardTitle
                     className="flex flex-1 items-center gap-2 text-sm"
@@ -611,7 +860,7 @@ export function FormationClient({
                         closes {fmtWhen(row.closes_at)}
                       </span>
                     )}
-                    {statusBadge(status)}
+                    {statusBadge(displayStatus)}
                   </div>
                 </button>
               </CardHeader>
@@ -626,6 +875,105 @@ export function FormationClient({
                         ` · ${summary.voted}/${summary.eligible} voted`}
                     </p>
                   )}
+
+                  {/* Who this step seated. Without it a finished election read
+                      as turnout and nothing else, and the organiser had to
+                      leave the page to find out who had won. */}
+                  {isDone && def.mode === "election" && (
+                    <div className="rounded-xl border border-[#1a1a3e]/10 bg-[#1a1a3e]/[0.02] px-4 py-3">
+                      {(state?.winners?.[def.key] ?? []).length > 0 ? (
+                        <>
+                          <p
+                            className="text-[10px] font-bold uppercase tracking-[0.16em]"
+                            style={{ color: SAFFRON }}
+                          >
+                            Elected
+                          </p>
+                          <dl className="mt-1.5 space-y-1">
+                            {(state?.winners?.[def.key] ?? []).map((w, i) => (
+                              <div
+                                key={`${w.label}-${w.name}-${i}`}
+                                className="flex flex-wrap items-baseline gap-x-2"
+                              >
+                                <dt className="text-xs text-[#1a1a3e]/55">{w.label}</dt>
+                                <dd
+                                  className="text-sm font-semibold"
+                                  style={{ color: INK }}
+                                >
+                                  {w.name}
+                                </dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </>
+                      ) : (
+                        <p className="text-xs text-[#1a1a3e]/55">
+                          This step is closed but no one holds its post yet. Check
+                          Positions — the seat may have been cleared by hand.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* The counts. Closing a step archives the ballot, so before
+                      this the numbers left the app the moment it closed. */}
+                  {isDone &&
+                    def.mode === "election" &&
+                    (state?.tallies?.[def.key] ?? []).length > 0 && (
+                      <details className="rounded-xl border border-[#1a1a3e]/10 px-4 py-3">
+                        <summary
+                          className="cursor-pointer text-xs font-medium"
+                          style={{ color: SAFFRON }}
+                        >
+                          Votes cast
+                        </summary>
+                        <div className="mt-3 space-y-4">
+                          {(state?.tallies?.[def.key] ?? []).map((ballot) => (
+                            <div key={ballot.sessionId}>
+                              <p className="text-xs font-semibold" style={{ color: INK }}>
+                                {ballot.label ?? "All members"}
+                                <span className="ml-2 font-normal text-[#1a1a3e]/50">
+                                  {ballot.totalVotes} vote
+                                  {ballot.totalVotes === 1 ? "" : "s"}
+                                </span>
+                              </p>
+                              {ballot.entries.length === 0 ? (
+                                <p className="mt-1 text-xs text-[#1a1a3e]/55">
+                                  No votes were cast in this ballot.
+                                </p>
+                              ) : (
+                                <ul className="mt-1.5 space-y-1">
+                                  {ballot.entries.map((e) => (
+                                    <li
+                                      key={`${ballot.sessionId}-${e.name}-${e.constituencyNumber ?? ""}`}
+                                      className="flex items-baseline gap-2 text-sm"
+                                    >
+                                      <span
+                                        className="w-8 shrink-0 text-right font-semibold tabular-nums"
+                                        style={{ color: e.isTop ? GREEN : INK }}
+                                      >
+                                        {e.votes}
+                                      </span>
+                                      <span style={{ color: INK }}>{e.name}</span>
+                                      <span className="text-xs text-[#1a1a3e]/45">
+                                        {e.constituencyNumber != null &&
+                                          `#${e.constituencyNumber}`}
+                                        {e.partyName && ` · ${e.partyName}`}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <p className="mt-3 text-[11px] text-[#1a1a3e]/45">
+                          Totals only — how any individual voted is not recorded here.
+                          A count level with the top is highlighted; who took the seat is
+                          shown above, since a runoff or tie-break can decide it.
+                        </p>
+                      </details>
+                    )}
 
                   {/* ── Allocation (organiser step 1) ── */}
                   {def.key === "allocation" && !isDone && (
@@ -697,6 +1045,53 @@ export function FormationClient({
 
                   {def.mode === "election" && isOpen && (
                     <div className="space-y-4">
+                      {/* Partial open: some parties never got a ballot. The
+                          server's own error tells the organiser to "open the
+                          step again to retry" — openFormationStep IS re-entrant
+                          for this step — but until now no control did that, and
+                          the turnout bar counts only parties that DID get a
+                          ballot, so the gap was invisible. */}
+                      {def.key === "party_leader_ballots" &&
+                        partiesWithoutBallot.length > 0 && (
+                          <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
+                            <p className="text-sm font-medium text-amber-800">
+                              No ballot opened for:{" "}
+                              {partiesWithoutBallot
+                                .map((p) => p.name)
+                                .join(", ")}
+                              . Their members cannot vote, and they are NOT
+                              counted in the turnout below.
+                            </p>
+                            <p className="text-xs text-amber-700">
+                              A party with no members cannot get a ballot — add
+                              members on the{" "}
+                              <Link
+                                href={`/yip/dashboard/events/${eventId}/parties`}
+                                className="font-medium underline"
+                              >
+                                Parties page
+                              </Link>
+                              , then open the remaining ballots. You can also
+                              assign that party&apos;s leader directly there.
+                            </p>
+                            <Button
+                              size="sm"
+                              disabled={isPending}
+                              onClick={() =>
+                                handleOpenBallotDialog("party_leader_ballots", {
+                                  onlyPartyIds: partiesWithoutBallot.map(
+                                    (p) => p.id
+                                  ),
+                                  closesAtLocal: isoToLocal(row?.closes_at),
+                                })
+                              }
+                            >
+                              <Vote className="mr-1.5 size-3.5" />
+                              Open remaining party ballots…
+                            </Button>
+                          </div>
+                        )}
+
                       <TurnoutBlock eventId={eventId} stepKey={def.key} />
 
                       {/* Window editor: extend */}
@@ -742,77 +1137,124 @@ export function FormationClient({
                         <Button
                           size="sm"
                           variant="destructive"
-                          disabled={isPending}
-                          onClick={() => handleCloseStep(def.key, def.label)}
+                          disabled={isPending || preflightStep === def.key}
+                          onClick={() =>
+                            handleCloseStep(def.key, def.label, def.mode)
+                          }
                         >
-                          Close & count
+                          {preflightStep === def.key
+                            ? "Checking turnout…"
+                            : "Close & count"}
                         </Button>
                       </div>
                     </div>
                   )}
 
                   {/* Runoff banner on tie */}
-                  {def.mode === "election" && tie && (
-                    <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
-                      <p className="text-sm font-medium text-amber-800">
-                        Tie — the leading candidates finished on equal votes
-                        {tie.sessionIds.length > 1
-                          ? ` in ${tie.sessionIds.length} ballots`
-                          : ""}
-                        . Open a runoff between only the tied candidates.
-                      </p>
-                      {/* Director edge-case decision 3 (11 Aug): the organiser
-                          may instead resolve the tie DIRECTLY — a tied reveal
-                          writes no role, so assigning the seat on Positions and
-                          closing this step again works cleanly. */}
-                      <p className="text-xs text-amber-700">
-                        Or resolve it directly: assign the seat on the{" "}
-                        <Link
-                          href={`/yip/dashboard/events/${eventId}/positions`}
-                          className="font-medium underline"
-                        >
-                          Positions page
-                        </Link>
-                        , then press Close &amp; count again — the step will
-                        close with your pick standing.
-                      </p>
-                      <div className="flex flex-wrap items-end gap-2">
-                        <div className="space-y-1.5">
-                          <Label
-                            htmlFor={`runoff-${def.key}`}
-                            className="text-xs"
-                          >
-                            Runoff closes at
-                          </Label>
-                          <Input
-                            id={`runoff-${def.key}`}
-                            type="datetime-local"
-                            value={runoffLocal[def.key] ?? ""}
-                            onChange={(e) =>
-                              setRunoffLocal((p) => ({
-                                ...p,
-                                [def.key]: e.target.value,
-                              }))
-                            }
-                            className="h-9 w-56"
-                          />
+                  {def.mode === "election" &&
+                    tie &&
+                    (() => {
+                      // A ballot that was ITSELF a runoff and tied again is
+                      // terminal — runoffs stop at one (Director, 11 Aug:
+                      // "organiser decides per case"). Only the first-time ties
+                      // still get runoff controls.
+                      const runoffable = tie.sessionIds.filter(
+                        (id) => !tie.terminalSessionIds.includes(id)
+                      );
+                      const terminalCount = tie.terminalSessionIds.length;
+                      return (
+                        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
+                          {runoffable.length > 0 ? (
+                            <p className="text-sm font-medium text-amber-800">
+                              Tie — the leading candidates finished on equal
+                              votes
+                              {runoffable.length > 1
+                                ? ` in ${runoffable.length} ballots`
+                                : ""}
+                              . Open a runoff between only the tied candidates.
+                            </p>
+                          ) : (
+                            <p className="text-sm font-medium text-amber-800">
+                              Tied again — the runoff finished level too
+                              {terminalCount > 1
+                                ? ` in ${terminalCount} ballots`
+                                : ""}
+                              . There is no second runoff: this seat is now
+                              yours to decide.
+                            </p>
+                          )}
+
+                          {/* Director edge-case decision 3 (11 Aug): the
+                              organiser may resolve a tie DIRECTLY — a tied
+                              reveal writes no role, so assigning the seat on
+                              Positions and closing this step again works
+                              cleanly. After a repeat tie this is the ONLY
+                              path offered. */}
+                          <p className="text-xs text-amber-700">
+                            {runoffable.length > 0
+                              ? "Or resolve it directly: assign the seat on the "
+                              : "Assign the seat on the "}
+                            <Link
+                              href={`/yip/dashboard/events/${eventId}/positions`}
+                              className="font-medium underline"
+                            >
+                              Positions page
+                            </Link>
+                            , then press Close &amp; count again — the step will
+                            close with your pick standing.
+                          </p>
+
+                          {runoffable.length > 0 && (
+                            <>
+                              {terminalCount > 0 && (
+                                <p className="text-xs text-amber-700">
+                                  {terminalCount} other ballot
+                                  {terminalCount === 1 ? "" : "s"} tied a second
+                                  time and will not get another runoff — decide
+                                  those on Positions.
+                                </p>
+                              )}
+                              <div className="flex flex-wrap items-end gap-2">
+                                <div className="space-y-1.5">
+                                  <Label
+                                    htmlFor={`runoff-${def.key}`}
+                                    className="text-xs"
+                                  >
+                                    Runoff closes at
+                                  </Label>
+                                  <Input
+                                    id={`runoff-${def.key}`}
+                                    type="datetime-local"
+                                    value={runoffLocal[def.key] ?? ""}
+                                    onChange={(e) =>
+                                      setRunoffLocal((p) => ({
+                                        ...p,
+                                        [def.key]: e.target.value,
+                                      }))
+                                    }
+                                    className="h-9 w-56"
+                                  />
+                                </div>
+                                <Button
+                                  size="sm"
+                                  disabled={isPending || !runoffLocal[def.key]}
+                                  onClick={() => handleOpenRunoff(def.key, tie)}
+                                >
+                                  Open runoff
+                                </Button>
+                              </div>
+                            </>
+                          )}
                         </div>
-                        <Button
-                          size="sm"
-                          disabled={isPending || !runoffLocal[def.key]}
-                          onClick={() => handleOpenRunoff(def.key, tie)}
-                        >
-                          Open runoff
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                      );
+                    })()}
 
                   {/* ── Appointments (organiser step 6) ── */}
                   {def.key === "appointments" && (
                     <div className="space-y-4">
                       <AppointmentsPanel
                         eventId={eventId}
+                        eventName={eventName}
                         ministries={ministries}
                         disabled={Boolean(isLocked)}
                       />
@@ -821,7 +1263,7 @@ export function FormationClient({
                           size="sm"
                           disabled={isPending || !prevStepClosed("appointments")}
                           onClick={() =>
-                            handleCloseStep("appointments", def.label)
+                            handleCloseStep("appointments", def.label, def.mode)
                           }
                         >
                           <CheckCircle2 className="mr-1.5 size-3.5" />
@@ -835,10 +1277,28 @@ export function FormationClient({
                   {def.key === "lock" && (
                     <div className="space-y-2">
                       {status === "locked" ? (
-                        <p className="flex items-center gap-2 text-sm font-medium text-[#138808]">
-                          <Lock className="size-4" />
-                          The House is locked — ready for event day.
-                        </p>
+                        <>
+                          <p className="flex items-center gap-2 text-sm font-medium text-[#138808]">
+                            <Lock className="size-4" />
+                            The House is locked — ready for event day.
+                          </p>
+                          {/* The way back, for a late change the lock cannot
+                              absorb (a student drops out the night before).
+                              Reopens the checklist; undoes no election. */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={isPending}
+                            onClick={handleUnlock}
+                          >
+                            <Unlock className="mr-1.5 size-3.5" />
+                            Unlock the House
+                          </Button>
+                          <p className="text-xs text-[#1a1a3e]/50">
+                            Reopens the checklist so you can fix a late change.
+                            Everyone already elected keeps their role.
+                          </p>
+                        </>
                       ) : (
                         <>
                           <Button
@@ -956,7 +1416,9 @@ export function FormationClient({
             <div className="max-h-72 space-y-4 overflow-y-auto pr-1">
               {ballotDialog.groups.map((g) => {
                 const visible = filterNominees(g.members);
-                if (visible.length === 0) return null;
+                // A member-less party is a blocker, not a search miss — always
+                // render it so the organiser sees why the ballot is refused.
+                if (visible.length === 0 && g.members.length > 0) return null;
                 const picks = g.members.filter((m) =>
                   ballotDialog.selectedIds.includes(m.id)
                 ).length;
@@ -975,6 +1437,12 @@ export function FormationClient({
                         {picks} nominated
                       </span>
                     </div>
+                    {g.members.length === 0 && (
+                      <p className="rounded-lg border-2 border-red-200 bg-red-50 p-2.5 text-xs text-red-700">
+                        No members — this party cannot get a ballot. Add members
+                        or delete it on the Parties tab.
+                      </p>
+                    )}
                     {visible.map((m) => {
                       const checked = ballotDialog.selectedIds.includes(m.id);
                       return (
@@ -1061,6 +1529,11 @@ export function FormationClient({
             <DialogTitle>{confirmDialog.title}</DialogTitle>
             <DialogDescription>{confirmDialog.description}</DialogDescription>
           </DialogHeader>
+          {confirmDialog.warning && (
+            <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm font-medium text-amber-800">
+              {confirmDialog.warning}
+            </p>
+          )}
           <DialogFooter>
             <Button
               variant="outline"

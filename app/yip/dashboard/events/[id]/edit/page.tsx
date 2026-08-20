@@ -190,6 +190,21 @@ export default function EditEventPage() {
       setError("Please choose a chapter for a Chapter Level event");
       return false;
     }
+    // A regional / national round needs its HOST chapter: chapter_name is what
+    // grants the host chapter's chair + organisers access (getYipEventAccess)
+    // and lists the round on their dashboard. This form is the REPAIR path for
+    // regional events created before the rule, so an already-stored
+    // chapter_name satisfies it even when no chapter row is linked.
+    if (
+      form.level !== "chapter" &&
+      !form.yi_chapter_id &&
+      !form.chapter_name.trim()
+    ) {
+      setError(
+        "Please choose the host chapter — its chair and organisers manage this round"
+      );
+      return false;
+    }
     if (!form.day1_date) {
       setError("Day 1 date is required");
       return false;
@@ -360,7 +375,7 @@ export default function EditEventPage() {
 
           <div>
             <Label htmlFor="yi_chapter_id">
-              Chapter {form.level === "chapter" ? "*" : "(optional)"}
+              {form.level === "chapter" ? "Chapter *" : "Host chapter *"}
             </Label>
             <select
               id="yi_chapter_id"
@@ -381,8 +396,12 @@ export default function EditEventPage() {
               ))}
             </select>
             <p className="mt-1 text-xs text-gray-500">
-              Linking a chapter fills in the city, state and region
-              automatically.
+              {form.level === "chapter"
+                ? "Linking a chapter fills in the city, state and region automatically."
+                : "The chapter running this round — its chair and organisers get access to manage it. Also fills in the city, state and region."}
+              {form.level !== "chapter" && form.chapter_name && !form.yi_chapter_id
+                ? ` Currently set to “${form.chapter_name}” (not linked to a chapter record — pick it above to link).`
+                : ""}
             </p>
           </div>
 

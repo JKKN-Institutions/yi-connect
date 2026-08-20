@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface EventQRCodeProps {
   eventId: string;

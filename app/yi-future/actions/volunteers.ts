@@ -21,6 +21,7 @@ import {
   type VolunteerStation,
 } from "@/lib/yi-future/volunteers";
 import type { ActionResult } from "./editions";
+import { safeError } from "@/lib/yi-future/db-error";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type LooseClient = any;
@@ -154,7 +155,7 @@ export async function createVolunteer(
           "Volunteers are not switched on yet — the future_volunteers_checkin migration has not been applied to this environment.",
       };
     }
-    return { ok: false, error: error.message };
+    return { ok: false, error: safeError(error.message, "volunteers.createVolunteer") };
   }
 
   revalidatePath("/yi-future/chapter/volunteers");
@@ -175,7 +176,7 @@ export async function setVolunteerStation(
     .from("volunteers")
     .update({ station: parsed })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "volunteers.setVolunteerStation") };
 
   revalidatePath("/yi-future/chapter/volunteers");
   return { ok: true, message: "Station updated." };
@@ -192,7 +193,7 @@ export async function setVolunteerActive(
     .from("volunteers")
     .update({ is_active: active })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "volunteers.setVolunteerActive") };
 
   revalidatePath("/yi-future/chapter/volunteers");
   return {
@@ -227,7 +228,7 @@ export async function regenerateVolunteerCode(
       revalidatePath("/yi-future/chapter/volunteers");
       return { ok: true, message: `New code: ${access_code}` };
     }
-    if (error.code !== "23505") return { ok: false, error: error.message };
+    if (error.code !== "23505") return { ok: false, error: safeError(error.message, "volunteers.regenerateVolunteerCode") };
   }
 
   return {
@@ -246,7 +247,7 @@ export async function revokeVolunteerCode(id: string): Promise<ActionResult> {
     .from("volunteers")
     .update({ access_code: null })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "volunteers.revokeVolunteerCode") };
 
   revalidatePath("/yi-future/chapter/volunteers");
   return { ok: true, message: "Code revoked — that volunteer is signed out." };
@@ -263,7 +264,7 @@ export async function deleteVolunteer(id: string): Promise<ActionResult> {
     .from("volunteers")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "volunteers.deleteVolunteer") };
 
   revalidatePath("/yi-future/chapter/volunteers");
   return { ok: true, message: "Volunteer removed." };

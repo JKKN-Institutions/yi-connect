@@ -6,6 +6,7 @@ import { createClient, createServiceClient } from "@/lib/yi-future/supabase/serv
 import { fetchAllRows } from "@/lib/pagination";
 import type { ActionResult } from "./editions";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 type PhaseEventScope = {
   userId: string;
@@ -101,7 +102,7 @@ export async function setDelegateAttendance(
     .select("id, chapter_id")
     .eq("id", delegateId)
     .maybeSingle();
-  if (delErr) return { ok: false, error: delErr.message };
+  if (delErr) return { ok: false, error: safeError(delErr.message, "attendance.setDelegateAttendance") };
   const delegate = delRow as { id: string; chapter_id: string | null } | null;
   if (!delegate) return { ok: false, error: "Delegate not found." };
   if (
@@ -128,7 +129,7 @@ export async function setDelegateAttendance(
       },
       { onConflict: "phase_event_id,delegate_id" }
     );
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "attendance.setDelegateAttendance") };
 
   return { ok: true, message: attended ? "Marked present." : "Marked absent." };
 }
@@ -179,7 +180,7 @@ export async function saveAttendance(
     .schema("future")
     .from("phase_event_attendance")
     .upsert(rows, { onConflict: "phase_event_id,delegate_id" });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "attendance.saveAttendance") };
 
   revalidatePath(`/yi-future/chapter/journey/${eventId}`);
   return {

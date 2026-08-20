@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import Link from "next/link";
 import { Scale, History, LogOut, ClipboardList } from "lucide-react";
+import { signOutYipSession } from "@/app/yip/actions/auth";
 import { GuideLauncher } from "@/components/yip/guide";
 import { GUIDES } from "@/lib/yip/guide/content";
 
@@ -95,16 +96,21 @@ export default async function JuryLayout({
               variant="navlink"
               className="w-auto rounded-lg px-3 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
             />
-            {/* Exit — icon only, needs aria-label */}
-            <Link
-              href="/yip/join"
-              className="flex items-center justify-center rounded-lg px-3 text-red-600 hover:bg-red-50 active:bg-red-100 transition-colors"
-              style={{ minHeight: "44px", minWidth: "44px" }}
-              aria-label="Exit jury session"
-              title="Exit"
-            >
-              <LogOut className="size-5" />
-            </Link>
+            {/* Sign out — icon only, needs aria-label. A real sign-out, not a
+                link: this used to navigate to /yip/join while the yip_session
+                cookie stayed live, so the jury member was never actually signed
+                out and the next person on that device inherited the session. */}
+            <form action={signOutYipSession}>
+              <button
+                type="submit"
+                className="flex items-center justify-center rounded-lg px-3 text-red-600 hover:bg-red-50 active:bg-red-100 transition-colors"
+                style={{ minHeight: "44px", minWidth: "44px" }}
+                aria-label="Sign out of jury session"
+                title="Sign out"
+              >
+                <LogOut className="size-5" />
+              </button>
+            </form>
           </nav>
         </div>
       </header>

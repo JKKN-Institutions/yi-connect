@@ -49,6 +49,7 @@ import type { QuestionWithSubmitter } from "@/app/yip/actions/questions";
 import { INK, SAFFRON, SERIF, SectionShell } from "@/app/yip/me/credential-ui";
 import { toast } from "sonner";
 
+import { ParticipantNameButton } from "@/components/yip/participant-profile-dialog";
 // ─── Types & Helpers ────────────────────────────────────────────
 
 type FilterTab = "all" | "submitted" | "approved" | "starred" | "rejected";
@@ -94,6 +95,7 @@ const BENCH_BADGES: Record<Bench, { label: string; className: string }> = {
 
 interface QuestionsClientProps {
   eventId: string;
+  eventName: string;
   initialQuestions: QuestionWithSubmitter[];
   /** events.questions_open_at — student submissions open at this time. */
   initialOpenAt: string | null;
@@ -114,6 +116,7 @@ function toLocalInputValue(iso: string | null): string {
 
 export function QuestionsClient({
   eventId,
+  eventName,
   initialQuestions,
   initialOpenAt,
   initialCloseAt,
@@ -701,7 +704,17 @@ export function QuestionsClient({
 
                       {/* Student Name */}
                       <TableCell className="font-medium text-sm">
-                        {q.submitter?.full_name ?? "Unknown"}
+                        {q.submitter?.id ? (
+                          <ParticipantNameButton
+                            eventId={eventId}
+                            eventName={eventName}
+                            participantId={q.submitter.id}
+                            name={q.submitter.full_name}
+                            className="text-left underline-offset-4 hover:underline"
+                          />
+                        ) : (
+                          "Unknown"
+                        )}
                       </TableCell>
 
                       {/* Bench Badge */}
@@ -922,6 +935,10 @@ function QuestionDetailDialog({
             <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm border-b pb-3">
               <div>
                 <span className="text-gray-400 text-xs block">Student</span>
+                {/* Plain text on purpose: this sits inside the question
+                    detail dialog, and opening a second dialog on top of an open
+                    one is the pattern this popup deliberately avoids. The name
+                    is clickable in the moderation table behind it. */}
                 <span className="font-medium">
                   {q.submitter?.full_name ?? "Unknown"}
                 </span>

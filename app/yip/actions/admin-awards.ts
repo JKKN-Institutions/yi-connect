@@ -9,22 +9,43 @@ import {
   AWARD_ELIGIBILITIES,
   AWARD_RANK_MODES,
 } from "@/lib/yip/award-formula";
+import {
+  describeRoundLevels,
+  fetchEventRoundLevel,
+  normaliseRoundLevels,
+  pickByLevel,
+  scopesOverlap,
+  type RoundLevel,
+} from "@/lib/yip/round-level";
+import { resolveAwardsForLevel } from "@/lib/yip/awards";
 
-// Admin configuration for the 15 workbook awards (yip.award_definitions). The
+// Admin configuration for the workbook awards (yip.award_definitions). The
 // award MATH (eligibility + ranking) is now editable here via eligibility /
 // rank_mode / rank_keys; the results engine interprets those on every Compute.
+//
+// ROUND LEVEL (2026-08)
+// An award may be scoped to chapter / regional / national rounds via `levels`.
+// NULL = every round, which is what every pre-existing award means, so nothing
+// changes until a scope is set. Because the regional set reuses seven of the
+// chapter award_keys (same award, different level), an award_key is no longer
+// unique — the identity of a row is its `id`. Updating by award_key would write
+// BOTH the chapter and the regional row at once. See lib/yip/round-level.ts.
 
 type ActionResult<T = null> =
   | { success: true; data: T }
   | { success: false; error: string };
 
-// eligibility/rank_mode/rank_keys are newer than the generated Database types,
-// so reads/writes use an untyped client view (values validated/coerced here).
+// id/levels/eligibility/rank_mode/rank_keys are newer than the generated
+// Database types (which have been stale for this table since the June formula
+// columns landed), so reads/writes use an untyped client view — values are
+// validated/coerced here.
 async function awardsClient(): Promise<SupabaseClient> {
   return (await createServiceClient()) as unknown as SupabaseClient;
 }
 
 export type AwardDefinition = {
+  /** Row identity. award_key is NOT unique once an award is level-scoped. */
+  id: string;
   award_key: string;
   label: string;
   basis_description: string;
@@ -35,11 +56,21 @@ export type AwardDefinition = {
   eligibility: string;
   rank_mode: string;
   rank_keys: string[];
+  /** Round levels this award applies to. null = every round. */
+  levels: RoundLevel[] | null;
 };
 
 const COLS =
-  "award_key, label, basis_description, default_recipients, is_team, is_active, display_order, eligibility, rank_mode, rank_keys";
+  "id, award_key, label, basis_description, default_recipients, is_team, is_active, display_order, eligibility, rank_mode, rank_keys, levels";
 
+/** Normalise a raw DB row: `levels` NULL stays NULL — "every round". */
+function toAwardDefinition(row: unknown): AwardDefinition {
+  const r = row as AwardDefinition & { levels?: string[] | null };
+  return { ...r, levels: normaliseRoundLevels(r.levels) };
+}
+
+/** EVERY award row, at every level — the admin console shows and groups them
+ *  all. Level resolution for a single event is getEventAwardConfig(). */
 export async function listAwardDefinitions(): Promise<AwardDefinition[]> {
   const supabase = await awardsClient();
   const { data, error } = await supabase
@@ -47,7 +78,7 @@ export async function listAwardDefinitions(): Promise<AwardDefinition[]> {
     .select(COLS)
     .order("display_order");
   if (error || !data) return [];
-  return data as AwardDefinition[];
+  return data.map(toAwardDefinition);
 }
 
 export type AwardDefinitionPatch = {
@@ -57,14 +88,23 @@ export type AwardDefinitionPatch = {
   eligibility?: string;
   rank_mode?: string;
   rank_keys?: string[];
+  /** Round levels; empty / all three / null all mean "every round". */
+  levels?: string[] | null;
 };
 
+/**
+ * Edit ONE award row, identified by its `id`.
+ *
+ * NOT by award_key: the chapter and regional sets share seven keys, so
+ * `.eq("award_key", …)` would silently write both rows at once.
+ */
 export async function updateAwardDefinition(
-  awardKey: string,
+  id: string,
   patch: AwardDefinitionPatch
 ): Promise<ActionResult<AwardDefinition>> {
   const gate = await requireSuperAdmin();
   if (!gate.ok) return { success: false, error: gate.error };
+  if (!id) return { success: false, error: "No award was specified." };
 
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (typeof patch.label === "string") {
@@ -103,10 +143,48 @@ export async function updateAwardDefinition(
   }
 
   const supabase = await awardsClient();
+
+  // Changing the level scope: two SCOPED awards sharing a key must not both
+  // claim a level — resolution would be ambiguous. A global (every-round) award
+  // never conflicts; it is the documented fallback a scoped award overrides.
+  if (patch.levels !== undefined) {
+    const levels = normaliseRoundLevels(patch.levels);
+
+    const { data: self } = await supabase
+      .from("award_definitions")
+      .select("award_key")
+      .eq("id", id)
+      .maybeSingle();
+    if (!self) return { success: false, error: "That award no longer exists." };
+
+    const { data: siblings } = await supabase
+      .from("award_definitions")
+      .select("id, levels")
+      .eq("award_key", (self as { award_key: string }).award_key);
+
+    const clash = (siblings ?? []).find(
+      (r) =>
+        (r as { id: string }).id !== id &&
+        scopesOverlap(
+          normaliseRoundLevels((r as { levels?: string[] | null }).levels),
+          levels
+        )
+    );
+    if (clash)
+      return {
+        success: false,
+        error: `Another award with the same key already covers ${describeRoundLevels(
+          levels
+        )}. Change the rounds this one applies to, or edit that award instead.`,
+      };
+
+    update.levels = levels;
+  }
+
   const { data, error } = await supabase
     .from("award_definitions")
     .update(update)
-    .eq("award_key", awardKey)
+    .eq("id", id)
     .select(COLS)
     .single();
 
@@ -117,7 +195,7 @@ export async function updateAwardDefinition(
     };
 
   revalidatePath("/yip/dashboard/admin/awards");
-  return { success: true, data: data as AwardDefinition };
+  return { success: true, data: toAwardDefinition(data) };
 }
 
 // ─── Per-event overrides (each chapter can "recognise more" on its own event) ──
@@ -128,8 +206,13 @@ export type EventAwardRow = AwardDefinition & {
   has_override: boolean;
 };
 
-/** The 15 awards with this event's EFFECTIVE recipient count + on/off (per-event
- * override falling back to the global default). Read-gated to score viewers. */
+/** THIS EVENT'S awards with their EFFECTIVE recipient count + on/off (per-event
+ * override falling back to the global default). Read-gated to score viewers.
+ *
+ * Which awards those are depends on the event's ROUND LEVEL: a round with its
+ * own award set gets that set, anything else gets the every-round set
+ * (resolveAwardsForLevel). Per-event overrides stay keyed by award_key — an
+ * event has exactly one level, so at most one definition per key is in play. */
 export async function getEventAwardConfig(
   eventId: string
 ): Promise<EventAwardRow[]> {
@@ -139,25 +222,58 @@ export async function getEventAwardConfig(
   // them on its own Awards tab.
   if (!access.canManage) return [];
   const supabase = await awardsClient();
-  const [defsRes, cfgRes] = await Promise.all([
+  const [defsRes, cfgRes, level] = await Promise.all([
     supabase.from("award_definitions").select(COLS).order("display_order"),
     supabase
       .from("event_award_config")
       .select("award_key, recipients, is_active")
       .eq("event_id", eventId),
+    fetchEventRoundLevel(supabase as never, eventId),
   ]);
   const cfg = new Map(
     (cfgRes.data ?? []).map((c) => [c.award_key, c])
   );
-  return (defsRes.data ?? []).map((d) => {
-    const o = cfg.get((d as AwardDefinition).award_key);
+  const defs = resolveAwardsForLevel(
+    (defsRes.data ?? []).map(toAwardDefinition),
+    level
+  );
+  return defs.map((d) => {
+    const o = cfg.get(d.award_key);
     return {
-      ...(d as AwardDefinition),
-      effective_recipients: o?.recipients ?? (d as AwardDefinition).default_recipients,
-      effective_active: o?.is_active ?? (d as AwardDefinition).is_active,
+      ...d,
+      effective_recipients: o?.recipients ?? d.default_recipients,
+      effective_active: o?.is_active ?? d.is_active,
       has_override: !!o && (o.recipients != null || o.is_active != null),
     };
   });
+}
+
+/**
+ * The award LABELS this event gives out, in display order — level-resolved, and
+ * including inactive awards (an award chosen by hand is seeded inactive so the
+ * engine never auto-assigns it, but the chair must still be able to pin it).
+ *
+ * Feeds the Results screen's award grid and its manual-override picker so both
+ * show the round's real awards instead of the hardcoded chapter 15. Gated to the
+ * same audience that can read results; returns [] otherwise, and the caller
+ * falls back to the chapter set.
+ */
+export async function getEventAwardLabels(eventId: string): Promise<string[]> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canViewScores) return [];
+  const supabase = await awardsClient();
+  const [defsRes, level] = await Promise.all([
+    supabase
+      .from("award_definitions")
+      .select("award_key, label, display_order, levels")
+      .order("display_order"),
+    fetchEventRoundLevel(supabase as never, eventId),
+  ]);
+  const rows = (defsRes.data ?? []) as {
+    label: string;
+    levels?: string[] | null;
+  }[];
+  return resolveAwardsForLevel(rows, level).map((r) => r.label);
 }
 
 /** Set (or clear) this event's recipient/on-off override for one award. Pass

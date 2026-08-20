@@ -5,6 +5,8 @@ import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
 import { modeForAgendaType } from "@/lib/yip/constants";
 import { expireActiveSpeakingRequests } from "@/lib/yip/speaking-floor-expiry";
+import { resolveSessionConfig } from "@/lib/yip/session-config-resolution";
+import { fetchEventRoundLevel } from "@/lib/yip/round-level";
 import type { Json } from "@/types/yip/database";
 import {
   type SubTimer,
@@ -26,7 +28,9 @@ type ActionResult<T = null> =
 
 export async function advanceAgenda(
   eventId: string
-): Promise<ActionResult<{ nextItemId: string | null }>> {
+): Promise<
+  ActionResult<{ nextItemId: string | null; nextDayWithItems: number | null }>
+> {
   const access = await getYipEventAccess(eventId);
   if (!access.canManage) return { success: false, error: "Not authorized to manage this event" };
   const supabase = await createServiceClient();
@@ -54,8 +58,21 @@ export async function advanceAgenda(
     return { success: false, error: "No agenda items found" };
   }
 
-  // Determine the current day from event status
-  const currentDay = event.status === "day2_live" ? 2 : 1;
+  // Determine the current day. Prefer the day of the item that is ACTUALLY
+  // live; fall back to the event status only when nothing is live.
+  // Why: organisers routinely start Day-2 sessions straight from the Day-2 tab
+  // without flipping the event status first (Salem ran Question Hour + Zero
+  // Hour on Day 2 while status was still `day1_live`). Deriving the day from
+  // status alone then filters `dayItems` to the WRONG day, so the live item is
+  // not found (currentIdx = -1) — Next neither completes it nor moves forward,
+  // it jumps the whole house BACK to the first unfinished Day-1 session.
+  // When the live item's day already matches the status-derived day (every
+  // normally-run event) this resolves to exactly the same number as before.
+  const liveItem = event.current_agenda_item_id
+    ? items.find((i) => i.id === event.current_agenda_item_id)
+    : null;
+  const statusDay = event.status === "day2_live" ? 2 : 1;
+  const currentDay = liveItem?.day ?? statusDay;
   const dayItems = items.filter((i) => i.day === currentDay);
 
   // Find current item index
@@ -115,8 +132,29 @@ export async function advanceAgenda(
   // New session → fresh Speaking Floor (clear any pending raise-to-speak hands).
   await expireActiveSpeakingRequests(supabase, eventId);
 
+  // Day boundary: this day has nothing left, but a LATER day still does.
+  // Report it so the Control panel can say so in words and point at the
+  // status button. We deliberately do NOT flip the event status here — moving
+  // the house to the next day stays the organiser's explicit decision.
+  let nextDayWithItems: number | null = null;
+  if (!nextItem) {
+    const laterDays = items
+      .filter(
+        (i) =>
+          typeof i.day === "number" &&
+          i.day > currentDay &&
+          i.status !== "completed" &&
+          i.status !== "skipped"
+      )
+      .map((i) => i.day as number);
+    if (laterDays.length > 0) nextDayWithItems = Math.min(...laterDays);
+  }
+
   revalidatePath(`/yip/dashboard/events/${eventId}/control`);
-  return { success: true, data: { nextItemId: nextItem?.id ?? null } };
+  return {
+    success: true,
+    data: { nextItemId: nextItem?.id ?? null, nextDayWithItems },
+  };
 }
 
 // ─── Re-open a Completed Agenda Item (BUG-409) ────────────────────
@@ -242,11 +280,27 @@ export async function reopenLastCompletedSession(
   if (agendaErr) return { success: false, error: agendaErr.message };
 
   // Point the event back at that item and put the matching day live again.
+  const nextStatus = item.day === 2 ? "day2_live" : "day1_live";
+
+  // This route writes day1_live DIRECTLY, bypassing updateEventStatus, so the
+  // go-live rule must be applied here too or it can be routed around
+  // (startAgendaItem -> reopenLastCompletedSession would put a draft regional
+  // round live). Same shared function, same answer.
+  if (nextStatus === "day1_live") {
+    const { data: ev } = await supabase
+      .from("events")
+      .select("level, committee_topics")
+      .eq("id", eventId)
+      .single();
+    const blocked = goLiveBlockReason(ev?.level, ev?.committee_topics);
+    if (blocked) return { success: false, error: blocked };
+  }
+
   const { error: eventErr } = await supabase
     .from("events")
     .update({
       current_agenda_item_id: item.id,
-      status: item.day === 2 ? "day2_live" : "day1_live",
+      status: nextStatus,
     })
     .eq("id", eventId);
   if (eventErr) return { success: false, error: eventErr.message };
@@ -308,8 +362,13 @@ export async function goToPreviousAgendaItem(
     return { success: false, error: "No agenda items found" };
   }
 
-  // Determine the current day from event status (same rule as advanceAgenda)
-  const currentDay = event.status === "day2_live" ? 2 : 1;
+  // Determine the current day (same rule as advanceAgenda): the day of the
+  // item that is actually live, falling back to the event status. Without
+  // this, a Day-2 session running while the status still reads `day1_live`
+  // is not found in `dayItems`, so Previous dead-ends on "Already at the
+  // first item" for the whole of Day 2.
+  const liveItem = items.find((i) => i.id === event.current_agenda_item_id);
+  const currentDay = liveItem?.day ?? (event.status === "day2_live" ? 2 : 1);
   const dayItems = items.filter((i) => i.day === currentDay);
 
   // Find current item index within the current day's ordered items
@@ -626,6 +685,69 @@ export async function updateAgendaItemSubTimers(
 
 // ─── Update Event Status ──────────────────────────────────────────
 
+/**
+ * THE ONE RULE for "may this round go LIVE?" - do not re-implement it anywhere.
+ *
+ * A regional or national round may not start with no committees picked
+ * (Director, 2026-08-19). Allocation already refuses to run without them, so
+ * going live in that state gives a hall full of unallocated students and a
+ * Control panel with nothing to run. He chose a hard block over auto-filling
+ * the committees or merely warning.
+ *
+ * WHY THIS IS SHARED AND NOT INLINE. It first shipped inline in
+ * updateEventStatus, and review found the block was routable around:
+ * reopenLastCompletedSession writes day1_live DIRECTLY, so a chair could go
+ * startAgendaItem -> reopenLastCompletedSession and put a draft regional round
+ * live without the rule ever running. This repo has been bitten by that exact
+ * shape before - two copies of one rule drifting apart - which is why
+ * lib/yip/session-config-resolution.ts exists. EVERY route that can write
+ * day1_live must call this function.
+ *
+ * SCOPE: regional + national ONLY. Chapter rounds have run all season and must
+ * stay bit-for-bit identical, so a chapter round never blocks.
+ *
+ * FAIL OPEN on anything we cannot positively establish. Six regional rounds run
+ * 22 Aug - 8 Sep; wrongly blocking one on the morning of a round, in a full
+ * hall, is far worse than the gap this closes. So refuse ONLY when we can read
+ * that the level is regional/national AND that the committee map is empty.
+ *
+ * Returns the message to refuse with, or null to allow.
+ */
+function goLiveBlockReason(level: unknown, committeeTopics: unknown): string | null {
+  if (level !== "regional" && level !== "national") return null;
+
+  // The two shapes allocation and the walk-in actions already read: the legacy
+  // array form is a list of committee names; the current form is a
+  // { committee -> topic } map whose KEYS are the committees.
+  const raw = committeeTopics;
+  let hasCommittees: boolean;
+  if (raw === null) {
+    hasCommittees = false; // NULL column = nothing has ever been picked
+  } else if (Array.isArray(raw)) {
+    hasCommittees = raw.some((c) => String(c ?? "").trim().length > 0);
+  } else if (typeof raw === "object") {
+    hasCommittees = Object.keys(raw as Record<string, unknown>).some(
+      (k) => k.trim().length > 0
+    );
+  } else {
+    // undefined (column did not come back) or an unexpected scalar - we cannot
+    // positively say "none picked", so do not block the round.
+    hasCommittees = true;
+  }
+  if (hasCommittees) return null;
+
+  // Say only what is ENFORCED. The check inspects committee KEYS and never the
+  // topic text, so it must not tell a host to "give each one a topic" - SRTN
+  // Regional has ten committees with empty topics and passes. Sending a host
+  // hunting for a condition the code never checks costs minutes they do not
+  // have on the morning of a round.
+  return (
+    "This round has no committees selected, so students cannot be allocated and " +
+    "the Control panel has nothing to run. Open this event's Committees tab, tick " +
+    "the committees for this round, then start the round."
+  );
+}
+
 export async function updateEventStatus(
   eventId: string,
   newStatus: string
@@ -647,7 +769,7 @@ export async function updateEventStatus(
 
   const { data: event } = await supabase
     .from("events")
-    .select("status")
+    .select("status, level, committee_topics")
     .eq("id", eventId)
     .single();
 
@@ -660,6 +782,14 @@ export async function updateEventStatus(
       error: `Cannot transition from ${event.status} to ${newStatus}`,
     };
   }
+
+  // Resolved through the shared rule so every route that can write day1_live
+  // gives the same answer. See goLiveBlockReason above.
+  if (newStatus === "day1_live") {
+    const blocked = goLiveBlockReason(event.level, event.committee_topics);
+    if (blocked) return { success: false, error: blocked };
+  }
+
 
   // If going to day1_live, set the first Day 1 agenda item as current
   const updatePayload: Record<string, unknown> = { status: newStatus };
@@ -896,26 +1026,39 @@ export async function setAgendaItemScoringVoting(
     return { success: false, error: "Agenda item not found for this event." };
 
   // Item 6 guard: no scoring without criteria.
+  // Resolved through the shared rule (level-aware) so this guard agrees with
+  // what a juror will actually see — a sheet written only for chapter rounds
+  // must not let a regional session be switched on.
   if (patch.is_scoreable === true) {
-    let q = supabase
-      .from("session_parameters")
-      .select("parameters")
-      .eq("is_active", true);
-    if (item.session_key) q = q.eq("session_key", item.session_key);
-    else if (item.agenda_type) q = q.eq("agenda_type", item.agenda_type);
-    else
+    if (!item.session_key && !item.agenda_type)
       return {
         success: false,
         error:
           "Cannot score this item: it has no session key, so no criteria can be matched. Set a session key first.",
       };
-    const { data: cfg } = await q.limit(1);
-    const params = cfg?.[0]?.parameters;
+    const [{ data: sheets }, level] = await Promise.all([
+      supabase
+        .from("session_parameters")
+        .select("session_key, agenda_type, display_order, is_active, levels, parameters")
+        .eq("is_active", true),
+      fetchEventRoundLevel(supabase as never, eventId),
+    ]);
+    const cfg = resolveSessionConfig(
+      item,
+      (sheets ?? []).map((s) => ({
+        ...s,
+        display_order: Number(s.display_order) || 0,
+        is_active: s.is_active !== false,
+        levels: s.levels ?? null,
+      })),
+      level
+    );
+    const params = cfg?.parameters;
     if (!Array.isArray(params) || params.length === 0) {
       const ref = item.session_key || item.agenda_type || "(none)";
       return {
         success: false,
-        error: `Cannot turn on scoring: no criteria are configured for session "${ref}". Add criteria under Admin → Session Scoring first.`,
+        error: `Cannot turn on scoring: no criteria are configured for session "${ref}" at this round level. Add criteria under Admin → Session Scoring first.`,
       };
     }
   }

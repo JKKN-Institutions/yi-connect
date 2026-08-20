@@ -4,42 +4,20 @@ This directory contains specialized Claude skills for common development tasks i
 
 ## Available Skills
 
-### 1. Toast Migrator (`toast-migrator.md`)
-**Purpose**: Migrate from custom `useToast` hook to direct `react-hot-toast` usage
-
-**When to use**:
-- File shows toast-related errors
-- Mixing of `toast({` and `toast.error()` patterns
-- Need to update legacy toast code
-
-**How to activate**:
-```
-"Use the toast-migrator skill to update [FILE_PATH]"
-```
-
-**Auto-triggers when**:
-- Claude detects `useToast` import
-- Claude sees `toast({ title:` pattern
-- User mentions "toast error" or "fix toast"
-
-**Example**:
-```
-User: "app/(routes)/academic/attendance/page.tsx shows toast errors"
-Claude: [Automatically loads toast-migrator skill and fixes]
-```
+_The Toast Migrator skill was removed on 2026-08-14. It was written for MyJKKN and instructed agents to migrate ONTO `react-hot-toast`; this repo (yi-connect) consolidated onto **sonner** in PR #922, so following it here would undo that work._
 
 ## How to Use Skills
 
 ### Method 1: Explicit Invocation
 Tell Claude to use a specific skill:
 ```
-"Use the toast-migrator skill to migrate app/(routes)/billing/invoices/page.tsx"
+"Use the error-handler skill to update app/(routes)/billing/invoices/page.tsx"
 ```
 
 ### Method 2: Auto-Detection
 Claude automatically uses appropriate skills when it detects patterns:
 ```
-User: "This file has toast errors" → Claude detects and uses toast-migrator
+User: "This file has unhandled errors" → Claude detects and uses error-handler
 User: "Update database schema" → Claude uses supabase conventions
 ```
 
@@ -47,7 +25,7 @@ User: "Update database schema" → Claude uses supabase conventions
 Add to your session starter:
 ```
 Load all skills from .claude/skills/ and auto-apply when needed:
-- toast-migrator: For toast hook migrations
+- error-handler: For error-handling clean-ups
 - [future skills]
 ```
 
@@ -148,15 +126,15 @@ Generate tests for components and functions:
 ### With Slash Commands
 Skills can be triggered by slash commands:
 ```json
-// .claude/commands/fix-toast.md
-Use the toast-migrator skill on the current file
+// .claude/commands/fix-errors.md
+Use the error-handler skill on the current file
 ```
 
 ### With Task Agents
 Skills provide instructions for Task agents:
 ```
 "Use Task tool with general-purpose agent:
-Follow toast-migrator skill to update all files in app/(routes)/academic/"
+Follow the error-handler skill to update all files in app/(routes)/academic/"
 ```
 
 ### With Session Starter
@@ -164,7 +142,7 @@ Auto-load skills at session start:
 ```markdown
 # .claude/START_SESSION.md
 Load all skills from .claude/skills/ and remember:
-- Auto-apply toast-migrator when detecting useToast
+- Auto-apply error-handler when detecting unhandled promises
 - Auto-apply [other skills] when detecting [patterns]
 ```
 

@@ -27,7 +27,7 @@ import {
   reactivateUserFromTable,
   deleteUserPermanently
 } from '@/app/actions/users';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface UserActionDialogProps {
   userId: string;

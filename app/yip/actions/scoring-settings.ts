@@ -13,6 +13,34 @@ async function settingsClient(): Promise<SupabaseClient> {
 
 // Global scoring-rule settings (singleton). Super-admin controlled; read by the
 // results engine so no aggregation decision is hardcoded.
+//
+// DELIBERATELY NOT SCOPED BY ROUND LEVEL (2026-08). yip.session_parameters,
+// yip.scoring_buckets and the position merit table were all given a `levels`
+// scope so a regional round can be marked differently from a chapter round.
+// This table was considered and left GLOBAL on purpose:
+//
+//   • aggregation_method and normalize_per_session describe the SHAPE OF THE
+//     ARITHMETIC, not the difficulty of a round. "Every session is scored on its
+//     own rubric, normalised to a fraction of its own max, weighted, out of 90"
+//     is what a YIP score MEANS. Letting one level average and another take a
+//     weighted percentage would make two rounds' scores incomparable, which
+//     defeats the point of a national pipeline that promotes across levels.
+//     What genuinely differs between levels is the rubrics and the weights, and
+//     those are exactly what session_parameters and scoring_buckets now scope.
+//
+//   • use_bucket_model is a CUTOVER TOGGLE between two scoring engines. Scoping
+//     it would let chapter rounds run the legacy per-session model while
+//     regional rounds run the bucket model, against one results table, with no
+//     way to compare them. The toggle exists to move everyone at once.
+//
+//   • best_n only has meaning under best_n aggregation, so it follows the
+//     method.
+//
+// If this ever does need to vary, note the shape: the row is a HARD singleton
+// (id boolean PRIMARY KEY, CHECK (id)), so it cannot hold a second row without
+// dropping its primary key. Follow the overlay-table approach taken for the
+// merit points in supabase/migrations/yip_position_bonus_config_round_level.sql
+// rather than performing identity surgery on a live table.
 
 type ActionResult<T = null> =
   | { success: true; data: T }

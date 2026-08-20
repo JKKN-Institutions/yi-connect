@@ -45,7 +45,7 @@ import {
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 import { cancelBooking } from '@/app/actions/session-bookings'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import type { SessionBookingFull, BOOKING_STATUS_INFO } from '@/types/session-booking'
 
 interface BookingsListProps {

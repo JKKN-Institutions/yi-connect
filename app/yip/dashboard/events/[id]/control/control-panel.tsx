@@ -45,6 +45,7 @@ import { MissionControl } from "./mission-control";
 import { AiMomentsCard } from "./ai-moments-card";
 import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS, isPreEventLive, PRE_EVENT_STATUS_LABEL } from "@/lib/yip/constants";
+import { isBillFloorAgendaType } from "@/lib/yip/bill-sources";
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
 import { armTimerSound } from "@/lib/yip/timer-sound";
@@ -391,9 +392,7 @@ export function ControlPanel({
   // a completed row does nothing), voting + jury silently stay dark. Surface a
   // one-tap fix instead of leaving them to improvise an on-the-spot item that
   // can't render as a bill session (the Erode 2026 incident).
-  const billSession = dayItems.find(
-    (i) => i.agenda_type === "bill_presentation"
-  );
+  const billSession = dayItems.find((i) => isBillFloorAgendaType(i.agenda_type));
   const currentIdxInDay = dayItems.findIndex((i) => i.id === currentItemId);
   const billIdxInDay = billSession
     ? dayItems.findIndex((i) => i.id === billSession.id)
@@ -446,6 +445,40 @@ export function ControlPanel({
 
   const nextTransition = getNextTransition();
 
+  // ── Day-boundary signpost ────────────────────────────────────────
+  // At the end of Day 1 the live-session card empties out (advanceAgenda
+  // clears current_agenda_item_id when a day runs out), taking the "Next"
+  // button with it. The button that actually moves the house to Day 2 lives in
+  // the top bar, and nothing on screen connects the two — so a chapter can sit
+  // at the boundary believing Next is broken. This says it in words and
+  // repeats the existing transition button next to the sentence.
+  // Purely additive: it renders only when NOTHING is live, and its button
+  // performs the same confirmed status transition as the top-bar one.
+  const dayBoundary: { title: string; hint: string } | null = (() => {
+    if (currentItemId || !nextTransition) return null;
+    const day2Remaining = agendaItems.some(
+      (i) => i.day === 2 && i.status !== "completed" && i.status !== "skipped"
+    );
+    if (!day2Remaining) return null;
+    if (eventStatus === "day1_complete") {
+      return {
+        title: "Day 1 has ended — Day 2 hasn’t started yet.",
+        hint: "Press “Start Day 2” to put the first Day-2 session on the big screen.",
+      };
+    }
+    if (eventStatus === "day1_live") {
+      const day1Remaining = agendaItems.some(
+        (i) => i.day === 1 && i.status !== "completed" && i.status !== "skipped"
+      );
+      if (day1Remaining) return null;
+      return {
+        title: "Day 1 is finished — Day 2 hasn’t started yet.",
+        hint: "“Next” has nothing left to advance to on Day 1. Press “End Day 1”, then “Start Day 2”.",
+      };
+    }
+    return null;
+  })();
+
   // ─── Action handlers ──────────────────────────────────────────
 
   function handleStatusTransition(newStatus: string, label: string) {
@@ -474,7 +507,9 @@ export function ControlPanel({
         toast.success(
           result.data.nextItemId
             ? "Advanced to next agenda item"
-            : "All agenda items completed for this day"
+            : result.data.nextDayWithItems
+              ? `This day is finished — start Day ${result.data.nextDayWithItems} to continue.`
+              : "All agenda items completed for this day"
         );
       } else {
         toast.error(result.error);
@@ -1067,6 +1102,39 @@ export function ControlPanel({
         </div>
       </div>
 
+      {/* Day boundary — nothing is live and the next day is still waiting.
+          Names the button that starts it; never performs it on its own. */}
+      {dayBoundary && nextTransition && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="mt-0.5 text-lg leading-none" aria-hidden>
+                🌙
+              </span>
+              <div className="min-w-0 text-sm">
+                <p className="font-semibold text-amber-900">
+                  {dayBoundary.title}
+                </p>
+                <p className="mt-0.5 text-amber-800">{dayBoundary.hint}</p>
+              </div>
+            </div>
+            <Button
+              variant={nextTransition.variant}
+              size="sm"
+              disabled={isPending}
+              onClick={() =>
+                handleStatusTransition(
+                  nextTransition.status,
+                  nextTransition.label
+                )
+              }
+            >
+              {nextTransition.label}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Mission Control — non-blocking guided readiness board for organisers
           (additive overlay; never blocks any action). */}
       <MissionControl eventId={initialEvent.id} />
@@ -1599,8 +1667,12 @@ export function ControlPanel({
             }
           />
 
-          {/* Bill Session (for bill_presentation agenda type) */}
-          {currentAgendaItem?.agenda_type === "bill_presentation" && (
+          {/* Bill Session — both bill-floor agenda types (Bill Presentation &
+              Voting, and the Regional Round's Private Members' Bills). This is
+              the ONLY surface that puts a bill on the floor, so gating it on
+              the bare 'bill_presentation' literal left the RR PMB session with
+              no way to choose the bill being moved. */}
+          {isBillFloorAgendaType(currentAgendaItem?.agenda_type) && currentAgendaItem && (
             <BillSession
               eventId={eventId}
               agendaItemId={currentAgendaItem.id}

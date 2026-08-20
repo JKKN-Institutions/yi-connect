@@ -25,7 +25,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { submitBestPractice, reviewBestPractice } from '@/app/actions/knowledge';
 import type { BestPractice } from '@/types/knowledge';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { Loader2, Send, CheckCircle, XCircle } from 'lucide-react';
 
 interface BestPracticeActionsProps {

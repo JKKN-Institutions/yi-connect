@@ -283,8 +283,16 @@ export function DashboardShell({
 
           {/* Global search — mounted in the shell rather than on a page so it is
               reachable from every dashboard screen, and so ⌘K works anywhere.
-              The trigger owns its own dialog state. */}
-          <div className="ml-4 hidden min-w-0 flex-1 sm:block md:max-w-xs">
+              The trigger owns its own dialog state.
+
+              Organisers run events from a phone, so this must never be desktop
+              only. It was previously `hidden sm:block`, which meant the search
+              simply did not exist on a phone — reported from the field within
+              an hour of shipping. The trigger now collapses to a 44×44 icon
+              below sm and expands to the full field above it, as ONE instance:
+              rendering an icon and a box side by side would mount two palettes
+              and two ⌘K listeners. */}
+          <div className="ml-2 shrink-0 sm:ml-4 sm:min-w-0 sm:flex-1 md:max-w-xs">
             <SearchTrigger />
           </div>
 

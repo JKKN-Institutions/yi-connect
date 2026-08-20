@@ -101,15 +101,22 @@ export function SearchTrigger({
         aria-label="Search YIP"
         aria-keyshortcuts="Meta+K Control+K"
         className={cn(
-          "group flex h-9 w-full items-center gap-2 rounded-xl border border-[#1a1a3e]/10 bg-white px-3 text-left shadow-sm transition-colors hover:border-[#C2691A]/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C2691A]/25 sm:w-64",
+          // Collapses to a 44x44 icon below sm and expands to the full field
+          // above it. Organisers run events from a phone, where the 56px header
+          // has no room for a text field — but the search must still be THERE.
+          // Kept as ONE instance: rendering a separate icon trigger alongside
+          // would mount a second palette and a second Cmd-K listener.
+          "group flex items-center rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C2691A]/25",
+          "size-11 justify-center text-[#1a1a3e]/50 hover:bg-[#1a1a3e]/5 hover:text-[#C2691A]",
+          "sm:h-9 sm:w-full sm:justify-start sm:gap-2 sm:border sm:border-[#1a1a3e]/10 sm:bg-white sm:px-3 sm:text-left sm:shadow-sm sm:hover:border-[#C2691A]/40 sm:hover:bg-white sm:hover:text-inherit",
           className,
         )}
       >
         <Search
           aria-hidden="true"
-          className="size-4 shrink-0 text-[#1a1a3e]/35 transition-colors group-hover:text-[#C2691A]"
+          className="size-5 shrink-0 transition-colors sm:size-4 sm:text-[#1a1a3e]/35 sm:group-hover:text-[#C2691A]"
         />
-        <span className="flex-1 truncate text-sm text-[#1a1a3e]/40">
+        <span className="hidden flex-1 truncate text-sm text-[#1a1a3e]/40 sm:block">
           Search…
         </span>
         {/* Fixed min-width keeps the chip from resizing when the real key

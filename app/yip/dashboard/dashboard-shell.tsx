@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/yip/utils";
 import { GuideLauncher } from "@/components/yip/guide";
 import { GUIDES } from "@/lib/yip/guide/content";
+import { SearchTrigger } from "@/components/yip/search/search-trigger";
 
 const navItems = [
   { label: "My Events", href: "/yip/dashboard", icon: CalendarDays },
@@ -278,6 +279,13 @@ export function DashboardShell({
             <span className="font-[family-name:var(--font-heading)] text-[15px] font-semibold text-[#1a1a3e]">
               YIP Platform
             </span>
+          </div>
+
+          {/* Global search — mounted in the shell rather than on a page so it is
+              reachable from every dashboard screen, and so ⌘K works anywhere.
+              The trigger owns its own dialog state. */}
+          <div className="ml-4 hidden min-w-0 flex-1 sm:block md:max-w-xs">
+            <SearchTrigger />
           </div>
 
           {/* Right side */}

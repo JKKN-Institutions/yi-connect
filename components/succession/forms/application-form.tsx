@@ -28,7 +28,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { submitApplication } from '@/app/actions/succession'
 import { CreateApplicationSchema } from '@/lib/validations/succession'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 type FormData = Omit<z.infer<typeof CreateApplicationSchema>, 'member_id'>
 

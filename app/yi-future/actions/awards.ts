@@ -8,6 +8,7 @@ import type { ActionResult } from "./editions";
 import { AWARD_CATEGORIES } from "@/lib/yi-future/constants";
 import { sendPushToSubject } from "@/lib/yi-future/push";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 type AwardCategory = Database["future"]["Enums"]["award_category"];
 
@@ -85,7 +86,7 @@ export async function announceAward(
       announced_at: new Date().toISOString(),
       announced_by: userId,
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "awards.announceAward") };
 
   revalidatePath("/yi-future/chapter/final");
   revalidatePath("/yi-future/chapter/results");
@@ -131,7 +132,7 @@ export async function deleteAward(id: string): Promise<ActionResult> {
     .from("awards")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "awards.deleteAward") };
   revalidatePath("/yi-future/chapter/results");
   revalidatePath("/yi-future/host");
   return { ok: true };

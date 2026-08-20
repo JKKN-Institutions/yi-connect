@@ -7,6 +7,7 @@ import { requireFutureNationalAdmin } from "@/lib/yi-future/auth/require-access"
 import { CORE_TEAM_ROLES } from "@/lib/yi-future/constants";
 import type { Database } from "@/types/yi-future/database";
 import type { ActionResult } from "./editions";
+import { safeError } from "@/lib/yi-future/db-error";
 
 type CoreTeamRole = Database["future"]["Enums"]["user_role"];
 
@@ -52,7 +53,7 @@ export async function linkSelfToChapter(input: {
     .eq("is_active", true)
     .limit(1)
     .maybeSingle();
-  if (edErr) return { ok: false, error: edErr.message };
+  if (edErr) return { ok: false, error: safeError(edErr.message, "chapter-bootstrap.linkSelfToChapter") };
   if (!edition) {
     return {
       ok: false,
@@ -82,7 +83,7 @@ export async function linkSelfToChapter(input: {
         .from("chapter_core_team")
         .update({ is_active: true, role: input.role })
         .eq("id", row.id);
-      if (upErr) return { ok: false, error: upErr.message };
+      if (upErr) return { ok: false, error: safeError(upErr.message, "chapter-bootstrap.linkSelfToChapter") };
     }
     revalidatePath("/yi-future/chapter");
     return { ok: true, message: "Already linked." };
@@ -101,7 +102,7 @@ export async function linkSelfToChapter(input: {
       email: user.email ?? null,
       is_active: true,
     });
-  if (insErr) return { ok: false, error: insErr.message };
+  if (insErr) return { ok: false, error: safeError(insErr.message, "chapter-bootstrap.linkSelfToChapter") };
 
   revalidatePath("/yi-future/chapter");
   return { ok: true, message: "Linked. Refreshing…" };

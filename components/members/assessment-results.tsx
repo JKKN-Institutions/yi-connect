@@ -56,7 +56,7 @@ import {
   type RoadmapMilestone,
 } from '@/types/assessment'
 import { assignVertical, assignMentor, completeRoadmapMilestone } from '@/app/actions/assessments'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 
 interface AssessmentResultsProps {
   assessment: SkillWillAssessmentFull

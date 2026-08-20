@@ -13,6 +13,7 @@ import {
 } from "@/lib/yip/vote-scope";
 import { assertCheckedInForVote } from "@/lib/yip/vote-eligibility";
 import { validateVoteValue } from "@/lib/yip/vote-validate";
+import { isBillFloorAgendaType } from "@/lib/yip/bill-sources";
 import {
   getEventSchoolNumbers,
   schoolNumberOf,
@@ -460,24 +461,30 @@ export async function openVote(
     return { success: false, error: "Scores are locked — unlock scores before opening a vote." };
   }
 
-  // A Bill Vote only makes sense inside the "Bill Presentation & Voting"
-  // session: the projector's bill card and the jury's bill-session scoring
-  // both key off the LIVE agenda item being agenda_type='bill_presentation'.
-  // Opening a bill vote against any other item produces a silent split — the
-  // vote tally shows on screen but the bill and jury stay dark (the Erode
-  // 2026 incident). Refuse it here so the invariant can't be bypassed via the
-  // API; the organiser must make the Bill Presentation session live first.
+  // A Bill Vote only makes sense inside a session that puts a bill on the
+  // floor: the projector's bill card and the jury's bill-session scoring both
+  // key off the LIVE agenda item's type. Opening a bill vote against any other
+  // item produces a silent split — the vote tally shows on screen but the bill
+  // and jury stay dark (the Erode 2026 incident). Refuse it here so the
+  // invariant can't be bypassed via the API; the organiser must make a bill
+  // session live first.
+  //
+  // isBillFloorAgendaType covers BOTH bill sessions — the long-standing
+  // 'bill_presentation' and the Regional Round's 'private_members_bills'.
+  // Comparing the bare 'bill_presentation' literal made the RR Private
+  // Members' Bills session unusable: use_for_voting=true showed the organiser
+  // an "Open Bill Vote" button that this guard then always rejected.
   if (voteType === "bill_vote") {
     const { data: voteItem } = await supabase
       .from("agenda")
       .select("agenda_type")
       .eq("id", agendaItemId)
       .maybeSingle();
-    if (!voteItem || voteItem.agenda_type !== "bill_presentation") {
+    if (!voteItem || !isBillFloorAgendaType(voteItem.agenda_type)) {
       return {
         success: false,
         error:
-          "Bill voting must run inside the “Bill Presentation & Voting” session. Make that session live first, then open the vote.",
+          "Bill voting must run inside a bill session (“Bill Presentation & Voting” or “Private Members’ Bills”). Make that session live first, then open the vote.",
       };
     }
   }

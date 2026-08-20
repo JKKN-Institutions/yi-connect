@@ -11,7 +11,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { KeyRound, Loader2, RefreshCw, Send, UserPlus } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import {
   addLateAcceptance,
   regenerateAccessCode,
@@ -32,7 +32,7 @@ export function CodeActions({ enrollmentId }: { enrollmentId: string }) {
       return;
     }
     if (result.warning) {
-      toast(result.warning, { icon: "⚠️", duration: 6000 });
+      toast.warning(result.warning, { duration: 6000 });
     } else {
       toast.success("Access code re-sent by email.");
     }
@@ -55,7 +55,7 @@ export function CodeActions({ enrollmentId }: { enrollmentId: string }) {
       return;
     }
     if (result.warning) {
-      toast(result.warning, { icon: "⚠️", duration: 8000 });
+      toast.warning(result.warning, { duration: 8000 });
     } else {
       toast.success("New access code generated and emailed.");
     }

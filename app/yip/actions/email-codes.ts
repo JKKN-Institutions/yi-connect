@@ -22,6 +22,15 @@
 import { Resend } from "resend";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import {
+  committeeWhatsappFor,
+  benchWhatsappFor,
+  BENCH_LABEL,
+  isBenchSide,
+} from "@/lib/yip/whatsapp-links";
+import { isUnnamedCommittee } from "@/lib/yip/event-committees";
+import { logYipEmails, settleYipEmails } from "@/lib/yip/email-log";
+import type { YipEmailLogEntry } from "@/lib/yip/email-log";
 import type {
   YipEmailSendPlan,
   YipEmailRecipient,
@@ -36,6 +45,9 @@ type ActionResult<T = null> =
 // one API request (one request → no per-message rate-limit churn); we stay well
 // under that and let the client iterate batches so the dialog can show progress.
 const EMAIL_BATCH_MAX = 50;
+
+/** What these rows are, in yip.email_log. */
+const TRIGGER_TYPE = "access_code";
 
 const JOIN_URL = "https://yi-connect-app.vercel.app/yip/join";
 
@@ -65,6 +77,37 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+// ─── Untyped reads for the two WhatsApp columns ─────────────────────
+// yip.parties.whatsapp_invite_url and yip.events.committee_whatsapp arrive in
+// migration 20260814170000_yip_whatsapp_group_links, but types/yip/database.ts
+// is not regenerated alongside (the supabase CLI appends a version banner that
+// corrupts the generated file). Narrow, file-local accessors for just these two
+// reads — the app/yip/actions/voting.ts pattern. Everything else stays typed.
+type WaPgError = { message: string };
+type WaRows<T> = {
+  select: (cols: string) => WaRows<T>;
+  eq: (col: string, val: unknown) => WaRows<T>;
+  in: (col: string, vals: readonly unknown[]) => WaRows<T>;
+  single: () => Promise<{ data: T | null; error: WaPgError | null }>;
+  then: Promise<{ data: T[] | null; error: WaPgError | null }>["then"];
+};
+type EventWaRow = {
+  name: string | null;
+  committee_whatsapp: unknown;
+  bench_whatsapp: unknown;
+};
+type PartyWaRow = {
+  id: string;
+  name: string | null;
+  whatsapp_invite_url: string | null;
+};
+function waTable<T>(
+  sb: Awaited<ReturnType<typeof createServiceClient>>,
+  table: string
+): WaRows<T> {
+  return (sb as unknown as { from: (t: string) => WaRows<T> }).from(table);
+}
+
 // YIP-branded code email (inline styles only — email clients strip <style>).
 // Saffron header band with dark text (legible), green accent rule, big code box,
 // join CTA. Mirrors the WhatsApp message content so both channels say the same.
@@ -72,11 +115,72 @@ function renderCodeEmail(input: {
   fullName: string;
   accessCode: string;
   eventName: string;
+  /** The student's own party and committee groups, when a link is on file. */
+  partyName?: string | null;
+  partyWhatsapp?: string | null;
+  committeeLabel?: string | null;
+  committeeWhatsapp?: string | null;
+  /** The student's bench group. Null when they have no bench recorded yet. */
+  benchWhatsapp?: string | null;
+  benchSide?: "ruling" | "opposition" | null;
 }): { subject: string; html: string; text: string } {
   const name = escapeHtml(input.fullName);
   const code = escapeHtml(input.accessCode);
   const eventName = escapeHtml(input.eventName);
   const subject = `Your Young Indians Parliament login code — ${input.eventName}`;
+
+  // Group links are OPTIONAL. A student whose party or committee has no link on
+  // file still gets their code — the block is simply shorter. Never withhold
+  // the code over a missing group link (Director, 2026-08-14).
+  const groups: Array<{ label: string; url: string }> = [];
+  if (input.partyWhatsapp) {
+    groups.push({
+      label: input.partyName ? `Your party — ${input.partyName}` : "Your party",
+      url: input.partyWhatsapp,
+    });
+  }
+  if (input.committeeWhatsapp) {
+    groups.push({
+      label: input.committeeLabel
+        ? `Your committee — ${input.committeeLabel}`
+        : "Your committee",
+      url: input.committeeWhatsapp,
+    });
+  }
+  if (input.benchWhatsapp) {
+    groups.push({
+      label: isBenchSide(input.benchSide)
+        ? `Your bench — ${BENCH_LABEL[input.benchSide]}`
+        : "Your bench",
+      url: input.benchWhatsapp,
+    });
+  }
+
+  const groupsText =
+    groups.length === 0
+      ? ""
+      : `\nYOUR WHATSAPP GROUPS\n${groups
+          .map((g) => `${g.label}: ${g.url}`)
+          .join("\n")}\nJoin these so you get updates before and during the event.\n`;
+
+  const groupsHtml =
+    groups.length === 0
+      ? ""
+      : `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px;margin:20px 0">
+        <p style="margin:0 0 10px;color:#166534;font-size:14px;font-weight:600">Your WhatsApp groups</p>
+        ${groups
+          .map(
+            (g) =>
+              `<p style="margin:0 0 8px;font-size:14px"><span style="color:#4b5563">${escapeHtml(
+                g.label
+              )}</span><br><a href="${escapeHtml(
+                g.url
+              )}" style="color:#138808;font-weight:600">Join the group</a></p>`
+          )
+          .join("")}
+        <p style="margin:6px 0 0;color:#4b5563;font-size:12px">Join these so you get updates before and during the event.</p>
+      </div>`;
+
   const text = `Young Indians Parliament 2026
 ${input.eventName}
 
@@ -86,7 +190,7 @@ Your YIP login code is: ${input.accessCode}
 
 Sign in here: ${JOIN_URL}
 Open that link and enter your code to join.
-
+${groupsText}
 IMPORTANT: This code is yours alone. Do NOT share it with anyone — not classmates, friends or family. Anyone who has your code can sign in and act as you at the event.
 
 Young Indians · CII`;
@@ -107,6 +211,7 @@ Young Indians · CII`;
       </div>
       <p style="margin:28px 0 8px"><a href="${JOIN_URL}" style="display:inline-block;background:#138808;color:#ffffff;padding:13px 28px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px">Sign in to YIP</a></p>
       <p style="margin:0 0 20px;color:#6b7280;font-size:13px">Or open <a href="${JOIN_URL}" style="color:#138808">${JOIN_URL}</a> and enter your code.</p>
+      ${groupsHtml}
       <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin:0 0 4px">
         <p style="margin:0;color:#b91c1c;font-size:13px;font-weight:600">Do NOT share this code with anyone — not classmates, friends or family. Anyone who has your code can sign in and act as you at the event.</p>
       </div>
@@ -123,7 +228,17 @@ Young Indians · CII`;
 // Builds the "who will get a code" confirmation: every participant and whether
 // they have a sendable email.
 export async function getYipEmailCodePlan(
-  eventId: string
+  eventId: string,
+  /**
+   * The participants currently SHOWN on the Participants tab. When the
+   * organiser has filtered the list, only these are emailed.
+   *
+   * `undefined` means "no scoping given" → the whole event, which is the
+   * historical behaviour. An EMPTY ARRAY means "the filter matched nobody" and
+   * sends to NOBODY — the distinction matters, because treating an empty
+   * filter result as "everyone" is exactly the accident this guards against.
+   */
+  participantIds?: string[]
 ): Promise<ActionResult<YipEmailSendPlan>> {
   const access = await getYipEventAccess(eventId);
   if (!access.canManage) {
@@ -131,13 +246,64 @@ export async function getYipEmailCodePlan(
   }
 
   const supabase = await createServiceClient();
-  const { data: participants, error } = await supabase
-    .from("participants")
-    .select("id, full_name, serial_no, email, access_code")
-    .eq("event_id", eventId)
-    .order("serial_no");
 
-  if (error) return { success: false, error: error.message };
+  // Everyone in the event, so the dialog can show the filtered count against
+  // the whole — an organiser must be able to see at a glance which they are
+  // about to do.
+  const { count: eventTotal } = await supabase
+    .from("participants")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", eventId);
+
+  const scoped = participantIds !== undefined;
+  if (scoped && participantIds.length === 0) {
+    return {
+      success: true,
+      data: {
+        total: 0,
+        withEmail: 0,
+        recipients: [],
+        eventTotal: eventTotal ?? 0,
+        filtered: true,
+      },
+    };
+  }
+
+  // Chunked so a large event cannot blow the URL length limit on .in().
+  type Row = {
+    id: string;
+    full_name: string;
+    serial_no: number | null;
+    email: string | null;
+    access_code: string | null;
+  };
+  const rows: Row[] = [];
+  let error: { message: string } | null = null;
+  if (scoped) {
+    for (let i = 0; i < participantIds.length; i += 300) {
+      const { data, error: e } = await supabase
+        .from("participants")
+        .select("id, full_name, serial_no, email, access_code")
+        .eq("event_id", eventId)
+        .in("id", participantIds.slice(i, i + 300))
+        .order("serial_no");
+      if (e) {
+        error = e;
+        break;
+      }
+      rows.push(...((data ?? []) as Row[]));
+    }
+    rows.sort((a, b) => (a.serial_no ?? 0) - (b.serial_no ?? 0));
+  } else {
+    const { data, error: e } = await supabase
+      .from("participants")
+      .select("id, full_name, serial_no, email, access_code")
+      .eq("event_id", eventId)
+      .order("serial_no");
+    error = e;
+    rows.push(...((data ?? []) as Row[]));
+  }
+  const participants = rows;
 
   const recipients: YipEmailRecipient[] = (participants ?? []).map((p) => {
     const ok = isValidEmail(p.email) && !!p.access_code;
@@ -156,6 +322,8 @@ export async function getYipEmailCodePlan(
       total: recipients.length,
       withEmail: recipients.filter((r) => r.hasEmail).length,
       recipients,
+      eventTotal: eventTotal ?? recipients.length,
+      filtered: scoped && recipients.length < (eventTotal ?? 0),
     },
   };
 }
@@ -166,13 +334,20 @@ export async function getYipEmailCodePlan(
 export async function sendYipAccessCodeEmailsBatch(
   eventId: string,
   participantIds: string[]
-): Promise<ActionResult<{ results: YipEmailBatchItemResult[] }>> {
+): Promise<
+  ActionResult<{
+    results: YipEmailBatchItemResult[];
+    /** Parties/committees with no WhatsApp link on file. The codes were still
+     *  sent; this is so the organiser knows what to fill in and re-send. */
+    missingGroups: string[];
+  }>
+> {
   const access = await getYipEventAccess(eventId);
   if (!access.canManage) {
     return { success: false, error: "Not authorized to manage this event" };
   }
   if (participantIds.length === 0) {
-    return { success: true, data: { results: [] } };
+    return { success: true, data: { results: [], missingGroups: [] } };
   }
   if (participantIds.length > EMAIL_BATCH_MAX) {
     return { success: false, error: `Batch too large (max ${EMAIL_BATCH_MAX})` };
@@ -186,20 +361,50 @@ export async function sendYipAccessCodeEmailsBatch(
 
   const supabase = await createServiceClient();
 
-  const { data: event } = await supabase
-    .from("events")
-    .select("name")
+  const { data: event } = await waTable<EventWaRow>(supabase, "events")
+    .select("name, committee_whatsapp, bench_whatsapp")
     .eq("id", eventId)
     .single();
   const eventName = event?.name ?? "Young Indians Parliament";
+  const committeeWhatsapp = event?.committee_whatsapp;
+  const benchWhatsapp = event?.bench_whatsapp;
 
   const { data: participants, error } = await supabase
     .from("participants")
-    .select("id, full_name, serial_no, email, access_code")
+    .select(
+      "id, full_name, serial_no, email, access_code, party_id, committee_name, committee_number, party_side"
+    )
     .eq("event_id", eventId)
     .in("id", participantIds);
 
   if (error) return { success: false, error: error.message };
+
+  // Each student belongs to one party and one committee, each with its own
+  // WhatsApp group; the email carries whichever links exist so they get the
+  // code and both groups in one message. A missing link is NOT a reason to
+  // withhold the access code (Director's choice) — the line is simply left
+  // out, and the caller is told which parties/committees are still unlinked.
+  const partyIds = [
+    ...new Set(
+      (participants ?? [])
+        .map((p) => (p as { party_id: string | null }).party_id)
+        .filter((v): v is string => !!v)
+    ),
+  ];
+  const partyById = new Map<
+    string,
+    { name: string | null; whatsapp: string | null }
+  >();
+  if (partyIds.length > 0) {
+    const { data: parties } = await waTable<PartyWaRow>(supabase, "parties")
+      .select("id, name, whatsapp_invite_url")
+      .eq("event_id", eventId)
+      .in("id", partyIds);
+    for (const r of parties ?? []) {
+      partyById.set(r.id, { name: r.name, whatsapp: r.whatsapp_invite_url });
+    }
+  }
+  const missingGroups = new Set<string>();
 
   const results: YipEmailBatchItemResult[] = [];
   type Sendable = {
@@ -210,20 +415,73 @@ export async function sendYipAccessCodeEmailsBatch(
   };
   const sendable: Sendable[] = [];
 
+  // Students who could never be emailed are logged too — "no address on file"
+  // is the answer to half of all "I never got my code" questions.
+  const skipped: YipEmailLogEntry[] = [];
+
   for (const p of participants ?? []) {
     if (!isValidEmail(p.email) || !p.access_code) {
+      const reason = !p.access_code ? "No access code" : "No valid email";
       results.push({
         participantId: p.id,
         fullName: p.full_name,
         success: false,
-        error: !p.access_code ? "No access code" : "No valid email",
+        error: reason,
+      });
+      skipped.push({
+        eventId,
+        participantId: p.id,
+        triggerType: TRIGGER_TYPE,
+        recipientEmail: p.email ?? null,
+        recipientName: p.full_name,
+        status: "skipped",
+        error: reason,
       });
       continue;
     }
+    const party = (p as { party_id: string | null }).party_id
+      ? partyById.get((p as { party_id: string }).party_id)
+      : undefined;
+    const committeeNumber = (p as { committee_number: number | null })
+      .committee_number;
+    const committeeName = (p as { committee_name: string | null })
+      .committee_name;
+    const committeeLink = committeeWhatsappFor(
+      committeeWhatsapp,
+      committeeNumber
+    );
+    if (party && !party.whatsapp) {
+      missingGroups.add(`Party ${party.name ?? "(unnamed)"}`);
+    }
+    if (committeeName && !committeeLink) {
+      missingGroups.add(
+        committeeNumber != null ? `Committee ${committeeNumber}` : committeeName
+      );
+    }
+
     const { subject, html, text } = renderCodeEmail({
       fullName: p.full_name,
       accessCode: p.access_code,
       eventName,
+      partyName: party?.name ?? null,
+      partyWhatsapp: party?.whatsapp ?? null,
+      committeeLabel:
+        committeeName && committeeNumber != null
+          ? isUnnamedCommittee(committeeName)
+            ? committeeName
+            : `Committee ${committeeNumber} · ${committeeName}`
+          : committeeName,
+      committeeWhatsapp: committeeLink,
+      // Resolved from the student's OWN side, so a student with no bench gets
+      // no bench line rather than the wrong group.
+      benchWhatsapp: benchWhatsappFor(
+        benchWhatsapp,
+        (p as { party_side: string | null }).party_side
+      ),
+      benchSide: (p as { party_side: string | null }).party_side as
+        | "ruling"
+        | "opposition"
+        | null,
     });
     sendable.push({
       id: p.id,
@@ -233,9 +491,29 @@ export async function sendYipAccessCodeEmailsBatch(
     });
   }
 
+  await logYipEmails(supabase as never, skipped);
+
   if (sendable.length === 0) {
-    return { success: true, data: { results } };
+    return {
+      success: true,
+      data: { results, missingGroups: [...missingGroups].sort() },
+    };
   }
+
+  // Written BEFORE the provider call, so a crash or timeout mid-batch still
+  // leaves a record of who was attempted. Settled to sent/failed below.
+  const pendingIds = await logYipEmails(
+    supabase as never,
+    sendable.map((s) => ({
+      eventId,
+      participantId: s.id,
+      triggerType: TRIGGER_TYPE,
+      recipientEmail: s.email,
+      recipientName: s.fullName,
+      subjectLine: s.payload.subject,
+      status: "pending" as const,
+    }))
+  );
 
   // One batch request for all valid recipients — sidesteps the per-message
   // rate limit a sequential loop would hit. A batch-level failure marks every
@@ -247,15 +525,20 @@ export async function sendYipAccessCodeEmailsBatch(
       sendable.map((s) => s.payload)
     );
     if (batchError) {
+      const reason = batchError.message || "Email send failed";
       for (const s of sendable) {
         results.push({
           participantId: s.id,
           fullName: s.fullName,
           success: false,
-          error: batchError.message || "Email send failed",
+          error: reason,
         });
       }
-      return { success: true, data: { results } };
+      await settleYipEmails(supabase as never, pendingIds, "failed", reason);
+      return {
+      success: true,
+      data: { results, missingGroups: [...missingGroups].sort() },
+    };
     }
     for (const s of sendable) {
       results.push({
@@ -264,6 +547,7 @@ export async function sendYipAccessCodeEmailsBatch(
         success: true,
       });
     }
+    await settleYipEmails(supabase as never, pendingIds, "sent");
   } catch (e) {
     const reason = e instanceof Error ? e.message : "Email service error";
     for (const s of sendable) {
@@ -274,7 +558,11 @@ export async function sendYipAccessCodeEmailsBatch(
         error: reason,
       });
     }
+    await settleYipEmails(supabase as never, pendingIds, "failed", reason);
   }
 
-  return { success: true, data: { results } };
+  return {
+      success: true,
+      data: { results, missingGroups: [...missingGroups].sort() },
+    };
 }

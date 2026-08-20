@@ -3547,6 +3547,8 @@ export type Database = {
           participant_id: string
           position_bonus: number
           rubric_id: string
+          scored_role_source: string | null
+          scored_roles: string[] | null
           status: Database["public"]["Enums"]["score_status"] | null
           submitted_at: string | null
           total_score: number
@@ -3569,6 +3571,8 @@ export type Database = {
           occurrence?: number
           position_bonus?: number
           rubric_id: string
+          scored_role_source?: string | null
+          scored_roles?: string[] | null
           status?: Database["public"]["Enums"]["score_status"] | null
           submitted_at?: string | null
           total_score: number
@@ -3591,6 +3595,8 @@ export type Database = {
           occurrence?: number
           position_bonus?: number
           rubric_id?: string
+          scored_role_source?: string | null
+          scored_roles?: string[] | null
           status?: Database["public"]["Enums"]["score_status"] | null
           submitted_at?: string | null
           total_score?: number
@@ -3684,6 +3690,7 @@ export type Database = {
           id: string
           is_active: boolean
           label: string
+          levels: Database["public"]["Enums"]["event_level"][] | null
           lock_on_submit: boolean
           parameters: Json
           session_key: string
@@ -3698,6 +3705,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           label: string
+          levels?: Database["public"]["Enums"]["event_level"][] | null
           lock_on_submit?: boolean
           parameters?: Json
           session_key: string
@@ -3712,6 +3720,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           label?: string
+          levels?: Database["public"]["Enums"]["event_level"][] | null
           lock_on_submit?: boolean
           parameters?: Json
           session_key?: string

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { ActionResult } from "./editions";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 /**
  * Chapter-scoped gate for team mutations — a chair of chapter A must not
@@ -85,7 +86,7 @@ export async function createTeamCore(input: {
     })
     .select("id")
     .maybeSingle();
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "teams.createTeamCore") };
 
   revalidatePath("/yi-future/chapter/teams");
   return { ok: true, teamId: (inserted as { id: string } | null)?.id };
@@ -143,7 +144,7 @@ export async function updateTeamName(
     .from("teams")
     .update({ team_name, updated_at: new Date().toISOString() })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "teams.updateTeamName") };
 
   revalidatePath(`/yi-future/chapter/teams/${id}`);
   return { ok: true, message: "Team name updated." };
@@ -177,7 +178,7 @@ export async function setTeamCaptain(
     .from("teams")
     .update({ captain_id: delegateId, updated_at: new Date().toISOString() })
     .eq("id", teamId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "teams.setTeamCaptain") };
 
   // Mark member's role_in_team = "captain" for clarity
   await svc
@@ -213,7 +214,7 @@ export async function pickProblemStatement(
       updated_at: new Date().toISOString(),
     })
     .eq("id", teamId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "teams.pickProblemStatement") };
 
   revalidatePath(`/yi-future/chapter/teams/${teamId}`);
   revalidatePath("/yi-future/me/team");
@@ -233,7 +234,7 @@ export async function clearProblem(teamId: string): Promise<ActionResult> {
       updated_at: new Date().toISOString(),
     })
     .eq("id", teamId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "teams.clearProblem") };
   revalidatePath(`/yi-future/chapter/teams/${teamId}`);
   revalidatePath("/yi-future/me/team");
   return { ok: true };
@@ -249,7 +250,7 @@ export async function deleteTeam(id: string): Promise<ActionResult> {
     .from("teams")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "teams.deleteTeam") };
   revalidatePath("/yi-future/chapter/teams");
   return { ok: true, message: "Team deleted." };
 }

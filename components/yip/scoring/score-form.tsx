@@ -3,8 +3,11 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/yip/ui/button";
 import { Textarea } from "@/components/yip/ui/textarea";
-import { ROLE_LABELS, ROLE_COLORS, PARTY_COLORS } from "@/lib/yip/constants";
 import { criteriaForRole } from "@/lib/yip/rubric";
+import {
+  isRoleSplitSheet,
+  resolveRoleForSheet,
+} from "@/lib/yip/scoring-roles";
 import { saveToBuffer, getFromBuffer, removeFromBuffer } from "@/lib/yip/score-buffer";
 import { Save, Send, Loader2, CheckCircle2, MessageSquare } from "lucide-react";
 
@@ -77,6 +80,11 @@ interface ScoreFormProps {
     totalScore: number;
     comments: string;
     status: "draft" | "submitted";
+    // Role-dependent criteria: the role this delegate was marked in, and
+    // whether the judge overrode the automatic answer. Null on an unsplit
+    // sheet — nothing to record, because every criterion applied.
+    scoredRoles: string[] | null;
+    scoredRoleSource: "auto" | "override" | null;
   }) => Promise<{ success: boolean; error?: string }>;
 }
 
@@ -94,13 +102,56 @@ export function ScoreForm({
   flags,
   onSubmit,
 }: ScoreFormProps) {
-  // Role-scoped criteria (S2-5): only the criteria that apply to THIS
-  // participant's parliament role are rendered, totalled, required for submit,
-  // and included in the payload. Unrestricted criteria (no `roles`) apply to
-  // everyone; a null/unknown role sees only the unrestricted set.
+  // Role-dependent criteria: only the criteria that apply to THIS delegate are
+  // rendered, totalled, required for submit, and included in the payload — and
+  // the /max in the total banner is theirs, not the sheet's published total.
+  //
+  // A delegate carries several role slugs at once (their parliament role AND
+  // the bench they sit on), because "the presenter" and "the opposition" in a
+  // Government Bill are benches: a ruling MP and an opposition MP both have
+  // parliament_role 'mp'. See lib/yip/scoring-roles.ts.
+  //
+  // BENCH-BLIND (National Admin, 2026-08-18): "The jury need not be aware how
+  // the app evaluates ruling and opposition participants. Internally it must be
+  // linked for assessment. Only 2 attributes should be shown each time you want
+  // to score someone: Session name / A - / B -".
+  //
+  // So the resolution below still runs in full and is still recorded on the
+  // mark — it is simply never DRAWN. The juror receives the criteria that apply
+  // to the delegate in front of them and nothing that names, colours or hints
+  // at a side of the House. When the bench cannot be worked out we do NOT ask
+  // the juror to pick one (that would tell them benches exist, and a juror's
+  // guess silently changes the denominator): the mark is refused and the HOST
+  // fixes the roster — see the blocked notice below and
+  // getEventBenchReadiness() in app/yip/actions/scoring.ts.
+  const sheetIsSplit = useMemo(
+    () => isRoleSplitSheet(allCriteria),
+    [allCriteria]
+  );
+  const roleResolution = useMemo(
+    () => resolveRoleForSheet(participant, allCriteria),
+    [participant, allCriteria]
+  );
+  // Unsplit sheet (every sheet in production today) -> nothing to choose, and
+  // criteriaForRole over an untagged list returns the whole list unchanged.
+  const roleUnknown = roleResolution.needsChoice;
   const criteria = useMemo(
-    () => criteriaForRole(allCriteria, participant.parliament_role),
-    [allCriteria, participant.parliament_role]
+    () =>
+      roleUnknown
+        ? []
+        : criteriaForRole(allCriteria, roleResolution.slugs),
+    [allCriteria, roleResolution.slugs, roleUnknown]
+  );
+
+  // What every write (server submit AND the offline buffer) records about the
+  // role. Null on an unsplit sheet: no criterion was restricted, so there is no
+  // denominator to reproduce and nothing to store.
+  const scoredRolePayload = useMemo(
+    () => ({
+      scoredRoles: sheetIsSplit ? roleResolution.slugs : null,
+      scoredRoleSource: sheetIsSplit ? roleResolution.source : null,
+    }),
+    [sheetIsSplit, roleResolution]
   );
   // Why: form state must be EXACTLY the current rubric's parent keys. Stale localStorage
   // or older DB rows can carry legacy dotted sub-keys (e.g. "delivery.fluency") alongside
@@ -208,7 +259,12 @@ export function ScoreForm({
   // 0 counts). Prevents the accidental early-Submit that recorded unscored
   // criteria as 0. Save Draft is unaffected — drafts may be partial.
   const scoredCount = criteria.filter((c) => touched.has(c.key)).length;
-  const allScored = scoredCount === criteria.length;
+  // An unknown role on a split sheet yields NO criteria, and "0 of 0 scored"
+  // would otherwise read as complete and let a blank sheet be submitted. The
+  // extra clause is reachable ONLY on a split sheet (roleUnknown is false by
+  // construction on an unsplit one), so no existing round changes. Drafts stay
+  // allowed, as they always have been.
+  const allScored = scoredCount === criteria.length && !roleUnknown;
   const unscoredCount = criteria.length - scoredCount;
   const isSubmitted = existingScore?.status === "submitted";
   // lock_on_submit sessions freeze on submit: a submitted score is read-only,
@@ -242,13 +298,18 @@ export function ScoreForm({
         savedAt: new Date().toISOString(),
         status: prev?.status === "submitted" ? "submitted" : "draft",
         ...(flags ? { flags } : {}),
+        ...scoredRolePayload,
       });
     }, 500);
 
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
-  }, [scores, comments, juryAssignmentId, participant.id, rubricId, eventId, agendaItemId, totalScore, flags]);
+    // scoredRolePayload is a dependency because a judge changing the role must
+    // re-buffer under the new role — otherwise an outage would replay the mark
+    // under the role it was FIRST opened with. Extra fires are free: the
+    // dirtyRef guard above returns before any work when nothing was edited.
+  }, [scores, comments, juryAssignmentId, participant.id, rubricId, eventId, agendaItemId, totalScore, flags, scoredRolePayload]);
 
   // FLUSH-ON-UNMOUNT (BUG-393): when the organiser advances the house, the
   // jury screen auto-switches the session and remounts this form (the `key`
@@ -271,6 +332,7 @@ export function ScoreForm({
       savedAt: new Date().toISOString(),
       status: prev?.status === "submitted" ? "submitted" : "draft",
       ...(flags ? { flags } : {}),
+      ...scoredRolePayload,
     });
   };
   useEffect(() => {
@@ -308,6 +370,11 @@ export function ScoreForm({
         totalScore,
         comments,
         status,
+        // Only a split sheet has a role worth recording. On an unsplit sheet
+        // there is no restriction to reproduce, so this stays null and the
+        // engine reads the sheet's published total as the denominator — the
+        // behaviour every existing round already has.
+        ...scoredRolePayload,
       });
 
       if (result.success) {
@@ -335,6 +402,7 @@ export function ScoreForm({
         savedAt: new Date().toISOString(),
         status,
         ...(flags ? { flags } : {}),
+        ...scoredRolePayload,
       });
       setError(
         status === "submitted"
@@ -537,17 +605,15 @@ export function ScoreForm({
     );
   };
 
-  const roleLabel = participant.parliament_role
-    ? ROLE_LABELS[participant.parliament_role] ?? participant.parliament_role
-    : "Participant";
-  const roleColor = participant.parliament_role
-    ? ROLE_COLORS[participant.parliament_role] ?? "bg-gray-500 text-white"
-    : "bg-gray-500 text-white";
-  // Header tint: Ruling/Opposition keep their colour; a benchless party (side
-  // null but a party number) gets a neutral saffron tint; no party = gray.
-  const partyTint = participant.party_side
-    ? `${PARTY_COLORS[participant.party_side as keyof typeof PARTY_COLORS].bg} ${PARTY_COLORS[participant.party_side as keyof typeof PARTY_COLORS].border}`
-    : participant.party_number != null
+  // Header tint, BENCH-BLIND. This used to be PARTY_COLORS[party_side], which
+  // painted the treasury bench and the opposition bench two different colours —
+  // the side was legible at a glance even with every word about it removed. It
+  // is now ONE neutral saffron for any party affiliation (so a delegate who has
+  // been allocated still looks allocated) and gray for none. party_side is
+  // still read by the resolution above and still stored on the mark; it is only
+  // never drawn.
+  const partyTint =
+    participant.party_side || participant.party_number != null
       ? "bg-[#FF9933]/5 border-[#FF9933]/30"
       : null;
 
@@ -557,25 +623,50 @@ export function ScoreForm({
       <div
         className={`rounded-xl border-2 p-4 landscape-compact ${partyTint ?? "bg-gray-50 border-gray-200"}`}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            {/* Juror sees only the blind participant label (constituency
-                number, via juryLabel) + constituency. Real name, school, and
-                the roster serial number are intentionally never shown. */}
-            <h2 className="text-lg font-bold text-gray-900 truncate">
-              {participant.full_name}
-            </h2>
-            {participant.constituency_name && (
-              <p className="text-sm text-gray-600 mt-0.5">
-                Constituency: {participant.constituency_name}
-              </p>
-            )}
-          </div>
-          <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${roleColor}`}>
-            {roleLabel}
-          </span>
+        <div className="min-w-0">
+          {/* Juror sees only the blind participant label (constituency
+              number, via juryLabel) + constituency. Real name, school, and
+              the roster serial number are intentionally never shown.
+              The parliament-role pill that used to sit to the right of this
+              was removed on 2026-08-18: on a role-split sheet it is one half
+              of the answer to "which side is this delegate on", and the
+              National Admin's rule is that the juror is shown the session and
+              their criteria, nothing else. parliament_role is still read by
+              the resolution and still stored on the mark. */}
+          <h2 className="text-lg font-bold text-gray-900 truncate">
+            {participant.full_name}
+          </h2>
+          {participant.constituency_name && (
+            <p className="text-sm text-gray-600 mt-0.5">
+              Constituency: {participant.constituency_name}
+            </p>
+          )}
         </div>
       </div>
+
+      {/* Role-dependent criteria — BENCH-BLIND. When the sheet splits and the
+          delegate's side IS known, nothing renders here at all: the juror just
+          receives their criteria and the /max in the banner below, with no
+          label, badge or colour telling them which bench the app used.
+
+          The one thing that can appear is the BLOCKED state, and it names no
+          benches either. We do not offer the juror a side to pick — that would
+          both reveal the mechanism and let a guess silently change the
+          denominator. Instead the mark is refused and the fix is the host's:
+          the delegate has no bench on the roster, and getEventBenchReadiness()
+          in app/yip/actions/scoring.ts lists exactly who for the event
+          dashboard. On every unsplit sheet (all 13 in production today) this
+          block is absent and the screen is unchanged. */}
+      {sheetIsSplit && roleUnknown && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">This delegate can&apos;t be marked yet.</p>
+          <p className="mt-1">
+            Their record is incomplete for this session. Please tell the host —
+            they can fix it from the event dashboard and this screen will start
+            working straight away. Carry on with the next delegate meanwhile.
+          </p>
+        </div>
+      )}
 
       {/* Score Total Banner — sticky in landscape */}
       <div className="flex items-center justify-between rounded-lg bg-gray-900 px-5 py-3.5 landscape-sticky-top landscape-small-py">
@@ -718,10 +809,22 @@ export function ScoreForm({
               (tapping 0 counts). Save Draft stays available for partial sheets. */}
           {!allScored && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
-              Score all {criteria.length} criteria to submit — {unscoredCount}{" "}
-              still {unscoredCount === 1 ? "needs" : "need"} a score. Tap{" "}
-              <span className="font-semibold">0</span> if a criterion earns
-              nothing.
+              {roleUnknown ? (
+                // Bench-blind: names no side, asks the juror for no decision.
+                // The host fixes the roster; the juror moves on.
+                <>
+                  This delegate can&apos;t be marked yet — ask the host to
+                  complete their record.
+                </>
+              ) : (
+                <>
+                  Score all {criteria.length} criteria to submit —{" "}
+                  {unscoredCount} still{" "}
+                  {unscoredCount === 1 ? "needs" : "need"} a score. Tap{" "}
+                  <span className="font-semibold">0</span> if a criterion earns
+                  nothing.
+                </>
+              )}
             </div>
           )}
           <div className="flex gap-3">

@@ -27,7 +27,7 @@ import {
 import type { BestPractice } from '@/types/knowledge';
 import type { FormState } from '@/types/knowledge';
 import { z } from 'zod';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
 interface BestPracticeFormProps {

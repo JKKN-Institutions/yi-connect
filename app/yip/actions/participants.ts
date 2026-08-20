@@ -7,7 +7,13 @@ import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
 import { COMMITTEES } from "@/lib/yip/constants";
 import { getCommitteeNumbering } from "@/lib/yip/committee-number";
+import {
+  orderEventCommittees,
+  unnamedCommitteeName,
+} from "@/lib/yip/event-committees";
 import { cleanParticipantName } from "@/lib/yip/name-clean";
+import { parsePartySide, type PartySideValue } from "@/lib/yip/party-side";
+import { findOrCreatePerson } from "@/lib/yip/people/find-or-create";
 import {
   isGoIndependentClosed,
   BILL_DRAFTING_SESSION_KEY,
@@ -27,6 +33,86 @@ import type { Database } from "@/types/yip/database";
 // UI import RLS write-block.)
 
 type ParliamentRole = Database["public"]["Enums"]["parliament_role"];
+
+// ─── Person linking ────────────────────────────────────────────────
+//
+// Every participant row is one student's appearance at ONE event. The person
+// behind it lives in yip.contestants, and participants.person_id is the link
+// that lets a student's rounds add up into a career — it is what /yip/me/journey
+// ("The Record") and the admin person page read.
+//
+// findOrCreatePerson has existed since the People entity shipped but had NO
+// callers anywhere in the repo, so person_id sat at 0.9% (and 0% of real
+// students). These three create paths are the entire forward fix; promotion
+// already carries an existing person_id across rounds.
+//
+// LINKING NEVER BLOCKS A ROSTER. If resolution fails we insert the participant
+// with person_id null and move on: the student still gets their code and their
+// seat, and an unlinked row can be linked later. The reverse — refusing an
+// import because identity resolution had a bad day — would be a much worse
+// failure on an event morning.
+type PersonIdentity = {
+  full_name: string;
+  school_name?: string | null;
+  school_id?: string | null;
+  class?: number | null;
+  email?: string | null;
+  city?: string | null;
+  home_state?: string | null;
+};
+
+async function resolvePersonId(input: PersonIdentity): Promise<string | null> {
+  try {
+    const res = await findOrCreatePerson({
+      full_name: input.full_name,
+      // phone/parent_phone deliberately NOT passed — siblings at one school
+      // share a parent's number, and matching on it merges two children into
+      // one career. See findOrCreatePerson's own note.
+      email: input.email ?? null,
+      school_id: input.school_id ?? null,
+      school_name: input.school_name ?? null,
+      class: input.class ?? null,
+      city: input.city ?? null,
+      home_state: input.home_state ?? null,
+    });
+    return res.success ? res.data.id : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve many identities without firing one round trip per row.
+ *
+ * Rows that describe the same student are collapsed FIRST, so a batch resolves
+ * each person once — this both cuts the query count and removes the race where
+ * two rows for one new student each find nothing and each insert a contestant.
+ * Resolution then runs in small concurrent groups; a 200-row roster is an admin
+ * action, but doing it strictly serially would take long enough to risk the
+ * function timeout.
+ */
+async function resolvePersonIdsForBatch(
+  rows: PersonIdentity[]
+): Promise<Array<string | null>> {
+  const keyOf = (r: PersonIdentity) =>
+    r.email?.trim()
+      ? `e:${r.email.trim().toLowerCase()}`
+      : `n:${r.full_name.trim().toLowerCase()}|${(r.school_name ?? "").trim().toLowerCase()}`;
+
+  const unique = new Map<string, PersonIdentity>();
+  for (const r of rows) if (!unique.has(keyOf(r))) unique.set(keyOf(r), r);
+
+  const resolved = new Map<string, string | null>();
+  const entries = [...unique.entries()];
+  const GROUP = 8;
+  for (let i = 0; i < entries.length; i += GROUP) {
+    const group = entries.slice(i, i + GROUP);
+    const ids = await Promise.all(group.map(([, r]) => resolvePersonId(r)));
+    group.forEach(([k], j) => resolved.set(k, ids[j]));
+  }
+
+  return rows.map((r) => resolved.get(keyOf(r)) ?? null);
+}
 
 // ─── Types ─────────────────────────────────────────────────────────
 
@@ -89,6 +175,11 @@ interface ImportRow {
   // NEW — allocation columns (all optional, back-compat)
   party_letter?: string;        // "A".."Z" — case-insensitive
   party_name?: string;          // a party NAME → resolved to an EXISTING party
+  // Bench MASTER DATA — "Ruling"/"Treasury"/"Govt" or "Opposition"/"Opp",
+  // case-insensitive (see lib/yip/party-side.ts). Blank = not stated. An
+  // unrecognised value REJECTS the row; it is never defaulted, because a wrong
+  // bench means the student is marked against the wrong two criteria.
+  party_side?: string;
   constituency_name?: string;
   constituency_number?: number; // platform seat number (e.g. 101)
   constituency_state?: string;
@@ -220,12 +311,25 @@ export async function addParticipant(
         ? data.ministry ?? null
         : null;
 
+    // Link to the person behind this participant. Match on the CLEANED name so
+    // "Mr. Arun" and "Arun" resolve to one student, not two.
+    const cleanedName = cleanParticipantName(data.full_name);
+    const personId = await resolvePersonId({
+      full_name: cleanedName,
+      school_name: data.school_name || null,
+      class: data.class ?? null,
+      email: data.email || null,
+      city: data.city || null,
+      home_state: data.home_state || null,
+    });
+
     const { data: participant, error } = await supabase
       .from("participants")
       .insert({
         event_id: eventId,
         // Google-Form rosters arrive with honorifics ("Mr. Arun") — strip them.
-        full_name: cleanParticipantName(data.full_name),
+        full_name: cleanedName,
+        person_id: personId,
         school_name: data.school_name || "",
         class: data.class ?? 9,
         phone: data.phone || null,
@@ -623,12 +727,25 @@ export async function quickAddWalkIn(
     // ── Write the single participant ──
     const accessCode = await generateUniqueCode(supabase, eventId, new Set());
 
+    // A walk-in is very often a student who has played a round before, so this
+    // is the path where linking pays off most.
+    const cleanedName = cleanParticipantName(data.full_name);
+    const personId = await resolvePersonId({
+      full_name: cleanedName,
+      school_name: data.school_name?.trim() || null,
+      class: data.class ?? null,
+      email: data.email?.trim() || null,
+      city: data.city?.trim() || null,
+      home_state: data.home_state?.trim() || null,
+    });
+
     const { data: participant, error } = await supabase
       .from("participants")
       .insert({
         event_id: eventId,
         // Strip honorific prefixes ("Mr. / Dr. …") — same rule as import.
-        full_name: cleanParticipantName(data.full_name),
+        full_name: cleanedName,
+        person_id: personId,
         school_name: data.school_name?.trim() || "",
         class: data.class ?? 9,
         phone: data.phone?.trim() || null,
@@ -696,17 +813,48 @@ export async function importParticipants(
   eventId: string,
   rows: ImportRow[],
   opts?: { assignBenches?: boolean }
-): Promise<ActionResult<{ imported: number; errors: string[] }>> {
+): Promise<
+  ActionResult<{
+    imported: number;
+    errors: string[];
+    benchesSet: number;
+    benchSample: Array<{
+      full_name: string;
+      access_code: string;
+      party_side: string | null;
+    }>;
+  }>
+> {
   const access = await getYipEventAccess(eventId);
   if (!access.canManage) {
     return { success: false, error: "Not authorized to manage this event" };
   }
   const supabase = await createServiceClient();
 
-  // Committee numbers are PERMANENT global numbers (the catalogue topic_number),
-  // identical in every event — so an uploaded "6" resolves to the same committee
-  // everywhere. The committee name is filled in from that number.
-  const committeeNumbering = await getCommitteeNumbering(supabase);
+  // Committee numbers are positions WITHIN THIS EVENT — 1..N (Director,
+  // 2026-08-14). An uploaded "6" therefore means "this event's Committee 6",
+  // NOT the same committee in every event. Build the event's own name↔number
+  // map; the catalogue numbering is loaded only to order named committees in
+  // official ministry order. See lib/yip/event-committees.ts.
+  const catalogue = await getCommitteeNumbering(supabase);
+  const { data: importEvent } = await supabase
+    .from("events")
+    .select("committee_topics")
+    .eq("id", eventId)
+    .single();
+  const eventCommitteeNames = committeesFromTopics(
+    (importEvent as { committee_topics?: unknown } | null)?.committee_topics
+  );
+  const eventCommittees = orderEventCommittees(
+    eventCommitteeNames,
+    catalogue.numberByName
+  );
+  const committeeNameByNumber = new Map<number, string>(
+    eventCommittees.map((c) => [c.number, c.name])
+  );
+  const committeeNumberByName = new Map<string, number>(
+    eventCommittees.map((c) => [c.name.toLowerCase(), c.number])
+  );
 
   // Benches (government/opposition): when false, lettered parties import as a
   // FLAT house — the parties are still created (so party names show on the
@@ -718,11 +866,18 @@ export async function importParticipants(
 
   const existingCodes = new Set<string>();
   const errors: string[] = [];
+  // access_code -> the bench the organiser stated for that student. Applied
+  // AFTER the insert; see the "why not on the insert itself" note below.
+  const benchByCode = new Map<string, PartySideValue>();
 
   // ── Pre-pass: validate party_letter values & collect unique letters ──
   const uniqueLetters = new Set<string>();
   const uniquePartyNames = new Set<string>();
   const validRowIdx: number[] = [];
+  // Bench MASTER DATA supplied by the organiser, by row index. Only rows that
+  // actually stated a bench appear here — a blank cell is "not stated" and
+  // leaves the student exactly as the party-derived logic would have left them.
+  const declaredBench = new Map<number, PartySideValue>();
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
 
@@ -746,6 +901,15 @@ export async function importParticipants(
     if (row.party_name !== undefined && row.party_name.trim() !== "") {
       uniquePartyNames.add(row.party_name.trim());
     }
+    // Bench: reject an unrecognised value outright rather than importing the
+    // student with no bench (which then silently asks a juror to guess in the
+    // hall) or with a guessed one (which marks them on the wrong criteria).
+    const bench = parsePartySide(row.party_side);
+    if (!bench.ok) {
+      errors.push(`Row ${i + 1}: ${bench.error}`);
+      continue;
+    }
+    if (bench.value) declaredBench.set(i, bench.value);
     if (
       row.committee_number !== undefined &&
       row.committee_number !== null &&
@@ -864,8 +1028,10 @@ export async function importParticipants(
       }
     }
 
-    // Committee: a number is used directly; a NAME is resolved to its global
-    // number. Unmatched names are flagged and left unassigned (never created).
+    // Committee: a number is used directly; a NAME is resolved to this event's
+    // number. Both resolve against THIS EVENT's committee list, so an uploaded
+    // "6" means this event's Committee 6. Unmatched names are flagged and left
+    // unassigned (never created).
     let committee_number: number | null =
       row.committee_number !== undefined && row.committee_number !== null
         ? row.committee_number
@@ -873,17 +1039,14 @@ export async function importParticipants(
     let committee_name: string | null = row.committee_name?.trim() || null;
     if (committee_number !== null) {
       committee_name =
-        committeeNumbering.nameByNumber.get(committee_number) ??
+        committeeNameByNumber.get(committee_number) ??
         committee_name ??
-        `Committee ${committee_number}`;
+        unnamedCommitteeName(committee_number);
     } else if (committee_name) {
-      const resolved = committeeNumbering.numberByName.get(
-        committee_name.toLowerCase()
-      );
+      const resolved = committeeNumberByName.get(committee_name.toLowerCase());
       if (resolved != null) {
         committee_number = resolved;
-        committee_name =
-          committeeNumbering.nameByNumber.get(resolved) ?? committee_name;
+        committee_name = committeeNameByNumber.get(resolved) ?? committee_name;
       } else {
         errors.push(
           `Row ${i + 1}: committee "${committee_name}" not found — left unassigned. Add it on the Committees tab, then re-upload.`
@@ -894,6 +1057,12 @@ export async function importParticipants(
 
     try {
       const code = await generateUniqueCode(supabase, eventId, existingCodes);
+      // Remember the organiser's stated bench against this row's access code.
+      // The code is unique within the event and WE generate it, so it is a
+      // reliable handle on the row after insert — unlike relying on PostgREST
+      // returning inserted rows in the order we sent them.
+      const explicitBench = declaredBench.get(i);
+      if (explicitBench) benchByCode.set(code, explicitBench);
       inserts.push({
         event_id: eventId,
         // Google-Form rosters arrive with honorifics ("Mr. Arun") — strip them.
@@ -931,13 +1100,89 @@ export async function importParticipants(
     };
   }
 
+  // Link every imported row to a person, so this roster starts accumulating
+  // careers from the moment it lands. Resolved as one batch (deduped, small
+  // concurrent groups) rather than a round trip per row — see
+  // resolvePersonIdsForBatch. A null here is survivable: the student is still
+  // imported and can be linked later.
+  const personIds = await resolvePersonIdsForBatch(
+    inserts.map((r) => ({
+      full_name: r.full_name,
+      school_name: r.school_name,
+      class: r.class,
+      email: r.email,
+      city: r.city,
+      home_state: r.home_state,
+    }))
+  );
+  const insertsWithPerson = inserts.map((r, idx) => ({
+    ...r,
+    person_id: personIds[idx],
+  }));
+
   // Batch insert
   const { error: insertError } = await supabase
     .from("participants")
-    .insert(inserts);
+    .insert(insertsWithPerson);
 
   if (insertError) {
     return { success: false, error: insertError.message };
+  }
+
+  // ── Apply the organiser's stated benches (AFTER the insert, deliberately) ──
+  //
+  // WHY NOT ON THE INSERT ITSELF. yip.participants carries the live trigger
+  // trg_sync_participant_party_link, which runs BEFORE INSERT OR UPDATE OF
+  // party_number, party_id. On INSERT *every* branch of that function assigns
+  // party_side — from the matching party's side, or NULL when there is no party
+  // number or no matching party. There is no branch that preserves a bench
+  // supplied on the insert. So putting party_side in the INSERT payload would
+  // be silently discarded and would LOOK like it had worked.
+  //
+  // An UPDATE that touches only party_side does not fire that trigger at all
+  // (its column list is party_number, party_id), so the bench sticks. That is
+  // why this is a second statement rather than one column on the insert, and
+  // why we must not "simplify" it back.
+  let benchesSet = 0;
+  let benchSample: Array<{
+    full_name: string;
+    access_code: string;
+    party_side: string | null;
+  }> = [];
+  if (benchByCode.size > 0) {
+    for (const side of ["ruling", "opposition"] as const) {
+      const codes = [...benchByCode.entries()]
+        .filter(([, v]) => v === side)
+        .map(([code]) => code);
+      if (codes.length === 0) continue;
+
+      const { data: updated, error: benchErr } = await supabase
+        .from("participants")
+        .update({ party_side: side })
+        .eq("event_id", eventId)
+        .in("access_code", codes)
+        .select("full_name, access_code, party_side");
+
+      if (benchErr) {
+        // The roster is already in. Surface the bench failure loudly instead of
+        // failing the whole import — a student with no bench is recoverable
+        // from the participants screen, a lost roster on event morning is not.
+        errors.push(
+          `Benches could not be applied to ${codes.length} student(s): ${benchErr.message}. Set them on the participants screen before the round.`
+        );
+        continue;
+      }
+      benchesSet += updated?.length ?? 0;
+      benchSample = benchSample.concat((updated ?? []).slice(0, 3));
+    }
+
+    // Counts in this project have been exactly wrong before, so say so when the
+    // number written back does not match the number asked for.
+    if (benchesSet !== benchByCode.size) {
+      errors.push(
+        `Bench check: asked to set ${benchByCode.size} bench(es) but ${benchesSet} row(s) came back. Verify on the participants screen.`
+      );
+    }
   }
 
   await logAuditAction({
@@ -946,15 +1191,28 @@ export async function importParticipants(
     target_event_id: eventId,
     metadata: {
       imported: inserts.length,
+      benches_declared: benchByCode.size,
+      benches_set: benchesSet,
       attempted: rows.length,
       errors_count: errors.length,
+      // How many rows actually got linked to a person. Linking is best-effort,
+      // so this is the signal that tells us whether it is working in production
+      // without waiting for someone to notice an empty career page.
+      linked_to_person: personIds.filter(Boolean).length,
       assign_benches: assignBenches,
     },
   });
   revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
   return {
     success: true,
-    data: { imported: inserts.length, errors },
+    data: {
+      imported: inserts.length,
+      errors,
+      benchesSet,
+      // Real rows read back from the database, not a restatement of what we
+      // sent — so the organiser can eyeball that the bench actually landed.
+      benchSample,
+    },
   };
 }
 
@@ -1224,6 +1482,108 @@ export async function bulkCheckIn(
   revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
   revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: { checkedIn: participantIds.length } };
+}
+
+// ─── Bench (ruling / opposition) master data ───────────────────────
+
+/**
+ * Set — or clear — the bench for a batch of students, without re-importing.
+ *
+ * WHY THIS EXISTS. Regional scoring shows a juror only the two criteria that
+ * apply to the student in front of them, chosen from the student's bench. When
+ * the bench is unknown the juror is asked to pick, which the national admin
+ * ruled out on 18 Aug 2026 ("the jury need not be aware how the app evaluates
+ * ruling and opposition participants"). The bench therefore has to be settled
+ * before the round. Until now the only route was to give the student a party
+ * and give that PARTY a side — but imports deliberately create parties with no
+ * side, so in practice benches stayed empty.
+ *
+ * TRIGGER SAFETY — DO NOT FOLD party_number OR party_id INTO THIS UPDATE.
+ * yip.participants carries trg_sync_participant_party_link, declared BEFORE
+ * INSERT OR UPDATE **OF party_number, party_id**. Naming either of those
+ * columns in the SET list fires it, and the trigger then rewrites party_side
+ * from the party's own side (usually NULL) — silently undoing this write. An
+ * update that touches party_side alone never fires it.
+ *
+ * `side: null` clears the bench, which is a legitimate correction (a student
+ * put on the wrong bench in a hurry), so it is allowed rather than blocked.
+ */
+export async function setParticipantBenches(
+  eventId: string,
+  participantIds: string[],
+  side: PartySideValue | null
+): Promise<
+  ActionResult<{
+    updated: number;
+    requested: number;
+    remainingWithoutBench: number;
+    sample: Array<{
+      id: string;
+      full_name: string;
+      party_side: string | null;
+    }>;
+  }>
+> {
+  if (participantIds.length === 0) {
+    return { success: false, error: "No students selected" };
+  }
+  if (side !== null && side !== "ruling" && side !== "opposition") {
+    return { success: false, error: "Bench must be Ruling, Opposition, or cleared" };
+  }
+
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  const supabase = await createServiceClient();
+
+  // `.eq("event_id")` as well as `.in("id")` so a stray id from another event
+  // can never be written through this action.
+  const { data: updated, error } = await supabase
+    .from("participants")
+    .update({ party_side: side })
+    .eq("event_id", eventId)
+    .in("id", participantIds)
+    .select("id, full_name, party_side");
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  // Read the gap back from the database rather than inferring it. Counts in
+  // this project have been confidently wrong before, so the screen shows a
+  // number the database just produced, plus real rows to eyeball.
+  const { count: remaining } = await supabase
+    .from("participants")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", eventId)
+    .is("party_side", null);
+
+  await logAuditAction({
+    action_type: "update",
+    target_table: "participants",
+    target_event_id: eventId,
+    metadata: {
+      field: "party_side",
+      side: side ?? "cleared",
+      requested: participantIds.length,
+      updated: updated?.length ?? 0,
+      remaining_without_bench: remaining ?? 0,
+    },
+  });
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+
+  return {
+    success: true,
+    data: {
+      updated: updated?.length ?? 0,
+      requested: participantIds.length,
+      remainingWithoutBench: remaining ?? 0,
+      sample: (updated ?? []).slice(0, 5),
+    },
+  };
 }
 
 // ─── Get Participants ──────────────────────────────────────────────

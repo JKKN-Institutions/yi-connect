@@ -9,7 +9,7 @@ import { useState, useEffect } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import { Download, Mail, Phone, Users, Car, MoreHorizontal } from 'lucide-react';
 import { format } from 'date-fns';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

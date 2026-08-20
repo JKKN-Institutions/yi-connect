@@ -6,6 +6,7 @@ import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { requireFutureNationalAdmin } from "@/lib/yi-future/auth/require-access";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
 import type { ActionResult } from "./editions";
+import { safeError } from "@/lib/yi-future/db-error";
 
 // National-only: the chapter list is national config. createChapter,
 // updateChapter and setChapterActive all write yi.chapters via the service
@@ -33,7 +34,7 @@ export async function createChapter(
     .schema("yi")
     .from("chapters")
     .insert({ name, city, state, region, is_active: true });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "chapters.createChapter") };
 
   revalidatePath("/national/admin/chapters");
   redirect("/yi-future/national/admin/chapters");
@@ -60,7 +61,7 @@ export async function updateChapter(
     .from("chapters")
     .update({ name, city, state, region, logo_url })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "chapters.updateChapter") };
 
   revalidatePath("/national/admin/chapters");
   revalidatePath("/yi-future/chapter/setup");
@@ -116,7 +117,7 @@ export async function updateOwnChapterProfile(
       finale_end_date,
     } as never)
     .eq("id", ctx.chapterId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "chapters.updateOwnChapterProfile") };
 
   // Programme duration (30/60/90) — locked once the first phase event exists.
   const raw = String(formData.get("programme_duration_days") ?? "").trim();
@@ -135,7 +136,7 @@ export async function updateOwnChapterProfile(
         .from("chapters")
         .update({ programme_duration_days: parsed } as never)
         .eq("id", ctx.chapterId);
-      if (durErr) return { ok: false, error: durErr.message };
+      if (durErr) return { ok: false, error: safeError(durErr.message, "chapters.updateOwnChapterProfile") };
     }
   }
 
@@ -156,7 +157,7 @@ export async function setChapterActive(
     .from("chapters")
     .update({ is_active: nextActive })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "chapters.setChapterActive") };
   revalidatePath("/national/admin/chapters");
   return { ok: true };
 }

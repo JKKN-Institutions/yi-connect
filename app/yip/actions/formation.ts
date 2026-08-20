@@ -21,6 +21,7 @@ import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import {
   FORMATION_STEPS,
   FORMATION_ANCHOR_SESSION_KEY,
+  FORMATION_STEP_ROLES,
   formationStepDef,
   stepDeadlinePassed,
   isTerminalTieSession,
@@ -35,6 +36,9 @@ import {
   type FormationCloseResult,
   type FormationAnnouncement,
   type FormationAnnouncementPerson,
+  type FormationWinner,
+  type FormationBallotTally,
+  buildFormationTalliesCsv,
 } from "@/lib/yip/formation";
 import {
   openVote,
@@ -94,9 +98,19 @@ function formationStepsTable(
   );
 }
 
-// Ballot COUNTS for live turnout (never the ballots themselves). Same narrow
-// accessor pattern for yip.votes (session_id post-dates the generated types).
-type VoteLiteRow = { session_id: string | null; participant_id: string | null };
+// Ballot rows for live turnout AND the organiser's post-close tally. Same
+// narrow accessor pattern for yip.votes (session_id post-dates the generated
+// types).
+//
+// `vote_value` (the choice) is read so a CLOSED ballot can show its counts —
+// see FormationState.tallies. It is never paired with participant_id in any
+// returned shape: turnout counts distinct voters, the tally counts choices, and
+// nothing joins the two. Who voted for whom is not assembled here.
+type VoteLiteRow = {
+  session_id: string | null;
+  participant_id: string | null;
+  vote_value: string | null;
+};
 type FormationVotesTable = {
   select: (cols: string) => FormationVotesTable;
   in: (col: string, vals: readonly unknown[]) => FormationVotesTable;
@@ -314,6 +328,8 @@ export async function getFormationState(
   const sessions: Record<string, FormationSessionLite> = {};
   const voteCounts: Record<string, number> = {};
   const turnout: FormationState["turnout"] = {};
+  const winners: FormationState["winners"] = {};
+  const tallies: FormationState["tallies"] = {};
 
   if (allSessionIds.length > 0) {
     const { data: sessionRows } = await supabase
@@ -325,6 +341,7 @@ export async function getFormationState(
         partyId?: string;
         side?: "ruling" | "opposition";
         closesAt?: string;
+        candidateIds?: string[];
       };
       sessions[s.id] = {
         id: s.id,
@@ -333,13 +350,19 @@ export async function getFormationState(
         partyId: cfg.partyId ?? null,
         side: cfg.side ?? null,
         closesAt: cfg.closesAt ?? null,
+        // Who was ON the ballot, which is NOT the same as who drew a vote —
+        // the tally seeds from this so a nominee on zero still appears.
+        candidateIds: Array.isArray(cfg.candidateIds) ? cfg.candidateIds : [],
       };
     }
 
     const { data: votes } = await formationVotesTable(supabase)
-      .select("session_id, participant_id")
+      .select("session_id, participant_id, vote_value")
       .in("session_id", allSessionIds);
     const votersBySession = new Map<string, Set<string>>();
+    // session id → candidate id → count. Built from vote_value ALONE; the voter
+    // is deliberately not carried into it.
+    const choicesBySession = new Map<string, Map<string, number>>();
     for (const v of votes ?? []) {
       if (!v.session_id) continue;
       voteCounts[v.session_id] = (voteCounts[v.session_id] ?? 0) + 1;
@@ -348,6 +371,11 @@ export async function getFormationState(
         set.add(v.participant_id);
         votersBySession.set(v.session_id, set);
       }
+      if (v.vote_value) {
+        const m = choicesBySession.get(v.session_id) ?? new Map<string, number>();
+        m.set(v.vote_value, (m.get(v.vote_value) ?? 0) + 1);
+        choicesBySession.set(v.session_id, m);
+      }
     }
 
     // Per-step turnout summary (plan §3.2): party ballots partition the
@@ -355,9 +383,97 @@ export async function getFormationState(
     // step totals either way. Same eligibility rules as getFormationTurnout.
     const { data: participants } = await supabase
       .from("participants")
-      .select("id, party_id, party_side")
+      .select("id, party_id, party_side, full_name, parliament_role, constituency_number")
       .eq("event_id", eventId);
     const everyone = participants ?? [];
+
+    // Who each closed election step seated. Read from the roles people hold
+    // NOW rather than from a stored tally, so a hand-correction on Positions
+    // shows here too instead of the two screens disagreeing.
+    const nameByRole = new Map<string, string[]>();
+    for (const p of everyone) {
+      const role = (p as { parliament_role?: string | null }).parliament_role;
+      const name = (p as { full_name?: string | null }).full_name;
+      if (!role || !name) continue;
+      nameByRole.set(role, [...(nameByRole.get(role) ?? []), name]);
+    }
+    for (const [stepKey, roles] of Object.entries(FORMATION_STEP_ROLES)) {
+      const seated: FormationWinner[] = [];
+      for (const { role, label } of roles ?? []) {
+        for (const name of nameByRole.get(role) ?? []) {
+          seated.push({ label, name });
+        }
+      }
+      if (seated.length > 0) winners[stepKey as FormationStepKey] = seated;
+    }
+
+    // Party leaders hang off parties.party_leader_id, not a parliament_role.
+    const { data: partyRows } = await supabase
+      .from("parties")
+      .select("id, name, party_number, party_leader_id")
+      .eq("event_id", eventId)
+      .order("party_number");
+    const nameById = new Map(
+      everyone
+        .map((p) => [p.id, (p as { full_name?: string | null }).full_name] as const)
+        .filter((e): e is readonly [string, string] => Boolean(e[1]))
+    );
+    const leaders: FormationWinner[] = [];
+    for (const party of partyRows ?? []) {
+      const leaderName = party.party_leader_id
+        ? nameById.get(party.party_leader_id)
+        : undefined;
+      if (leaderName) leaders.push({ label: party.name, name: leaderName });
+    }
+    if (leaders.length > 0) winners.party_leader_ballots = leaders;
+
+    // Ranked counts for every CLOSED ballot. Only closed/locked steps, because
+    // showing a running tally mid-vote would let an organiser watch a live
+    // election and could influence how it is run.
+    const partyNameById = new Map((partyRows ?? []).map((p) => [p.id, p.name]));
+    const personById = new Map(everyone.map((p) => [p.id, p]));
+    for (const step of steps) {
+      if (step.status !== "closed" && step.status !== "locked") continue;
+      const ballots: FormationBallotTally[] = [];
+      for (const sessionId of step.session_ids) {
+        const counts = choicesBySession.get(sessionId) ?? new Map<string, number>();
+        // Seed every nominee at zero FIRST. Building only from cast votes drops
+        // a candidate who drew none — and a nominee who stood and got nothing
+        // is a result, not an absence. The Speaker ballot had 20 nominees and
+        // 19 with votes; the 20th used to vanish silently.
+        const withZeros = new Map<string, number>();
+        for (const id of sessions[sessionId]?.candidateIds ?? []) withZeros.set(id, 0);
+        for (const [id, n] of counts) withZeros.set(id, n);
+        const entries = [...withZeros.entries()]
+          .map(([candidateId, votesFor]) => {
+            const p = personById.get(candidateId);
+            return {
+              name:
+                (p as { full_name?: string | null } | undefined)?.full_name ??
+                "(unknown candidate)",
+              constituencyNumber:
+                (p as { constituency_number?: number | null } | undefined)
+                  ?.constituency_number ?? null,
+              partyName: p?.party_id ? (partyNameById.get(p.party_id) ?? null) : null,
+              votes: votesFor,
+              isTop: false,
+            };
+          })
+          .sort((a, b) => b.votes - a.votes || a.name.localeCompare(b.name));
+        const top = entries.length > 0 ? entries[0].votes : 0;
+        for (const e of entries) e.isTop = e.votes === top && top > 0;
+        ballots.push({
+          sessionId,
+          label: sessions[sessionId]?.partyId
+            ? (partyNameById.get(sessions[sessionId].partyId as string) ?? null)
+            : null,
+          totalVotes: entries.reduce((s, e) => s + e.votes, 0),
+          entries,
+        });
+      }
+      if (ballots.length > 0) tallies[step.step_key] = ballots;
+    }
+
     for (const step of steps) {
       if (step.session_ids.length === 0) continue;
       let eligible = 0;
@@ -393,6 +509,8 @@ export async function getFormationState(
       sessions,
       voteCounts,
       turnout,
+      winners,
+      tallies,
     },
   };
 }
@@ -1380,6 +1498,56 @@ export async function getFormationAnnouncement(
           role: "parliamentary_journalist",
         })),
       ],
+    },
+  };
+}
+
+/**
+ * The formation elections' vote counts as a CSV.
+ *
+ * Exists because the ballots are archived the moment a step closes — the counts
+ * are otherwise unrecoverable from the app, and an election result is exactly
+ * the kind of thing a chapter needs a durable record of.
+ *
+ * Totals only: one row per candidate per ballot. No voter appears anywhere in
+ * it, by construction — the tallies it renders were built from vote_value alone.
+ */
+export async function exportFormationTalliesCsv(
+  eventId: string
+): Promise<ActionResult<{ filename: string; csv: string; ballots: number }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to export this event." };
+  }
+
+  const state = await getFormationState(eventId);
+  if (!state.success) return state;
+
+  const supabase = await createServiceClient();
+  const { data: event } = await supabase
+    .from("events")
+    .select("name")
+    .eq("id", eventId)
+    .maybeSingle();
+
+  const tallies = state.data.tallies;
+  const ballots = Object.values(tallies).reduce(
+    (n, list) => n + (list?.length ?? 0),
+    0
+  );
+  if (ballots === 0) {
+    return {
+      success: false,
+      error: "No election has been closed yet, so there are no votes to export.",
+    };
+  }
+
+  return {
+    success: true,
+    data: {
+      filename: `yip-formation-votes-${eventId.slice(0, 8)}.csv`,
+      csv: buildFormationTalliesCsv(event?.name ?? "", tallies),
+      ballots,
     },
   };
 }

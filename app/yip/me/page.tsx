@@ -2,11 +2,16 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { clauseTexts } from "@/lib/yip/bill-provisions";
 import {
+  committeeWhatsappFor,
+  benchWhatsappFor,
+} from "@/lib/yip/whatsapp-links";
+import {
   isGoIndependentClosed,
   BILL_DRAFTING_SESSION_KEY,
 } from "@/lib/yip/go-independent";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { fetchCommitteeTopicForEvent } from "@/lib/yip/committee-topics";
 import {
   getEventSchoolNumbers,
   schoolNumberOf,
@@ -65,6 +70,9 @@ import { YourDayInTheHouseCard } from "./your-day-card";
 import { YourGrowthCard } from "./your-growth-card";
 import { SectionShell, SectionHeading, INK, SAFFRON, GREEN, GOLD, SERIF, inkA } from "./credential-ui";
 import { CommitteeBillsList, type DashboardCommitteeBill } from "./committee-bills-list";
+import { getMySelfNomination } from "@/app/yip/actions/self-nomination";
+import { selfNominationRoleLabels } from "@/lib/yip/self-nomination";
+import { getMyQuestionnaire } from "@/app/yip/actions/questionnaire";
 
 // ─── Session parsing ─────────────────────────────────────────────
 
@@ -258,18 +266,65 @@ export default async function ParticipantPage() {
     myBill = billData;
   }
 
+  // The student's OWN two WhatsApp groups — their party's and their
+  // committee's. Shown here as well as in the access-code email so a student
+  // who loses the email can still find their groups (Director, 2026-08-14).
+  // Only ever this student's own groups; nothing about anyone else's.
+  let partyWhatsapp: string | null = null;
+  let committeeWhatsappLink: string | null = null;
+  // The bench group, resolved from THIS student's side. A student with no bench
+  // recorded sees no bench group — never a guessed one.
+  let benchWhatsappLink: string | null = null;
+  {
+    const untyped = supabase as unknown as {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (
+            col: string,
+            v: unknown
+          ) => {
+            maybeSingle: () => Promise<{ data: Record<string, unknown> | null }>;
+          };
+        };
+      };
+    };
+    if (participant.party_id) {
+      const { data } = await untyped
+        .from("parties")
+        .select("whatsapp_invite_url")
+        .eq("id", participant.party_id)
+        .maybeSingle();
+      const v = data?.whatsapp_invite_url;
+      partyWhatsapp = typeof v === "string" && v.trim() !== "" ? v : null;
+    }
+    const { data: ev } = await untyped
+      .from("events")
+      .select("committee_whatsapp, bench_whatsapp")
+      .eq("id", event.id)
+      .maybeSingle();
+    committeeWhatsappLink = committeeWhatsappFor(
+      ev?.committee_whatsapp,
+      participant.committee_number
+    );
+    benchWhatsappLink = benchWhatsappFor(
+      ev?.bench_whatsapp,
+      participant.party_side
+    );
+  }
+
   // Committee topic + linked scheme (yip.topics catalog, same lookup as the bill
   // page) so the dashboard can show "Committee N — topic" + the scheme.
   let committeeTopic: string | null = null;
   let committeeScheme: string | null = null;
   if (participant.committee_name) {
-    const { data: ct } = await supabase
-      .from("topics")
-      .select("description, linked_scheme")
-      .eq("category", "committee")
-      .eq("title", participant.committee_name)
-      .eq("is_active", true)
-      .maybeSingle();
+    // Resolved for this event's round level: a ministry name can now be held
+    // by both a shared row and a regional-round row, and .maybeSingle() would
+    // error (and silently blank the topic) the moment two rows matched.
+    const ct = await fetchCommitteeTopicForEvent(
+      supabase as never,
+      participant.event_id,
+      participant.committee_name
+    );
     committeeTopic = ct?.description ?? null;
     committeeScheme = ct?.linked_scheme ?? null;
   }
@@ -414,6 +469,35 @@ export default async function ParticipantPage() {
     : "";
   const sessionStamp = [stampChapter, stampYear].filter(Boolean).join(" · ");
 
+  // Self-nomination window + whether this student has already put themselves
+  // forward. The action re-reads the httpOnly session cookie itself, so nothing
+  // is trusted from here. Fails CLOSED — a read error reads as "closed".
+  const selfNom = await getMySelfNomination(session.eventId);
+  const selfNomOpen = selfNom.success && selfNom.data.open;
+  const selfNomRoles =
+    selfNom.success && selfNom.data.nomination
+      ? selfNom.data.nomination.roles
+      : [];
+
+  // Selection questionnaire. Only the posts this student actually nominated for
+  // matter here, so a student who never put themselves forward sees nothing.
+  // Carries NO score — the action does not return one.
+  const qn = await getMyQuestionnaire(session.eventId);
+  const qnMine = qn.success ? qn.data.posts.filter((p) => p.nominated) : [];
+  const qnOpen = qnMine.filter((p) => p.windowOpen && !p.attempt?.submittedAt);
+  const qnInProgress = qnMine.find((p) => p.attempt && !p.attempt.submittedAt);
+  const qnSubmitted = qnMine.filter((p) => p.attempt?.submittedAt);
+  const qnLine =
+    qnInProgress && qnInProgress.attempt
+      ? `In progress — ${qnInProgress.attempt.answered} of ${qnInProgress.attempt.total} answered`
+      : qnOpen.length > 0
+        ? `${qnOpen.map((p) => p.label).join(", ")} — open now`
+        : qnSubmitted.length === qnMine.length && qnMine.length > 0
+          ? "All submitted"
+          : qnSubmitted.length > 0
+            ? `${qnSubmitted.map((p) => p.label).join(", ")} submitted`
+            : "Not open yet — watch your WhatsApp group";
+
   return (
     <div className="space-y-5">
       {/* First-entry welcome — students have no Supabase progress (access-code
@@ -446,6 +530,10 @@ export default async function ParticipantPage() {
         committeeNumber={participant.committee_number}
         committeeTopic={committeeTopic}
         committeeScheme={committeeScheme}
+        partyWhatsapp={partyWhatsapp}
+        committeeWhatsapp={committeeWhatsappLink}
+        benchWhatsapp={benchWhatsappLink}
+        benchSide={participant.party_side as "ruling" | "opposition" | null}
         sessionStamp={sessionStamp}
       />
 
@@ -844,6 +932,90 @@ export default async function ParticipantPage() {
             </div>
           </SectionShell>
         )}
+
+      {/* ─── SELF-NOMINATION (pre-event; admin-toggled window) ───────
+          Only shown when the organiser has OPENED the window, or when this
+          student already nominated. The column defaults to false on every
+          existing event, so a live chapter round mid-flight gains nothing on
+          this dashboard until an organiser deliberately switches it on. */}
+      {(selfNomOpen || selfNomRoles.length > 0) && (
+      <SectionShell accent={SAFFRON}>
+        <div className="px-5 py-4">
+          <SectionHeading
+            eyebrow="Leadership"
+            title="Self-Nomination"
+            icon={Gavel}
+            accent={SAFFRON}
+            trailing={
+              <Link
+                href="/yip/me/nominate"
+                className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
+                style={{ background: `${SAFFRON}14`, color: SAFFRON }}
+              >
+                {/* "Open" is the house CTA verb, but next to a "closed"
+                    status line it reads as the window state — so only use it
+                    when the window really is open and nothing is submitted. */}
+                {selfNomOpen && selfNomRoles.length === 0 ? "Open" : "View"}
+                <ChevronRight className="size-4" />
+              </Link>
+            }
+          />
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <span
+              className="size-1.5 shrink-0 rounded-full"
+              style={{ background: selfNomOpen ? GREEN : inkA(0.35) }}
+            />
+            <p className="text-xs" style={{ color: inkA(0.55) }}>
+              {selfNomRoles.length > 0
+                ? `You nominated for ${selfNominationRoleLabels(selfNomRoles)}`
+                : selfNomOpen
+                  ? "Nominate yourself for Administrator, Speaker and/or Party Leader"
+                  : "Nominations are closed"}
+            </p>
+          </div>
+        </div>
+      </SectionShell>
+      )}
+
+      {/* ─── SELECTION QUESTIONNAIRE (pre-event; per-post windows) ───
+          Sits directly under Self-Nomination because it is the next step of the
+          same thing. Shown ONLY to a student who actually nominated — everyone
+          else, and every event where no window was ever opened, sees nothing.
+          Carries no score: getMyQuestionnaire does not return one. */}
+      {qnMine.length > 0 && (
+      <SectionShell accent={SAFFRON}>
+        <div className="px-5 py-4">
+          <SectionHeading
+            eyebrow="Selection"
+            title="Selection Questions"
+            icon={FileText}
+            accent={SAFFRON}
+            trailing={
+              <Link
+                href="/yip/me/questionnaire"
+                className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
+                style={{ background: `${SAFFRON}14`, color: SAFFRON }}
+              >
+                {qnInProgress ? "Continue" : qnOpen.length > 0 ? "Start" : "View"}
+                <ChevronRight className="size-4" />
+              </Link>
+            }
+          />
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <span
+              className="size-1.5 shrink-0 rounded-full"
+              style={{
+                background:
+                  qnOpen.length > 0 || qnInProgress ? GREEN : inkA(0.35),
+              }}
+            />
+            <p className="text-xs" style={{ color: inkA(0.55) }}>
+              {qnLine}
+            </p>
+          </div>
+        </div>
+      </SectionShell>
+      )}
 
       {/* ─── QUESTION HOUR ────────────────────────────────────────── */}
       <SectionShell accent={SAFFRON}>

@@ -24,7 +24,7 @@ import { QRScanner } from '@/components/mobile/qr-scanner';
 import { checkInByTicketToken } from '@/app/actions/events';
 import type { TicketAttendeeProfile } from '@/types/event';
 import type { QRScanResult } from '@/types/mobile';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface ScannerClientProps {
   eventId: string;
@@ -94,7 +94,7 @@ export function ScannerClient({ eventId, initialToken }: ScannerClientProps) {
         setCount((c) => c + 1);
         toast.success(`Checked in: ${data.fullName}`);
       } else {
-        toast(`Already checked in: ${data.fullName}`, { icon: 'ℹ️' });
+        toast.info(`Already checked in: ${data.fullName}`);
       }
       setState({ kind: 'success', profile: data });
     },

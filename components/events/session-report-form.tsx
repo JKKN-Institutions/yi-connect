@@ -68,7 +68,7 @@ import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 interface SessionReportFormProps {
   eventId: string

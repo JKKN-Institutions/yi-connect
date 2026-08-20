@@ -1,0 +1,538 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import {
+  AlertCircle,
+  Check,
+  CheckCircle2,
+  Clock3,
+  Gavel,
+  Loader2,
+  Pencil,
+  Send,
+  Trash2,
+} from "lucide-react";
+import { toast } from "sonner";
+
+import { Button } from "@/components/yip/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/yip/ui/dialog";
+import {
+  SectionShell,
+  SectionHeading,
+  INK,
+  SAFFRON,
+  GREEN,
+  SERIF,
+  inkA,
+} from "../credential-ui";
+import {
+  SELF_NOMINATION_ROLES,
+  type SelfNominationRole,
+} from "@/lib/yip/self-nomination";
+import {
+  getMySelfNomination,
+  submitSelfNomination,
+  withdrawSelfNomination,
+} from "@/app/yip/actions/self-nomination";
+
+/**
+ * Student self-nomination screen (/yip/me/nominate).
+ *
+ * THREE STATES, exactly as the feature spec behaves:
+ *   FORM         — pick 1–3 roles, live counter, Submit disabled until ≥1.
+ *   CONFIRMATION — tick + the chosen roles + "Edit selection" (re-submit; the
+ *                  row is upserted, so editing is the same server call) and
+ *                  "Withdraw my nomination", which deletes the row and returns
+ *                  the student to an empty FORM. Withdraw exists because the
+ *                  role set may not be empty — without it, a student who
+ *                  changes their mind can only swap roles, never stand down,
+ *                  and the organiser would pick someone who no longer wants it.
+ *                  Both controls disappear the moment the window closes.
+ *   CLOSED       — the organiser's explicit toggle is off. A student who
+ *                  already nominated still sees their picks above the closed
+ *                  panel; only editing is taken away.
+ *
+ * Identity NEVER comes from props or the URL — every action resolves the
+ * participant from the httpOnly `yip_session` cookie server-side. `eventId` is
+ * only a scope hint; the action rejects it if it isn't the session's event.
+ *
+ * The window can be closed by the organiser WHILE this page is open. A failed
+ * submit therefore (a) toasts, (b) leaves the reason on the page next to the
+ * button — a toast alone is easy to miss on a phone — and (c) re-reads the
+ * server state so the screen flips to CLOSED rather than sitting there looking
+ * broken.
+ */
+
+type Props = {
+  eventId: string;
+  initialOpen: boolean;
+  initialRoles: SelfNominationRole[];
+  initialSubmitted: boolean;
+  /** Server-side read failure — shown verbatim; the screen fails CLOSED. */
+  loadError: string | null;
+};
+
+/**
+ * A server action can fail at the TRANSPORT layer, not just the business one:
+ * after a deploy the action endpoint this page was built against is gone, and
+ * the call rejects instead of returning { success:false }. Unhandled, that
+ * leaves the spinner clearing with nothing on screen — the student reads
+ * "nothing happened" as "it worked", which for a withdrawal is the dangerous
+ * direction. Turn every throw into the same visible failure shape.
+ */
+async function callAction<T>(
+  run: () => Promise<{ success: true; data: T } | { success: false; error: string }>
+): Promise<{ success: true; data: T } | { success: false; error: string }> {
+  try {
+    return await run();
+  } catch {
+    return {
+      success: false,
+      error:
+        "Could not reach the server. Refresh the page and check before trying again.",
+    };
+  }
+}
+
+/** Selection held in catalogue order so the UI never reorders on toggle. */
+function ordered(roles: readonly SelfNominationRole[]): SelfNominationRole[] {
+  const picked = new Set(roles);
+  return SELF_NOMINATION_ROLES.filter((r) => picked.has(r.key)).map(
+    (r) => r.key
+  );
+}
+
+export function NominateClient({
+  eventId,
+  initialOpen,
+  initialRoles,
+  initialSubmitted,
+  loadError,
+}: Props) {
+  const [open, setOpen] = useState(initialOpen);
+  const [hasSubmitted, setHasSubmitted] = useState(initialSubmitted);
+  const [submittedRoles, setSubmittedRoles] =
+    useState<SelfNominationRole[]>(initialRoles);
+  // A returning student opens straight in CONFIRMATION; a first-timer in FORM.
+  const [editing, setEditing] = useState(!initialSubmitted);
+  const [selected, setSelected] = useState<SelfNominationRole[]>(initialRoles);
+  const [error, setError] = useState<string | null>(loadError);
+  const [confirmWithdraw, setConfirmWithdraw] = useState(false);
+  const [isPending, startTransition] = useTransition();
+
+  // Closed always wins over "editing" — a stale edit view must never linger
+  // once the organiser shuts the window.
+  const showForm = open && editing;
+  const showConfirmation = hasSubmitted && !showForm;
+
+  function toggle(role: SelfNominationRole) {
+    if (isPending) return;
+    setError(null);
+    setSelected((prev) =>
+      ordered(
+        prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
+      )
+    );
+  }
+
+  function handleSubmit() {
+    if (selected.length === 0) {
+      setError("Select at least one role to nominate for.");
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const res = await callAction(() =>
+        submitSelfNomination(eventId, selected)
+      );
+      if (res.success) {
+        setSubmittedRoles(res.data.roles);
+        setSelected(res.data.roles);
+        setHasSubmitted(true);
+        setEditing(false);
+        toast.success("Nomination submitted.");
+        return;
+      }
+
+      // Keep the reason on the page AND toast it.
+      setError(res.error);
+      toast.error(res.error);
+      await resyncFromServer();
+    });
+  }
+
+  /**
+   * Pull the server's truth back after a write is REJECTED. The usual cause is
+   * the organiser closing the window mid-session, and the screen has to flip to
+   * CLOSED rather than sit there looking broken. Also covers the row having
+   * been withdrawn from another device.
+   */
+  async function resyncFromServer() {
+    const fresh = await callAction(() => getMySelfNomination(eventId));
+    if (!fresh.success) return;
+    setOpen(fresh.data.open);
+    if (fresh.data.nomination) {
+      setHasSubmitted(true);
+      setSubmittedRoles(fresh.data.nomination.roles);
+    } else {
+      setHasSubmitted(false);
+      setSubmittedRoles([]);
+    }
+  }
+
+  function handleWithdraw() {
+    setConfirmWithdraw(false);
+    setError(null);
+    startTransition(async () => {
+      const res = await callAction(() => withdrawSelfNomination(eventId));
+      if (res.success) {
+        setSubmittedRoles([]);
+        setSelected([]);
+        setHasSubmitted(false);
+        setEditing(true); // straight back to an empty form
+        toast.success("Nomination withdrawn.");
+        return;
+      }
+
+      setError(res.error);
+      toast.error(res.error);
+      await resyncFromServer();
+    });
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* ─── HEADER ────────────────────────────────────────────── */}
+      <SectionShell accent={SAFFRON}>
+        <div className="px-5 py-4">
+          <SectionHeading
+            eyebrow="Leadership"
+            title="Self-Nomination"
+            icon={Gavel}
+            accent={SAFFRON}
+            trailing={
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em]"
+                style={{
+                  background: open ? `${GREEN}14` : inkA(0.06),
+                  color: open ? GREEN : inkA(0.55),
+                }}
+              >
+                <span
+                  className="size-1.5 rounded-full"
+                  style={{ background: open ? GREEN : inkA(0.35) }}
+                />
+                {open ? "Open now" : "Closed"}
+              </span>
+            }
+          />
+          <p className="mt-1.5 text-xs" style={{ color: inkA(0.55) }}>
+            Put yourself forward for Administrator, Speaker and/or Party Leader.
+          </p>
+        </div>
+      </SectionShell>
+
+      {/* ─── ERROR (stays visible — a toast is missable on a phone) ─ */}
+      {error && (
+        <div
+          className="flex items-start gap-2.5 rounded-xl px-4 py-3"
+          style={{ background: "#fef2f2", border: "1px solid #fecaca" }}
+          role="alert"
+        >
+          <AlertCircle className="mt-0.5 size-4 shrink-0 text-red-600" />
+          <p className="text-xs leading-relaxed text-red-700">{error}</p>
+        </div>
+      )}
+
+      {/* ─── CONFIRMATION ──────────────────────────────────────── */}
+      {showConfirmation && (
+        <SectionShell accent={GREEN}>
+          <div className="px-5 py-5">
+            <div className="flex items-center gap-3">
+              <span
+                className="flex size-11 shrink-0 items-center justify-center rounded-full"
+                style={{ background: `${GREEN}14` }}
+              >
+                <CheckCircle2 className="size-6" style={{ color: GREEN }} />
+              </span>
+              <div className="min-w-0">
+                <h2
+                  className="text-[17px] font-semibold leading-snug"
+                  style={{ ...SERIF, color: INK }}
+                >
+                  Nomination Submitted
+                </h2>
+                <p className="mt-0.5 text-xs" style={{ color: inkA(0.55) }}>
+                  {open
+                    ? "You're in the running for the role(s) below. You can still edit this until Admin closes the session."
+                    : "Nominations are closed. This is the selection the organiser has for you."}
+                </p>
+              </div>
+            </div>
+
+            <ul className="mt-4 space-y-2">
+              {SELF_NOMINATION_ROLES.filter((r) =>
+                submittedRoles.includes(r.key)
+              ).map((role) => (
+                <li
+                  key={role.key}
+                  className="flex items-start gap-2.5 rounded-xl px-3.5 py-3"
+                  style={{
+                    background: `${GREEN}0a`,
+                    border: `1px solid ${GREEN}2e`,
+                  }}
+                >
+                  <Check
+                    className="mt-0.5 size-4 shrink-0"
+                    style={{ color: GREEN }}
+                  />
+                  <div className="min-w-0">
+                    <p
+                      className="text-[15px] font-semibold leading-snug"
+                      style={{ ...SERIF, color: INK }}
+                    >
+                      {role.label}
+                    </p>
+                    <p
+                      className="mt-0.5 text-xs leading-relaxed"
+                      style={{ color: inkA(0.6) }}
+                    >
+                      {role.description}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            {open && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    setSelected(submittedRoles);
+                    setEditing(true);
+                  }}
+                  disabled={isPending}
+                  className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition-colors active:translate-y-px disabled:opacity-50"
+                  style={{ background: `${SAFFRON}14`, color: SAFFRON }}
+                >
+                  <Pencil className="size-4" />
+                  Edit selection
+                </button>
+
+                {/* Standing down entirely. Deliberately quieter than Edit —
+                    it is the rarer, destructive choice. */}
+                <button
+                  type="button"
+                  onClick={() => setConfirmWithdraw(true)}
+                  disabled={isPending}
+                  className="mt-2 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl px-4 text-xs font-medium transition-colors active:translate-y-px disabled:opacity-50"
+                  style={{ color: "#b91c1c" }}
+                >
+                  {isPending ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="size-3.5" />
+                  )}
+                  Withdraw my nomination
+                </button>
+              </>
+            )}
+          </div>
+        </SectionShell>
+      )}
+
+      {/* ─── FORM ──────────────────────────────────────────────── */}
+      {showForm && (
+        <SectionShell accent={SAFFRON}>
+          <div className="px-5 py-5">
+            <h2
+              className="text-[16px] font-semibold leading-snug"
+              style={{ ...SERIF, color: INK }}
+            >
+              Select the role(s) you want to contest for.
+            </h2>
+            <p
+              className="mt-1.5 text-xs leading-relaxed"
+              style={{ color: inkA(0.6) }}
+            >
+              You may select one, two, or all three — this is a shared
+              nomination window for all three roles.
+            </p>
+
+            <div className="mt-4 space-y-2.5">
+              {SELF_NOMINATION_ROLES.map((role) => {
+                const isOn = selected.includes(role.key);
+                return (
+                  <label
+                    key={role.key}
+                    className="flex min-h-[64px] cursor-pointer items-start gap-3 rounded-xl px-3.5 py-3.5 transition-colors"
+                    style={{
+                      border: `1.5px solid ${isOn ? SAFFRON : inkA(0.1)}`,
+                      background: isOn ? `${SAFFRON}0f` : "#ffffff",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      className="sr-only"
+                      checked={isOn}
+                      disabled={isPending}
+                      onChange={() => toggle(role.key)}
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md transition-colors"
+                      style={{
+                        border: `1.5px solid ${isOn ? SAFFRON : inkA(0.2)}`,
+                        background: isOn ? SAFFRON : "transparent",
+                      }}
+                    >
+                      {isOn && <Check className="size-4 text-white" />}
+                    </span>
+                    <span className="min-w-0">
+                      <span
+                        className="block text-[15px] font-semibold leading-snug"
+                        style={{ ...SERIF, color: INK }}
+                      >
+                        {role.label}
+                      </span>
+                      <span
+                        className="mt-0.5 block text-xs leading-relaxed"
+                        style={{ color: inkA(0.6) }}
+                      >
+                        {role.description}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+
+            {/* Live counter */}
+            <p
+              className="mt-3.5 text-center text-xs font-medium"
+              aria-live="polite"
+              style={{ color: selected.length === 0 ? inkA(0.5) : SAFFRON }}
+            >
+              {selected.length === 0
+                ? "No roles selected yet"
+                : `${selected.length} of 3 roles selected`}
+            </p>
+
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={selected.length === 0 || isPending}
+              className="mt-3 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-white shadow-sm transition-all active:translate-y-px disabled:cursor-not-allowed disabled:opacity-45"
+              style={{ background: SAFFRON }}
+            >
+              {isPending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Submitting…
+                </>
+              ) : (
+                <>
+                  <Send className="size-4" />
+                  {hasSubmitted ? "Save Selection" : "Submit Nomination"}
+                </>
+              )}
+            </button>
+
+            <p
+              className="mt-2.5 text-center text-[11px] leading-relaxed"
+              style={{ color: inkA(0.45) }}
+            >
+              You can change your selection any time before Admin closes the
+              session.
+            </p>
+
+            {hasSubmitted && (
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setSelected(submittedRoles);
+                  setEditing(false);
+                }}
+                disabled={isPending}
+                className="mt-2 min-h-[44px] w-full rounded-xl text-xs font-medium disabled:opacity-50"
+                style={{ color: inkA(0.5) }}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </SectionShell>
+      )}
+
+      {/* ─── CLOSED ────────────────────────────────────────────── */}
+      {!open && (
+        <SectionShell accent={inkA(0.25)}>
+          <div className="px-5 py-5">
+            <div className="flex items-center gap-3">
+              <span
+                className="flex size-11 shrink-0 items-center justify-center rounded-full"
+                style={{ background: inkA(0.06) }}
+              >
+                <Clock3 className="size-6" style={{ color: inkA(0.5) }} />
+              </span>
+              <h2
+                className="text-[17px] font-semibold leading-snug"
+                style={{ ...SERIF, color: INK }}
+              >
+                Self-Nomination Closed
+              </h2>
+            </div>
+            <p
+              className="mt-3 text-sm leading-relaxed"
+              style={{ color: inkA(0.65) }}
+            >
+              Admin has closed the session. If you nominated, check your
+              Party/Committee WhatsApp group for next steps. If you didn&apos;t,
+              you&apos;ll remain a Regular MP.
+            </p>
+          </div>
+        </SectionShell>
+      )}
+
+      {/* ─── WITHDRAW CONFIRMATION ─────────────────────────────── */}
+      <Dialog open={confirmWithdraw} onOpenChange={setConfirmWithdraw}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Withdraw your nomination?</DialogTitle>
+            <DialogDescription>
+              Your name comes off the organiser&apos;s list and you will not be
+              considered for any of the roles you picked. You can nominate again
+              while the session is still open.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmWithdraw(false)}
+              disabled={isPending}
+            >
+              Keep my nomination
+            </Button>
+            <Button
+              onClick={handleWithdraw}
+              disabled={isPending}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              {isPending ? "Withdrawing…" : "Yes, withdraw"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

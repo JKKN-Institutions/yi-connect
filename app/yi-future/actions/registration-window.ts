@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { checkWaitlistAbuse } from "@/lib/yi-future/waitlist-guard";
 import { requirePlatformAdmin } from "./national-admins";
+import { safeError } from "@/lib/yi-future/db-error";
 
 export type SaveWindowResult =
   | { ok: true; message: string }
@@ -29,7 +30,7 @@ export async function saveRegistrationWindow(
     .from("editions")
     .update({ registration_closed: closed } as never)
     .eq("id", editionId);
-  if (updErr) return { ok: false, error: updErr.message };
+  if (updErr) return { ok: false, error: safeError(updErr.message, "registration-window.saveRegistrationWindow") };
 
   // Replace the exception list wholesale — it is tiny (≤65 chapters) and a
   // full swap keeps the saved state exactly what the admin sees on screen.
@@ -40,7 +41,7 @@ export async function saveRegistrationWindow(
     .from("registration_open_chapters")
     .delete()
     .eq("edition_id", editionId);
-  if (delErr) return { ok: false, error: delErr.message };
+  if (delErr) return { ok: false, error: safeError(delErr.message, "registration-window.saveRegistrationWindow") };
 
   const uniqueIds = Array.from(new Set(openChapterIds.filter(Boolean)));
   if (closed && uniqueIds.length > 0) {
@@ -48,7 +49,7 @@ export async function saveRegistrationWindow(
       .schema("future")
       .from("registration_open_chapters")
       .insert(uniqueIds.map((chapter_id) => ({ edition_id: editionId, chapter_id })));
-    if (insErr) return { ok: false, error: insErr.message };
+    if (insErr) return { ok: false, error: safeError(insErr.message, "registration-window.saveRegistrationWindow") };
   }
 
   revalidatePath("/yi-future/join");

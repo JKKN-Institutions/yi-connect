@@ -208,6 +208,12 @@ export type FormationSessionLite = {
   partyId: string | null;
   side: "ruling" | "opposition" | null;
   closesAt: string | null;
+  /**
+   * Who was ON this ballot, from the session's own config — NOT who drew a
+   * vote. The tally seeds from this so a nominee on zero votes still appears;
+   * standing and getting nothing is a result, not an absence.
+   */
+  candidateIds: string[];
 };
 
 export type FormationState = {
@@ -229,6 +235,162 @@ export type FormationState = {
    * partition the electorate, so per-session sums are step totals.
    */
   turnout: Partial<Record<FormationStepKey, { eligible: number; voted: number }>>;
+  /**
+   * Who each election step actually seated, so a closed step can say so.
+   *
+   * Before this the console reported only "155/196 voted" and never named the
+   * winner. The result WAS recorded correctly — roles are written at reveal —
+   * but an organiser had to leave the page for Positions or the Oath
+   * Announcement to find out who had won the election they had just run, which
+   * reads as "nothing happened".
+   *
+   * Read from the CURRENT holders of the roles a step seats, not from a stored
+   * tally, so a later hand-correction on Positions shows here too instead of
+   * leaving two screens disagreeing about who the Speaker is.
+   */
+  winners: Partial<Record<FormationStepKey, FormationWinner[]>>;
+  /**
+   * Every closed ballot's ranked vote counts, for the organiser to read.
+   *
+   * Closing a step reveals the result and then IMMEDIATELY archives the session
+   * (clearVoteResults), because a revealed ballot otherwise stays pinned to the
+   * participants' screens. 'archived' is a terminal, non-displayed status — so
+   * before this the counts vanished from the app the instant a step closed, and
+   * the only function that could return them (getVoteResults) had never been
+   * wired to a screen.
+   *
+   * Organiser-only, and totals only: who voted for whom is never assembled here.
+   */
+  tallies: Partial<Record<FormationStepKey, FormationBallotTally[]>>;
+};
+
+/** One seat filled by an election step. */
+export type FormationWinner = {
+  /** The post, e.g. "Speaker", "Deputy Speaker", "Party C". */
+  label: string;
+  name: string;
+};
+
+/** One candidate's line in a closed ballot's tally. */
+export type FormationTallyEntry = {
+  name: string;
+  constituencyNumber: number | null;
+  partyName: string | null;
+  votes: number;
+  /** Level with the highest count in this ballot — plural on a tie. */
+  isTop: boolean;
+};
+
+/**
+ * One closed ballot's result, ranked highest first.
+ *
+ * A party-leader step opens one of these PER PARTY, so `label` carries the party
+ * name; House-wide (Speaker) and bench (PM / LoP) ballots leave it null.
+ *
+ * `isTop` marks whoever is level on the highest count. It does NOT decide the
+ * seat — who actually won is `FormationState.winners`, read from the roles
+ * written at reveal. Keeping the two separate means this view never
+ * re-implements computeElectionOutcome and so can never quietly disagree with
+ * it: a runoff, a tie-break or a hand-correction shows up in `winners` while the
+ * raw counts here stay exactly what was cast.
+ */
+export type FormationBallotTally = {
+  sessionId: string;
+  label: string | null;
+  totalVotes: number;
+  entries: FormationTallyEntry[];
+};
+
+/**
+ * The tallies as a CSV an organiser can keep or hand on.
+ *
+ * One row per candidate per ballot. Ballots that produced no votes are still
+ * listed, with a zero row, so an empty ballot cannot be mistaken for a missing
+ * one. Rank restarts within each ballot; ties share a rank.
+ */
+export function buildFormationTalliesCsv(
+  eventName: string,
+  tallies: Partial<Record<FormationStepKey, FormationBallotTally[]>>
+): string {
+  const esc = (v: unknown): string => {
+    const s = v == null ? "" : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines: string[] = [
+    ["Event", "Election", "Ballot", "Rank", "Candidate", "Constituency", "Party", "Votes", "Share %"]
+      .map(esc)
+      .join(","),
+  ];
+
+  for (const def of FORMATION_STEPS) {
+    for (const ballot of tallies[def.key] ?? []) {
+      if (ballot.entries.length === 0) {
+        lines.push(
+          [eventName, def.label, ballot.label ?? "All members", "", "(no votes cast)", "", "", 0, ""]
+            .map(esc)
+            .join(",")
+        );
+        continue;
+      }
+      let rank = 0;
+      let lastVotes: number | null = null;
+      ballot.entries.forEach((e, i) => {
+        // Ties share a rank; the next distinct count skips ahead (1,2,2,4).
+        if (lastVotes === null || e.votes !== lastVotes) rank = i + 1;
+        lastVotes = e.votes;
+        const share =
+          ballot.totalVotes > 0
+            ? Math.round((e.votes / ballot.totalVotes) * 1000) / 10
+            : 0;
+        lines.push(
+          [
+            eventName,
+            def.label,
+            ballot.label ?? "All members",
+            rank,
+            e.name,
+            e.constituencyNumber ?? "",
+            e.partyName ?? "",
+            e.votes,
+            share,
+          ]
+            .map(esc)
+            .join(",")
+        );
+      });
+    }
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * The parliament_role values each election step seats.
+ *
+ * The Speaker ballot's runner-up becomes Deputy Speaker (see the ballot
+ * subtitle in app/yip/actions/voting.ts), so both belong to step 2.
+ * party_leader_ballots is deliberately absent: its winners hang off
+ * parties.party_leader_id rather than a parliament_role, and are resolved
+ * separately.
+ *
+ * A role listed here that nobody holds is simply not shown — these are the
+ * seats a step CAN fill, not seats it must have filled.
+ */
+export const FORMATION_STEP_ROLES: Partial<
+  Record<FormationStepKey, { role: string; label: string }[]>
+> = {
+  speaker_ballot: [
+    { role: "speaker", label: "Speaker" },
+    { role: "deputy_speaker", label: "Deputy Speaker" },
+  ],
+  pm_ballot: [
+    { role: "prime_minister", label: "Prime Minister" },
+    { role: "deputy_prime_minister", label: "Deputy Prime Minister" },
+  ],
+  lop_ballot: [
+    { role: "leader_of_opposition", label: "Leader of Opposition" },
+    { role: "coalition_leader", label: "Coalition Leader" },
+  ],
 };
 
 export type FormationPendingParticipant = {

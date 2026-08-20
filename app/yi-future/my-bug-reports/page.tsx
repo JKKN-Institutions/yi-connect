@@ -24,13 +24,29 @@ type UserContext = {
 // layout suppresses its own widget on this route (see bug-reporter-wrapper.tsx)
 // so there is exactly one floating button on the page.
 //
-// Visible to anyone signed-in; the underlying API filters by reporter_email
-// server-side via the user context attached below.
+// Visible to anyone signed-in.
+//
+// ⚠️ KNOWN BROKEN in @boobalan_jkkn/bug-reporter-sdk@1.1.0 (audited 2026-08-14).
+// The previous note here claimed "the underlying API filters by reporter_email
+// server-side via the user context attached below". That is FALSE for this SDK
+// version: getMyBugReports() sends only page/limit/status/category/search and
+// never sends reporter_email, so the API answers HTTP 400 "reporter_email is
+// required" and MyBugsPanel can only ever render its error state. Verified with
+// a live read-only GET. Fix belongs upstream in the SDK (append
+// config.userContext.email in getMyBugReports), not here.
+//
+// Also note: this page nests its own BugReporterProvider inside the layout's,
+// and the SDK mounts its react-hot-toast <Toaster> OUTSIDE its `enabled` gate,
+// so two toast roots exist on this route and SDK toasts render twice here. That
+// is cosmetic, confined to this page, and also only fixable upstream.
 export default function MyBugReportsPage() {
   const apiKey = process.env.NEXT_PUBLIC_BUG_REPORTER_API_KEY;
   const apiUrl = process.env.NEXT_PUBLIC_BUG_REPORTER_API_URL;
 
   const [user, setUser] = useState<UserContext | undefined>(undefined);
+  // Distinguishes "still asking Supabase" from "asked, and there is nobody".
+  // Without it an admin would see the signed-out notice flash before the panel.
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -46,6 +62,7 @@ export default function MyBugReportsPage() {
           email: data.user.email ?? "",
         });
       }
+      setAuthChecked(true);
     });
 
     const {
@@ -93,6 +110,25 @@ export default function MyBugReportsPage() {
             <p className="text-sm text-navy/60">
               Bug reporting is not configured in this environment.
             </p>
+          ) : !authChecked ? (
+            <p className="text-sm text-navy/60">Checking your access…</p>
+          ) : !user ? (
+            /* Signed-in admins only (Director, 2026-08-14) — see the note in
+               components/yi-future/bug-reporter-wrapper.tsx. This page mounts
+               its own provider, so without this gate it would hand a working
+               bug widget, screenshot capture and all, to any visitor who typed
+               the URL — including a delegate. Say so explicitly rather than
+               redirecting to a landing page. */
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-navy">
+                Bug reporting is for signed-in Yi-Future admins.
+              </p>
+              <p className="text-sm text-navy/60">
+                If you joined with an access code, there is nothing to show here.
+                Report a problem to your chapter team instead and they will raise
+                it for you.
+              </p>
+            </div>
           ) : (
             <BugReporterProvider
               apiKey={apiKey}

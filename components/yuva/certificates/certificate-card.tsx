@@ -8,7 +8,7 @@
 
 import { useState } from "react";
 import { Award, Ban, Download, Loader2 } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { getMyCertificateUrl } from "@/app/youth-academy/actions/certificates";
 import { Button } from "@/components/ui/button";
 

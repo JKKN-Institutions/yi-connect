@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { requireFutureNationalAdmin } from "@/lib/yi-future/auth/require-access";
 import type { ActionResult } from "./editions";
+import { safeError } from "@/lib/yi-future/db-error";
 
 // ─── auth ───────────────────────────────────────────────────────────
 // National-only: government MoU data is national config. Re-gates all 5
@@ -98,7 +99,7 @@ export async function createPartnership(
     .select("id")
     .single();
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "gov-partnerships.createPartnership") };
 
   revalidatePath("/national/admin/government");
   if (data?.id) redirect(`/national/admin/government/${data.id}`);
@@ -152,7 +153,7 @@ export async function updatePartnership(
     })
     .eq("id", id);
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "gov-partnerships.updatePartnership") };
 
   revalidatePath("/national/admin/government");
   revalidatePath(`/national/admin/government/${id}`);
@@ -169,7 +170,7 @@ export async function deletePartnership(
     .from("government_partnerships")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "gov-partnerships.deletePartnership") };
   revalidatePath("/national/admin/government");
   redirect("/yi-future/national/admin/government");
 }
@@ -210,7 +211,7 @@ export async function logContact(
       logged_by: userId,
     });
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "gov-partnerships.logContact") };
 
   revalidatePath(`/national/admin/government/${partnershipId}`);
   redirect(`/national/admin/government/${partnershipId}`);
@@ -227,7 +228,7 @@ export async function deleteContactLog(
     .from("government_contact_log")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "gov-partnerships.deleteContactLog") };
   revalidatePath(`/national/admin/government/${partnershipId}`);
   return { ok: true, message: "Contact log entry removed." };
 }

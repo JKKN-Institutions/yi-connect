@@ -39,11 +39,24 @@ export function ParticipantProfileClient({
   eventId,
   eventName,
   profile,
+  variant = "page",
 }: {
   eventId: string;
   eventName: string;
   profile: ParticipantProfile;
+  /**
+   * "page"   — the standalone /participants/[participantId] route: centred,
+   *            page padding, and a "Back to participants" link.
+   * "dialog" — the same profile shown inside a popup. Drops the page wrapper
+   *            and the Back link, because the dialog's own close button is the
+   *            way out and a "Back to participants" link inside a popup opened
+   *            FROM a table would navigate the page out from under it.
+   * Deliberately the same component either way, so the popup can never drift
+   * from the page it is meant to mirror.
+   */
+  variant?: "page" | "dialog";
 }) {
+  const inDialog = variant === "dialog";
   const { participant: p, contestant, crossLevel, canManage } = profile;
   const place = [p.city, p.home_state].filter(Boolean).join(", ");
   // Benchless (party_side null) still has a party letter — neutral saffron chip.
@@ -56,15 +69,23 @@ export function ParticipantProfileClient({
         : "";
 
   return (
-    <div className="max-w-[1100px] mx-auto px-6 py-6 space-y-6">
-      {/* Back */}
-      <Link
-        href={`/yip/dashboard/events/${eventId}/participants`}
-        className="inline-flex items-center gap-1.5 text-sm text-[#1a1a3e]/60 hover:text-[#1a1a3e]"
-      >
-        <ArrowLeft className="size-4" />
-        Back to participants
-      </Link>
+    <div
+      className={
+        inDialog
+          ? "space-y-6"
+          : "max-w-[1100px] mx-auto px-6 py-6 space-y-6"
+      }
+    >
+      {/* Back — page only. */}
+      {!inDialog && (
+        <Link
+          href={`/yip/dashboard/events/${eventId}/participants`}
+          className="inline-flex items-center gap-1.5 text-sm text-[#1a1a3e]/60 hover:text-[#1a1a3e]"
+        >
+          <ArrowLeft className="size-4" />
+          Back to participants
+        </Link>
+      )}
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">

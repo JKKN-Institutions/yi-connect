@@ -27,7 +27,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { createApproach, updateApproachResponse } from '@/app/actions/succession'
 import { CreateApproachSchema, ApproachResponseStatusSchema } from '@/lib/validations/succession'
 import type { SuccessionPosition } from '@/lib/types/succession'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 
 type CreateFormData = Omit<z.infer<typeof CreateApproachSchema>, 'approached_by'>
 

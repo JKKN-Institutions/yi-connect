@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import { requirePlatformAdmin } from "./national-admins";
 import type { ActionResult } from "./editions";
+import { safeError } from "@/lib/yi-future/db-error";
 
 async function requireAdmin(): Promise<void> {
   const supabase = await createClient();
@@ -60,7 +61,7 @@ export async function createProblem(
       display_order,
       is_active: true,
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "problems.createProblem") };
 
   revalidatePath("/national/admin/problems");
   redirect(`/national/admin/problems?track=${trackId}`);
@@ -104,7 +105,7 @@ export async function updateProblem(
       display_order,
     })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "problems.updateProblem") };
 
   revalidatePath("/national/admin/problems");
   redirect(`/national/admin/problems?track=${trackId}`);
@@ -123,7 +124,7 @@ export async function toggleProblemActive(
     .from("problem_statements")
     .update({ is_active: nextActive })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "problems.toggleProblemActive") };
 
   revalidatePath("/national/admin/problems");
   return { ok: true };
@@ -154,7 +155,7 @@ export async function deleteProblem(id: string): Promise<ActionResult> {
     .from("problem_statements")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "problems.deleteProblem") };
 
   revalidatePath("/national/admin/problems");
   return { ok: true, message: "Problem deleted." };

@@ -10,6 +10,7 @@ import {
   requireFutureNationalAdmin,
   requireChapterAdmin,
 } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 // experts.access_code / is_active are new columns not yet in the generated
 // `future` types — use a loose client (the codebase pattern for untyped
@@ -113,7 +114,7 @@ export async function createExpert(
       access_code,
       is_active: true,
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "experts.createExpert") };
 
   revalidatePath("/yi-future/chapter/experts");
   redirect("/yi-future/chapter/experts");
@@ -150,7 +151,7 @@ export async function updateExpert(
       expertise_areas,
     })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "experts.updateExpert") };
 
   revalidatePath("/yi-future/chapter/experts");
   redirect("/yi-future/chapter/experts");
@@ -183,7 +184,7 @@ export async function deleteExpert(id: string): Promise<ActionResult> {
     .from("experts")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "experts.deleteExpert") };
   revalidatePath("/yi-future/chapter/experts");
   return { ok: true, message: "Expert removed." };
 }
@@ -200,7 +201,7 @@ export async function regenerateExpertAccessCode(
     .from("experts")
     .update({ access_code })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "experts.regenerateExpertAccessCode") };
   revalidatePath("/yi-future/chapter/experts");
   return { ok: true, message: `New code: ${access_code}` };
 }
@@ -239,7 +240,7 @@ export async function assignExpertToPhaseEvent(
     .from("phase_events")
     .update({ expert_id: expertId })
     .eq("id", phaseEventId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "experts.assignExpertToPhaseEvent") };
 
   revalidatePath("/yi-future/chapter/experts");
   revalidatePath("/yi-future/chapter/journey");
@@ -260,7 +261,7 @@ export async function unassignExpertFromPhaseEvent(
     .from("phase_events")
     .update({ expert_id: null })
     .eq("id", phaseEventId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "experts.unassignExpertFromPhaseEvent") };
 
   revalidatePath("/yi-future/chapter/experts");
   revalidatePath("/yi-future/chapter/journey");

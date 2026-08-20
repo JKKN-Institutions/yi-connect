@@ -6,10 +6,12 @@ import {
   getDay2CheckinWarning,
   getAwardCandidates,
   getResultsFreshness,
+  getMarkingCoverage,
 } from "@/app/yip/actions/results";
 import { getAwardOverrides } from "@/app/yip/actions/award-overrides";
 import { getPositionBonusConfigAdmin } from "@/app/yip/actions/positions";
 import { getZoneAwardConfig } from "@/app/yip/actions/qualification";
+import { getEventAwardLabels } from "@/app/yip/actions/admin-awards";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { ResultsClient } from "./results-client";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
@@ -51,11 +53,19 @@ export default async function ResultsPage({
   // Award-based qualification: which awards confer advancement is per-zone config
   // (default = all). Locking qualifiers is a national-team (super-admin) action.
   const zoneAwardConfig = await getZoneAwardConfig(event.yi_zone_code ?? null);
+  // The awards THIS round hands out, resolved from the event's round level
+  // (yip.award_definitions.levels). Empty = fall back to the workbook 15, which
+  // is what every round showed before awards could be scoped.
+  const eventAwardLabels = await getEventAwardLabels(id);
   const canQualify = access.role === "super_admin";
   // Light "is the snapshot current + complete" read for the Show Results block
   // (judges-scored count + stale flag + participant count). Cheap counts only —
   // deliberately NOT getScoringProgress (that times out on heavy events).
   const freshness = await getResultsFreshness(id);
+  // Two host-only notes about HOW the marks were taken (Director 2026-08-19):
+  // students a single judge marked, and students whose marks span both benches
+  // after a no-confidence motion. Read-only — changes no score.
+  const markingCoverage = await getMarkingCoverage(id);
 
   return (
     <ResultsClient
@@ -70,11 +80,14 @@ export default async function ResultsPage({
       day2CheckinWarning={day2Warning.shouldWarn}
       awardCandidates={awardCandidates}
       zoneAwardConfig={zoneAwardConfig}
+      eventAwardLabels={eventAwardLabels}
       canQualify={canQualify}
       participantCount={freshness?.participantCount ?? 0}
       totalJudges={freshness?.totalJudges ?? 0}
       judgesScored={freshness?.judgesScored ?? 0}
       scoresStale={freshness?.scoresStale ?? false}
+      singleJudgeStudents={markingCoverage?.singleJudgeStudents ?? []}
+      sideChangeStudents={markingCoverage?.sideChangeStudents ?? []}
     />
   );
 }

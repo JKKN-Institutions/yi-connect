@@ -316,20 +316,34 @@ function JuryScoringClientInner({
   // (bottom-left — it sat exactly on the pad's "1" key) hides itself.
   const [jumpBarHeight, setJumpBarHeight] = useState(0);
   const jumpBarObserverRef = useRef<ResizeObserver | null>(null);
+  const jumpBarCleanupRef = useRef<(() => void) | null>(null);
   const jumpBarRef = useCallback((el: HTMLDivElement | null) => {
     jumpBarObserverRef.current?.disconnect();
     jumpBarObserverRef.current = null;
+    jumpBarCleanupRef.current?.();
+    jumpBarCleanupRef.current = null;
     if (!el) {
       setJumpBarHeight(0);
       document.body.removeAttribute("data-yip-jury-jumpbar");
       return;
     }
     document.body.setAttribute("data-yip-jury-jumpbar", "1");
-    const observer = new ResizeObserver(() =>
-      setJumpBarHeight(el.offsetHeight)
-    );
+    // Measure from the bar's TOP EDGE to the bottom of the viewport, not just
+    // its own height. The bar is `fixed`, so its rect is viewport-relative and
+    // scroll-independent, and this picks up the bottom margin AND the iOS
+    // safe-area inset for free — offsetHeight alone misses both, which on a
+    // phone with a home indicator left the pad's bottom row of keys short of
+    // clearance.
+    const measure = () => {
+      const footprint = window.innerHeight - el.getBoundingClientRect().top;
+      setJumpBarHeight(Math.max(el.offsetHeight, Math.round(footprint)));
+    };
+    const observer = new ResizeObserver(measure);
     observer.observe(el);
-    setJumpBarHeight(el.offsetHeight);
+    window.addEventListener("resize", measure);
+    jumpBarCleanupRef.current = () =>
+      window.removeEventListener("resize", measure);
+    measure();
     jumpBarObserverRef.current = observer;
   }, []);
 
@@ -1955,7 +1969,7 @@ function JuryScoringClientInner({
           // the form — the content column's md:pr-80 guarantees no overlap.
           // Scrolls internally if the matches/Unfinished strips grow tall;
           // max-h keeps it clear of the sticky 56px header.
-          className="fixed left-0 right-0 bottom-0 z-30 mx-auto mb-3 w-[calc(100%-2rem)] max-w-md rounded-xl border-2 border-gray-200 bg-white/95 px-3 py-2.5 backdrop-blur shadow-[0_-2px_10px_rgba(0,0,0,0.07)] md:left-auto md:right-4 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:mb-0 md:w-72 md:max-h-[calc(100vh-8rem)] md:overflow-y-auto md:shadow-[0_4px_16px_rgba(0,0,0,0.08)]"
+          className="fixed left-0 right-0 bottom-0 z-30 mx-auto mb-[max(0.75rem,env(safe-area-inset-bottom))] w-[calc(100%-2rem)] max-w-md rounded-xl border-2 border-gray-200 bg-white/95 px-3 py-2.5 backdrop-blur shadow-[0_-2px_10px_rgba(0,0,0,0.07)] md:left-auto md:right-4 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:mb-0 md:w-72 md:max-h-[calc(100vh-8rem)] md:overflow-y-auto md:shadow-[0_4px_16px_rgba(0,0,0,0.08)]"
         >
           <label
             htmlFor="quick-jump-input"

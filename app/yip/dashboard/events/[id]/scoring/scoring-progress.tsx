@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 import { INK, SAFFRON, SERIF, inkA } from "@/app/yip/me/credential-ui";
 
+import { ParticipantNameButton } from "@/components/yip/participant-profile-dialog";
 function formatRelative(dateStr: string | null): string {
   if (!dateStr) return "Never";
   const date = new Date(dateStr);
@@ -89,9 +90,11 @@ const STATUS_DOTS = {
 
 export function ScoringProgress({
   eventId,
+  eventName,
   data,
 }: {
   eventId: string;
+  eventName: string;
   data: ScoringProgressData;
 }) {
   const router = useRouter();
@@ -515,7 +518,13 @@ export function ScoringProgress({
                                     >
                                       <div className="min-w-0">
                                         <p className="truncate font-medium text-gray-900">
-                                          {d.participantName}
+                                          <ParticipantNameButton
+                                            eventId={eventId}
+                                            eventName={eventName}
+                                            participantId={d.participantId}
+                                            name={d.participantName}
+                                            className="text-left underline-offset-4 hover:underline"
+                                          />
                                           {d.constituencyNumber != null && (
                                             <span className="ml-1 text-xs tabular-nums text-gray-400">
                                               #{d.constituencyNumber}

@@ -23,7 +23,7 @@ import {
   AlertDialogTrigger
 } from '@/components/ui/alert-dialog';
 import { publishEvent } from '@/app/actions/events';
-import { toast } from 'react-hot-toast';
+import { toast } from 'sonner';
 import type { EventStatus } from '@/types/event';
 
 interface EventPublishButtonProps {

@@ -50,7 +50,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 interface MaterialUploadFormProps {
   eventId: string

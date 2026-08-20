@@ -31,7 +31,7 @@ import { createCategory, updateCategory } from '@/app/actions/knowledge';
 import type { KnowledgeCategory } from '@/types/knowledge';
 import type { FormState } from '@/types/knowledge';
 import { z } from 'zod';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
 interface CategoryFormProps {

@@ -58,7 +58,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { deleteDocument } from '@/app/actions/knowledge';
 
 const VISIBILITY_COLORS: Record<string, string> = {

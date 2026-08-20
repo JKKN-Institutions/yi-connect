@@ -20,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from '@/components/ui/alert-dialog';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { Share2, Copy, Link2, Edit, Trash2, MoreVertical } from 'lucide-react';
 import { deleteDocument } from '@/app/actions/knowledge';
 

@@ -7,9 +7,26 @@ import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { isCurrentUserSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { getRegionalAdminZones } from "@/lib/yi/auth/yi-directory-roles";
 import { revalidatePath } from "next/cache";
-import { attachCentralTopicsToEvent } from "./admin-topics";
+import {
+  attachCentralTopicsToEvent,
+  attachCommitteeTopicsToEvent,
+} from "./admin-topics";
+import { fetchEventRoundLevel, type RoundLevel } from "@/lib/yip/round-level";
+import { committeeCatalogueForLevel } from "@/lib/yip/committee-topics";
 import { getComplianceScore } from "./branding";
 import { writeEventAiEnabled } from "@/lib/yip/ai/drafts";
+import { getCommitteeNumbering } from "@/lib/yip/committee-number";
+import {
+  orderEventCommittees,
+  unnamedCommitteeName,
+} from "@/lib/yip/event-committees";
+import {
+  isValidWhatsappInvite,
+  normalizeWhatsappInvite,
+  withCommitteeWhatsapp,
+  withBenchWhatsapp,
+  type BenchSide,
+} from "@/lib/yip/whatsapp-links";
 import type { Database } from "@/types/yip/database";
 
 // ─── Types ─────────────────────────────────────────────────────────
@@ -71,22 +88,48 @@ export type CommitteeTopicOption = {
   topic_number: number | null;
 };
 
-export async function listCommitteeTopics(): Promise<CommitteeTopicOption[]> {
+export async function listCommitteeTopics(
+  // Which round's committee list to return. Omitted / null = the shared
+  // catalogue only, which is byte-for-byte what this returned before topics
+  // gained a level scope — so every existing caller keeps its exact behaviour.
+  // Pass a level to get that round's own committees where it has them.
+  level: RoundLevel | null = null
+): Promise<CommitteeTopicOption[]> {
   const supabase = await createServiceClient();
   const { data, error } = await supabase
     .from("topics")
-    .select("id, title, description, linked_scheme, topic_number")
+    .select("id, title, description, linked_scheme, topic_number, levels")
     .eq("category", "committee")
     .eq("is_active", true)
     .order("topic_number", { nullsFirst: false });
   if (error || !data) return [];
-  return data.map((r) => ({
+  const resolved = committeeCatalogueForLevel(
+    (data as unknown as Array<{
+      id: string;
+      title: string | null;
+      description: string | null;
+      linked_scheme: string | null;
+      topic_number: number | null;
+      levels?: string[] | null;
+    }>).map((r) => ({ ...r, title: r.title ?? "" })),
+    level
+  );
+  return resolved.map((r) => ({
     id: r.id,
     committee: r.title,
     topic: r.description ?? "",
     scheme: r.linked_scheme ?? "",
     topic_number: r.topic_number,
   }));
+}
+
+/** The committee catalogue as ONE event sees it, resolved from its round level. */
+export async function listCommitteeTopicsForEvent(
+  eventId: string
+): Promise<CommitteeTopicOption[]> {
+  const supabase = await createServiceClient();
+  const level = await fetchEventRoundLevel(supabase as never, eventId);
+  return listCommitteeTopics(level);
 }
 
 /**
@@ -112,7 +155,9 @@ export async function pushCommitteeTopicsToAllChapterEvents(
       error: "Only super-admins can push committee topics to events.",
     };
   }
-  const catalog = await listCommitteeTopics();
+  // Explicitly the CHAPTER catalogue: this writes to chapter events only, and
+  // must never push the regional round's committees onto them.
+  const catalog = await listCommitteeTopics("chapter");
   if (catalog.length === 0) {
     return { success: false, error: "No committee topics in the catalogue to push." };
   }
@@ -188,7 +233,7 @@ export async function setEventCommittees(
   // Resolve each chosen committee to its topic from the live catalogue, so the
   // event always carries an authoritative { committee → topic } map (ignores
   // any name not in the catalogue rather than persisting a stale committee).
-  const catalog = await listCommitteeTopics();
+  const catalog = await listCommitteeTopicsForEvent(eventId);
   const topicByCommittee = new Map(catalog.map((c) => [c.committee, c.topic]));
   const obj: Record<string, string> = {};
   for (const name of committeeNames) {
@@ -211,6 +256,398 @@ export async function setEventCommittees(
   revalidatePath(`/yip/dashboard/events/${eventId}/topics`);
   revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);
   return { success: true, data: { count: Object.keys(obj).length } };
+}
+
+// ─── Numbered committees (Director, 2026-08-14) ────────────────────
+//
+// A chapter runs "Committee 1..N" and attributes a ministry to each number
+// LATER, once. These two actions are that flow: set the count now, name them
+// when you know. See lib/yip/event-committees.ts for why renumbering is safe.
+
+/**
+ * Set how many committees this event runs, WITHOUT naming them. Slots that
+ * already have a ministry attributed keep it; the rest become "Committee n".
+ *
+ * Shrinking (say 6 → 4) keeps the first 4 exactly as they are and leaves the
+ * students from the dropped committees UNASSIGNED for the organiser to move by
+ * hand (Director's choice — nobody who was already told their committee gets
+ * silently reshuffled). The count of those students is returned so the UI can
+ * say so plainly.
+ */
+export async function setEventCommitteeCount(
+  eventId: string,
+  count: number
+): Promise<ActionResult<{ count: number; unassigned: number }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  if (!Number.isInteger(count) || count < 1 || count > 40) {
+    return {
+      success: false,
+      error: "Enter how many committees this chapter will run (1–40).",
+    };
+  }
+
+  const supabase = await createServiceClient();
+  const { data: event, error: readErr } = await supabase
+    .from("events")
+    .select("committee_topics, allocation_locked")
+    .eq("id", eventId)
+    .single();
+  if (readErr || !event) return { success: false, error: "Event not found" };
+  if ((event as { allocation_locked?: boolean }).allocation_locked) {
+    return {
+      success: false,
+      error:
+        "Allocation is locked for this event. Unlock it before changing how many committees you run.",
+    };
+  }
+
+  const existing = (event.committee_topics ?? {}) as unknown as
+    | Record<string, string>
+    | string[];
+  const existingNames = Array.isArray(existing)
+    ? existing.map(String)
+    : Object.keys(existing);
+  const topicOf = (name: string): string =>
+    Array.isArray(existing) ? "" : (existing[name] ?? "");
+  const catalogue = await getCommitteeNumbering(supabase);
+  const current = orderEventCommittees(existingNames, catalogue.numberByName);
+  const nameBySlot = new Map(current.map((c) => [c.number, c.name]));
+
+  const obj: Record<string, string> = {};
+  for (let n = 1; n <= count; n++) {
+    const kept = nameBySlot.get(n);
+    const name = kept ?? unnamedCommitteeName(n);
+    obj[name] = kept ? topicOf(kept) : "";
+  }
+
+  // Students sitting in a committee that no longer exists are released rather
+  // than reshuffled. They show as unassigned so the organiser can place them.
+  const droppedNumbers = current
+    .filter((c) => c.number > count)
+    .map((c) => c.number);
+  let unassigned = 0;
+  if (droppedNumbers.length > 0) {
+    const { data: released, error: relErr } = await supabase
+      .from("participants")
+      .update({ committee_name: null, committee_number: null })
+      .eq("event_id", eventId)
+      .in("committee_number", droppedNumbers)
+      .select("id");
+    if (relErr) return { success: false, error: relErr.message };
+    unassigned = released?.length ?? 0;
+  }
+
+  const { error } = await supabase
+    .from("events")
+    .update({ committee_topics: obj, updated_at: new Date().toISOString() })
+    .eq("id", eventId);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/topics`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+  return { success: true, data: { count, unassigned } };
+}
+
+/**
+ * Attribute a ministry (and its topic) to one committee NUMBER. This is the
+ * "name it later" step: Committee 3 becomes Ministry of Health, and every
+ * student already sitting in committee 3 keeps their number and gains the name.
+ *
+ * Pass `null` to clear a ministry and go back to "Committee 3".
+ */
+export async function attributeCommitteeMinistry(
+  eventId: string,
+  committeeNumber: number,
+  ministry: string | null
+): Promise<ActionResult<{ number: number; name: string; moved: number }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  if (!Number.isInteger(committeeNumber) || committeeNumber < 1) {
+    return { success: false, error: "Pick a committee number." };
+  }
+
+  const supabase = await createServiceClient();
+  const { data: event, error: readErr } = await supabase
+    .from("events")
+    .select("committee_topics")
+    .eq("id", eventId)
+    .single();
+  if (readErr || !event) return { success: false, error: "Event not found" };
+
+  const existing = (event.committee_topics ?? {}) as unknown as
+    | Record<string, string>
+    | string[];
+  const existingNames = Array.isArray(existing)
+    ? existing.map(String)
+    : Object.keys(existing);
+  const topicOf = (name: string): string =>
+    Array.isArray(existing) ? "" : (existing[name] ?? "");
+  const catalogue = await getCommitteeNumbering(supabase);
+  const current = orderEventCommittees(existingNames, catalogue.numberByName);
+  const slot = current.find((c) => c.number === committeeNumber);
+  if (!slot) {
+    return {
+      success: false,
+      error: `This event does not run a Committee ${committeeNumber}.`,
+    };
+  }
+
+  let nextName: string;
+  let nextTopic = "";
+  if (ministry === null || ministry.trim() === "") {
+    nextName = unnamedCommitteeName(committeeNumber);
+  } else {
+    const wanted = ministry.trim();
+    const catalog = await listCommitteeTopicsForEvent(eventId);
+    const match = catalog.find((c) => c.committee === wanted);
+    if (!match) {
+      return {
+        success: false,
+        error: `"${wanted}" is not in the committee catalogue.`,
+      };
+    }
+    // One ministry per event — otherwise two committees share a name and the
+    // bills table (unique on event + committee_name) would collide.
+    const clash = current.find(
+      (c) =>
+        c.number !== committeeNumber &&
+        c.name.toLowerCase() === wanted.toLowerCase()
+    );
+    if (clash) {
+      return {
+        success: false,
+        error: `${wanted} is already Committee ${clash.number} in this event.`,
+      };
+    }
+    nextName = match.committee;
+    nextTopic = match.topic ?? "";
+  }
+
+  if (nextName === slot.name) {
+    return {
+      success: true,
+      data: { number: committeeNumber, name: nextName, moved: 0 },
+    };
+  }
+
+  // Rebuild the map with this slot renamed, every other slot untouched.
+  const obj: Record<string, string> = {};
+  for (const c of current) {
+    if (c.number === committeeNumber) obj[nextName] = nextTopic;
+    else obj[c.name] = topicOf(c.name);
+  }
+
+  const { error: evErr } = await supabase
+    .from("events")
+    .update({ committee_topics: obj, updated_at: new Date().toISOString() })
+    .eq("id", eventId);
+  if (evErr) return { success: false, error: evErr.message };
+
+  // Carry the students across. They keep their NUMBER — only the label moves.
+  const { data: movedRows, error: pErr } = await supabase
+    .from("participants")
+    .update({ committee_name: nextName })
+    .eq("event_id", eventId)
+    .eq("committee_number", committeeNumber)
+    .select("id");
+  if (pErr) return { success: false, error: pErr.message };
+
+  // A bill is filed under the committee NAME (bills_event_committee_key is
+  // unique on event + committee_name), so a rename has to take any existing
+  // bill with it or it would be orphaned from its own committee. Naming is
+  // meant to happen before drafting starts, so this normally moves nothing.
+  await supabase
+    .from("bills")
+    .update({ committee_name: nextName } as never)
+    .eq("event_id", eventId)
+    .eq("committee_name" as never, slot.name as never);
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/topics`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+  revalidatePath("/yip/me");
+  return {
+    success: true,
+    data: {
+      number: committeeNumber,
+      name: nextName,
+      moved: movedRows?.length ?? 0,
+    },
+  };
+}
+
+// ─── WhatsApp group invite links (Director, 2026-08-14) ────────────
+//
+// Every student belongs to one party and one committee, each with its own
+// WhatsApp group. The access-code email carries whichever links exist, so a
+// student gets their code and both groups in one message.
+
+/** Save (or clear, with null/blank) a PARTY's WhatsApp group invite link. */
+export async function setPartyWhatsappLink(
+  eventId: string,
+  partyId: string,
+  url: string | null
+): Promise<ActionResult<{ saved: boolean }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  const value = normalizeWhatsappInvite(url);
+  if (value !== null && !isValidWhatsappInvite(value)) {
+    return {
+      success: false,
+      error:
+        "That is not a WhatsApp group invite link. It should start with https://chat.whatsapp.com/ — use Group info → Invite via link → Copy link.",
+    };
+  }
+
+  const supabase = await createServiceClient();
+  // Scope the write to this event so a party id from another event cannot be
+  // edited by someone who only manages this one.
+  const { data, error } = await supabase
+    .from("parties")
+    .update({ whatsapp_invite_url: value } as never)
+    .eq("id", partyId)
+    .eq("event_id", eventId)
+    .select("id");
+  if (error) return { success: false, error: error.message };
+  if (!data || data.length === 0) {
+    return { success: false, error: "That party is not part of this event." };
+  }
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/parties`);
+  revalidatePath("/yip/me");
+  return { success: true, data: { saved: value !== null } };
+}
+
+/**
+ * Set (or clear) the WhatsApp group invite for one BENCH of an event.
+ *
+ * A regional round splits the House into a ruling and an opposition bench, each
+ * with its own group. Unlike a party (a real row) or a committee (a numbered
+ * key), there are exactly two benches per event, so both links live in one
+ * jsonb column keyed by the side.
+ *
+ * A student is shown the link for THEIR side only, resolved from
+ * yip.participants.party_side. A student with no bench set sees no bench group
+ * rather than a guessed one — the same refusal-to-guess the jury screen makes.
+ *
+ * events.bench_whatsapp is newer than types/yip/database.ts (which is not
+ * regenerated — the CLI corrupts it), so the read and write are cast once, the
+ * same narrow-accessor pattern committee_whatsapp already uses in
+ * app/yip/dashboard/events/[id]/topics/page.tsx.
+ */
+export async function setBenchWhatsappLink(
+  eventId: string,
+  side: BenchSide,
+  url: string | null
+): Promise<ActionResult<{ saved: boolean }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  if (side !== "ruling" && side !== "opposition") {
+    return { success: false, error: "Unknown bench." };
+  }
+  const value = normalizeWhatsappInvite(url);
+  if (value !== null && !isValidWhatsappInvite(value)) {
+    return {
+      success: false,
+      error:
+        "That is not a WhatsApp group invite link. It should start with https://chat.whatsapp.com/ — use Group info → Invite via link → Copy link.",
+    };
+  }
+
+  const supabase = await createServiceClient();
+  // Read-modify-write the map: the two sides are independent, and writing the
+  // whole column from one input would silently wipe the other bench's link.
+  const { data: row, error: readErr } = await (
+    supabase as unknown as {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (k: string, v: string) => {
+            maybeSingle: () => Promise<{
+              data: { bench_whatsapp: unknown } | null;
+              error: { message: string } | null;
+            }>;
+          };
+        };
+      };
+    }
+  )
+    .from("events")
+    .select("bench_whatsapp")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (readErr) return { success: false, error: readErr.message };
+  if (!row) return { success: false, error: "Event not found" };
+
+  const next = withBenchWhatsapp(row.bench_whatsapp, side, value);
+
+  const { error } = await supabase
+    .from("events")
+    .update({ bench_whatsapp: next } as never)
+    .eq("id", eventId);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/parties`);
+  revalidatePath("/yip/me");
+  return { success: true, data: { saved: value !== null } };
+}
+
+/** Save (or clear) a COMMITTEE's WhatsApp link, keyed by its number. */
+export async function setCommitteeWhatsappLink(
+  eventId: string,
+  committeeNumber: number,
+  url: string | null
+): Promise<ActionResult<{ saved: boolean }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  if (!Number.isInteger(committeeNumber) || committeeNumber < 1) {
+    return { success: false, error: "Pick a committee number." };
+  }
+  const value = normalizeWhatsappInvite(url);
+  if (value !== null && !isValidWhatsappInvite(value)) {
+    return {
+      success: false,
+      error:
+        "That is not a WhatsApp group invite link. It should start with https://chat.whatsapp.com/ — use Group info → Invite via link → Copy link.",
+    };
+  }
+
+  const supabase = await createServiceClient();
+  const { data: event, error: readErr } = await supabase
+    .from("events")
+    .select("committee_whatsapp")
+    .eq("id", eventId)
+    .single();
+  if (readErr || !event) return { success: false, error: "Event not found" };
+
+  const next = withCommitteeWhatsapp(
+    (event as { committee_whatsapp?: unknown }).committee_whatsapp,
+    committeeNumber,
+    value
+  );
+  const { error } = await supabase
+    .from("events")
+    .update({
+      committee_whatsapp: next,
+      updated_at: new Date().toISOString(),
+    } as never)
+    .eq("id", eventId);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/topics`);
+  revalidatePath("/yip/me");
+  return { success: true, data: { saved: value !== null } };
 }
 
 // ─── Setup progress (sidebar checklist) ────────────────────────────
@@ -611,6 +1048,21 @@ export async function createEvent(
     }
   }
 
+  // Regional events inherit the regional committee set the same way — all
+  // fifteen are attached and the host trims to the ten they will run. Before
+  // this, createEvent inherited nothing for a regional event, which is why
+  // every regional round created so far carries zero topics. Failure here MUST
+  // NOT roll back the event, exactly as above.
+  if (data.level === "regional") {
+    const attachResult = await attachCommitteeTopicsToEvent(event.id, "regional");
+    if (!attachResult.success) {
+      console.error(
+        "Failed to auto-attach committee topics to regional event:",
+        attachResult.error
+      );
+    }
+  }
+
   await logAuditAction({
     action_type: "create",
     target_table: "events",
@@ -636,6 +1088,22 @@ export async function updateEvent(
   if (!access.canManage) {
     return { success: false, error: "Not authorized to manage this event" };
   }
+
+  // This is the ordinary EDIT path (name, dates, venue, committees). It must not
+  // be a second way to START a round: UpdateEventData.status admits "day1_live",
+  // and this function applies no transition validation and no readiness check,
+  // so writing it here would route around goLiveBlockReason() in
+  // app/yip/actions/agenda.ts. The YIP edit page never sends `status`, so
+  // refusing it changes no existing screen - it closes a server-side hole.
+  // Every other status stays writable: only going LIVE is gated.
+  if (data.status === "day1_live" || data.status === "day2_live") {
+    return {
+      success: false,
+      error:
+        "A round cannot be put live from the event edit form. Use the Control panel for this event, which checks the round is ready first.",
+    };
+  }
+
   const supabase = await createServiceClient();
 
   // When the caller (re)links a chapter, re-derive the canonical fields from

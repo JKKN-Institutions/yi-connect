@@ -161,7 +161,24 @@ export async function getWhatsAppStatus(): Promise<{
   isReady: boolean;
 }> {
   if (useApiClient()) {
-    return getWhatsAppStatusAPI();
+    // The Railway service is an EXTERNAL dependency and answers 404 once it is
+    // torn down. An unhandled throw here is not a broken page, it is a broken
+    // DEPLOY: this status is read by a prerendered page, so a dead third-party
+    // service silently blocked every production build for 18 hours (18-19 Aug
+    // 2026). Degrade to the same 'not configured' shape this function already
+    // returns when no service is configured at all.
+    try {
+      return await getWhatsAppStatusAPI();
+    } catch (err) {
+      return {
+        status: 'not_configured',
+        qrCode: null,
+        error: `WhatsApp service unreachable: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        isReady: false,
+      };
+    }
   } else if (isServerless()) {
     // Serverless without Railway service - return helpful error
     return {

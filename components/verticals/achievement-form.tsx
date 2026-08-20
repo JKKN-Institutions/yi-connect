@@ -51,7 +51,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 interface AchievementFormProps {
   verticalId: string

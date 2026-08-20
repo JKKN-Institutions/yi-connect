@@ -28,7 +28,7 @@ import { Input } from '@/components/ui/input'
 import { submitNomination } from '@/app/actions/succession'
 import { NominationFormSchema } from '@/lib/validations/succession'
 import type { SuccessionPosition } from '@/lib/types/succession'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 
 type FormData = z.infer<typeof NominationFormSchema>
 

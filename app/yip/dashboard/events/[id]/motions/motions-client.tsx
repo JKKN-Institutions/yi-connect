@@ -34,6 +34,7 @@ import {
 } from "@/lib/yip/motions";
 import { MINISTRIES } from "@/lib/yip/constants";
 import { SearchablePersonSelect } from "@/components/yip/searchable-person-select";
+import { ParticipantNameButton } from "@/components/yip/participant-profile-dialog";
 import {
   createMotion,
   admitMotion,
@@ -571,7 +572,17 @@ export function MotionsClient({
                       )}
                     </TableCell>
                     <TableCell className="text-sm">
-                      {m.raised_by_name ?? "—"}
+                      {m.raised_by_name && m.raised_by_id ? (
+                        <ParticipantNameButton
+                          eventId={eventId}
+                          eventName={eventName}
+                          participantId={m.raised_by_id}
+                          name={m.raised_by_name}
+                          className="text-left underline-offset-4 hover:underline"
+                        />
+                      ) : (
+                        (m.raised_by_name ?? "—")
+                      )}
                       {m.raised_by_party_side && (
                         <Badge
                           variant="secondary"

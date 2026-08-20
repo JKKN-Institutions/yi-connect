@@ -379,6 +379,29 @@ export default async function ScoringPage({
     byTeam.get(e.team_id)!.push(e);
   }
 
+  // ─── Scorecards that are OPEN, and therefore NOT counted above ────────
+  //
+  // Only a submitted evaluation counts toward a team's average. A scorecard
+  // that a juror started and never submitted — or that an admin reopened so a
+  // mistake could be corrected — silently drops out of the average, and until
+  // now nothing on this page said so. The team simply appeared to have been
+  // judged by fewer people.
+  //
+  // That is not hypothetical. At the Erode chapter final on 12 Aug, five
+  // scorecards were left unsubmitted and THREE teams ended with no counted
+  // jury score at all. Nobody could see it while it was still fixable.
+  const openByTeam = new Map<string, number>();
+  for (const e of evals) {
+    if (e.status === "submitted") continue;
+    openByTeam.set(e.team_id, (openByTeam.get(e.team_id) ?? 0) + 1);
+  }
+  const teamsWithOpenScores = teams.filter((t) => (openByTeam.get(t.id) ?? 0) > 0);
+  // The sharpest case: a juror has an open card and the team has NO counted
+  // score at all, so it is currently unrankable.
+  const teamsWithNoCountedScore = teamsWithOpenScores.filter(
+    (t) => (byTeam.get(t.id)?.length ?? 0) === 0
+  );
+
   const teamAggregates = teams.map((t) => {
     const list = byTeam.get(t.id) ?? [];
     const agg = aggregateEvaluations(list);
@@ -572,6 +595,59 @@ export default async function ScoringPage({
           </tbody>
         </table>
       </div>
+
+      {/* ─── Open scorecards ───────────────────────────────────────────
+          Named BEFORE the ranking below, because the ranking is computed
+          without them. An admin reading a table of averages has no other way
+          to know a juror is still holding a card. */}
+      {teamsWithOpenScores.length > 0 && (
+        <section
+          role="alert"
+          className="border-2 border-yi-gold/60 bg-yi-gold/5 rounded-lg p-4"
+        >
+          <h3 className="text-sm font-bold text-navy">
+            {teamsWithOpenScores.length}{" "}
+            {teamsWithOpenScores.length === 1 ? "team has" : "teams have"} a
+            juror still editing
+          </h3>
+          <p className="mt-1 text-xs text-navy/70 leading-relaxed">
+            A scorecard only counts once the juror presses Submit. The
+            scorecards below are open — reopened, or started and never
+            finished — so they are <strong>not</strong> included in the
+            averages or the ranking. Ask those jurors to submit before treating
+            any result as final.
+          </p>
+          <ul className="mt-3 space-y-1">
+            {teamsWithOpenScores.map((t) => {
+              const open = openByTeam.get(t.id) ?? 0;
+              const counted = byTeam.get(t.id)?.length ?? 0;
+              return (
+                <li key={t.id} className="text-xs text-navy">
+                  <strong>{t.team_name}</strong> — {counted} counted,{" "}
+                  <span className="font-semibold text-red-600">
+                    {open} still open
+                  </span>
+                  {counted === 0 && (
+                    <span className="font-semibold text-red-600">
+                      {" "}
+                      · no jury score at all yet
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          {teamsWithNoCountedScore.length > 0 && (
+            <p className="mt-3 text-xs font-semibold text-red-600">
+              {teamsWithNoCountedScore.length}{" "}
+              {teamsWithNoCountedScore.length === 1
+                ? "team currently has no counted jury score"
+                : "teams currently have no counted jury score"}{" "}
+              and cannot be ranked fairly until those scorecards are submitted.
+            </p>
+          )}
+        </section>
+      )}
 
       {/* Per-team jury breakdown */}
       {teamAggregates.some((a) => a.count > 0) && (

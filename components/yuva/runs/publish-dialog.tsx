@@ -12,7 +12,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Loader2, Megaphone, XCircle } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { publishRun } from "@/app/youth-academy/actions/runs";
 import { Button } from "@/components/ui/button";
 import {

@@ -30,7 +30,7 @@ import type { FormState } from '@/types/knowledge';
 import { z } from 'zod';
 import { Loader2, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface DocumentUploadFormProps {
   categories: KnowledgeCategory[];

@@ -9,7 +9,7 @@
 
 import { useState, useTransition } from 'react'
 import { Heart, Loader2 } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { toggleSessionInterest } from '@/app/actions/events'
 import { cn } from '@/lib/utils'

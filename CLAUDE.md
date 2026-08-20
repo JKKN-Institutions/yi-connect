@@ -243,7 +243,7 @@ Use the nextjs16-web-development skill to set up the Events module, and then use
   - Overlays: Dialog, Sheet, Drawer, Popover, Hover Card
   - Navigation: Tabs, Menubar, Navigation Menu, Sidebar, Breadcrumb
   - Data Display: Table, Card, Avatar, Badge, Calendar, Chart
-  - Feedback: Alert, Progress, Spinner, Skeleton, Toast (via react-hot-toast)
+  - Feedback: Alert, Progress, Spinner, Skeleton, Toast (via sonner — the ONLY toast library; do not add a second one)
   - Layout: Accordion, Collapsible, Resizable, Scroll Area, Carousel
 
 ### State Management & Forms

@@ -43,6 +43,7 @@ import {
   SelectValue,
 } from "@/components/yip/ui/select";
 import { cn } from "@/lib/yip/utils";
+import { isBillFloorAgendaType } from "@/lib/yip/bill-sources";
 import { toast } from "sonner";
 import { useVoteSession } from "@/lib/yip/hooks/use-vote-session";
 import { useActiveVoteSessions } from "@/lib/yip/hooks/use-active-vote-sessions";
@@ -173,6 +174,45 @@ export function VoteManager({
     selectedIds: [],
     loading: false,
   });
+  /**
+   * Let students who are not checked in cast in an ELECTION.
+   *
+   * Elections are routinely run BEFORE the two event days — Speaker and party
+   * leaders are often settled in advance so the House can start with its chair
+   * in place. On those days nobody is checked in, because nobody is in the room
+   * yet, and every ballot silently refuses every vote.
+   *
+   * Checking everyone in to work around it is worse than the bug: it records
+   * 196 students as physically present on a day that has not happened, and that
+   * attendance is used elsewhere.
+   *
+   * `openVote` has accepted `override_checkin` since #757 and the Bill screen
+   * has always exposed it; the election screen never did. Deliberately STICKY
+   * across dialogs — an organiser opening five party-leader ballots in a row
+   * needs it for all five, and re-ticking it each time is how one gets missed.
+   */
+  const [overrideCheckin, setOverrideCheckin] = useState(false);
+
+  const checkinOverrideToggle = (
+    <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
+      <input
+        type="checkbox"
+        className="mt-0.5"
+        checked={overrideCheckin}
+        onChange={(e) => setOverrideCheckin(e.target.checked)}
+      />
+      <span>
+        <span className="font-medium">
+          Let students who are not checked in vote
+        </span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">
+          Turn this on when the election is being held before the event days, so
+          nobody has to be marked present for a day that has not happened yet.
+        </span>
+      </span>
+    </label>
+  );
+
   // Speaker nomination dialog — like leadershipDialog but the candidate pool is
   // the WHOLE House (both benches), grouped by party. Equity rule: each party
   // puts forward min 1, max 2 nominees. `selectedByParty` keys the picks by
@@ -292,7 +332,7 @@ export function VoteManager({
   const itemUsesVoting =
     currentAgendaItem?.use_for_voting === true ||
     agendaType === "speaker_election" ||
-    agendaType === "bill_presentation";
+    isBillFloorAgendaType(agendaType);
   const showVoteControls = Boolean(currentAgendaItem) && itemUsesVoting;
 
   // The active party-leader session's party id (config.partyId), used to label
@@ -376,10 +416,7 @@ export function VoteManager({
   // on other items. Re-runs only when the item changes, so a manual collapse
   // sticks until the organiser moves to the next item.
   useEffect(() => {
-    if (
-      agendaType === "speaker_election" ||
-      agendaType === "bill_presentation"
-    ) {
+    if (agendaType === "speaker_election" || isBillFloorAgendaType(agendaType)) {
       setElectionsMenuOpen(true);
     }
   }, [agendaType, currentAgendaItem?.id]);
@@ -520,7 +557,7 @@ export function VoteManager({
         eventId,
         currentAgendaItem.id,
         "speaker_election",
-        { candidateIds }
+        { candidateIds, override_checkin: overrideCheckin }
       );
       if (result.success) {
         toast.success("Speaker election is now open!");
@@ -579,7 +616,7 @@ export function VoteManager({
         eventId,
         currentAgendaItem.id,
         "party_leader",
-        { candidateIds, partyId: party.id }
+        { candidateIds, partyId: party.id, override_checkin: overrideCheckin }
       );
       if (result.success) {
         toast.success(`${party.name} leader election is now open!`);
@@ -674,6 +711,7 @@ export function VoteManager({
       const result = await openVote(eventId, currentAgendaItem.id, voteType, {
         side,
         candidateIds,
+        override_checkin: overrideCheckin,
       });
       if (result.success) {
         toast.success(`${label} election is now open!`);
@@ -748,6 +786,7 @@ export function VoteManager({
         partyId: party.id,
         seats,
         candidateIds,
+        override_checkin: overrideCheckin,
       });
       if (result.success) {
         const title =
@@ -1104,6 +1143,8 @@ export function VoteManager({
           </div>
         )}
 
+        {checkinOverrideToggle}
+
         <DialogFooter>
           <span className="mr-auto self-center text-xs text-muted-foreground">
             {leaderDialog.selectedIds.length} selected
@@ -1313,6 +1354,8 @@ export function VoteManager({
             })}
           </div>
         )}
+
+        {checkinOverrideToggle}
 
         <DialogFooter>
           <span className="mr-auto self-center text-xs text-muted-foreground">
@@ -1643,6 +1686,8 @@ export function VoteManager({
           </div>
         )}
 
+        {checkinOverrideToggle}
+
         <DialogFooter>
           <span className="mr-auto self-center text-xs text-muted-foreground">
             {ministerDialog.selectedIds.length} selected · need{" "}
@@ -1913,6 +1958,8 @@ export function VoteManager({
             })}
           </div>
         )}
+
+        <div className="px-6">{checkinOverrideToggle}</div>
 
         <div className="mt-2 flex items-center gap-3 border-t px-6 py-4">
           <span className="mr-auto text-xs text-muted-foreground">

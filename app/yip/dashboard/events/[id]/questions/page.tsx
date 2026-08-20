@@ -38,6 +38,7 @@ export default async function QuestionsPage({
   return (
     <QuestionsClient
       eventId={id}
+      eventName={event.name ?? ""}
       initialQuestions={questions}
       initialOpenAt={event.questions_open_at ?? null}
       initialCloseAt={event.questions_close_at ?? null}

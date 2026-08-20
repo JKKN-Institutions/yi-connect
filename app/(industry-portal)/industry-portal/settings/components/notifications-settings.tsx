@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Loader2, Bell, Mail, Calendar, FileText } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';

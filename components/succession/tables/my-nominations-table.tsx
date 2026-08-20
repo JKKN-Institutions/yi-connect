@@ -22,7 +22,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { withdrawNomination } from '@/app/actions/succession';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 const statusColors: Record<string, string> = {
   draft: 'bg-gray-500',

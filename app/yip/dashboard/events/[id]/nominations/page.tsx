@@ -18,7 +18,10 @@
 import type { Metadata } from "next";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
-import { getSelfNominationResults } from "@/app/yip/actions/self-nomination";
+import {
+  getSelfNominationResults,
+  getSelfNominationWindows,
+} from "@/app/yip/actions/self-nomination";
 import { emptySelfNominationStats } from "@/lib/yip/self-nomination";
 import { getEvent } from "@/app/yip/actions/events";
 import { NominationsClient } from "./nominations-client";
@@ -41,7 +44,10 @@ export default async function NominationsPage({
     );
   }
 
-  const res = await getSelfNominationResults(id);
+  const [res, win] = await Promise.all([
+    getSelfNominationResults(id),
+    getSelfNominationWindows(id),
+  ]);
   // Passed to the profile popup so it can title itself with the event.
   const event = await getEvent(id);
 
@@ -51,6 +57,7 @@ export default async function NominationsPage({
       eventName={event?.name ?? ""}
       canManage={access.canManage}
       initialOpen={res.success ? res.data.open : false}
+      initialWindows={win.success ? win.data.windows : []}
       initialRows={res.success ? res.data.rows : []}
       initialStats={res.success ? res.data.stats : emptySelfNominationStats()}
       initialError={res.success ? null : res.error}

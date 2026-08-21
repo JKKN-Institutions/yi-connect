@@ -15,10 +15,13 @@ import {
   eligibleSelfNominationRoles,
   emptySelfNominationStats,
   isCabinetRole,
+  isSelfNominationRole,
   normalizeCabinetMinistries,
   normalizeSelfNominationRoles,
   type NominationEligibility,
   SELF_NOMINATION_CSV_HEADERS,
+  SELF_NOMINATION_ROLE_KEYS,
+  selfNominationRoleLabels,
   type SelfNominationActionResult,
   type SelfNominationResultRow,
   type SelfNominationRole,
@@ -129,16 +132,54 @@ function toRow(db: SelfNominationDbRow): SelfNominationRow {
   };
 }
 
-/** Read the window toggle. Fails CLOSED: any error/missing event ⇒ closed. */
-async function readWindowOpen(
+/** The three roles that shared events.self_nomination_open before 2026-08-21. */
+const ORIGINAL_ROLES = [
+  "parliamentary_administrator",
+  "speaker",
+  "party_leader",
+] as const;
+
+type WindowRow = { role: string; is_open: boolean | null };
+
+type WindowsTable = {
+  select: (cols: string) => WindowsTable;
+  upsert: (
+    rows: Record<string, unknown> | Record<string, unknown>[],
+    opts?: { onConflict?: string }
+  ) => WindowsTable;
+  eq: (col: string, val: unknown) => WindowsTable;
+  then: Promise<{ data: WindowRow[] | null; error: PgErr | null }>["then"];
+};
+
+function nominationWindows(
+  sb: Awaited<ReturnType<typeof createServiceClient>>
+): WindowsTable {
+  return (
+    sb as unknown as { from: (t: string) => WindowsTable }
+  ).from("self_nomination_windows");
+}
+
+/**
+ * Which roles are open for nomination at this event — ONE WINDOW PER ROLE
+ * since 2026-08-21.
+ *
+ * The single events.self_nomination_open switch was right for three roles that
+ * opened together; with eight running at different times it meant opening
+ * Student Journalist also reopened Administrator, Speaker and Party Leader,
+ * letting students edit nominations the organiser had already selected from.
+ *
+ * Fails CLOSED: any error, or an event with no rows yet, yields an EMPTY set —
+ * nothing is nominable. Erring the other way would fling every window open.
+ */
+async function readOpenNominationRoles(
   sb: Awaited<ReturnType<typeof createServiceClient>>,
   eventId: string
-): Promise<boolean> {
-  const { data } = await eventFlags(sb)
-    .select("id, self_nomination_open")
-    .eq("id", eventId)
-    .maybeSingle();
-  return data?.self_nomination_open === true;
+): Promise<Set<string>> {
+  const { data, error } = await nominationWindows(sb)
+    .select("role, is_open")
+    .eq("event_id", eventId);
+  if (error || !data) return new Set();
+  return new Set(data.filter((w) => w.is_open === true).map((w) => w.role));
 }
 
 /**
@@ -207,10 +248,14 @@ export async function getMySelfNomination(eventId: string): Promise<
   if (!me.ok) return { success: false, error: me.error };
 
   const sb = await createServiceClient();
-  const open = await readWindowOpen(sb, eventId);
+  const openRoles = await readOpenNominationRoles(sb, eventId);
+  // A role is pickable only if the student is eligible for it AND its own
+  // window is open. Both filters, always — bench eligibility alone would show
+  // a Ruling Member the PM card weeks before that stage runs.
   const eligibleRoles = eligibleSelfNominationRoles(
     await readMyEligibility(sb, me.participantId)
-  );
+  ).filter((r) => openRoles.has(r));
+  const open = eligibleRoles.length > 0;
   const offeredMinistries = eligibleRoles.some(isCabinetRole)
     ? await readEventMinistries(sb, eventId)
     : [];
@@ -323,10 +368,17 @@ export async function submitSelfNomination(
     ministryPicks = picked.ministries;
   }
 
-  if (!(await readWindowOpen(sb, eventId))) {
+  // EVERY submitted role's own window must be open. A student holding a stale
+  // page could otherwise re-submit a role whose stage has since closed.
+  const openRoles = await readOpenNominationRoles(sb, eventId);
+  const shut = parsed.roles.filter((r) => !openRoles.has(r));
+  if (shut.length > 0) {
     return {
       success: false,
-      error: "Self-nomination is closed for this event.",
+      error:
+        shut.length === parsed.roles.length
+          ? "Self-nomination is closed for this event."
+          : `Nominations have closed for ${selfNominationRoleLabels(shut)}.`,
     };
   }
 
@@ -373,7 +425,10 @@ export async function withdrawSelfNomination(
   if (!me.ok) return { success: false, error: me.error };
 
   const sb = await createServiceClient();
-  if (!(await readWindowOpen(sb, eventId))) {
+  // Withdrawal deletes the whole row, so it needs ANY window still open. A
+  // student whose stage has closed keeps their nomination, which is correct:
+  // the organiser has already selected from it.
+  if ((await readOpenNominationRoles(sb, eventId)).size === 0) {
     return {
       success: false,
       error: "Self-nomination is closed for this event.",
@@ -404,7 +459,8 @@ export async function getSelfNominationOpen(
     return { success: false, error: "Not authorized to view this event" };
   }
   const sb = await createServiceClient();
-  return { success: true, data: { open: await readWindowOpen(sb, eventId) } };
+  const openRoles = await readOpenNominationRoles(sb, eventId);
+  return { success: true, data: { open: openRoles.size > 0 } };
 }
 
 /**
@@ -412,23 +468,75 @@ export async function getSelfNominationOpen(
  * Closing does NOT delete anything; existing nominations stay readable by the
  * organiser and by the student who made them.
  */
-export async function setSelfNominationOpen(
+/**
+ * Open or close ONE role's nomination window.
+ *
+ * Since 2026-08-21 each role has its own switch, so an organiser can open
+ * Student Journalist without reopening Administrator, Speaker and Party
+ * Leader — which would let students edit nominations already selected from.
+ *
+ * Upserts, so an event created before the windows table (or a role added after
+ * its backfill) gets its row on first use rather than silently doing nothing.
+ * `events.self_nomination_open` is still written for the three original roles:
+ * it is no longer the authority, but leaving it stale would mislead anyone
+ * reading the events table directly.
+ */
+export async function setSelfNominationRoleOpen(
   eventId: string,
+  role: string,
   open: boolean
-): Promise<ActionResult<{ open: boolean }>> {
+): Promise<ActionResult<{ role: string; open: boolean }>> {
   const access = await getYipEventAccess(eventId);
   if (!access.canManage) {
     return { success: false, error: "Not authorized to manage this event" };
   }
+  if (!isSelfNominationRole(role)) {
+    return { success: false, error: "That is not a nominable role." };
+  }
   const sb = await createServiceClient();
-  const { error } = await eventFlags(sb)
-    .update({ self_nomination_open: open })
-    .eq("id", eventId);
+  const { error } = await nominationWindows(sb).upsert(
+    {
+      event_id: eventId,
+      role,
+      is_open: open,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "event_id,role" }
+  );
   if (error) return { success: false, error: error.message };
+
+  // Keep the legacy summary column roughly honest for the original three.
+  const openRoles = await readOpenNominationRoles(sb, eventId);
+  await eventFlags(sb)
+    .update({
+      self_nomination_open: ORIGINAL_ROLES.some((r) => openRoles.has(r)),
+    })
+    .eq("id", eventId);
 
   revalidateAdmin(eventId);
   revalidateStudent();
-  return { success: true, data: { open } };
+  return { success: true, data: { role, open } };
+}
+
+/** Every role's window state, for the organiser's toggle list. */
+export async function getSelfNominationWindows(
+  eventId: string
+): Promise<ActionResult<{ windows: { role: string; open: boolean }[] }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) {
+    return { success: false, error: "Not authorized to view this event" };
+  }
+  const sb = await createServiceClient();
+  const openRoles = await readOpenNominationRoles(sb, eventId);
+  return {
+    success: true,
+    data: {
+      windows: SELF_NOMINATION_ROLE_KEYS.map((role) => ({
+        role,
+        open: openRoles.has(role),
+      })),
+    },
+  };
 }
 
 /**
@@ -486,7 +594,7 @@ export async function getSelfNominationResults(eventId: string): Promise<
   }
 
   const sb = await createServiceClient();
-  const open = await readWindowOpen(sb, eventId);
+  const open = (await readOpenNominationRoles(sb, eventId)).size > 0;
 
   const noms = await readAllNominations(sb, eventId);
   if (!noms.ok) return { success: false, error: noms.error };

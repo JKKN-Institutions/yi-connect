@@ -31,6 +31,7 @@ export const QUESTIONNAIRE_POST_KEYS = [
   "parliamentary_journalist",
   "prime_minister",
   "leader_of_opposition",
+  "cabinet_minister",
 ] as const;
 
 export type QuestionnairePostKey = (typeof QUESTIONNAIRE_POST_KEYS)[number];
@@ -66,7 +67,17 @@ export const QUESTIONNAIRE_POSTS: readonly QuestionnairePostDef[] = [
   // header says "all 20 / max 200"; the Director's 6-of-20 ruling supersedes it.
   { key: "prime_minister", label: "Prime Minister", questionsPerAttempt: 6, attemptMinutes: 30 },
   { key: "leader_of_opposition", label: "Leader of Opposition", questionsPerAttempt: 6, attemptMinutes: 30 },
+  // ONE post serves both benches: the portfolio questions are identical whether
+  // you are shadowing Finance or running it, so a Shadow Minister nominee sits
+  // the same paper. The bench only decides the LABEL on their nomination.
+  // 6 questions from each of the candidate's two portfolios = 12, in 60
+  // minutes (Director, 2026-08-21). questionsPerAttempt is the TOTAL; the
+  // per-portfolio split is CABINET_QUESTIONS_PER_MINISTRY.
+  { key: "cabinet_minister", label: "Cabinet / Shadow Minister", questionsPerAttempt: 12, attemptMinutes: 60 },
 ] as const;
+
+/** Questions drawn from EACH of a Cabinet candidate's two portfolios. */
+export const CABINET_QUESTIONS_PER_MINISTRY = 6;
 
 const POST_BY_KEY = new Map<string, QuestionnairePostDef>(
   QUESTIONNAIRE_POSTS.map((p) => [p.key, p])
@@ -247,6 +258,32 @@ export function shortlistCutoff(scoredCandidates: number): number {
  * Start; the drawn questions are then written as answer rows so a reload or a
  * dropped connection returns exactly the same paper.
  */
+/**
+ * The Cabinet paper: a separate draw per portfolio, concatenated in the
+ * candidate's own portfolio order.
+ *
+ * Deliberately NOT one draw over the merged bank — that would let luck hand a
+ * candidate ten Finance questions and two Health ones, and they are being
+ * judged on both. Each portfolio contributes exactly `perMinistry`, so the
+ * paper is balanced however the shuffle falls.
+ *
+ * A portfolio with no questions contributes nothing rather than throwing: the
+ * caller reports the short paper, which is a far better failure than a student
+ * facing a blank screen mid-window.
+ */
+export function drawCabinetPaper<T extends { ministry: string | null }>(
+  bank: readonly T[],
+  ministries: readonly string[],
+  perMinistry: number = CABINET_QUESTIONS_PER_MINISTRY
+): T[] {
+  const paper: T[] = [];
+  for (const ministry of ministries) {
+    const sub = bank.filter((q) => q.ministry === ministry);
+    paper.push(...drawQuestions(sub, perMinistry));
+  }
+  return paper;
+}
+
 export function drawQuestions<T>(bank: readonly T[], count: number): T[] {
   const pool = [...bank];
   for (let i = pool.length - 1; i > 0; i--) {

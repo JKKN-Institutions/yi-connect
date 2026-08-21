@@ -34,6 +34,7 @@ import {
   attemptExpired,
   buildQuestionnaireCsv,
   buildQuestionnaireResponsesCsv,
+  drawCabinetPaper,
   drawQuestions,
   expiryFor,
   isQuestionnairePostKey,
@@ -89,6 +90,8 @@ type QuestionDb = {
   id: string;
   event_id: string | null;
   post_key: string;
+  /** Portfolio this question belongs to — cabinet_minister only, else null. */
+  ministry: string | null;
   body: string;
   display_order: number;
   is_active: boolean;
@@ -139,7 +142,36 @@ const windowsT = (sb: SB) => tbl<WindowDb>(sb, "questionnaire_windows");
 const attemptsT = (sb: SB) => tbl<AttemptDb>(sb, "questionnaire_attempts");
 const answersT = (sb: SB) => tbl<AnswerDb>(sb, "questionnaire_answers");
 const selfNomsT = (sb: SB) =>
-  tbl<{ participant_id: string; roles: string[] }>(sb, "self_nominations");
+  tbl<{
+    participant_id: string;
+    roles: string[];
+    ministries: string[] | null;
+  }>(sb, "self_nominations");
+
+/**
+ * The two portfolios on THIS student's Cabinet/Shadow nomination.
+ *
+ * Read from their own nomination row rather than anything the client sent —
+ * the paper a candidate sits is decided by what they nominated for, and a
+ * client that could name its own portfolios could choose the easy two. Returns
+ * [] when there is no nomination or it carries none, which the caller reports
+ * rather than silently handing out an empty paper.
+ */
+async function readMyNominatedMinistries(
+  sb: SB,
+  eventId: string,
+  participantId: string
+): Promise<string[]> {
+  const { data, error } = await selfNomsT(sb)
+    .select("participant_id, roles, ministries")
+    .eq("event_id", eventId)
+    .eq("participant_id", participantId)
+    .maybeSingle();
+  if (error || !data) return [];
+  return Array.isArray(data.ministries)
+    ? data.ministries.filter((m): m is string => typeof m === "string")
+    : [];
+}
 const participantsT = (sb: SB) =>
   tbl<{ id: string; full_name: string; constituency_number: number | null }>(
     sb,
@@ -247,7 +279,7 @@ async function effectiveQuestions(
   postKey: QuestionnairePostKey
 ): Promise<{ questions: QuestionDb[]; source: "chapter" | "national" }> {
   const { data: own } = await questionsT(sb)
-    .select("id, event_id, post_key, body, display_order, is_active")
+    .select("id, event_id, post_key, ministry, body, display_order, is_active")
     .eq("event_id", eventId)
     .eq("post_key", postKey)
     .eq("is_active", true)
@@ -256,7 +288,7 @@ async function effectiveQuestions(
   if (own && own.length > 0) return { questions: own, source: "chapter" };
 
   const { data: national } = await questionsT(sb)
-    .select("id, event_id, post_key, body, display_order, is_active")
+    .select("id, event_id, post_key, ministry, body, display_order, is_active")
     .is("event_id", null)
     .eq("post_key", postKey)
     .eq("is_active", true)
@@ -485,7 +517,35 @@ export async function startQuestionnaire(
     };
   }
 
-  const drawn = drawQuestions(questions, questionsPerAttempt(postKey));
+  // The Cabinet paper is drawn per portfolio (6 + 6), not as one draw over the
+  // merged bank — a single draw could hand a candidate ten Finance questions
+  // and two Health ones when they are judged on both. Every other post is a
+  // straight draw over its whole bank.
+  let drawn: typeof questions;
+  if (postKey === "cabinet_minister") {
+    const myMinistries = await readMyNominatedMinistries(
+      sb,
+      eventId,
+      me.participantId
+    );
+    if (myMinistries.length === 0) {
+      return {
+        success: false,
+        error:
+          "Your nomination does not have two portfolios on it. Tell your organiser.",
+      };
+    }
+    drawn = drawCabinetPaper(questions, myMinistries);
+    if (drawn.length === 0) {
+      return {
+        success: false,
+        error:
+          "No questions have been set up for your portfolios yet. Tell your organiser.",
+      };
+    }
+  } else {
+    drawn = drawQuestions(questions, questionsPerAttempt(postKey));
+  }
   const startedAt = new Date();
 
   // One clock for the whole cohort, anchored on when the window was opened.

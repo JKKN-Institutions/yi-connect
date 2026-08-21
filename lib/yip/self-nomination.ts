@@ -26,6 +26,8 @@ export const SELF_NOMINATION_ROLE_KEYS = [
   "parliamentary_journalist",
   "prime_minister",
   "leader_of_opposition",
+  "cabinet_minister",
+  "shadow_minister",
 ] as const;
 
 export type SelfNominationRole = (typeof SELF_NOMINATION_ROLE_KEYS)[number];
@@ -88,7 +90,41 @@ export const SELF_NOMINATION_ROLES: readonly SelfNominationRoleDef[] = [
     description:
       "Leads the Opposition benches, holds the Government to account, and offers the alternative.",
   },
+  // Added 2026-08-21 (Director). Also later-stage and bench-decided, but the
+  // SAME opportunity on both benches — a Ruling Member's picks are tagged
+  // Cabinet Minister and an Opposition Member's identical picks are tagged
+  // Shadow Minister. Unlike PM/LOP there is NO Party-Leader bar: no such
+  // restriction was specified for this stage. Both carry exactly two
+  // ministries — see normalizeCabinetMinistries().
+  {
+    key: "cabinet_minister",
+    label: "Cabinet Minister",
+    description:
+      "Holds two portfolios in Government — answers for them in Question Hour and tables their Bills.",
+  },
+  {
+    key: "shadow_minister",
+    label: "Shadow Minister",
+    description:
+      "Shadows two portfolios from the Opposition benches — scrutinises them and offers the alternative.",
+  },
 ] as const;
+
+/**
+ * How many portfolios a Cabinet/Shadow nominee must choose — exactly this many,
+ * no more and no fewer (Director, 2026-08-21).
+ */
+export const CABINET_MINISTRIES_REQUIRED = 2;
+
+/** The two ministry-bearing roles. Everything else ignores `ministries`. */
+export const CABINET_ROLES: readonly SelfNominationRole[] = [
+  "cabinet_minister",
+  "shadow_minister",
+];
+
+export function isCabinetRole(role: string): boolean {
+  return (CABINET_ROLES as readonly string[]).includes(role);
+}
 
 // ─── Eligibility (later-stage roles only) ───────────────────────
 
@@ -142,12 +178,82 @@ export function eligibleSelfNominationRoles(
   who: NominationEligibility
 ): SelfNominationRole[] {
   const roles = [...ALWAYS_ELIGIBLE_ROLES];
-  if (who.parliamentRole && LEADERSHIP_MANDATE_ROLES.has(who.parliamentRole)) {
-    return roles;
+
+  // PM / LOP — one bench, one role, and barred outright for a Member who
+  // already holds a leadership mandate.
+  const barred =
+    !!who.parliamentRole && LEADERSHIP_MANDATE_ROLES.has(who.parliamentRole);
+  if (!barred) {
+    if (who.partySide === "ruling") roles.push("prime_minister");
+    else if (who.partySide === "opposition") roles.push("leader_of_opposition");
   }
-  if (who.partySide === "ruling") roles.push("prime_minister");
-  else if (who.partySide === "opposition") roles.push("leader_of_opposition");
+
+  // Cabinet / Shadow — also bench-decided, but deliberately NOT subject to the
+  // leadership bar: no such restriction was specified for this stage, so a
+  // Party Leader may still stand for a portfolio.
+  const cabinetRole = cabinetRoleForSide(who.partySide);
+  if (cabinetRole) roles.push(cabinetRole);
+
   return SELF_NOMINATION_ROLE_KEYS.filter((k) => roles.includes(k));
+}
+
+/**
+ * The ministry role this Member's bench gives them, or null before allocation.
+ *
+ * Cabinet and Shadow are the SAME opportunity seen from the two benches, so
+ * this is computed, never chosen — a Ruling Member cannot nominate as a Shadow
+ * Minister and vice versa. Unlike PM/LOP there is no Party-Leader bar.
+ */
+export function cabinetRoleForSide(
+  partySide: "ruling" | "opposition" | null
+): SelfNominationRole | null {
+  if (partySide === "ruling") return "cabinet_minister";
+  if (partySide === "opposition") return "shadow_minister";
+  return null;
+}
+
+export type MinistrySetResult =
+  | { ok: true; ministries: string[] }
+  | { ok: false; error: string };
+
+/**
+ * Validate a Cabinet/Shadow nominee's portfolio picks against the ministries
+ * THIS chapter chose for the event (events.cabinet_ministries, resolved by
+ * effectiveMinistries()). Enforces exactly two, de-duplicates, and rejects
+ * anything outside that event's own list — a chapter running eight portfolios
+ * must not receive a nomination for a ninth.
+ *
+ * Order follows the event's list, so every nomination reads the same way.
+ */
+export function normalizeCabinetMinistries(
+  input: unknown,
+  allowed: readonly string[]
+): MinistrySetResult {
+  if (!Array.isArray(input)) {
+    return { ok: false, error: "Choose exactly two portfolios." };
+  }
+  const allow = new Set(allowed);
+  const seen = new Set<string>();
+  for (const raw of input) {
+    if (typeof raw !== "string" || !allow.has(raw)) {
+      return { ok: false, error: "That portfolio is not offered at this event." };
+    }
+    seen.add(raw);
+  }
+  if (seen.size !== CABINET_MINISTRIES_REQUIRED) {
+    return { ok: false, error: "Choose exactly two portfolios." };
+  }
+  return { ok: true, ministries: allowed.filter((m) => seen.has(m)) };
+}
+
+/** Keep only recognised ministries from a stored row, in the event's order. */
+export function coerceStoredMinistries(
+  value: unknown,
+  allowed: readonly string[]
+): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set(value.filter((v): v is string => typeof v === "string"));
+  return allowed.filter((m) => seen.has(m));
 }
 
 /**
@@ -248,6 +354,8 @@ export type SelfNominationRow = {
   eventId: string;
   participantId: string;
   roles: SelfNominationRole[];
+  /** The two portfolios, when a Cabinet/Shadow role is on this nomination. */
+  ministries: string[];
   /** ISO timestamps. */
   createdAt: string;
   updatedAt: string;
@@ -296,6 +404,8 @@ export function emptySelfNominationStats(): SelfNominationStats {
       parliamentary_journalist: 0,
       prime_minister: 0,
       leader_of_opposition: 0,
+      cabinet_minister: 0,
+      shadow_minister: 0,
     },
   };
 }

@@ -7,6 +7,7 @@ import { signOutYipSession } from "@/app/yip/actions/auth";
 import { GuideLauncher } from "@/components/yip/guide";
 import { GUIDES } from "@/lib/yip/guide/content";
 import { SearchTrigger } from "@/components/yip/search/search-trigger";
+import { ScrollToTop } from "./scroll-to-top";
 
 interface JurySession {
   type: "jury";
@@ -41,6 +42,8 @@ export default async function JuryLayout({
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50 overflow-x-hidden">
+      {/* Every jury screen opens at the top — see scroll-to-top.tsx. */}
+      <ScrollToTop />
       {/* Header -- fixed for mobile */}
       <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
         <div className="flex h-14 items-center justify-between px-4">

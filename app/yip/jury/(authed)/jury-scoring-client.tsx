@@ -386,6 +386,26 @@ function JuryScoringClientInner({
     [activeParticipantRaw]
   );
 
+  // A new delegate means a new sheet — start it at the top.
+  //
+  // Keyed on the delegate's ID, so it fires ONLY on a genuine switch. A juror
+  // scrolling through the criteria of the delegate they are already marking is
+  // never yanked back, which is what makes rapid scoring usable.
+  //
+  // Two frames, not one: selecting a delegate also collapses the digit pad on a
+  // phone, which changes the fixed bar's height and re-measures the clearance
+  // padding, and the keyboard's own dismissal scroll can land after ours. A
+  // single synchronous scrollTo runs before those settle and gets undone. The
+  // rAF pass re-asserts the top once the layout has stopped moving.
+  useEffect(() => {
+    if (!activeParticipant?.id) return;
+    const toTop = () =>
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    toTop();
+    const raf = requestAnimationFrame(() => requestAnimationFrame(toTop));
+    return () => cancelAnimationFrame(raf);
+  }, [activeParticipant?.id]);
+
   // ─── Fetch speaker data ─────────────────────────────────────────
 
   const loadRubricAndScore = useCallback(
@@ -1123,6 +1143,19 @@ function JuryScoringClientInner({
   };
 
   const selectManualParticipant = async (p: Participant) => {
+    // Dismiss the on-screen keyboard FIRST.
+    //
+    // The quick-jump input is a real numeric input inside the bar that is FIXED
+    // TO THE BOTTOM of the screen, so tapping it opens the phone keyboard and
+    // the browser scrolls that input up into the remaining space — which
+    // scrolls the whole sheet down. Picking a delegate used to leave it there,
+    // with the session name and the delegate's number off screen. Blurring here
+    // ends that scroll before the new sheet renders; the scroll-to-top effect
+    // below then puts the sheet at its start. (Field report 2026-08-21.)
+    if (typeof document !== "undefined") {
+      const el = document.activeElement;
+      if (el instanceof HTMLElement) el.blur();
+    }
     setManualParticipant(p);
     setShowPicker(false);
     setPickerSearch(""); // clear search after picking a participant

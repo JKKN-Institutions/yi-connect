@@ -23,6 +23,7 @@ export const SELF_NOMINATION_ROLE_KEYS = [
   "parliamentary_administrator",
   "speaker",
   "party_leader",
+  "parliamentary_journalist",
 ] as const;
 
 export type SelfNominationRole = (typeof SELF_NOMINATION_ROLE_KEYS)[number];
@@ -58,6 +59,16 @@ export const SELF_NOMINATION_ROLES: readonly SelfNominationRoleDef[] = [
     label: "Party Leader",
     description:
       "Leads your party's coalition negotiations and represents it going forward.",
+  },
+  // Added 2026-08-21 (Director). A duty official, not a competing MP — see
+  // OFFICIAL_DUTY_ROLES in lib/yip/constants.ts. Selected on a written news
+  // report rather than a question paper; the report runs as the
+  // 'parliamentary_journalist' questionnaire post.
+  {
+    key: "parliamentary_journalist",
+    label: "Student Journalist",
+    description:
+      "Covers the House across both days and reports on it — neutral about their own party.",
   },
 ] as const;
 
@@ -180,6 +191,7 @@ export function emptySelfNominationStats(): SelfNominationStats {
       parliamentary_administrator: 0,
       speaker: 0,
       party_leader: 0,
+      parliamentary_journalist: 0,
     },
   };
 }

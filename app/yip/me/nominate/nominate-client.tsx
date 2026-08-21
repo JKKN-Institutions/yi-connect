@@ -33,6 +33,8 @@ import {
   inkA,
 } from "../credential-ui";
 import {
+  CABINET_MINISTRIES_REQUIRED,
+  isCabinetRole,
   SELF_NOMINATION_ROLES,
   type SelfNominationRole,
 } from "@/lib/yip/self-nomination";
@@ -82,6 +84,10 @@ type Props = {
    * CLOSED, same as loadError.
    */
   eligibleRoles: SelfNominationRole[];
+  /** Portfolios this event offers, in the chapter's own order. */
+  offeredMinistries: string[];
+  /** Portfolios already on this student's nomination. */
+  initialMinistries: string[];
   /** Server-side read failure — shown verbatim; the screen fails CLOSED. */
   loadError: string | null;
 };
@@ -122,8 +128,22 @@ export function NominateClient({
   initialRoles,
   initialSubmitted,
   eligibleRoles,
+  offeredMinistries,
+  initialMinistries,
   loadError,
 }: Props) {
+  // Portfolio picks, only meaningful while a Cabinet/Shadow role is selected.
+  const [ministries, setMinistries] =
+    useState<string[]>(initialMinistries);
+
+  /** Toggle a portfolio, hard-capped at two — the third tick is ignored. */
+  function toggleMinistry(name: string) {
+    setMinistries((cur) => {
+      if (cur.includes(name)) return cur.filter((m) => m !== name);
+      if (cur.length >= CABINET_MINISTRIES_REQUIRED) return cur;
+      return offeredMinistries.filter((m) => cur.includes(m) || m === name);
+    });
+  }
   // The picker is the ELIGIBLE set, not the whole catalogue — a Ruling Member
   // never sees Leader of Opposition, and a Party Leader sees neither
   // later-stage role. Kept in catalogue order so the list reads the same for
@@ -138,6 +158,8 @@ export function NominateClient({
   // A returning student opens straight in CONFIRMATION; a first-timer in FORM.
   const [editing, setEditing] = useState(!initialSubmitted);
   const [selected, setSelected] = useState<SelfNominationRole[]>(initialRoles);
+  /** A Cabinet/Shadow role is ticked, so portfolios are required. */
+  const wantsCabinet = selected.some(isCabinetRole);
   const [error, setError] = useState<string | null>(loadError);
   const [confirmWithdraw, setConfirmWithdraw] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -162,14 +184,23 @@ export function NominateClient({
       setError("Select at least one role to nominate for.");
       return;
     }
+    // Caught here so the student sees it next to the portfolio list rather
+    // than as a round-trip error. The server re-checks regardless.
+    if (wantsCabinet && ministries.length !== CABINET_MINISTRIES_REQUIRED) {
+      setError("Choose exactly two portfolios.");
+      return;
+    }
     setError(null);
     startTransition(async () => {
       const res = await callAction(() =>
-        submitSelfNomination(eventId, selected)
+        submitSelfNomination(eventId, selected, wantsCabinet ? ministries : [])
       );
       if (res.success) {
         setSubmittedRoles(res.data.roles);
         setSelected(res.data.roles);
+        // Take the server's copy: it returns the portfolios in the event's own
+        // order, and clears them when the edit dropped the Cabinet role.
+        setMinistries(res.data.ministries);
         setHasSubmitted(true);
         setEditing(false);
         toast.success("Nomination submitted.");
@@ -384,6 +415,48 @@ export function NominateClient({
             </p>
 
             <div className="mt-4 space-y-2.5">
+              {wantsCabinet && offeredMinistries.length > 0 ? (
+                <div
+                  className="rounded-xl px-3.5 py-3"
+                  style={{
+                    border: `1.5px dashed ${SAFFRON}`,
+                    background: `${SAFFRON}08`,
+                  }}
+                >
+                  <div className="text-[13px] font-semibold" style={{ color: INK }}>
+                    Choose exactly two portfolios
+                  </div>
+                  <div className="mt-0.5 text-[11.5px]" style={{ color: inkA(0.6) }}>
+                    {ministries.length} of {CABINET_MINISTRIES_REQUIRED} chosen —
+                    you will answer 6 questions on each.
+                  </div>
+                  <div className="mt-2.5 flex flex-wrap gap-2">
+                    {offeredMinistries.map((m) => {
+                      const on = ministries.includes(m);
+                      const full =
+                        !on && ministries.length >= CABINET_MINISTRIES_REQUIRED;
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          disabled={full}
+                          onClick={() => toggleMinistry(m)}
+                          className="rounded-full px-3 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-40"
+                          style={{
+                            border: `1.5px solid ${on ? SAFFRON : inkA(0.12)}`,
+                            background: on ? `${SAFFRON}1a` : "#ffffff",
+                            color: INK,
+                          }}
+                        >
+                          {on ? "✓ " : ""}
+                          {m}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
               {pickableRoles.map((role) => {
                 const isOn = selected.includes(role.key);
                 return (

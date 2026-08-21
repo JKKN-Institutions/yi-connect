@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
+import { effectiveMinistries } from "@/lib/yip/cabinet";
 import { toCsv } from "@/lib/yip/attendance-csv";
 import {
   assertEligibleRoles,
@@ -13,6 +14,8 @@ import {
   countSelfNominations,
   eligibleSelfNominationRoles,
   emptySelfNominationStats,
+  isCabinetRole,
+  normalizeCabinetMinistries,
   normalizeSelfNominationRoles,
   type NominationEligibility,
   SELF_NOMINATION_CSV_HEADERS,
@@ -59,6 +62,7 @@ type SelfNominationDbRow = {
   event_id: string;
   participant_id: string;
   roles: string[] | null;
+  ministries: string[] | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -117,6 +121,9 @@ function toRow(db: SelfNominationDbRow): SelfNominationRow {
     eventId: db.event_id,
     participantId: db.participant_id,
     roles: coerceStoredRoles(db.roles),
+    ministries: Array.isArray(db.ministries)
+      ? db.ministries.filter((m): m is string => typeof m === "string")
+      : [],
     createdAt: db.created_at ?? "",
     updatedAt: db.updated_at ?? db.created_at ?? "",
   };
@@ -188,6 +195,12 @@ export async function getMySelfNomination(eventId: string): Promise<
      * re-derives it server-side and is the check that actually holds.
      */
     eligibleRoles: SelfNominationRole[];
+    /**
+     * The portfolios THIS event offers, in the chapter's own order. Only
+     * meaningful when a Cabinet/Shadow role is among eligibleRoles; the picker
+     * shows it as a sub-list requiring exactly two.
+     */
+    offeredMinistries: string[];
   }>
 > {
   const me = await requireMe(eventId);
@@ -198,9 +211,12 @@ export async function getMySelfNomination(eventId: string): Promise<
   const eligibleRoles = eligibleSelfNominationRoles(
     await readMyEligibility(sb, me.participantId)
   );
+  const offeredMinistries = eligibleRoles.some(isCabinetRole)
+    ? await readEventMinistries(sb, eventId)
+    : [];
 
   const { data, error } = await selfNominations(sb)
-    .select("id, event_id, participant_id, roles, created_at, updated_at")
+    .select("id, event_id, participant_id, roles, ministries, created_at, updated_at")
     .eq("event_id", eventId)
     .eq("participant_id", me.participantId)
     .maybeSingle();
@@ -208,7 +224,12 @@ export async function getMySelfNomination(eventId: string): Promise<
 
   return {
     success: true,
-    data: { open, nomination: data ? toRow(data) : null, eligibleRoles },
+    data: {
+      open,
+      nomination: data ? toRow(data) : null,
+      eligibleRoles,
+      offeredMinistries,
+    },
   };
 }
 
@@ -228,6 +249,25 @@ export async function getMySelfNomination(eventId: string): Promise<
  * null bench. Erring the other way would let an unallocated Member stand for
  * Prime Minister.
  */
+/**
+ * The portfolios THIS event offers — the chapter's own Cabinet list, falling
+ * back to the platform defaults when it has not configured one. Same resolver
+ * the Cabinet tab and Government Formation use, so the three never disagree.
+ */
+async function readEventMinistries(
+  sb: Awaited<ReturnType<typeof createServiceClient>>,
+  eventId: string
+): Promise<string[]> {
+  const { data, error } = await sb
+    .from("events")
+    .select("cabinet_ministries")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (error || !data) return [];
+  const row = data as { cabinet_ministries: unknown };
+  return effectiveMinistries(row.cabinet_ministries).map((m) => m.label);
+}
+
 async function readMyEligibility(
   sb: Awaited<ReturnType<typeof createServiceClient>>,
   participantId: string
@@ -250,7 +290,9 @@ async function readMyEligibility(
 
 export async function submitSelfNomination(
   eventId: string,
-  roles: string[]
+  roles: string[],
+  /** Portfolios, required only when a Cabinet/Shadow role is among `roles`. */
+  ministries: string[] = []
 ): Promise<ActionResult<SelfNominationRow>> {
   const me = await requireMe(eventId);
   if (!me.ok) return { success: false, error: me.error };
@@ -269,6 +311,18 @@ export async function submitSelfNomination(
   const allowed = assertEligibleRoles(parsed.roles, eligible);
   if (!allowed.ok) return { success: false, error: allowed.error };
 
+  // Portfolios travel with a Cabinet/Shadow nomination and only with one. They
+  // are validated against the EVENT's own ministry list, so a chapter running
+  // eight portfolios cannot receive a nomination for a ninth.
+  const wantsCabinet = parsed.roles.some(isCabinetRole);
+  let ministryPicks: string[] | null = null;
+  if (wantsCabinet) {
+    const offered = await readEventMinistries(sb, eventId);
+    const picked = normalizeCabinetMinistries(ministries, offered);
+    if (!picked.ok) return { success: false, error: picked.error };
+    ministryPicks = picked.ministries;
+  }
+
   if (!(await readWindowOpen(sb, eventId))) {
     return {
       success: false,
@@ -283,11 +337,15 @@ export async function submitSelfNomination(
         event_id: eventId,
         participant_id: me.participantId,
         roles: parsed.roles,
+        // Cleared when the student edits down to a non-Cabinet selection —
+        // the CHECK requires "cabinet role ⇒ exactly 2, otherwise none", so a
+        // stale array would reject the whole upsert.
+        ministries: ministryPicks,
         updated_at: now,
       },
       { onConflict: "event_id,participant_id" }
     )
-    .select("id, event_id, participant_id, roles, created_at, updated_at")
+    .select("id, event_id, participant_id, roles, ministries, created_at, updated_at")
     .maybeSingle();
   if (error) return { success: false, error: error.message };
   if (!data) {
@@ -391,7 +449,7 @@ async function readAllNominations(
   const out: SelfNominationDbRow[] = [];
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await selfNominations(sb)
-      .select("id, event_id, participant_id, roles, created_at, updated_at")
+      .select("id, event_id, participant_id, roles, ministries, created_at, updated_at")
       .eq("event_id", eventId)
       .order("created_at", { ascending: false })
       .range(from, from + PAGE - 1);

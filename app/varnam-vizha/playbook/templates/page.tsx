@@ -7,6 +7,32 @@ import { MapPin, Users, CheckCircle2 } from "lucide-react";
 
 export const metadata: Metadata = { title: "Event Templates" };
 
+/** Map a playbook template category to a real yi_connect event category. */
+function toEventCategory(cat: EventTemplate["category"]): string {
+  switch (cat) {
+    case "Sports":
+      return "sports";
+    case "Cultural":
+    case "Music":
+    case "Heritage":
+    case "Ceremony":
+      return "cultural";
+    default: // Awareness, Community
+      return "other";
+  }
+}
+
+/** Prefill link into the New-event form (URL-encoded from the template). */
+function templateHref(t: EventTemplate): string {
+  const params = new URLSearchParams({
+    title: t.name,
+    category: toEventCategory(t.category),
+    description: t.whatItIs,
+  });
+  if (t.typicalVenue) params.set("venue", t.typicalVenue);
+  return `/varnam-vizha/dashboard/events/new?${params.toString()}`;
+}
+
 function categoryChip(cat: EventTemplate["category"]): string {
   switch (cat) {
     case "Sports":
@@ -21,7 +47,7 @@ function categoryChip(cat: EventTemplate["category"]): string {
   }
 }
 
-function TemplateCard({ t }: { t: EventTemplate }) {
+function TemplateCard({ t, canManage }: { t: EventTemplate; canManage: boolean }) {
   return (
     <article className="flex h-full flex-col rounded-2xl border border-[#3B0A45]/10 bg-white p-6 shadow-sm">
       <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -73,6 +99,17 @@ function TemplateCard({ t }: { t: EventTemplate }) {
           )}
         </div>
       )}
+
+      {canManage && (
+        <p className="mt-auto pt-4">
+          <Link
+            href={templateHref(t)}
+            className="text-sm font-semibold text-[#0CA4A5] hover:underline"
+          >
+            Use this template →
+          </Link>
+        </p>
+      )}
     </article>
   );
 }
@@ -99,7 +136,7 @@ export default async function VarnamPlaybookTemplates() {
 
       <div className="grid gap-5 lg:grid-cols-2">
         {EVENT_TEMPLATES.map((t) => (
-          <TemplateCard key={t.name} t={t} />
+          <TemplateCard key={t.name} t={t} canManage={access.canManage} />
         ))}
       </div>
 

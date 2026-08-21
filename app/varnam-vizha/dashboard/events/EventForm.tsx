@@ -44,7 +44,11 @@ export function EventForm({
   initial,
 }: {
   mode: "create" | "edit";
-  initial?: EventFormInitial;
+  /**
+   * Edit mode passes the full row; create mode may pass a partial prefill
+   * (playbook "Use this template →" links). Every field falls back safely.
+   */
+  initial?: Partial<EventFormInitial>;
 }) {
   const [state, action, pending] = useActionState(
     mode === "create" ? createEvent : updateEvent,
@@ -74,7 +78,7 @@ export function EventForm({
       action={action}
       className="rounded-2xl border border-[#3B0A45]/10 bg-white p-6 shadow-sm"
     >
-      {mode === "edit" && initial && (
+      {mode === "edit" && initial?.id && (
         <input type="hidden" name="event_id" value={initial.id} />
       )}
 

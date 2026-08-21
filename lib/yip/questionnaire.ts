@@ -109,6 +109,99 @@ export function isWindowStatus(v: unknown): v is WindowStatus {
   return typeof v === "string" && (WINDOW_STATUSES as readonly string[]).includes(v);
 }
 
+// ─── Is the marking still moving? ────────────────────────────────
+//
+// Marking happens outside this app: papers are queued here and drained by the
+// external routine (see docs/yip-ai-routine.md). Nothing in the database times
+// a claim out — claimScoringWork flips an attempt to 'scoring' BEFORE the
+// routine reads it, so if the routine dies mid-batch those papers sit in
+// 'scoring' for ever and no scheduled run ever picks them up again.
+//
+// That is not hypothetical. On 16 Aug 2026 papers sat claimed for fifteen hours
+// and it was noticed by chance. The organiser's screen showed a count that had
+// simply stopped rising, which looks exactly like "still working".
+//
+// So the counts below are paired with two independent stall tests, and an
+// organiser is told in words what has gone wrong. Deliberately NO estimate of
+// when marking will finish: the papers queue behind work this app cannot see,
+// and a guess printed as a time is a guess an organiser will plan around.
+
+/** How long a stalled queue is tolerated before the screen says so. */
+export const MARKING_STALL_MINUTES = 30;
+
+/**
+ * Live state of the marking queue for one event.
+ *
+ * The elapsed figures are computed SERVER-side and shipped as minutes rather
+ * than being derived from `lastMovedAt` on the client, so a phone with a wrong
+ * clock cannot invent — or hide — a stall.
+ */
+export type QuestionnaireMarkingProgress = {
+  /** Papers handed in. The denominator of "N of M marked". */
+  submitted: number;
+  pending: number;
+  scoring: number;
+  scored: number;
+  failed: number;
+  /** Most recent change to any attempt of this event, or null if none yet. */
+  lastMovedAt: string | null;
+  /** Minutes since `lastMovedAt`, server-measured. Null when nothing has moved. */
+  stalledMinutes: number | null;
+  /** Papers claimed for marking that have not moved for MARKING_STALL_MINUTES+. */
+  stuckScoring: number;
+  /** Minutes since the LONGEST-stuck claimed paper last moved. */
+  oldestStuckMinutes: number | null;
+  checkedAt: string;
+};
+
+/** "45 minutes" / "3 hours" — the way an organiser would say it out loud. */
+export function describeMinutes(minutes: number): string {
+  const m = Math.max(0, Math.round(minutes));
+  if (m < 60) return `${m} minute${m === 1 ? "" : "s"}`;
+  const h = Math.round(m / 60);
+  return `${h} hour${h === 1 ? "" : "s"}`;
+}
+
+/**
+ * What to tell the organiser, in plain English, or nothing at all.
+ *
+ * Two separate tests, because they fail differently:
+ *   1. Papers claimed and abandoned — the routine took them and died. Nothing
+ *      requeues these, so this is the one that needs a human.
+ *   2. A queue that has simply stopped draining.
+ *
+ * Both are gated on there being unfinished work. A finished event whose last
+ * paper was marked yesterday is not stalled, it is done, and saying otherwise
+ * would train organisers to ignore the banner.
+ */
+export function markingStallWarnings(p: QuestionnaireMarkingProgress): string[] {
+  const out: string[] = [];
+
+  if (p.stuckScoring > 0 && p.oldestStuckMinutes != null) {
+    out.push(
+      `${p.stuckScoring} paper${p.stuckScoring === 1 ? " has" : "s have"} been stuck being marked for ${describeMinutes(
+        p.oldestStuckMinutes
+      )} — the marking service may have stopped. Clearing that post's marks puts them back in the queue.`
+    );
+  }
+
+  const waiting = p.pending + p.scoring;
+  if (
+    waiting > 0 &&
+    p.stalledMinutes != null &&
+    p.stalledMinutes >= MARKING_STALL_MINUTES &&
+    p.stuckScoring === 0
+  ) {
+    out.push(
+      `Nothing has been marked for ${describeMinutes(p.stalledMinutes)} and ${waiting} paper${
+        waiting === 1 ? " is" : "s are"
+      } still waiting — the marking service may have stopped.`
+    );
+  }
+
+  return out;
+}
+
 // ─── The rubric ──────────────────────────────────────────────────
 //
 // Reproduced from "YiP 2026 – Regional Round Selection Questionnaires"
@@ -351,6 +444,136 @@ export type QuestionnaireMissingRow = {
   postKey: QuestionnairePostKey;
   startedButBlank: boolean;
 };
+
+// ─── Worth a look before the shortlist ───────────────────────────
+//
+// NOT a gate. The Director was explicit that a blanket "are you sure?" over the
+// whole ranking is the wrong shape (2026-08-16): it fires on every candidate,
+// so it teaches an organiser to click through without reading, and it slows the
+// one moment where thinking matters.
+//
+// So this surfaces exactly two things and nothing else — the two cases where
+// the ranked list, read straight down, hides something an organiser would want
+// to know before they confirm:
+//
+//   (a) a candidate the ranking wants to shortlist whose paper carries red
+//       flags. The flags are already on the answers (RED_FLAGS above, written
+//       by the routine via applyAttemptScores and counted into redFlagCount) —
+//       this reads that same field, it does not invent a second signal.
+//   (b) candidates LEVEL ON POINTS across the cut line. The list shows one of
+//       them above and one below with nothing separating them, and only the
+//       ordering of equal numbers decides which is which.
+//
+// It informs. It blocks nothing, and it changes no ranking.
+
+export type QuestionnaireFlaggedHigh = {
+  attemptId: string;
+  participantId: string;
+  fullName: string;
+  constituencyNumber: number | null;
+  postKey: QuestionnairePostKey;
+  rank: number;
+  pct: number | null;
+  redFlagCount: number;
+};
+
+export type QuestionnaireTiedCandidate = {
+  attemptId: string;
+  participantId: string;
+  fullName: string;
+  constituencyNumber: number | null;
+  rank: number;
+  /** Above the suggested cut on the strength of the ordering alone. */
+  insideCut: boolean;
+};
+
+export type QuestionnaireCutTie = {
+  postKey: QuestionnairePostKey;
+  cutoff: number;
+  pct: number;
+  candidates: QuestionnaireTiedCandidate[];
+};
+
+export type QuestionnaireWatchList = {
+  flaggedHigh: QuestionnaireFlaggedHigh[];
+  cutTies: QuestionnaireCutTie[];
+};
+
+/**
+ * Read the ranked list the way the screen draws it and pull out the two odd
+ * cases. Pure and synchronous: same input, same output, no reads of its own.
+ *
+ * Only SCORED papers are considered, and for the same reason the CSV does it —
+ * an unscored attempt has no rank, so it can neither be shortlisted nor be
+ * level with anybody.
+ */
+export function buildQuestionnaireWatchList(
+  rows: readonly QuestionnaireResultRow[]
+): QuestionnaireWatchList {
+  const byPost = new Map<QuestionnairePostKey, QuestionnaireResultRow[]>();
+  for (const r of rows) {
+    if (r.scoringStatus !== "scored") continue;
+    const list = byPost.get(r.postKey) ?? [];
+    list.push(r);
+    byPost.set(r.postKey, list);
+  }
+
+  const flaggedHigh: QuestionnaireFlaggedHigh[] = [];
+  const cutTies: QuestionnaireCutTie[] = [];
+
+  for (const [postKey, unsorted] of byPost) {
+    // Best first — the same order the table ranks in, sorted here rather than
+    // assumed so this cannot quietly disagree with the screen.
+    const ranked = [...unsorted].sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1));
+    const cutoff = shortlistCutoff(ranked.length);
+
+    ranked.forEach((r, i) => {
+      if (i < cutoff && r.redFlagCount > 0) {
+        flaggedHigh.push({
+          attemptId: r.attemptId,
+          participantId: r.participantId,
+          fullName: r.fullName,
+          constituencyNumber: r.constituencyNumber,
+          postKey,
+          rank: i + 1,
+          pct: r.pct,
+          redFlagCount: r.redFlagCount,
+        });
+      }
+    });
+
+    // A tie only matters when there is a line for it to straddle: if everyone
+    // scored is inside the cut, nobody is being separated by anything.
+    if (ranked.length <= cutoff) continue;
+    const pctAtCut = ranked[cutoff - 1]?.pct;
+    if (pctAtCut == null) continue;
+
+    const tied = ranked
+      .map((r, i) => ({ r, rank: i + 1 }))
+      .filter(({ r }) => r.pct === pctAtCut);
+    const spansCut =
+      tied.some(({ rank }) => rank <= cutoff) && tied.some(({ rank }) => rank > cutoff);
+    if (!spansCut) continue;
+
+    cutTies.push({
+      postKey,
+      cutoff,
+      pct: pctAtCut,
+      candidates: tied.map(({ r, rank }) => ({
+        attemptId: r.attemptId,
+        participantId: r.participantId,
+        fullName: r.fullName,
+        constituencyNumber: r.constituencyNumber,
+        rank,
+        insideCut: rank <= cutoff,
+      })),
+    });
+  }
+
+  flaggedHigh.sort((a, b) => a.postKey.localeCompare(b.postKey) || a.rank - b.rank);
+  cutTies.sort((a, b) => a.postKey.localeCompare(b.postKey));
+  return { flaggedHigh, cutTies };
+}
 
 export type QuestionnaireActionResult<T = null> =
   | { success: true; data: T }

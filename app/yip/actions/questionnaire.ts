@@ -29,6 +29,7 @@ import { logAuditAction } from "@/lib/yip/audit/log-action";
 import { revalidatePath } from "next/cache";
 import {
   ATTEMPT_MINUTES,
+  MARKING_STALL_MINUTES,
   MAX_PER_ANSWER,
   QUESTIONNAIRE_POSTS,
   attemptExpired,
@@ -41,6 +42,7 @@ import {
   questionnairePostLabel,
   questionsPerAttempt,
   type QuestionnaireActionResult as R,
+  type QuestionnaireMarkingProgress,
   type QuestionnairePostKey,
   type QuestionnaireMissingRow,
   type QuestionnaireResponseRow,
@@ -1279,6 +1281,220 @@ export async function rescoreQuestionnaireAttempt(
   revalidateAdmin(eventId);
   await pingScoringRoutine();
   return { success: true, data: { queued: true } };
+}
+
+/**
+ * How far the marking has actually got, and whether it is still moving.
+ *
+ * Read-only and deliberately narrow — three columns, no answers, no names — so
+ * the organiser's screen can poll it every half-minute without weight.
+ *
+ * The elapsed figures are measured HERE rather than on the client. A phone with
+ * a wrong clock would otherwise either invent a stall or, worse, hide one.
+ */
+export async function getQuestionnaireMarkingProgress(
+  eventId: string
+): Promise<R<QuestionnaireMarkingProgress>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) {
+    return { success: false, error: "Not authorized to view this event." };
+  }
+  const sb = await createServiceClient();
+
+  // Submitted papers only: an attempt nobody handed in is not waiting to be
+  // marked, and counting it would make the queue look permanently behind.
+  const rows = await readAllPaged<{
+    scoring_status: string;
+    updated_at: string;
+  }>(() =>
+    tbl<{ scoring_status: string; updated_at: string }>(sb, "questionnaire_attempts")
+      .select("scoring_status, updated_at")
+      .eq("event_id", eventId)
+      .not("submitted_at", "is", null)
+  );
+
+  const now = Date.now();
+  const stallMs = MARKING_STALL_MINUTES * 60_000;
+  let pending = 0;
+  let scoring = 0;
+  let scored = 0;
+  let failed = 0;
+  let stuckScoring = 0;
+  let lastMovedMs: number | null = null;
+  let oldestStuckMs: number | null = null;
+
+  for (const r of rows) {
+    const t = Date.parse(r.updated_at);
+    const known = !Number.isNaN(t);
+    if (known) lastMovedMs = lastMovedMs === null ? t : Math.max(lastMovedMs, t);
+
+    switch (r.scoring_status) {
+      case "pending":
+        pending += 1;
+        break;
+      case "scoring":
+        scoring += 1;
+        // A claimed paper never times out on its own — claimScoringWork flips
+        // it to 'scoring' before the routine reads it, and nothing puts it back.
+        if (known && now - t >= stallMs) {
+          stuckScoring += 1;
+          oldestStuckMs = oldestStuckMs === null ? t : Math.min(oldestStuckMs, t);
+        }
+        break;
+      case "scored":
+        scored += 1;
+        break;
+      case "failed":
+        failed += 1;
+        break;
+      default:
+        break;
+    }
+  }
+
+  return {
+    success: true,
+    data: {
+      submitted: rows.length,
+      pending,
+      scoring,
+      scored,
+      failed,
+      lastMovedAt: lastMovedMs === null ? null : new Date(lastMovedMs).toISOString(),
+      stalledMinutes:
+        lastMovedMs === null ? null : Math.floor((now - lastMovedMs) / 60_000),
+      stuckScoring,
+      oldestStuckMinutes:
+        oldestStuckMs === null ? null : Math.floor((now - oldestStuckMs) / 60_000),
+      checkedAt: new Date(now).toISOString(),
+    },
+  };
+}
+
+/** PostgREST puts `.in()` values in the query string — keep the URL sane. */
+function chunked<T>(items: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/**
+ * Throw away every mark for one post and put its papers back in the queue.
+ *
+ * WHY THIS EXISTS: rescoreQuestionnaireAttempt already does this one paper at a
+ * time, which is fine for a single disputed mark and useless when the marking
+ * routine dies mid-batch and leaves fifty papers claimed-and-abandoned. There is
+ * no timeout on a claim, so without this the only way back is one click per
+ * paper.
+ *
+ * WHAT IT CLEARS: marks, and only marks — the per-answer rubric numbers, the
+ * flags, the attempt's totals, the organiser-only analysis note, and the status
+ * back to 'pending' so the routine picks it up again.
+ *
+ * WHAT IT NEVER TOUCHES: `answer_text`, `answered_at` and `submitted_at`. The
+ * student's writing and the moment they handed it in are the record of what
+ * happened in the room; a marking mistake is not a reason to disturb either,
+ * and a paper that lost its submitted_at would silently drop out of the results
+ * view and out of the scoring queue at the same time.
+ *
+ * Answers are cleared BEFORE the attempts are re-queued: the other order would
+ * let the routine claim a paper and start writing marks into rows this action
+ * is about to blank, and the paper would end up 'scored' with half its answers
+ * wiped.
+ */
+export async function clearQuestionnaireMarksForPost(
+  eventId: string,
+  postKeyRaw: string
+): Promise<R<{ postKey: QuestionnairePostKey; attempts: number; answers: number }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event." };
+  }
+  if (!isQuestionnairePostKey(postKeyRaw)) {
+    return { success: false, error: "Unknown post." };
+  }
+  const postKey = postKeyRaw;
+  const sb = await createServiceClient();
+
+  const attempts = await readAllPaged<{ id: string }>(() =>
+    tbl<{ id: string }>(sb, "questionnaire_attempts")
+      .select("id")
+      .eq("event_id", eventId)
+      .eq("post_key", postKey)
+      .not("submitted_at", "is", null)
+  );
+  if (attempts.length === 0) {
+    return {
+      success: false,
+      error: `Nobody has handed in a ${questionnairePostLabel(
+        postKey
+      )} paper yet, so there are no marks to clear.`,
+    };
+  }
+
+  const ids = attempts.map((a) => a.id);
+  const batches = chunked(ids, 100);
+  const now = new Date().toISOString();
+
+  let answersCleared = 0;
+  for (const batch of batches) {
+    const { data, error } = await answersT(sb)
+      .update({
+        grounding: null,
+        depth: null,
+        voice: null,
+        red_flag_penalty: null,
+        score: null,
+        // The column is `jsonb not null default '[]'` — an empty array, never null.
+        flags: [],
+        scored_at: null,
+        updated_at: now,
+      })
+      .in("attempt_id", batch)
+      .select("id");
+    if (error) return { success: false, error: error.message };
+    answersCleared += data?.length ?? 0;
+  }
+
+  let attemptsCleared = 0;
+  for (const batch of batches) {
+    const { data, error } = await attemptsT(sb)
+      .update({
+        scoring_status: "pending",
+        total_score: null,
+        max_score: null,
+        pct: null,
+        scored_at: null,
+        score_error: null,
+        analysis_note: null,
+        updated_at: now,
+      })
+      .in("id", batch)
+      // Belt and braces: the ids came from this event, and they stay in it.
+      .eq("event_id", eventId)
+      .select("id");
+    if (error) return { success: false, error: error.message };
+    attemptsCleared += data?.length ?? 0;
+  }
+
+  await logAuditAction({
+    action_type: "update",
+    target_table: "questionnaire_attempts",
+    target_event_id: eventId,
+    metadata: {
+      post_key: postKey,
+      action: "clear_marks_and_requeue",
+      attempts: attemptsCleared,
+      answers: answersCleared,
+    },
+  });
+
+  revalidateAdmin(eventId);
+  await pingScoringRoutine();
+  return {
+    success: true,
+    data: { postKey, attempts: attemptsCleared, answers: answersCleared },
+  };
 }
 
 // ─── Question-bank review (organiser-only, out-of-band) ──────────────────

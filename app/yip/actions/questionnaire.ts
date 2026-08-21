@@ -227,10 +227,10 @@ function uniformExpiry(
   startedAt: Date
 ): string {
   const openedAt = windows.find((w) => w.post_key === postKey)?.opened_at;
-  if (!openedAt) return expiryFor(startedAt);
+  if (!openedAt) return expiryFor(startedAt, postKey);
   const parsed = new Date(openedAt);
-  if (Number.isNaN(parsed.getTime())) return expiryFor(startedAt);
-  return expiryFor(parsed);
+  if (Number.isNaN(parsed.getTime())) return expiryFor(startedAt, postKey);
+  return expiryFor(parsed, postKey);
 }
 
 /**
@@ -690,6 +690,8 @@ export type PostOverview = {
   questionCount: number;
   questionSource: "chapter" | "national";
   drawSize: number;
+  /** Window length for THIS post — 30 for the three original posts, 60 for the journalist report. */
+  minutes: number;
   nominated: number;
   started: number;
   submitted: number;
@@ -730,6 +732,7 @@ export async function getQuestionnaireOverview(
       questionCount: questions.length,
       questionSource: source,
       drawSize: Math.min(p.questionsPerAttempt, questions.length),
+      minutes: p.attemptMinutes,
       nominated: noms.filter((n) => Array.isArray(n.roles) && n.roles.includes(p.key)).length,
       started: mine.length,
       submitted: mine.filter((a) => a.submitted_at !== null).length,

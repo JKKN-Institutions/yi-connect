@@ -28,6 +28,7 @@ export const QUESTIONNAIRE_POST_KEYS = [
   "parliamentary_administrator",
   "speaker",
   "party_leader",
+  "parliamentary_journalist",
 ] as const;
 
 export type QuestionnairePostKey = (typeof QUESTIONNAIRE_POST_KEYS)[number];
@@ -37,6 +38,12 @@ export type QuestionnairePostDef = {
   label: string;
   /** How many of that post's bank a single candidate is asked. */
   questionsPerAttempt: number;
+  /**
+   * Length of that post's window, in minutes. Per-post since 2026-08-21: the
+   * three original posts stay on the Director's flat 30, but Student
+   * Journalist is a single long-form news report and was set to 60.
+   */
+  attemptMinutes: number;
 };
 
 /**
@@ -45,9 +52,13 @@ export type QuestionnairePostDef = {
  * per candidate, so two candidates rarely get the same paper.
  */
 export const QUESTIONNAIRE_POSTS: readonly QuestionnairePostDef[] = [
-  { key: "parliamentary_administrator", label: "Administrator", questionsPerAttempt: 10 },
-  { key: "speaker", label: "Speaker", questionsPerAttempt: 6 },
-  { key: "party_leader", label: "Party Leader", questionsPerAttempt: 6 },
+  { key: "parliamentary_administrator", label: "Administrator", questionsPerAttempt: 10, attemptMinutes: 30 },
+  { key: "speaker", label: "Speaker", questionsPerAttempt: 6, attemptMinutes: 30 },
+  { key: "party_leader", label: "Party Leader", questionsPerAttempt: 6, attemptMinutes: 30 },
+  // Student Journalist is not a question paper: the bank holds ONE prompt (the
+  // report brief) and the candidate writes a single news report against it, so
+  // the draw is 1 and the window is 60 minutes (Director, 2026-08-21).
+  { key: "parliamentary_journalist", label: "Student Journalist", questionsPerAttempt: 1, attemptMinutes: 60 },
 ] as const;
 
 const POST_BY_KEY = new Map<string, QuestionnairePostDef>(
@@ -68,6 +79,14 @@ export function questionnairePostLabel(key: string): string {
 
 export function questionsPerAttempt(key: string): number {
   return POST_BY_KEY.get(key)?.questionsPerAttempt ?? 0;
+}
+
+/**
+ * Window length for a post, in minutes. Unknown keys fall back to the original
+ * flat ATTEMPT_MINUTES so a bad key can never hand out an unbounded window.
+ */
+export function attemptMinutesFor(key: string): number {
+  return POST_BY_KEY.get(key)?.attemptMinutes ?? ATTEMPT_MINUTES;
 }
 
 /**
@@ -352,8 +371,12 @@ export function attemptExpired(
   return now.getTime() > t;
 }
 
-export function expiryFor(startedAt: Date = new Date()): string {
-  return new Date(startedAt.getTime() + ATTEMPT_MINUTES * 60_000).toISOString();
+export function expiryFor(
+  startedAt: Date = new Date(),
+  postKey?: string
+): string {
+  const minutes = postKey ? attemptMinutesFor(postKey) : ATTEMPT_MINUTES;
+  return new Date(startedAt.getTime() + minutes * 60_000).toISOString();
 }
 
 // ─── Display ─────────────────────────────────────────────────────

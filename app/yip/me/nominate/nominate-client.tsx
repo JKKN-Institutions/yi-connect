@@ -75,6 +75,13 @@ type Props = {
   initialOpen: boolean;
   initialRoles: SelfNominationRole[];
   initialSubmitted: boolean;
+  /**
+   * Roles this student may pick, from the server. The later-stage roles (PM /
+   * Leader of Opposition) depend on their bench, so the catalogue is NOT the
+   * picker: render only these. Empty means "show nothing" — the screen fails
+   * CLOSED, same as loadError.
+   */
+  eligibleRoles: SelfNominationRole[];
   /** Server-side read failure — shown verbatim; the screen fails CLOSED. */
   loadError: string | null;
 };
@@ -114,8 +121,16 @@ export function NominateClient({
   initialOpen,
   initialRoles,
   initialSubmitted,
+  eligibleRoles,
   loadError,
 }: Props) {
+  // The picker is the ELIGIBLE set, not the whole catalogue — a Ruling Member
+  // never sees Leader of Opposition, and a Party Leader sees neither
+  // later-stage role. Kept in catalogue order so the list reads the same for
+  // everyone who can see a given role.
+  const pickableRoles = SELF_NOMINATION_ROLES.filter((r) =>
+    eligibleRoles.includes(r.key)
+  );
   const [open, setOpen] = useState(initialOpen);
   const [hasSubmitted, setHasSubmitted] = useState(initialSubmitted);
   const [submittedRoles, setSubmittedRoles] =
@@ -369,7 +384,7 @@ export function NominateClient({
             </p>
 
             <div className="mt-4 space-y-2.5">
-              {SELF_NOMINATION_ROLES.map((role) => {
+              {pickableRoles.map((role) => {
                 const isOn = selected.includes(role.key);
                 return (
                   <label

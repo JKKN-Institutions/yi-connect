@@ -29,6 +29,8 @@ export const QUESTIONNAIRE_POST_KEYS = [
   "speaker",
   "party_leader",
   "parliamentary_journalist",
+  "prime_minister",
+  "leader_of_opposition",
 ] as const;
 
 export type QuestionnairePostKey = (typeof QUESTIONNAIRE_POST_KEYS)[number];
@@ -59,6 +61,11 @@ export const QUESTIONNAIRE_POSTS: readonly QuestionnairePostDef[] = [
   // report brief) and the candidate writes a single news report against it, so
   // the draw is 1 and the window is 60 minutes (Director, 2026-08-21).
   { key: "parliamentary_journalist", label: "Student Journalist", questionsPerAttempt: 1, attemptMinutes: 60 },
+  // Later-stage posts (after Government Formation). Banks of 20 each, drawn 6,
+  // on the standard 30-minute window (Director, 2026-08-21). The source PDF's
+  // header says "all 20 / max 200"; the Director's 6-of-20 ruling supersedes it.
+  { key: "prime_minister", label: "Prime Minister", questionsPerAttempt: 6, attemptMinutes: 30 },
+  { key: "leader_of_opposition", label: "Leader of Opposition", questionsPerAttempt: 6, attemptMinutes: 30 },
 ] as const;
 
 const POST_BY_KEY = new Map<string, QuestionnairePostDef>(

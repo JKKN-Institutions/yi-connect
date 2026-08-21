@@ -7,14 +7,18 @@ import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { toCsv } from "@/lib/yip/attendance-csv";
 import {
+  assertEligibleRoles,
   buildSelfNominationCsvRows,
   coerceStoredRoles,
   countSelfNominations,
+  eligibleSelfNominationRoles,
   emptySelfNominationStats,
   normalizeSelfNominationRoles,
+  type NominationEligibility,
   SELF_NOMINATION_CSV_HEADERS,
   type SelfNominationActionResult,
   type SelfNominationResultRow,
+  type SelfNominationRole,
   type SelfNominationRow,
   type SelfNominationStats,
 } from "@/lib/yip/self-nomination";
@@ -174,13 +178,26 @@ function revalidateAdmin(eventId: string) {
  * are refused once closed.
  */
 export async function getMySelfNomination(eventId: string): Promise<
-  ActionResult<{ open: boolean; nomination: SelfNominationRow | null }>
+  ActionResult<{
+    open: boolean;
+    nomination: SelfNominationRow | null;
+    /**
+     * Which roles THIS student may pick. The picker renders only these, so a
+     * Ruling Member never sees Leader of Opposition and a Party Leader sees
+     * neither later-stage role. Presentation only — submitSelfNomination
+     * re-derives it server-side and is the check that actually holds.
+     */
+    eligibleRoles: SelfNominationRole[];
+  }>
 > {
   const me = await requireMe(eventId);
   if (!me.ok) return { success: false, error: me.error };
 
   const sb = await createServiceClient();
   const open = await readWindowOpen(sb, eventId);
+  const eligibleRoles = eligibleSelfNominationRoles(
+    await readMyEligibility(sb, me.participantId)
+  );
 
   const { data, error } = await selfNominations(sb)
     .select("id, event_id, participant_id, roles, created_at, updated_at")
@@ -191,7 +208,7 @@ export async function getMySelfNomination(eventId: string): Promise<
 
   return {
     success: true,
-    data: { open, nomination: data ? toRow(data) : null },
+    data: { open, nomination: data ? toRow(data) : null, eligibleRoles },
   };
 }
 
@@ -203,6 +220,34 @@ export async function getMySelfNomination(eventId: string): Promise<
  * Refuses when the window is closed. Validates + de-duplicates the role set
  * (normalizeSelfNominationRoles) before it reaches the CHECK constraint.
  */
+/**
+ * The caller's own bench + parliament role, for the PM/LOP eligibility gate.
+ *
+ * Fails CLOSED on any read problem: a missing row or a query error returns
+ * nulls, and eligibleSelfNominationRoles() grants no later-stage role for a
+ * null bench. Erring the other way would let an unallocated Member stand for
+ * Prime Minister.
+ */
+async function readMyEligibility(
+  sb: Awaited<ReturnType<typeof createServiceClient>>,
+  participantId: string
+): Promise<NominationEligibility> {
+  const { data, error } = await sb
+    .from("participants")
+    .select("party_side, parliament_role")
+    .eq("id", participantId)
+    .maybeSingle();
+  if (error || !data) return { partySide: null, parliamentRole: null };
+  const row = data as {
+    party_side: "ruling" | "opposition" | null;
+    parliament_role: string | null;
+  };
+  return {
+    partySide: row.party_side ?? null,
+    parliamentRole: row.parliament_role ?? null,
+  };
+}
+
 export async function submitSelfNomination(
   eventId: string,
   roles: string[]
@@ -214,6 +259,16 @@ export async function submitSelfNomination(
   if (!parsed.ok) return { success: false, error: parsed.error };
 
   const sb = await createServiceClient();
+
+  // Eligibility for the later-stage roles (PM / LOP) is decided by the
+  // Member's OWN row, never by what the client sent. The picker hides
+  // ineligible roles, but a hand-rolled POST never goes near the picker, so
+  // this server-side check is the one that actually holds. Fails closed: a
+  // participant row we cannot read yields no later-stage eligibility.
+  const eligible = await readMyEligibility(sb, me.participantId);
+  const allowed = assertEligibleRoles(parsed.roles, eligible);
+  if (!allowed.ok) return { success: false, error: allowed.error };
+
   if (!(await readWindowOpen(sb, eventId))) {
     return {
       success: false,

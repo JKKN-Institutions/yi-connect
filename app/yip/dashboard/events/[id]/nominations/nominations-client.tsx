@@ -79,6 +79,9 @@ const ROLE_BADGE: Record<SelfNominationRole, string> = {
   party_leader: "border-[#138808]/25 bg-[#138808]/10 text-[#0f7006]",
   parliamentary_journalist:
     "border-[#6a4a9c]/25 bg-[#6a4a9c]/10 text-[#5a3d87]",
+  prime_minister: "border-[#138808]/35 bg-[#138808]/15 text-[#0b5a04]",
+  leader_of_opposition:
+    "border-[#8a2b27]/25 bg-[#8a2b27]/10 text-[#8a2b27]",
 };
 
 export function NominationsClient({

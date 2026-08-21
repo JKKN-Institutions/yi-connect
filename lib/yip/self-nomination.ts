@@ -24,6 +24,8 @@ export const SELF_NOMINATION_ROLE_KEYS = [
   "speaker",
   "party_leader",
   "parliamentary_journalist",
+  "prime_minister",
+  "leader_of_opposition",
 ] as const;
 
 export type SelfNominationRole = (typeof SELF_NOMINATION_ROLE_KEYS)[number];
@@ -70,7 +72,107 @@ export const SELF_NOMINATION_ROLES: readonly SelfNominationRoleDef[] = [
     description:
       "Covers the House across both days and reports on it — neutral about their own party.",
   },
+  // Added 2026-08-21 (Director). LATER-STAGE roles: this pair runs AFTER
+  // Government Formation, so unlike the four above they are not open to
+  // everyone — see eligibleSelfNominationRoles(). A Member gets at most ONE of
+  // them, decided by which bench their party landed on.
+  {
+    key: "prime_minister",
+    label: "Prime Minister",
+    description:
+      "Heads the Government, sets the legislative agenda, and answers for the ruling coalition.",
+  },
+  {
+    key: "leader_of_opposition",
+    label: "Leader of Opposition",
+    description:
+      "Leads the Opposition benches, holds the Government to account, and offers the alternative.",
+  },
 ] as const;
+
+// ─── Eligibility (later-stage roles only) ───────────────────────
+
+/**
+ * Roles every Member may always put themselves forward for. These run BEFORE
+ * Government Formation, when nobody has a bench yet, so there is nothing to
+ * gate on.
+ */
+const ALWAYS_ELIGIBLE_ROLES: readonly SelfNominationRole[] = [
+  "parliamentary_administrator",
+  "speaker",
+  "party_leader",
+  "parliamentary_journalist",
+];
+
+/**
+ * A leadership mandate that BARS its holder from contesting PM or LOP. A Party
+ * Leader already leads their party into coalition talks; a Coalition Leader
+ * leads a bloc of them. `coalition_leader` is a distinct parliament_role that
+ * REPLACES party_leader on that participant's row, so excluding only
+ * "party_leader" would quietly let the more senior of the two stand.
+ */
+const LEADERSHIP_MANDATE_ROLES = new Set<string>([
+  "party_leader",
+  "coalition_leader",
+]);
+
+export type NominationEligibility = {
+  /** The bench the Member's party landed on at Government Formation. */
+  partySide: "ruling" | "opposition" | null;
+  /** The Member's current parliament_role, if any. */
+  parliamentRole: string | null;
+};
+
+/**
+ * Which roles THIS Member may self-nominate for.
+ *
+ * The four early roles are always available. PM and LOP are the later stage and
+ * are gated two ways (Director, 2026-08-21):
+ *
+ *   • one bench, one role — Ruling ⇒ Prime Minister, Opposition ⇒ Leader of
+ *     Opposition. Never both, and never the other bench's role.
+ *   • a Party Leader (or Coalition Leader) gets NEITHER.
+ *
+ * FAILS CLOSED, per the repo's authorization rule: an unknown or missing
+ * `partySide` — a Member not yet allocated a party, or a row read before
+ * Government Formation ran — yields no later-stage role at all. Opening the
+ * gate on null would let every unallocated Member stand for PM.
+ */
+export function eligibleSelfNominationRoles(
+  who: NominationEligibility
+): SelfNominationRole[] {
+  const roles = [...ALWAYS_ELIGIBLE_ROLES];
+  if (who.parliamentRole && LEADERSHIP_MANDATE_ROLES.has(who.parliamentRole)) {
+    return roles;
+  }
+  if (who.partySide === "ruling") roles.push("prime_minister");
+  else if (who.partySide === "opposition") roles.push("leader_of_opposition");
+  return SELF_NOMINATION_ROLE_KEYS.filter((k) => roles.includes(k));
+}
+
+/**
+ * Reject any role the Member is not eligible for. The picker already hides
+ * them, but a hand-rolled POST does not go near the picker — this is the check
+ * that actually holds, and every write path must call it.
+ */
+export function assertEligibleRoles(
+  roles: readonly SelfNominationRole[],
+  who: NominationEligibility
+): RoleSetResult {
+  const allowed = new Set(eligibleSelfNominationRoles(who));
+  for (const role of roles) {
+    if (!allowed.has(role)) {
+      return {
+        ok: false,
+        error:
+          role === "prime_minister" || role === "leader_of_opposition"
+            ? "You are not eligible to stand for that role."
+            : "That is not a role you can nominate for.",
+      };
+    }
+  }
+  return { ok: true, roles: [...roles] };
+}
 
 const ROLE_BY_KEY = new Map<string, SelfNominationRoleDef>(
   SELF_NOMINATION_ROLES.map((r) => [r.key, r])
@@ -192,6 +294,8 @@ export function emptySelfNominationStats(): SelfNominationStats {
       speaker: 0,
       party_leader: 0,
       parliamentary_journalist: 0,
+      prime_minister: 0,
+      leader_of_opposition: 0,
     },
   };
 }

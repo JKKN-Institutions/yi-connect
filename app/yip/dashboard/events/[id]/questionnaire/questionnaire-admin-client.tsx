@@ -19,6 +19,7 @@ import {
   FileText,
   Info,
   Loader2,
+  Paperclip,
   RefreshCw,
   Sparkles,
 } from "lucide-react";
@@ -38,6 +39,7 @@ import {
   exportQuestionnaireCsv,
   exportQuestionnaireResponsesCsv,
   getQuestionnaireAttemptDetail,
+  getQuestionnaireFileUrl,
   getQuestionnaireOverview,
   getQuestionnaireQuestionReview,
   getQuestionnaireResults,
@@ -49,6 +51,7 @@ import {
   type PostOverview,
 } from "@/app/yip/actions/questionnaire";
 import {
+  formatFileSize,
   formatQuestionnaireTime,
   questionnairePostLabel,
   shortlistCutoff,
@@ -135,6 +138,28 @@ export function QuestionnaireAdminClient({
     // failed refresh would silently wipe a real error off the screen.
     if (o.success && r.success) setError(null);
   }, [eventId]);
+
+  /**
+   * Open one handed-in file.
+   *
+   * The bucket is PRIVATE — there is no URL to link to until the server mints
+   * a signed one, and it lasts five minutes. The blank tab is opened on the
+   * CLICK, before the await, or Safari treats the later window.open as a popup
+   * and swallows it.
+   */
+  function openHandedInFile(attemptId: string, path: string) {
+    const tab = window.open("", "_blank", "noopener,noreferrer");
+    void (async () => {
+      const res = await callAction(() => getQuestionnaireFileUrl(eventId, attemptId, path));
+      if (!res.success) {
+        tab?.close();
+        toast.error(res.error);
+        return;
+      }
+      if (tab) tab.location.href = res.data.url;
+      else window.location.href = res.data.url;
+    })();
+  }
 
   function applyToggle() {
     if (!confirm) return;
@@ -549,6 +574,22 @@ export function QuestionnaireAdminClient({
                               {r.answered} of {r.drawn} answered
                             </span>
                           )}
+                          {/*
+                            A handed-in file counts as an answer, so a paper
+                            here may have almost no typed words in it. Say so
+                            on the row — otherwise a low score on a photographed
+                            report reads as a candidate who barely wrote
+                            anything, and the pages never get opened.
+                          */}
+                          {r.fileCount > 0 && (
+                            <span
+                              className="mt-0.5 inline-flex items-center gap-1 text-[11px]"
+                              style={{ color: SAFFRON }}
+                            >
+                              <Paperclip className="size-3" />
+                              {r.fileCount} file{r.fileCount === 1 ? "" : "s"} handed in
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-2 text-right text-xs">
                           {r.redFlagCount > 0 ? (
@@ -609,8 +650,36 @@ export function QuestionnaireAdminClient({
                             {a.position}. {a.question}
                           </p>
                           <p className="mt-1 whitespace-pre-wrap text-sm text-[#1a1a3e]/80">
-                            {a.answer || <em className="text-[#1a1a3e]/40">No answer</em>}
+                            {a.answer || (
+                              <em className="text-[#1a1a3e]/40">
+                                {a.files.length > 0
+                                  ? "Handed in as a file — nothing typed."
+                                  : "No answer"}
+                              </em>
+                            )}
                           </p>
+                          {a.files.length > 0 && (
+                            <ul className="mt-1.5 space-y-1">
+                              {a.files.map((f) => (
+                                <li key={f.path}>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      openHandedInFile(expanded, f.path)
+                                    }
+                                    className="inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-xs underline-offset-4 hover:underline"
+                                    style={{ borderColor: "#1a1a3e1a", color: SAFFRON }}
+                                  >
+                                    <Paperclip className="size-3 shrink-0" />
+                                    <span className="truncate">{f.name}</span>
+                                    <span className="shrink-0 text-[11px] text-[#1a1a3e]/45">
+                                      {formatFileSize(f.size)}
+                                    </span>
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
                           <p className="mt-1 text-[11px] text-[#1a1a3e]/55">
                             {a.score == null
                               ? "Not scored"
@@ -685,8 +754,8 @@ export function QuestionnaireAdminClient({
               Nominated, nothing answered ({missing.length})
             </p>
             <p className="mt-1 text-xs text-[#1a1a3e]/60">
-              These students put their name down but have no answers on record, so they
-              are not in the ranking above.
+              These students put their name down but have nothing on record — no typed
+              answers and no files handed in — so they are not in the ranking above.
             </p>
             <ul className="mt-3 space-y-1.5">
               {missing.map((m) => (

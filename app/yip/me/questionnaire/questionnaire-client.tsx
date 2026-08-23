@@ -25,20 +25,32 @@ import {
   ChevronRight,
   Clock3,
   Loader2,
+  Paperclip,
   Send,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   getMyQuestionnaire,
+  removeQuestionnaireFile,
   saveQuestionnaireAnswer,
   startQuestionnaire,
   submitQuestionnaire,
+  uploadQuestionnaireFile,
   type MyPostState,
   type StartedAttempt,
 } from "@/app/yip/actions/questionnaire";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
 import { armTimerSound } from "@/lib/yip/timer-sound";
-import { wordCount } from "@/lib/yip/questionnaire";
+import {
+  QUESTIONNAIRE_MAX_FILES_PER_ANSWER,
+  QUESTIONNAIRE_UPLOAD_ACCEPT,
+  answerIsGiven,
+  formatFileSize,
+  questionnaireAllowsFileUpload,
+  questionnairePostLabel,
+  wordCount,
+} from "@/lib/yip/questionnaire";
 import {
   SectionShell,
   SectionHeading,
@@ -83,7 +95,9 @@ export function QuestionnaireClient({
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(loadError);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const mine = posts.filter((p) => p.nominated);
   const openNow = mine.filter((p) => p.windowOpen && !p.attempt?.submittedAt);
@@ -178,11 +192,80 @@ export function QuestionnaireClient({
         return;
       }
       setAttempt(res.data);
-      const firstUnanswered = res.data.questions.findIndex((q) => q.answer.trim() === "");
+      // A question with a handed-in file is ANSWERED — resuming must not drop
+      // the student back on a question they already dealt with by uploading.
+      const firstUnanswered = res.data.questions.findIndex(
+        (q) => !answerIsGiven(q.answer, q.files)
+      );
       const at = firstUnanswered === -1 ? 0 : firstUnanswered;
       setIndex(at);
       setDraft(res.data.questions[at]?.answer ?? "");
     });
+  }
+
+  // ── Handing in a file ──────────────────────────────────────────
+  // Only offered on the Student Journalist report. Typing keeps working
+  // exactly as it did — a file is as well as, or instead of, typed text.
+
+  /** Replace this question's file list in state after the server confirms it. */
+  const setFilesForCurrent = useCallback(
+    (files: StartedAttempt["questions"][number]["files"]) => {
+      setAttempt((prev) =>
+        prev
+          ? {
+              ...prev,
+              questions: prev.questions.map((q, i) =>
+                i === index ? { ...q, files } : q
+              ),
+            }
+          : prev
+      );
+    },
+    [index]
+  );
+
+  async function handlePickFiles(picked: FileList | null) {
+    if (!attempt || !picked || picked.length === 0) return;
+    const position = attempt.questions[index]?.position;
+    if (position == null) return;
+
+    setUploading(true);
+    // One at a time: the server appends to the answer row, so parallel uploads
+    // would race and one could overwrite the other's entry.
+    for (const file of Array.from(picked)) {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await callAction(() =>
+        uploadQuestionnaireFile(eventId, attempt.postKey, position, form)
+      );
+      if (!res.success) {
+        setError(res.error);
+        toast.error(res.error);
+        break;
+      }
+      setFilesForCurrent(res.data.files);
+      setError(null);
+    }
+    setUploading(false);
+    // Clear the input or picking the SAME file again fires no change event.
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function handleRemoveFile(path: string) {
+    if (!attempt) return;
+    const position = attempt.questions[index]?.position;
+    if (position == null) return;
+    setUploading(true);
+    const res = await callAction(() =>
+      removeQuestionnaireFile(eventId, attempt.postKey, position, path)
+    );
+    setUploading(false);
+    if (!res.success) {
+      setError(res.error);
+      toast.error(res.error);
+      return;
+    }
+    setFilesForCurrent(res.data.files);
   }
 
   function handleNext() {
@@ -227,6 +310,7 @@ export function QuestionnaireClient({
 
   const isLast = attempt ? index >= attempt.questions.length - 1 : false;
   const answering = attempt !== null && !attempt.submittedAt;
+  const currentFiles = attempt?.questions[index]?.files ?? [];
 
   return (
     <div className="space-y-4">
@@ -285,11 +369,7 @@ export function QuestionnaireClient({
                   className="text-[10px] font-bold uppercase tracking-[0.16em]"
                   style={{ color: SAFFRON }}
                 >
-                  {attempt.postKey === "parliamentary_administrator"
-                    ? "Administrator"
-                    : attempt.postKey === "speaker"
-                      ? "Speaker"
-                      : "Party Leader"}
+                  {questionnairePostLabel(attempt.postKey)}
                 </p>
                 <h2 className="text-[16px] font-semibold" style={{ ...SERIF, color: INK }}>
                   Question {index + 1} of {attempt.questions.length}
@@ -333,10 +413,99 @@ export function QuestionnaireClient({
               </span>
             </div>
 
+            {/* ── Hand in a file (Student Journalist only) ── */}
+            {questionnaireAllowsFileUpload(attempt.postKey) && (
+              <div
+                className="mt-3 rounded-xl border p-3"
+                style={{ borderColor: inkA(0.15), background: `${SAFFRON}08` }}
+              >
+                <p className="text-[13px] font-semibold" style={{ color: INK }}>
+                  Or hand in a file
+                </p>
+                <p className="mt-0.5 text-xs" style={{ color: inkA(0.6) }}>
+                  A document, or a photo of your handwritten report. You can do this
+                  instead of typing, or as well as it.
+                </p>
+
+                {currentFiles.length > 0 && (
+                  <ul className="mt-2.5 space-y-1.5">
+                    {currentFiles.map((f) => (
+                      <li
+                        key={f.path}
+                        className="flex items-center gap-2 rounded-xl border bg-white px-3 py-2"
+                        style={{ borderColor: inkA(0.12) }}
+                      >
+                        <Paperclip
+                          className="size-3.5 shrink-0"
+                          style={{ color: SAFFRON }}
+                        />
+                        <span
+                          className="min-w-0 flex-1 truncate text-xs"
+                          style={{ color: INK }}
+                        >
+                          {f.name}
+                        </span>
+                        <span
+                          className="shrink-0 text-[11px] tabular-nums"
+                          style={{ color: inkA(0.45) }}
+                        >
+                          {formatFileSize(f.size)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void handleRemoveFile(f.path)}
+                          disabled={uploading}
+                          aria-label={`Remove ${f.name}`}
+                          className="inline-flex size-8 shrink-0 items-center justify-center rounded-xl disabled:opacity-40"
+                          style={{ color: inkA(0.55) }}
+                        >
+                          <X className="size-4" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept={QUESTIONNAIRE_UPLOAD_ACCEPT}
+                  className="sr-only"
+                  onChange={(e) => void handlePickFiles(e.target.files)}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading || currentFiles.length >= QUESTIONNAIRE_MAX_FILES_PER_ANSWER}
+                  className="mt-2.5 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold disabled:opacity-50"
+                  style={{ background: `${SAFFRON}14`, color: SAFFRON }}
+                >
+                  {uploading ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Paperclip className="size-4" />
+                  )}
+                  {uploading
+                    ? "Adding…"
+                    : currentFiles.length > 0
+                      ? "Add another file"
+                      : "Choose a file or take a photo"}
+                </button>
+                <p className="mt-1.5 text-[11px]" style={{ color: inkA(0.45) }}>
+                  {currentFiles.length >= QUESTIONNAIRE_MAX_FILES_PER_ANSWER
+                    ? `That's the most you can add (${QUESTIONNAIRE_MAX_FILES_PER_ANSWER}). Remove one if you need to swap it.`
+                    : `Up to ${QUESTIONNAIRE_MAX_FILES_PER_ANSWER} files, 10 MB each. Photos, PDF or Word.`}
+                </p>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={isLast ? handleSubmit : handleNext}
-              disabled={isPending}
+              // Also blocked while a file is going up — submitting mid-upload
+              // would hand in a paper without the page the student just chose.
+              disabled={isPending || uploading}
               className="mt-4 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white disabled:opacity-60"
               style={{ background: isLast ? GREEN : INK }}
             >

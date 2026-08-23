@@ -34,10 +34,13 @@ import {
   attemptExpired,
   buildQuestionnaireCsv,
   buildQuestionnaireResponsesCsv,
+  CABINET_QUESTIONS_PER_MINISTRY,
   drawCabinetPaper,
   drawQuestions,
   expiryFor,
   isQuestionnairePostKey,
+  ministryMatchKey,
+  nominatedPostKeys,
   normalizeAnswerText,
   questionnairePostLabel,
   questionsPerAttempt,
@@ -171,6 +174,60 @@ async function readMyNominatedMinistries(
   return Array.isArray(data.ministries)
     ? data.ministries.filter((m): m is string => typeof m === "string")
     : [];
+}
+
+/**
+ * Portfolios that real candidates nominated for but that cannot fill a paper.
+ *
+ * Returns one row per short portfolio with how many questions it has and how
+ * many candidates are waiting on it. An empty array means every nominated
+ * portfolio can fill its share of the paper.
+ *
+ * Fails LOUD, not open: if the read errors we report the whole thing as short
+ * rather than reporting all-clear, because the cost of a wrong all-clear is a
+ * cohort sitting a blank paper inside a 30-minute window.
+ */
+async function cabinetCoverageShortfall(
+  sb: SB,
+  eventId: string
+): Promise<{ ministry: string; have: number; candidates: number }[]> {
+  const { data: noms, error } = await selfNomsT(sb)
+    .select("participant_id, roles, ministries")
+    .eq("event_id", eventId);
+  if (error) {
+    return [{ ministry: "could not read the nominations", have: 0, candidates: 0 }];
+  }
+
+  const waiting = new Map<string, { label: string; candidates: number }>();
+  for (const n of noms ?? []) {
+    // Shadow Ministers sit this same paper, so they must be counted here too.
+    if (!nominatedPostKeys(n.roles).includes("cabinet_minister")) continue;
+    if (!Array.isArray(n.ministries)) continue;
+    for (const m of n.ministries) {
+      if (typeof m !== "string" || m.trim() === "") continue;
+      const key = ministryMatchKey(m);
+      const seen = waiting.get(key);
+      if (seen) seen.candidates += 1;
+      else waiting.set(key, { label: m, candidates: 1 });
+    }
+  }
+  if (waiting.size === 0) return [];
+
+  const { questions } = await effectiveQuestions(sb, eventId, "cabinet_minister");
+  const have = new Map<string, number>();
+  for (const q of questions) {
+    const key = ministryMatchKey(q.ministry);
+    have.set(key, (have.get(key) ?? 0) + 1);
+  }
+
+  const short: { ministry: string; have: number; candidates: number }[] = [];
+  for (const [key, info] of waiting) {
+    const count = have.get(key) ?? 0;
+    if (count < CABINET_QUESTIONS_PER_MINISTRY) {
+      short.push({ ministry: info.label, have: count, candidates: info.candidates });
+    }
+  }
+  return short.sort((a, b) => b.candidates - a.candidates);
 }
 const participantsT = (sb: SB) =>
   tbl<{ id: string; full_name: string; constituency_number: number | null }>(
@@ -323,7 +380,9 @@ async function myNominatedPosts(sb: SB, eventId: string, participantId: string) 
     .eq("participant_id", participantId)
     .maybeSingle();
   const roles = Array.isArray(data?.roles) ? data!.roles : [];
-  return roles.filter(isQuestionnairePostKey);
+  // NOT `roles.filter(isQuestionnairePostKey)` — that drops shadow_minister,
+  // whose paper is the Cabinet one. See nominatedPostKeys.
+  return nominatedPostKeys(roles);
 }
 
 /**
@@ -793,7 +852,7 @@ export async function getQuestionnaireOverview(
       questionSource: source,
       drawSize: Math.min(p.questionsPerAttempt, questions.length),
       minutes: p.attemptMinutes,
-      nominated: noms.filter((n) => Array.isArray(n.roles) && n.roles.includes(p.key)).length,
+      nominated: noms.filter((n) => nominatedPostKeys(n.roles).includes(p.key)).length,
       started: mine.length,
       submitted: mine.filter((a) => a.submitted_at !== null).length,
       scored: mine.filter((a) => a.scoring_status === "scored").length,
@@ -846,6 +905,35 @@ export async function setQuestionnaireWindow(
           postKeyRaw
         )} — students who nominated for both cannot sit two at once.`,
       };
+    }
+
+    // COVERAGE GATE — Cabinet only (2026-08-23).
+    //
+    // The Cabinet paper is drawn per portfolio, so a portfolio with no
+    // questions yields a short paper — or, when both of a candidate's
+    // portfolios are empty, no paper at all. On 2026-08-22 that is exactly
+    // what happened: the bank was fully stocked but under different portfolio
+    // names, every one of the 77 candidates drew nothing, and the round was
+    // abandoned 41 seconds in. Nothing warned the organiser beforehand.
+    //
+    // So refuse to open, and name the portfolios that are short. Checked
+    // against the portfolios candidates ACTUALLY NOMINATED FOR, not every
+    // portfolio the event lists — an unchosen portfolio with no questions
+    // harms nobody, and blocking on it would be a false alarm.
+    if (postKeyRaw === "cabinet_minister") {
+      const shortfall = await cabinetCoverageShortfall(sb, eventId);
+      if (shortfall.length > 0) {
+        const named = shortfall
+          .map((s) => `${s.ministry} (${s.have} of ${CABINET_QUESTIONS_PER_MINISTRY}, ${s.candidates} waiting)`)
+          .join("; ");
+        return {
+          success: false,
+          error:
+            `Not opening yet — these portfolios do not have enough questions: ${named}. ` +
+            `Candidates who nominated for them would get a short paper or none at all. ` +
+            `Add the questions, then open.`,
+        };
+      }
     }
   }
 

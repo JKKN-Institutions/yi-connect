@@ -133,11 +133,45 @@ export async function claimScoringWork(limit = 25): Promise<ScoringWorkItem[]> {
       position: number;
       question_text: string;
       answer_text: string | null;
+      files: unknown;
     }>(sb, "questionnaire_answers")
-      .select("position, question_text, answer_text")
+      .select("position, question_text, answer_text, files")
       .eq("attempt_id", r.id)
       .order("position", { ascending: true })
       .limit(100);
+
+    // HANDED IN AS A FILE → a person must read it, not the scorer.
+    //
+    // The payload below carries answer TEXT only. The scorer cannot open an
+    // upload, and cannot read a photograph of handwriting at all. Sending it a
+    // paper whose answer lives in a file would return a near-zero mark on real
+    // work — and a recorded mark reads as a judgement, not as a gap.
+    //
+    // So park it: complete, un-scored, and visible to the organiser as needing
+    // a person. Not `failed`, which is re-queueable and would loop straight
+    // back here.
+    const handedInAsFile = (answers ?? []).some(
+      (a) =>
+        (a.answer_text ?? "").trim() === "" &&
+        Array.isArray(a.files) &&
+        a.files.length > 0
+    );
+    if (handedInAsFile) {
+      await tbl(sb, "questionnaire_attempts")
+        .update({
+          scoring_status: "needs_human",
+          // NOTE: this deliberately does not say "enter the marks here" —
+          // there is no manual-marking screen in this app. The only writers of
+          // a score are the external routine and a re-queue to it. So the
+          // honest instruction is to read and judge it, and record the mark
+          // wherever the shortlist is decided.
+          score_error:
+            "Handed in as a file — the automatic scorer cannot read it. Open the pages and judge this one yourself.",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", r.id);
+      continue;
+    }
 
     out.push({
       attemptId: r.id,

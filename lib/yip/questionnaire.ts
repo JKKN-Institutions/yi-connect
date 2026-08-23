@@ -79,6 +79,127 @@ export const QUESTIONNAIRE_POSTS: readonly QuestionnairePostDef[] = [
 /** Questions drawn from EACH of a Cabinet candidate's two portfolios. */
 export const CABINET_QUESTIONS_PER_MINISTRY = 6;
 
+// ─── Handing in a FILE instead of typing ─────────────────────────
+//
+// WHY: the Student Journalist paper is one 300–500 word news report inside a
+// 60-minute window. On 2026-08-22, 32 candidates submitted and only 5 had typed
+// anything — 27 handed in blank. Typing a full report on a phone is the obvious
+// suspect, so a candidate may hand in a document, or a PHOTO of a handwritten
+// report, as well as or instead of typing.
+
+/**
+ * Posts whose answer screen offers the file control.
+ *
+ * Only the journalist report today. The COLUMN and the server actions are
+ * general — an answer anywhere counts as given if it has text OR a file — but
+ * no other paper's screen changes.
+ */
+export const QUESTIONNAIRE_UPLOAD_POST_KEYS: readonly QuestionnairePostKey[] = [
+  "parliamentary_journalist",
+] as const;
+
+export function questionnaireAllowsFileUpload(key: string): boolean {
+  return (QUESTIONNAIRE_UPLOAD_POST_KEYS as readonly string[]).includes(key);
+}
+
+/**
+ * EXACTLY the `yip-questionnaire-uploads` bucket's allowed_mime_types, mapped
+ * to the extension the stored object gets.
+ *
+ * The extension is derived from the VALIDATED mime and never from the
+ * user-supplied filename — a filename is attacker-controlled text and has no
+ * business deciding a storage path. The original name survives only as display
+ * text inside the jsonb.
+ */
+export const QUESTIONNAIRE_UPLOAD_MIME_EXT: ReadonlyMap<string, string> = new Map([
+  ["application/pdf", "pdf"],
+  ["image/png", "png"],
+  ["image/jpeg", "jpg"],
+  ["image/webp", "webp"],
+  ["image/heic", "heic"],
+  ["image/heif", "heif"],
+  ["application/msword", "doc"],
+  [
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "docx",
+  ],
+  ["text/plain", "txt"],
+]);
+
+/** The bucket's own file_size_limit. Enforced here too — never trust the client. */
+export const QUESTIONNAIRE_MAX_FILE_BYTES = 10 * 1024 * 1024;
+
+/** A photographed report is a page or two, not an album. */
+export const QUESTIONNAIRE_MAX_FILES_PER_ANSWER = 3;
+
+/** Signed-URL lifetime for an organiser opening a handed-in file. */
+export const QUESTIONNAIRE_FILE_URL_SECONDS = 300;
+
+/** `accept` for the file input — the same list, in the form a browser wants. */
+export const QUESTIONNAIRE_UPLOAD_ACCEPT = [...QUESTIONNAIRE_UPLOAD_MIME_EXT.keys()].join(",");
+
+/** One handed-in file, as stored in `yip.questionnaire_answers.files`. */
+export type QuestionnaireAnswerFile = {
+  /** Object path inside the PRIVATE yip-questionnaire-uploads bucket. */
+  path: string;
+  /** The candidate's own filename — display text only. */
+  name: string;
+  size: number;
+  mime: string;
+  uploaded_at: string;
+};
+
+/**
+ * Read the `files` jsonb defensively.
+ *
+ * The column is `jsonb NOT NULL DEFAULT '[]'`, but every row written before the
+ * migration and anything hand-edited could be shaped differently, and this
+ * value decides whether a candidate's paper counts as blank. Anything that is
+ * not a well-formed entry is dropped rather than rendered.
+ */
+export function parseAnswerFiles(v: unknown): QuestionnaireAnswerFile[] {
+  if (!Array.isArray(v)) return [];
+  const out: QuestionnaireAnswerFile[] = [];
+  for (const raw of v) {
+    if (!raw || typeof raw !== "object") continue;
+    const f = raw as Record<string, unknown>;
+    if (typeof f.path !== "string" || f.path === "") continue;
+    out.push({
+      path: f.path,
+      name: typeof f.name === "string" && f.name !== "" ? f.name : "Attachment",
+      size: typeof f.size === "number" && Number.isFinite(f.size) ? f.size : 0,
+      mime: typeof f.mime === "string" ? f.mime : "application/octet-stream",
+      uploaded_at: typeof f.uploaded_at === "string" ? f.uploaded_at : "",
+    });
+  }
+  return out;
+}
+
+/**
+ * THE definition of "this answer was given".
+ *
+ * Typed text OR at least one handed-in file. Every count of answered/blank —
+ * the student's progress line, the ranking, the missing list, both CSVs —
+ * routes through this so a file-only submission can never be reported as blank
+ * in one place while counting in another.
+ */
+export function answerIsGiven(
+  answerText: string | null | undefined,
+  files: unknown
+): boolean {
+  if ((answerText ?? "").trim() !== "") return true;
+  return parseAnswerFiles(files).length > 0;
+}
+
+/** "1.4 MB" — for a 15-year-old checking the right page uploaded. */
+export function formatFileSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 KB";
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${Math.round(kb)} KB`;
+  return `${(kb / 1024).toFixed(1)} MB`;
+}
+
 const POST_BY_KEY = new Map<string, QuestionnairePostDef>(
   QUESTIONNAIRE_POSTS.map((p) => [p.key, p])
 );
@@ -158,7 +279,20 @@ export const ATTEMPT_MINUTES = 30;
 export const WINDOW_STATUSES = ["pending", "open", "closed"] as const;
 export type WindowStatus = (typeof WINDOW_STATUSES)[number];
 
-export const SCORING_STATUSES = ["pending", "scoring", "scored", "failed"] as const;
+/**
+ * `needs_human` is a resting state, not an error. The external scorer is sent
+ * answer TEXT only and cannot read an uploaded file — least of all a photograph
+ * of handwriting. A paper handed in as a file therefore stops here, complete,
+ * waiting for a person to open the pages and enter marks. It must never be
+ * re-queued to the scorer: doing so marks real work as blank.
+ */
+export const SCORING_STATUSES = [
+  "pending",
+  "scoring",
+  "scored",
+  "failed",
+  "needs_human",
+] as const;
 export type ScoringStatus = (typeof SCORING_STATUSES)[number];
 
 export function isWindowStatus(v: unknown): v is WindowStatus {
@@ -408,6 +542,8 @@ export type QuestionnaireAnswer = {
   score: number | null;
   flags: string[];
   scored_at: string | null;
+  /** Files handed in for this answer. An answer counts as given if it has text OR one of these. */
+  files: QuestionnaireAnswerFile[];
 };
 
 export type QuestionnaireAttempt = {
@@ -441,6 +577,12 @@ export type QuestionnaireResultRow = {
   redFlagCount: number;
   answered: number;
   drawn: number;
+  /**
+   * Files handed in across this paper. Shown so an organiser reading a low
+   * word count does not conclude the candidate wrote nothing — the report may
+   * be a photographed page rather than typed text.
+   */
+  fileCount: number;
 };
 
 /**
@@ -536,6 +678,11 @@ export type QuestionnaireResponseRow = {
   voice: number | null;
   redFlagPenalty: number | null;
   flags: readonly string[];
+  /**
+   * Files handed in for THIS answer. A file-only answer has 0 words, so
+   * without this column the row reads as a blank the candidate skipped.
+   */
+  fileCount: number;
 };
 
 export const QUESTIONNAIRE_RESPONSES_CSV_HEADERS = [
@@ -547,6 +694,7 @@ export const QUESTIONNAIRE_RESPONSES_CSV_HEADERS = [
   "Question",
   "Answer",
   "Words",
+  "Files",
   "Score",
   "Grounding",
   "Depth",
@@ -567,6 +715,7 @@ export function buildQuestionnaireResponsesCsv(
     r.question,
     r.answer,
     r.answer.trim() === "" ? 0 : wordCount(r.answer),
+    r.fileCount,
     r.score ?? "",
     r.grounding ?? "",
     r.depth ?? "",
@@ -590,6 +739,7 @@ export const QUESTIONNAIRE_CSV_HEADERS = [
   "Red flags",
   "Answered",
   "Questions",
+  "Files",
   "Shortlist marker",
 ];
 
@@ -626,6 +776,7 @@ export function buildQuestionnaireCsv(rows: readonly QuestionnaireResultRow[]): 
       r.redFlagCount,
       r.answered,
       r.drawn,
+      r.fileCount,
       marker,
     ];
   });

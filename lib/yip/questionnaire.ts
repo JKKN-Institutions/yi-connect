@@ -241,7 +241,20 @@ export const ATTEMPT_MINUTES = 30;
 export const WINDOW_STATUSES = ["pending", "open", "closed"] as const;
 export type WindowStatus = (typeof WINDOW_STATUSES)[number];
 
-export const SCORING_STATUSES = ["pending", "scoring", "scored", "failed"] as const;
+/**
+ * `needs_human` is a resting state, not an error. The external scorer is sent
+ * answer TEXT only and cannot read an uploaded file — least of all a photograph
+ * of handwriting. A paper handed in as a file therefore stops here, complete,
+ * waiting for a person to open the pages and enter marks. It must never be
+ * re-queued to the scorer: doing so marks real work as blank.
+ */
+export const SCORING_STATUSES = [
+  "pending",
+  "scoring",
+  "scored",
+  "failed",
+  "needs_human",
+] as const;
 export type ScoringStatus = (typeof SCORING_STATUSES)[number];
 
 export function isWindowStatus(v: unknown): v is WindowStatus {

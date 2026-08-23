@@ -556,6 +556,17 @@ export function QuestionnaireAdminClient({
                         <td className="px-4 py-2 text-right">
                           {r.scoringStatus === "scored" ? (
                             <span className="font-semibold">{r.pct}%</span>
+                          ) : r.scoringStatus === "needs_human" ? (
+                            /*
+                              Not a failure and not "not scored" — the paper is
+                              complete, it was handed in as a file the scorer
+                              cannot read, and it is waiting on a person. Said
+                              plainly so nobody re-queues it or reads it as a
+                              zero.
+                            */
+                            <span className="text-xs font-semibold text-[#b45309]">
+                              read this one yourself
+                            </span>
                           ) : (
                             <span className="text-xs text-[#1a1a3e]/50">
                               {r.scoringStatus === "failed" ? "failed" : "not scored"}

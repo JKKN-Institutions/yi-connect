@@ -372,15 +372,44 @@ export function FormationClient({
       const scoped = opts?.onlyPartyIds
         ? parties.filter((p) => opts.onlyPartyIds!.includes(p.id))
         : parties;
-      const pool =
-        stepKey === "pm_ballot"
-          ? scoped.filter((p) => p.side === "ruling")
-          : stepKey === "lop_ballot"
-            ? scoped.filter((p) => p.side === "opposition")
-            : scoped;
-      const lists = await Promise.all(
-        pool.map((p) => getPartyMembers(eventId, p.id))
+      // THE BENCH COMES FROM THE MEMBERS, NOT FROM `parties.side`.
+      //
+      // `parties.side` is read here and by the formation announcement, but
+      // NOTHING in this codebase ever writes it — every touchpoint on the
+      // parties table is a select. So filtering on it found no ruling parties
+      // however complete the event was, and both the PM and the Leader of
+      // Opposition ballots could never be opened at all. The organiser was
+      // told "run the allocation step first" while allocation was already
+      // done, which sent them at the wrong step.
+      //
+      // The bench is decided per PERSON (`participants.party_side`, written by
+      // runFormationAllocation and by allocation), so read it from there and
+      // fall back to the party column only if the members carry nothing. That
+      // also survives the alternating-bench path, where a party legitimately
+      // has no single side of its own.
+      const allLists = await Promise.all(
+        scoped.map((p) => getPartyMembers(eventId, p.id))
       );
+      const benchOf = (i: number): string | null => {
+        const sides = new Set(
+          (allLists[i] ?? [])
+            .map((m) => m.party_side)
+            .filter((s): s is string => Boolean(s))
+        );
+        if (sides.size === 1) return [...sides][0];
+        return scoped[i]?.side ?? null; // mixed or empty → whatever the party claims
+      };
+      const keep = scoped
+        .map((p, i) => ({ p, i }))
+        .filter(({ i }) =>
+          stepKey === "pm_ballot"
+            ? benchOf(i) === "ruling"
+            : stepKey === "lop_ballot"
+              ? benchOf(i) === "opposition"
+              : true
+        );
+      const pool = keep.map((k) => k.p);
+      const lists = keep.map((k) => allLists[k.i] ?? []);
       // party_leader_ballots opens one ballot PER party server-side, so an
       // empty party is a hard failure there — keep it visible as a blocker
       // instead of hiding it and manufacturing a partial open. Other steps
@@ -1410,7 +1439,17 @@ export function FormationClient({
             </div>
           ) : ballotDialog.groups.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
-              No members available — run the allocation step first.
+              {/*
+                Name the step that is actually missing. For a bench ballot the
+                usual cause is that the government has not been formed yet, not
+                that allocation is outstanding — saying "run allocation" sent
+                organisers to a step they had already completed.
+              */}
+              {ballotDialog.stepKey === "pm_ballot"
+                ? "No ruling-bench members yet — form the government first, so there is a ruling side to nominate from."
+                : ballotDialog.stepKey === "lop_ballot"
+                  ? "No opposition-bench members yet — form the government first, so there is an opposition side to nominate from."
+                  : "No members available — run the allocation step first."}
             </p>
           ) : (
             <div className="max-h-72 space-y-4 overflow-y-auto pr-1">

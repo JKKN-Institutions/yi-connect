@@ -1283,7 +1283,7 @@ export function VoteManager({
               : "Leadership Election"}
           </DialogTitle>
           <DialogDescription>
-            Choose 2–5 nominees from the{" "}
+            Choose at least 2 nominees from the{" "}
             {leadershipDialog.side === "ruling" ? "ruling" : "opposition"} bench.
             Only that bench&apos;s members will be able to vote.
           </DialogDescription>
@@ -1378,11 +1378,9 @@ export function VoteManager({
             Cancel
           </Button>
           <Button
-            disabled={
-              isPending ||
-              leadershipDialog.selectedIds.length < 2 ||
-              leadershipDialog.selectedIds.length > 5
-            }
+            // No upper limit on nominees (Director, 2026-08-23). The floor of 2
+            // stays: one nominee is an appointment, not an election.
+            disabled={isPending || leadershipDialog.selectedIds.length < 2}
             onClick={handleOpenLeadershipElection}
           >
             {isPending ? "Opening..." : "Open Election"}
@@ -2601,7 +2599,7 @@ export function VoteManager({
       {/* Party-Leader nomination dialog: pick 3–5 nominees, then open the vote */}
       {partyLeaderDialog}
 
-      {/* Leadership nomination dialog: pick 2–5 bench nominees, then open the vote */}
+      {/* Leadership nomination dialog: pick 2+ bench nominees, then open the vote */}
       {leadershipNominationDialog}
 
       {/* Cabinet/Shadow nomination dialog: pick the party's nominees, then open */}

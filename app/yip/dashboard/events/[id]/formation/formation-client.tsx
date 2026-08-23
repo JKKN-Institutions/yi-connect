@@ -494,9 +494,17 @@ export function FormationClient({
               .join(", ")}`,
           };
     }
-    // pm_ballot / lop_ballot — bench seat, 2–5 nominees (vote-manager idiom).
+    // pm_ballot / lop_ballot — bench seat. NO upper limit on nominees
+    // (Director, 2026-08-23); the previous ceiling of 5 was a convention
+    // carried over from vote-manager, not a derived figure.
+    //
+    // The floor of 2 stays, because one nominee is an appointment rather than
+    // an election. Worth knowing what the missing ceiling means: the winner is
+    // decided by simple plurality (voting.ts sorts the tally and takes the
+    // top), and the runoff fires only on an exact tie. So on a large bench a
+    // wide field can elect a leader on a small share of the vote. That is an
+    // accepted trade for giving learners a free choice, not an oversight.
     if (picked < 2) return { ok: false, hint: "Nominate at least 2." };
-    if (picked > 5) return { ok: false, hint: "At most 5 nominees." };
     return { ok: true, hint: `${picked} nominated` };
   }
 
@@ -1387,9 +1395,9 @@ export function FormationClient({
               {ballotDialog.stepKey === "party_leader_ballots"
                 ? "Every party's ballot opens at once — each member sees only their own party's nominees. Pick at least 2 nominees per party."
                 : ballotDialog.stepKey === "pm_ballot"
-                  ? "Nominate 2–5 from the ruling bench. Only the ruling bench votes."
+                  ? "Nominate at least 2 from the ruling bench. Only the ruling bench votes."
                   : ballotDialog.stepKey === "lop_ballot"
-                    ? "Nominate 2–5 from the opposition bench. Only the opposition bench votes."
+                    ? "Nominate at least 2 from the opposition bench. Only the opposition bench votes."
                     : "Nominate at least 2 from anywhere in the House. The whole House votes; the runner-up becomes Deputy Speaker."}{" "}
               Participants vote remotely until the window closes.
             </DialogDescription>

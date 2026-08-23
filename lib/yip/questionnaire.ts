@@ -87,6 +87,44 @@ export function isQuestionnairePostKey(v: unknown): v is QuestionnairePostKey {
   return typeof v === "string" && POST_BY_KEY.has(v);
 }
 
+/**
+ * Nomination roles that are not themselves a post, and the post they sit.
+ *
+ * `shadow_minister` is the only one: QUESTIONNAIRE_POSTS above states that one
+ * post serves both benches, because the portfolio questions are identical
+ * whether you shadow Finance or run it. But the role is not a post key, so
+ * filtering roles through `isQuestionnairePostKey` silently drops it — and on
+ * 2026-08-23 that left all 49 Shadow Minister nominees of the SRTN round with
+ * no paper at all, each having already chosen their two portfolios.
+ */
+const ROLE_TO_POST: Readonly<Record<string, QuestionnairePostKey>> = {
+  shadow_minister: "cabinet_minister",
+};
+
+/** The post a nomination role sits, or null if the role has no paper. */
+export function postKeyForRole(role: unknown): QuestionnairePostKey | null {
+  if (typeof role !== "string") return null;
+  const mapped = ROLE_TO_POST[role];
+  if (mapped) return mapped;
+  return isQuestionnairePostKey(role) ? role : null;
+}
+
+/**
+ * Every paper a set of nominated roles entitles someone to sit, de-duplicated.
+ * Use this anywhere roles are matched to posts — never `filter(isQuestionnairePostKey)`,
+ * which drops the roles that share another post's paper.
+ */
+export function nominatedPostKeys(
+  roles: readonly unknown[] | null | undefined
+): QuestionnairePostKey[] {
+  const out = new Set<QuestionnairePostKey>();
+  for (const r of roles ?? []) {
+    const k = postKeyForRole(r);
+    if (k) out.add(k);
+  }
+  return [...out];
+}
+
 export function questionnairePostDef(key: string): QuestionnairePostDef | null {
   return POST_BY_KEY.get(key) ?? null;
 }
@@ -278,10 +316,37 @@ export function drawCabinetPaper<T extends { ministry: string | null }>(
 ): T[] {
   const paper: T[] = [];
   for (const ministry of ministries) {
-    const sub = bank.filter((q) => q.ministry === ministry);
+    const want = ministryMatchKey(ministry);
+    const sub = bank.filter((q) => ministryMatchKey(q.ministry) === want);
     paper.push(...drawQuestions(sub, perMinistry));
   }
   return paper;
+}
+
+/**
+ * The comparison key for a portfolio name.
+ *
+ * A question's `ministry` and a candidate's nominated portfolio are two
+ * independently-typed strings, so they drift. On 2026-08-22 the SRTN round's
+ * bank held "Education" while every candidate held "Ministry of Education";
+ * an exact `===` matched nothing, so all 77 candidates drew an empty paper and
+ * the window was closed 41 seconds after it opened. Comparing on a normalised
+ * key survives that class of drift: the leading "Ministry of", case, and
+ * whitespace stop mattering.
+ *
+ * It deliberately does NOT try to equate genuinely different portfolios —
+ * "Skill Development" and "Skill Development & Entrepreneurship" stay distinct,
+ * because treating them as one would hand a candidate a paper for a portfolio
+ * they did not nominate for. That case is caught before the window opens, by
+ * the coverage check in `setQuestionnaireWindow`.
+ */
+export function ministryMatchKey(name: string | null | undefined): string {
+  return (name ?? "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/^\s*ministry\s+of\s+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function drawQuestions<T>(bank: readonly T[], count: number): T[] {

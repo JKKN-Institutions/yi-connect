@@ -149,7 +149,7 @@ export async function getNationalBoard(
       .order("display_order"),
   ]);
 
-  const entries = asEntryRows(rawEntries).map(toNationalEntry);
+  const entries = (rawEntries ?? []).map(toNationalEntry);
   const rounds = (rawRounds ?? []).map(toRoundRow);
   const ladder = nationalLadder(entries.length, { finalFieldSize: finalField });
 
@@ -442,7 +442,7 @@ export async function publishStageResults(
     .eq("edition_id", edition)
     .eq("category", category);
 
-  const entries = asEntryRows(rawEntries).map(toNationalEntry);
+  const entries = (rawEntries ?? []).map(toNationalEntry);
   if (entries.length === 0) {
     return {
       success: false,
@@ -553,7 +553,7 @@ export async function declareNationalChampion(
     .eq("edition_id", edition)
     .eq("category", category);
 
-  const entries = asEntryRows(rawEntries).map(toNationalEntry);
+  const entries = (rawEntries ?? []).map(toNationalEntry);
   const ladder = nationalLadder(entries.length, { finalFieldSize });
   const field = stageField(entries, ladder, "national_final");
 
@@ -683,26 +683,6 @@ function isNationalStage(stage: string): stage is NationalStage {
   return (NATIONAL_STAGES as string[]).includes(stage);
 }
 
-/**
- * national_entries rows, typed against our own explicit RawEntry shape.
- *
- * WHY THE CAST: ENTRY_COLUMNS selects quarterfinal_score / quarterfinal_rank.
- * Both are LIVE in the database (verified against information_schema
- * 2026-08-24: numeric(10,2) and integer, both nullable), but they are absent
- * from the checked-in types/yiq/database.ts on origin/master until it is
- * regenerated. Without this cast supabase-js resolves the select to
- * SelectQueryError<"column 'quarterfinal_score' does not exist"> and every
- * downstream .map() fails to typecheck.
- *
- * Nothing downstream loses safety — RawEntry is explicit and toNationalEntry
- * validates every field. Only the select-string check is bypassed.
- *
- * REMOVE ME once types/yiq/database.ts is regenerated: delete this helper,
- * inline `(rows ?? []).map(toNationalEntry)`, and tsc should stay clean.
- */
-function asEntryRows(rows: unknown): RawEntry[] {
-  return (rows ?? []) as RawEntry[];
-}
 
 type RawEntry = {
   id: string;

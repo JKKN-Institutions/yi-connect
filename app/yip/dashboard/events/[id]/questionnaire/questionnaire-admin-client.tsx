@@ -11,16 +11,19 @@
  * promotes nobody, assigns no role and drops nobody.
  */
 
-import { useCallback, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import {
   AlertTriangle,
   ChevronDown,
   Download,
+  Eraser,
+  Eye,
   FileText,
   Info,
   Loader2,
   Paperclip,
   RefreshCw,
+  Scale,
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -36,10 +39,12 @@ import {
 } from "@/components/yip/ui/dialog";
 import { ParticipantNameButton } from "@/components/yip/participant-profile-dialog";
 import {
+  clearQuestionnaireMarksForPost,
   exportQuestionnaireCsv,
   exportQuestionnaireResponsesCsv,
   getQuestionnaireAttemptDetail,
   getQuestionnaireFileUrl,
+  getQuestionnaireMarkingProgress,
   getQuestionnaireOverview,
   getQuestionnaireQuestionReview,
   getQuestionnaireResults,
@@ -52,11 +57,15 @@ import {
   type PostOverview,
 } from "@/app/yip/actions/questionnaire";
 import {
+  buildQuestionnaireWatchList,
+  describeMinutes,
   formatFileSize,
   formatQuestionnaireTime,
+  markingStallWarnings,
   questionnairePostLabel,
   RUBRIC_CRITERIA,
   shortlistCutoff,
+  type QuestionnaireMarkingProgress,
   type QuestionnaireMissingRow,
   type QuestionnaireResultRow,
 } from "@/lib/yip/questionnaire";
@@ -99,6 +108,7 @@ export function QuestionnaireAdminClient({
   initialMissing,
   initialError,
   initialReview,
+  initialProgress,
 }: {
   eventId: string;
   eventName: string;
@@ -110,14 +120,17 @@ export function QuestionnaireAdminClient({
   initialMissing: QuestionnaireMissingRow[];
   initialError: string | null;
   initialReview: QuestionReview;
+  initialProgress: QuestionnaireMarkingProgress | null;
 }) {
   const [posts, setPosts] = useState(initialPosts);
   const [rows, setRows] = useState(initialRows);
   const [unscored, setUnscored] = useState(initialUnscored);
   const [missing, setMissing] = useState(initialMissing);
   const [error, setError] = useState<string | null>(initialError);
+  const [progress, setProgress] = useState(initialProgress);
   const [isPending, startTransition] = useTransition();
   const [confirm, setConfirm] = useState<{ postKey: string; open: boolean } | null>(null);
+  const [clearing, setClearing] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [editLocked, setEditLocked] = useState(false);
@@ -133,13 +146,15 @@ export function QuestionnaireAdminClient({
   const [savingMarks, setSavingMarks] = useState(false);
 
   const refresh = useCallback(async () => {
-    const [o, r, qr] = await Promise.all([
+    const [o, r, qr, mp] = await Promise.all([
       callAction(() => getQuestionnaireOverview(eventId)),
       callAction(() => getQuestionnaireResults(eventId)),
       callAction(() => getQuestionnaireQuestionReview(eventId)),
+      callAction(() => getQuestionnaireMarkingProgress(eventId)),
     ]);
     if (o.success) setPosts(o.data.posts);
     if (qr.success) setReview(qr.data);
+    if (mp.success) setProgress(mp.data);
     if (r.success) {
       setRows(r.data.rows);
       setUnscored(r.data.unscored);
@@ -150,6 +165,53 @@ export function QuestionnaireAdminClient({
     // failed refresh would silently wipe a real error off the screen.
     if (o.success && r.success) setError(null);
   }, [eventId]);
+
+  /**
+   * Keep the marking count live.
+   *
+   * Marking happens outside this app, so nothing pushes a change back here —
+   * without a poll the count freezes at whatever it was when the page loaded,
+   * and a queue that has died looks identical to a queue that is working. Thirty
+   * seconds against three columns is cheap enough to leave running all day.
+   *
+   * Only the progress figures are polled, not the whole page: re-reading every
+   * answer on a timer would fight the organiser's scroll position and their open
+   * dialogs. A failed poll is left alone rather than blanking the last known
+   * numbers — the stall banner is built from the newest reading that ARRIVED,
+   * and a flapping connection is not a stalled marker.
+   */
+  useEffect(() => {
+    let live = true;
+    const id = setInterval(async () => {
+      const mp = await callAction(() => getQuestionnaireMarkingProgress(eventId));
+      if (live && mp.success) setProgress(mp.data);
+    }, 30_000);
+    return () => {
+      live = false;
+      clearInterval(id);
+    };
+  }, [eventId]);
+
+  function applyClearMarks() {
+    if (!clearing) return;
+    const postKey = clearing;
+    setClearing(null);
+    startTransition(async () => {
+      const res = await callAction(() => clearQuestionnaireMarksForPost(eventId, postKey));
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(
+        `Cleared the marks on ${res.data.attempts} ${questionnairePostLabel(
+          postKey
+        )} paper${res.data.attempts === 1 ? "" : "s"} (${res.data.answers} answer${
+          res.data.answers === 1 ? "" : "s"
+        }). They are back in the queue to be marked again. No answers were changed.`
+      );
+      await refresh();
+    });
+  }
 
   /**
    * Open one handed-in file.
@@ -415,6 +477,10 @@ export function QuestionnaireAdminClient({
   }
   const rankSeen = new Map<string, number>();
 
+  const stallWarnings = progress ? markingStallWarnings(progress) : [];
+  const watch = buildQuestionnaireWatchList(rows);
+  const worthALook = watch.flaggedHigh.length + watch.cutTies.length;
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -474,6 +540,89 @@ export function QuestionnaireAdminClient({
         </p>
       </div>
 
+      {/*
+        ── How far the marking has got ──
+
+        Marking runs outside this app, so nothing pushes a change back to this
+        screen; the numbers below are re-read every 30 seconds. NO estimate of
+        when it will finish is shown, on purpose — the papers queue behind work
+        this app cannot see, so any time printed here would be a guess an
+        organiser would then plan the room around.
+      */}
+      {progress && progress.submitted > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+              <div>
+                <p
+                  className="text-[10px] font-bold uppercase tracking-[0.16em]"
+                  style={{ color: SAFFRON }}
+                >
+                  Marking
+                </p>
+                <p className="text-lg font-semibold" style={{ color: INK }}>
+                  {progress.scored} of {progress.submitted} marked
+                </p>
+              </div>
+              <p className="text-xs text-[#1a1a3e]/55">
+                {progress.stalledMinutes == null
+                  ? "Nothing has moved yet."
+                  : progress.stalledMinutes < 1
+                    ? "Last moved just now."
+                    : `Last moved ${describeMinutes(progress.stalledMinutes)} ago.`}{" "}
+                Checked every 30 seconds.
+              </p>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              <span
+                className="rounded-full px-2.5 py-1 font-medium"
+                style={{ background: `${GREEN}1a`, color: GREEN }}
+              >
+                {progress.scored} marked
+              </span>
+              <span
+                className="rounded-full px-2.5 py-1 font-medium"
+                style={{ background: "#1a1a3e0d", color: "#1a1a3e99" }}
+              >
+                {progress.pending} waiting
+              </span>
+              <span
+                className="rounded-full px-2.5 py-1 font-medium"
+                style={
+                  progress.stuckScoring > 0
+                    ? { background: "#fef3c7", color: "#92400e" }
+                    : { background: "#1a1a3e0d", color: "#1a1a3e99" }
+                }
+              >
+                {progress.scoring} being marked
+                {progress.stuckScoring > 0 && ` · ${progress.stuckScoring} stuck`}
+              </span>
+              {progress.failed > 0 && (
+                <span
+                  className="rounded-full px-2.5 py-1 font-medium"
+                  style={{ background: "#fef2f2", color: "#b91c1c" }}
+                >
+                  {progress.failed} failed
+                </span>
+              )}
+            </div>
+
+            {stallWarnings.map((w) => (
+              <div
+                key={w}
+                role="alert"
+                className="mt-3 flex items-start gap-2 rounded-xl border px-4 py-3 text-sm"
+                style={{ background: "#fffbeb", borderColor: "#fde68a", color: "#92400e" }}
+              >
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <span>{w}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* ── Per-post windows ── */}
       <div className="grid gap-3 lg:grid-cols-3">
         {posts.map((p) => (
@@ -523,16 +672,36 @@ export function QuestionnaireAdminClient({
                 {p.locked && " · locked"}
               </div>
               {canManage && (
-                <button
-                  type="button"
-                  onClick={() => openEditor(p.postKey)}
-                  disabled={isPending}
-                  className="mt-2 inline-flex items-center gap-1 text-xs font-medium"
-                  style={{ color: SAFFRON }}
-                >
-                  <FileText className="size-3" />
-                  {p.locked ? "View questions" : "Edit questions"}
-                </button>
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <button
+                    type="button"
+                    onClick={() => openEditor(p.postKey)}
+                    disabled={isPending}
+                    className="inline-flex items-center gap-1 text-xs font-medium"
+                    style={{ color: SAFFRON }}
+                  >
+                    <FileText className="size-3" />
+                    {p.locked ? "View questions" : "Edit questions"}
+                  </button>
+                  {/*
+                    Only offered once something has been handed in — on a post
+                    with no papers there is nothing to clear, and the button
+                    would only ever produce a refusal.
+                  */}
+                  {p.submitted > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setClearing(p.postKey)}
+                      disabled={isPending}
+                      className="inline-flex items-center gap-1 text-xs font-medium"
+                      style={{ color: "#b45309" }}
+                      title="Throw away the marks on this post's papers and put them back in the queue. Student answers are not touched."
+                    >
+                      <Eraser className="size-3" />
+                      Clear marks and mark again
+                    </button>
+                  )}
+                </div>
               )}
             </CardContent>
           </Card>
@@ -927,6 +1096,139 @@ export function QuestionnaireAdminClient({
         </CardContent>
       </Card>
 
+      {/*
+        ── Worth a look ──
+
+        NOT a confirm gate over the whole shortlist. A gate that fires on every
+        candidate teaches you to click through it, and it fires hardest at the
+        moment you most need to be reading. This names only the two cases the
+        ranked list, read straight down, hides:
+
+          · someone the ranking wants to shortlist whose paper carries red flags
+          · people level on points across the cut, where only the ordering of
+            two equal numbers decides who is in
+
+        It blocks nothing and changes no ranking.
+      */}
+      {worthALook > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-start gap-2">
+              <Eye className="mt-0.5 size-4 shrink-0" style={{ color: SAFFRON }} />
+              <div>
+                <p className="font-semibold" style={{ color: INK }}>
+                  Worth a look before you confirm the shortlist
+                </p>
+                <p className="mt-1 text-xs text-[#1a1a3e]/60">
+                  Two things the ranking above does not show on its face. Nothing here
+                  changes a score or a place — it is only pointing.
+                </p>
+              </div>
+            </div>
+
+            {watch.flaggedHigh.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs font-semibold" style={{ color: "#b45309" }}>
+                  In the suggested shortlist, but the paper was flagged
+                </p>
+                <p className="mt-0.5 text-[11px] text-[#1a1a3e]/55">
+                  The marker raised something on these answers — read the paper before
+                  you count the score.
+                </p>
+                <ul className="mt-2 space-y-1.5">
+                  {watch.flaggedHigh.map((f) => (
+                    <li
+                      key={f.attemptId}
+                      className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm"
+                    >
+                      <span className="font-mono text-xs text-[#1a1a3e]/45">#{f.rank}</span>
+                      <ParticipantNameButton
+                        eventId={eventId}
+                        eventName={eventName}
+                        participantId={f.participantId}
+                        name={f.fullName}
+                        className="text-left underline-offset-4 hover:underline"
+                      />
+                      <span className="text-xs text-[#1a1a3e]/60">
+                        {questionnairePostLabel(f.postKey)}
+                      </span>
+                      {f.pct != null && (
+                        <span className="text-xs font-semibold text-[#1a1a3e]/75">
+                          {f.pct}%
+                        </span>
+                      )}
+                      <span
+                        className="rounded px-1.5 py-0.5 text-[11px] font-medium"
+                        style={{ background: "#fef3c7", color: "#92400e" }}
+                      >
+                        {f.redFlagCount} flag{f.redFlagCount === 1 ? "" : "s"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => toggleRow(f.attemptId)}
+                        className="text-xs font-medium"
+                        style={{ color: SAFFRON }}
+                      >
+                        Open answers
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {watch.cutTies.map((t) => (
+              <div key={t.postKey} className="mt-4">
+                <p
+                  className="flex items-center gap-1.5 text-xs font-semibold"
+                  style={{ color: INK }}
+                >
+                  <Scale className="size-3.5" />
+                  Level on points at the {questionnairePostLabel(t.postKey)} cut
+                </p>
+                <p className="mt-0.5 text-[11px] text-[#1a1a3e]/55">
+                  These {t.candidates.length} all scored {t.pct}%, and the suggested
+                  shortlist is the top {t.cutoff}. Nothing in the marks separates them —
+                  only where they happened to land in the list.
+                </p>
+                <ul className="mt-2 space-y-1.5">
+                  {t.candidates.map((c) => (
+                    <li
+                      key={c.attemptId}
+                      className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm"
+                    >
+                      <span className="font-mono text-xs text-[#1a1a3e]/45">#{c.rank}</span>
+                      <ParticipantNameButton
+                        eventId={eventId}
+                        eventName={eventName}
+                        participantId={c.participantId}
+                        name={c.fullName}
+                        className="text-left underline-offset-4 hover:underline"
+                      />
+                      {c.constituencyNumber != null && (
+                        <span className="font-mono text-xs text-[#1a1a3e]/45">
+                          #{c.constituencyNumber}
+                        </span>
+                      )}
+                      <span
+                        className="rounded px-1.5 py-0.5 text-[11px] font-medium"
+                        style={
+                          c.insideCut
+                            ? { background: `${GREEN}1a`, color: GREEN }
+                            : { background: "#1a1a3e0d", color: "#1a1a3e99" }
+                        }
+                      >
+                        {c.insideCut ? "Inside the cut" : "Below the cut"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {unscored > 0 && (
         <p className="text-xs text-[#1a1a3e]/55">
           {unscored} submission{unscored === 1 ? "" : "s"} not scored yet. Scoring runs
@@ -1020,6 +1322,56 @@ export function QuestionnaireAdminClient({
             </Button>
             <Button onClick={applyToggle} disabled={isPending}>
               {confirm?.open ? "Start" : "End"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/*
+        ── Confirm clearing a post's marks ──
+
+        The confirm text says what goes and what stays, in those words. "Are you
+        sure?" is not enough here: the thing an organiser is actually afraid of
+        is losing what the students wrote, and that is exactly the thing this
+        does not touch.
+      */}
+      <Dialog open={clearing !== null} onOpenChange={(o) => !o && setClearing(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Clear the marks on {clearing ? questionnairePostLabel(clearing) : ""} papers?
+            </DialogTitle>
+            <DialogDescription>
+              Every {clearing ? questionnairePostLabel(clearing) : ""} paper that has been
+              handed in goes back into the queue and gets marked again from scratch.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
+            <div
+              className="rounded-lg border px-3 py-2"
+              style={{ background: "#fffbeb", borderColor: "#fde68a", color: "#92400e" }}
+            >
+              <b>This clears:</b> the scores and percentages, the per-answer marks and
+              flags, and the AI note on each paper. The old marks are gone for good.
+            </div>
+            <div
+              className="rounded-lg border px-3 py-2"
+              style={{ background: "#f0fdf4", borderColor: "#bbf7d0", color: "#166534" }}
+            >
+              <b>This does not touch:</b> anything the students wrote, or the time they
+              handed it in. Every answer stays exactly as it is.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClearing(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={applyClearMarks}
+              disabled={isPending}
+              style={{ background: "#b45309", color: "#fff" }}
+            >
+              Clear marks and mark again
             </Button>
           </DialogFooter>
         </DialogContent>

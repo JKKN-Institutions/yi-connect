@@ -740,6 +740,58 @@ export type Database = {
         }
         Relationships: []
       }
+      finals_round_questions: {
+        Row: {
+          asked_at: string | null
+          assigned_team_id: string | null
+          created_at: string
+          display_order: number
+          finals_round_id: string
+          id: string
+          question_id: string
+        }
+        Insert: {
+          asked_at?: string | null
+          assigned_team_id?: string | null
+          created_at?: string
+          display_order?: number
+          finals_round_id: string
+          id?: string
+          question_id: string
+        }
+        Update: {
+          asked_at?: string | null
+          assigned_team_id?: string | null
+          created_at?: string
+          display_order?: number
+          finals_round_id?: string
+          id?: string
+          question_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finals_round_questions_assigned_team_id_fkey"
+            columns: ["assigned_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finals_round_questions_finals_round_id_fkey"
+            columns: ["finals_round_id"]
+            isOneToOne: false
+            referencedRelation: "finals_rounds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finals_round_questions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       finals_rounds: {
         Row: {
           category: string
@@ -882,6 +934,8 @@ export type Database = {
           finale_rank: number | null
           finale_score: number | null
           id: string
+          quarterfinal_rank: number | null
+          quarterfinal_score: number | null
           semifinal_rank: number | null
           semifinal_score: number | null
           status: string
@@ -896,6 +950,8 @@ export type Database = {
           finale_rank?: number | null
           finale_score?: number | null
           id?: string
+          quarterfinal_rank?: number | null
+          quarterfinal_score?: number | null
           semifinal_rank?: number | null
           semifinal_score?: number | null
           status?: string
@@ -910,6 +966,8 @@ export type Database = {
           finale_rank?: number | null
           finale_score?: number | null
           id?: string
+          quarterfinal_rank?: number | null
+          quarterfinal_score?: number | null
           semifinal_rank?: number | null
           semifinal_score?: number | null
           status?: string

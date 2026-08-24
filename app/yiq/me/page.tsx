@@ -165,6 +165,28 @@ export default async function MyYiqPage() {
           </Link>
         </section>
 
+        {/* ---- Paper review --------------------------------------------- */}
+        <section
+          className="mt-4 rounded-2xl p-6"
+          style={{ background: "rgba(247,244,237,0.05)", border: `1px solid ${RULE}` }}
+        >
+          <p className="yiq-eyebrow" style={{ color: DIM }}>
+            Your papers
+          </p>
+          <h2 className="yiq-display mt-2 text-[1.5rem]">See how you did</h2>
+          <p className="mt-2 text-[0.9375rem]" style={{ color: DIM }}>
+            Walk back through every paper you have sat. Practice answers open
+            straight away; the real round opens once your chapter closes it.
+          </p>
+          <Link
+            href="/yiq/me/review"
+            className="mt-5 inline-block rounded-full border px-5 py-3 text-[0.875rem] font-bold"
+            style={{ borderColor: RULE, color: PAPER }}
+          >
+            Review my papers
+          </Link>
+        </section>
+
         {/* ---- Team card ------------------------------------------------ */}
         <section className="mt-4 rounded-2xl p-6" style={{ border: `1px solid ${RULE}` }}>
           <p className="yiq-eyebrow" style={{ color: DIM }}>

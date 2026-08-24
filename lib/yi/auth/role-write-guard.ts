@@ -24,14 +24,35 @@ const LEGACY_APP_SUPER_ROLES: Record<string, string[]> = {
   future: ["national_admin", "platform_admin"],
 };
 
+// Every vertical whose super tier is platform-assignable-only. ADD A NEW
+// VERTICAL HERE THE DAY IT IS CREATED.
+//
+// This list is the whole guard. A vertical missing from it FAILS OPEN — its
+// `{app}_super_admin` slips past the check on line ~81 and that app's super
+// can then mint a peer, which is precisely the privilege escalation this file
+// exists to stop. `yiq` was omitted when YIQ shipped on 2026-08-24 and was
+// fail-open until it was caught; the same shape of bug has bitten this repo
+// before (a hardcoded five-key list that 403'd the sixth). Nothing errors and
+// nothing logs when it happens — the check simply does not fire.
+const SUPER_TIER_APPS = [
+  "yip",
+  "future",
+  "yifi",
+  "yuva",
+  "yiq",
+  "thalir",
+  "masoom",
+];
+
 // Role names that ONLY a platform super-admin may assign. Any app's super tier
 // (new `{app}_super_admin` + that app's legacy top-tier names) plus the
 // platform tier itself. Built from the legacy map so it stays in one place.
 const SUPER_TIER_ROLES = new Set<string>([
   ...PLATFORM_SUPER_ROLES,
-  ...["yip", "future", "yifi", "yuva", "thalir", "masoom"].map(
-    (a) => `${a}_super_admin`
-  ),
+  ...SUPER_TIER_APPS.map((a) => `${a}_super_admin`),
+  // YIQ's gate also honours a legacy `yiq_national` alias
+  // (lib/yiq/auth/require-super-admin.ts); guard it the same way.
+  "yiq_national",
   ...Object.values(LEGACY_APP_SUPER_ROLES).flat(),
 ]);
 

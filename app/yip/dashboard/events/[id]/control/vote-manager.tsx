@@ -100,6 +100,40 @@ function warnIfNoCheckin(result: Awaited<ReturnType<typeof openVote>>) {
   );
 }
 
+/**
+ * Say what the reveal actually did — including when it seated nobody.
+ *
+ * A reveal used to report "Results revealed!" whether or not the winner ended
+ * up holding the role, because marking the session revealed and writing the
+ * seat are two separate steps and only the first is unconditional. Twice, the
+ * second step did not happen and the screen said the cheerful thing anyway; it
+ * was caught days later by querying the database by hand.
+ *
+ * The result now carries a read-back of the participant rows, so this can tell
+ * the truth. The vote still succeeded and the tally still stands — what changes
+ * is that an unseated winner is said out loud, at the moment it happens, with
+ * the name of the person it concerns. Left on screen long enough to act on.
+ */
+function reportReveal(
+  seating:
+    | { expected: number; seated: number; unseatedNames: string[] }
+    | null
+    | undefined,
+  successMessage: string
+) {
+  if (!seating || seating.seated === seating.expected) {
+    toast.success(successMessage);
+    return;
+  }
+  const who = seating.unseatedNames.join(", ");
+  toast.error(
+    `Revealed, but ${seating.expected - seating.seated} of ${seating.expected} winner${
+      seating.expected === 1 ? "" : "s"
+    } did not get their role: ${who}. The result stands — but nobody is holding the seat yet, so do NOT clear or archive this election. Re-reveal it, or seat them from Participants.`,
+    { duration: 30000 }
+  );
+}
+
 // ─── Types ──────────────────────────────────────────────────────
 
 type AgendaItem = Tables<{ schema: "yip" }, "agenda">;
@@ -842,7 +876,7 @@ export function VoteManager({
         startTransition(async () => {
           const result = await revealResults(voteSession.id);
           if (result.success) {
-            toast.success("Results revealed!");
+            reportReveal(result.data.seating, "Results revealed!");
           } else {
             toast.error(result.error);
           }
@@ -931,7 +965,7 @@ export function VoteManager({
   function handleParallelReveal(sessionId: string) {
     startTransition(async () => {
       const res = await revealResults(sessionId);
-      if (res.success) toast.success("Leader revealed.");
+      if (res.success) reportReveal(res.data.seating, "Leader revealed.");
       else toast.error(res.error);
     });
   }

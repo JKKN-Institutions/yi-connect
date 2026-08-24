@@ -1,0 +1,182 @@
+/*
+ * YIQ design tokens + primitives.
+ *
+ * IMPORTANT: this file is imported by app/yiq/layout.tsx. Per-vertical
+ * `globals.css` files elsewhere in this repo are imported nowhere and their
+ * tokens are dead — if you add a token here, confirm the import still exists
+ * before relying on it.
+ *
+ * Direction: the quiz STAGE, not the classroom. Deep parliament navy ground,
+ * warm answer-sheet paper, saffron as the buzzer light. The signature device
+ * is the clock ring (.yiq-ring) — the countdown in the test UI, the motif on
+ * the hero, the rank medallion on the scoreboard. One device, three uses.
+ */
+
+.yiq-root {
+  /* Ground + paper */
+  --yiq-ink: #0a1633;
+  --yiq-ink-2: #12224a;
+  --yiq-ink-3: #1c3167;
+  --yiq-paper: #f7f4ed;
+  --yiq-paper-2: #ede8dc;
+
+  /* Accents */
+  --yiq-saffron: #e8a33d;
+  --yiq-saffron-hot: #f5bd68;
+  --yiq-green: #14795a;
+  --yiq-vermilion: #c8452f;
+  --yiq-brass: #b08a4a;
+
+  /* Text on ground */
+  --yiq-on-ink: #f7f4ed;
+  --yiq-on-ink-dim: #9fb0d4;
+  --yiq-on-paper: #0a1633;
+  --yiq-on-paper-dim: #5a6480;
+
+  --yiq-rule: rgba(247, 244, 237, 0.14);
+  --yiq-rule-paper: rgba(10, 22, 51, 0.12);
+
+  --yiq-display: var(--font-yiq-display), "Bricolage Grotesque",
+    ui-sans-serif, system-ui, sans-serif;
+  --yiq-body: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --yiq-data: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+
+  font-family: var(--yiq-body);
+  color: var(--yiq-on-paper);
+  -webkit-font-smoothing: antialiased;
+}
+
+.yiq-skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  background: var(--yiq-saffron);
+  color: var(--yiq-ink);
+  padding: 0.75rem 1.25rem;
+  font-weight: 700;
+  border-radius: 0 0 0.5rem 0;
+}
+.yiq-skip:focus {
+  left: 0;
+}
+
+/* --- Type ------------------------------------------------------------- */
+.yiq-display {
+  font-family: var(--yiq-display);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 0.95;
+}
+.yiq-eyebrow {
+  font-family: var(--yiq-data);
+  font-size: 0.6875rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+.yiq-data {
+  font-family: var(--yiq-data);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* --- Signature: the clock ring ---------------------------------------- */
+/*
+ * A conic-gradient ring driven by --yiq-ring-pct (0-100). Used at 220px as
+ * the test countdown, 44px as a rank medallion. `--yiq-ring-col` sets the
+ * live colour so the timer can go saffron -> vermilion as time runs out.
+ */
+.yiq-ring {
+  --yiq-ring-pct: 100;
+  --yiq-ring-col: var(--yiq-saffron);
+  --yiq-ring-track: rgba(247, 244, 237, 0.12);
+  --yiq-ring-w: 8px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--yiq-ring-col) calc(var(--yiq-ring-pct) * 1%),
+    var(--yiq-ring-track) 0
+  );
+  transition: --yiq-ring-pct 0.4s linear;
+}
+.yiq-ring::before {
+  content: "";
+  position: absolute;
+  inset: var(--yiq-ring-w);
+  border-radius: 50%;
+  background: var(--yiq-ring-bg, var(--yiq-ink));
+}
+.yiq-ring > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* --- Answer options --------------------------------------------------- */
+.yiq-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+  width: 100%;
+  text-align: left;
+  padding: 1rem 1.125rem;
+  border: 1.5px solid var(--yiq-rule-paper);
+  border-radius: 0.875rem;
+  background: #fff;
+  color: var(--yiq-on-paper);
+  font-size: 1rem;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.08s;
+}
+.yiq-option:hover:not(:disabled) {
+  border-color: rgba(10, 22, 51, 0.32);
+}
+.yiq-option:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.yiq-option[data-selected="true"] {
+  border-color: var(--yiq-ink);
+  background: #fff;
+  box-shadow: inset 0 0 0 1.5px var(--yiq-ink);
+}
+.yiq-option:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+.yiq-option-key {
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.5rem;
+  background: var(--yiq-paper-2);
+  font-family: var(--yiq-data);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.yiq-option[data-selected="true"] .yiq-option-key {
+  background: var(--yiq-ink);
+  color: var(--yiq-on-ink);
+}
+
+/* --- Focus + motion floor -------------------------------------------- */
+.yiq-root :focus-visible {
+  outline: 3px solid var(--yiq-saffron);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yiq-root *,
+  .yiq-root *::before,
+  .yiq-root *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

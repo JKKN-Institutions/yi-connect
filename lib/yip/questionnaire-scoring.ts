@@ -157,7 +157,17 @@ export async function claimScoringWork(limit = 25): Promise<ScoringWorkItem[]> {
         a.files.length > 0
     );
     if (handedInAsFile) {
-      await tbl(sb, "questionnaire_attempts")
+      // The park MUST be checked. It was not, and that cost a whole feature:
+      // a duplicate CHECK constraint made `needs_human` unwritable, every park
+      // was rejected, the error was discarded, and the paper stayed at
+      // `scoring` — a state the claim query never selects, so it could never be
+      // picked up again. It was invisible because nothing here looked.
+      //
+      // If the park cannot be written, fall back to leaving the attempt where
+      // the scorer can still reach it, and record why on the row. A paper the
+      // organiser can see and re-queue is recoverable; one stranded mid-claim
+      // is not.
+      const { error: parkError } = await tbl(sb, "questionnaire_attempts")
         .update({
           scoring_status: "needs_human",
           // NOTE: this deliberately does not say "enter the marks here" —
@@ -170,6 +180,16 @@ export async function claimScoringWork(limit = 25): Promise<ScoringWorkItem[]> {
           updated_at: new Date().toISOString(),
         })
         .eq("id", r.id);
+
+      if (parkError) {
+        await tbl(sb, "questionnaire_attempts")
+          .update({
+            scoring_status: "pending",
+            score_error: `Handed in as a file, and could not be parked for a person to read: ${parkError.message}`,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", r.id);
+      }
       continue;
     }
 

@@ -88,6 +88,28 @@ export default async function YiqAdminPage() {
           ))}
         </dl>
 
+        {/* The three consoles that hang off national admin. Held out of every
+            build lane so they could not collide; wired here. */}
+        <nav className="mt-9 grid gap-3 sm:grid-cols-3">
+          {[
+            { href: "/yiq/admin/questions", t: "Question bank", d: "Add, edit, retire and import questions" },
+            { href: "/yiq/admin/team", t: "YIQ team", d: "Who can run YIQ, and for which chapter" },
+            { href: "/yiq/national", t: "National round", d: "Quarter, semi and the Grand Final" },
+          ].map((c) => (
+            <Link
+              key={c.href}
+              href={c.href}
+              className="rounded-2xl border p-5 transition-colors hover:bg-white/5"
+              style={{ borderColor: RULE }}
+            >
+              <p className="text-[1rem] font-bold">{c.t}</p>
+              <p className="mt-1 text-[0.8125rem]" style={{ color: DIM }}>
+                {c.d}
+              </p>
+            </Link>
+          ))}
+        </nav>
+
         <section className="mt-10">
           <h2 className="yiq-display text-[1.5rem]">Bank depth by topic</h2>
           <ul className="mt-4 grid gap-2 sm:grid-cols-2">

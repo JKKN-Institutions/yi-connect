@@ -33,13 +33,32 @@ export const QUESTION_POOLS: readonly QuestionPool[] = [
   "either",
 ] as const;
 
-/** Mirrors the `paper_kind` check constraint on yiq.papers. */
-export type PaperKind = "mock" | "online_round" | "national_semifinal";
+/**
+ * Mirrors the `paper_kind` check constraint on yiq.papers.
+ *
+ * Kept in step with supabase/migrations/yiq_06_national_ladder.sql, which
+ * widened the constraint once the product owner confirmed content is
+ * authored for THREE levels: chapter online, chapter OFFLINE, and a
+ * national ladder of Quarter / Semi / Final. A kind present in the database
+ * but missing here makes eligiblePools() return [] for it, which callers
+ * must treat as "build nothing" — safe, but it silently disables that kind,
+ * so add new kinds in BOTH places.
+ */
+export type PaperKind =
+  | "mock"
+  | "online_round"
+  | "chapter_offline"
+  | "national_quarterfinal"
+  | "national_semifinal"
+  | "national_final";
 
 export const PAPER_KINDS: readonly PaperKind[] = [
   "mock",
   "online_round",
+  "chapter_offline",
+  "national_quarterfinal",
   "national_semifinal",
+  "national_final",
 ] as const;
 
 /**
@@ -50,10 +69,18 @@ export const PAPER_KINDS: readonly PaperKind[] = [
  */
 const SCORED_KINDS: readonly PaperKind[] = PAPER_KINDS.filter((k) => k !== "mock");
 
+// Only the practice paper may touch the practice pool. Every scored paper —
+// the chapter online round, the chapter offline round, and all three
+// national rungs — draws from `competition` + `either` ONLY. A Record (not a
+// partial) so adding a PaperKind without deciding its pools fails to compile
+// rather than silently defaulting.
 const ELIGIBLE: Record<PaperKind, readonly QuestionPool[]> = {
   mock: ["practice", "either"],
   online_round: ["competition", "either"],
+  chapter_offline: ["competition", "either"],
+  national_quarterfinal: ["competition", "either"],
   national_semifinal: ["competition", "either"],
+  national_final: ["competition", "either"],
 };
 
 export function isPaperKind(value: unknown): value is PaperKind {

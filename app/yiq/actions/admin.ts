@@ -17,6 +17,11 @@ import { requireYiqSuperAdmin } from "@/lib/yiq/auth/require-super-admin";
 import { requireYiqEventManage } from "@/lib/yiq/auth/event-access";
 import { shuffle } from "@/lib/yiq/paper";
 import {
+  assertPoolSafe,
+  eligiblePools,
+  type PaperKind,
+} from "@/lib/yiq/question-pools";
+import {
   bestIndividual,
   rankTeams,
   rollUpTeam,
@@ -34,7 +39,7 @@ type OkPlain = { success: true };
  */
 export async function generatePaper(input: {
   category: "junior" | "senior";
-  kind: "mock" | "online_round" | "national_semifinal";
+  kind: PaperKind;
   name: string;
   questionCount: number;
   durationMinutes: number;
@@ -61,14 +66,32 @@ export async function generatePaper(input: {
     .maybeSingle();
   if (!edition) return { success: false, error: "No active edition." };
 
-  // Eligible pool: active MCQs for this category (or 'both').
+  // POOL SAFETY. The practice pool is public — the sample questions ship in
+  // the YIQ deck that circulates to chapters and schools — so a scored paper
+  // that drew from it would hand every team that had practised the answers.
+  // eligiblePools() returns [] for a kind it does not recognise, and an empty
+  // `in` filter would match NOTHING rather than everything, but refuse
+  // explicitly rather than relying on that.
+  const pools = eligiblePools(input.kind);
+  if (pools.length === 0) {
+    return {
+      success: false,
+      error: `Unknown paper kind "${input.kind}" — refusing to build a paper rather than guess which questions it may use.`,
+    };
+  }
+  const unsafe = assertPoolSafe(input.kind, pools);
+  if (unsafe) return { success: false, error: unsafe };
+
+  // Eligible pool: active MCQs for this category (or 'both'), restricted to
+  // the pools this paper kind may draw from.
   const { data: pool } = await svc
     .from("questions")
     .select("id, topic_id")
     .eq("is_active", true)
     .eq("is_retired", false)
     .eq("question_type", "mcq")
-    .in("category", [input.category, "both"]);
+    .in("category", [input.category, "both"])
+    .in("pool", pools);
 
   if (!pool || pool.length === 0) {
     return { success: false, error: "The question bank has no usable questions yet." };

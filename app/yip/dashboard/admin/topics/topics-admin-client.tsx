@@ -28,6 +28,13 @@ import {
 } from "lucide-react";
 import { YI_ZONES, type YiZone } from "@/lib/yip/hierarchy";
 import {
+  ROUND_LEVELS,
+  ROUND_LEVEL_LABELS,
+  describeRoundLevels,
+  roundLevelScopeKey,
+  type RoundLevel,
+} from "@/lib/yip/round-level";
+import {
   adminCreateTopic,
   adminUpdateTopic,
   adminDeactivateTopic,
@@ -41,6 +48,8 @@ import { PushToSelectedEvents } from "../_components/push-to-selected-events";
 type FormState = {
   category: TopicCategory;
   zone: YiZone | "";
+  /** Round levels this topic applies to. Empty = every round. */
+  levels: RoundLevel[];
   title: string;
   description: string;
   sub_points: string;
@@ -51,6 +60,7 @@ type FormState = {
 const EMPTY: FormState = {
   category: "central",
   zone: "",
+  levels: [],
   title: "",
   description: "",
   sub_points: "",
@@ -70,6 +80,17 @@ const SECTIONS: { key: "central" | "committee" | YiZone; label: string }[] = [
 
 function zoneLabel(zone: string | null): string {
   return YI_ZONES.find((z) => z.code === zone)?.label ?? zone ?? "—";
+}
+
+/** The round levels a topic is used by. Absent for the shared (NULL) topics,
+ *  which is every topic that existed before the level scope was introduced. */
+function LevelBadge({ topic }: { topic: AdminTopic }) {
+  if (!topic.levels?.length) return null;
+  return (
+    <Badge className="bg-[#FF9933]/10 text-[#B35C00] border-[#FF9933]/20 text-[10px] ml-1">
+      {describeRoundLevels(topic.levels)}
+    </Badge>
+  );
 }
 
 function ScopeBadge({ topic }: { topic: AdminTopic }) {
@@ -105,6 +126,7 @@ export function TopicsAdminClient({
   >("all");
   const [query, setQuery] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+  const [levelFilter, setLevelFilter] = useState<"all" | RoundLevel>("all");
   const [showSubpoints, setShowSubpoints] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   function toggleExpand(id: string) {
@@ -133,6 +155,10 @@ export function TopicsAdminClient({
       t.zone !== filter
     )
       return false;
+    // A level filter shows what a round at that level can actually use: its
+    // own scoped topics PLUS the shared ones.
+    if (levelFilter !== "all" && t.levels?.length && !t.levels.includes(levelFilter))
+      return false;
     if (query) {
       const q = query.toLowerCase();
       if (
@@ -146,19 +172,41 @@ export function TopicsAdminClient({
   });
 
   // Bucket the visible topics into ordered sections (only non-empty ones render).
-  const grouped = SECTIONS.map((section) => ({
-    ...section,
-    rows: visible.filter((t) =>
+  // A section whose topics carry more than one level scope is split again, so a
+  // ministry name held by both a shared row and a regional-round row reads as
+  // two clearly-labelled groups rather than an unexplained duplicate. A section
+  // with a single scope keeps its plain label — which is every section until
+  // level-scoped topics exist, so nothing looks different today.
+  const scopeLabel = (levels: RoundLevel[] | null): string =>
+    !levels?.length ? "Every round" : `${describeRoundLevels(levels)} rounds only`;
+
+  const grouped = SECTIONS.flatMap((section) => {
+    const rows = visible.filter((t) =>
       section.key === "central"
         ? t.category === "central"
         : section.key === "committee"
           ? t.category === "committee"
           : t.category === "regional" && t.zone === section.key
-    ),
-  })).filter((g) => g.rows.length > 0);
+    );
+    if (rows.length === 0) return [];
+    const scopes = Array.from(new Set(rows.map((t) => roundLevelScopeKey(t.levels))));
+    if (scopes.length <= 1) return [{ key: section.key as string, label: section.label, rows }];
+    // Shared topics first, then each level-scoped group.
+    const ordered = [...scopes].sort((a, b) => (a === "*" ? -1 : b === "*" ? 1 : a.localeCompare(b)));
+    return ordered.map((s) => {
+      const scopeRows = rows.filter((t) => roundLevelScopeKey(t.levels) === s);
+      return {
+        key: `${section.key}|${s}`,
+        label: `${section.label} — ${scopeLabel(scopeRows[0]?.levels ?? null)}`,
+        rows: scopeRows,
+      };
+    });
+  });
 
   function openCreate() {
-    setForm(EMPTY);
+    // Pre-select the level being filtered on, so "show regional → new topic"
+    // creates a regional topic rather than another shared one.
+    setForm({ ...EMPTY, levels: levelFilter === "all" ? [] : [levelFilter] });
     setEditing(null);
     setCreating(true);
     setError(null);
@@ -167,6 +215,7 @@ export function TopicsAdminClient({
     setForm({
       category: t.category,
       zone: (t.zone as YiZone) ?? "",
+      levels: t.levels ?? [],
       title: t.title,
       description: t.description ?? "",
       sub_points: t.sub_points.join("\n"),
@@ -208,6 +257,7 @@ export function TopicsAdminClient({
         ? parseInt(form.handbook_page)
         : null,
       linked_scheme: form.linked_scheme.trim() || null,
+      levels: form.levels,
     };
     startTransition(async () => {
       const res = editing
@@ -352,6 +402,17 @@ export function TopicsAdminClient({
         >
           Committee ({counts.committee})
         </FilterChip>
+        <span className="mx-1 h-4 w-px bg-[#1a1a3e]/15" aria-hidden />
+        <span className="text-xs font-medium text-[#1a1a3e]/50">Used by</span>
+        {(["all", ...ROUND_LEVELS] as const).map((f) => (
+          <FilterChip
+            key={f}
+            active={levelFilter === f}
+            onClick={() => setLevelFilter(f)}
+          >
+            {f === "all" ? "All rounds" : `${ROUND_LEVEL_LABELS[f]} rounds`}
+          </FilterChip>
+        ))}
         <div className="ml-auto flex items-center gap-4">
           <label className="flex items-center gap-2 text-xs text-[#1a1a3e]/70">
             <input
@@ -499,6 +560,50 @@ export function TopicsAdminClient({
                 placeholder="One bullet per line"
               />
             </div>
+            {/* Round-level scope. Nothing selected = applies everywhere, which
+                is what every topic meant before this control existed. */}
+            <div>
+              <p className="text-xs font-medium text-[#1a1a3e]/70">Applies to</p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, levels: [] })}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                    form.levels.length === 0
+                      ? "border-[#FF9933] bg-[#FF9933]/10 text-[#B35C00]"
+                      : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  Every round
+                </button>
+                {ROUND_LEVELS.map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        levels: form.levels.includes(l)
+                          ? form.levels.filter((x) => x !== l)
+                          : [...form.levels, l],
+                      })
+                    }
+                    className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                      form.levels.includes(l)
+                        ? "border-[#1a1a3e] bg-[#1a1a3e]/5 text-[#1a1a3e]"
+                        : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    {ROUND_LEVEL_LABELS[l]}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[11px] text-[#1a1a3e]/50">
+                {form.levels.length === 0
+                  ? "Used by chapter, regional and national rounds alike."
+                  : `Used only by ${describeRoundLevels(form.levels)} rounds. Rounds at other levels fall back to a topic marked “Every round”.`}
+              </p>
+            </div>
             {error && (
               <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
                 {error}
@@ -630,6 +735,7 @@ export function TopicsAdminClient({
                       </TableCell>
                       <TableCell>
                         <ScopeBadge topic={t} />
+                        <LevelBadge topic={t} />
                       </TableCell>
                       <TableCell className="text-xs text-[#1a1a3e]/70">
                         {t.sub_points.length}

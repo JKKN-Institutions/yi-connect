@@ -546,6 +546,26 @@ export async function openVote(
       };
     }
     // Other parties' leader elections may coexist → allow.
+  } else if (
+    isBenchScoped(voteType) &&
+    actives.length > 0 &&
+    actives.every((s) => {
+      const cfg = (s.config ?? {}) as { side?: string };
+      return isBenchScoped(s.vote_type) && cfg.side && cfg.side !== config?.side;
+    })
+  ) {
+    // OPPOSITE BENCHES MAY RUN TOGETHER (Director, 2026-08-23).
+    //
+    // The exclusivity rule below exists because concurrent votes would share
+    // voters. Two bench elections on OPPOSITE sides do not: `party_side` holds
+    // one value per person, so nobody sits on both benches. The ruling bench
+    // elects the Prime Minister while the opposition elects its Leader, and
+    // neither group can see or vote in the other's ballot — the same reasoning
+    // that already lets every party's leader election run at once.
+    //
+    // Deliberately narrow: EVERY active session must be bench-scoped AND on a
+    // different side. A House-wide vote, a party vote, or another election on
+    // the SAME bench still blocks, because those really do share voters.
   } else if (actives.length > 0) {
     // Everything else (House-wide, bench, cabinet/shadow) stays exclusive.
     return {

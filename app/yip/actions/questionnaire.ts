@@ -31,17 +31,28 @@ import {
   ATTEMPT_MINUTES,
   MARKING_STALL_MINUTES,
   MAX_PER_ANSWER,
+  QUESTIONNAIRE_FILE_URL_SECONDS,
+  QUESTIONNAIRE_MAX_FILES_PER_ANSWER,
+  QUESTIONNAIRE_MAX_FILE_BYTES,
   QUESTIONNAIRE_POSTS,
+  QUESTIONNAIRE_UPLOAD_MIME_EXT,
+  answerIsGiven,
   attemptExpired,
   buildQuestionnaireCsv,
   buildQuestionnaireResponsesCsv,
+  CABINET_QUESTIONS_PER_MINISTRY,
+  drawCabinetPaper,
   drawQuestions,
   expiryFor,
   isQuestionnairePostKey,
+  ministryMatchKey,
+  nominatedPostKeys,
   normalizeAnswerText,
+  parseAnswerFiles,
   questionnairePostLabel,
   questionsPerAttempt,
   type QuestionnaireActionResult as R,
+  type QuestionnaireAnswerFile,
   type QuestionnaireMarkingProgress,
   type QuestionnairePostKey,
   type QuestionnaireMissingRow,
@@ -50,6 +61,14 @@ import {
   type ScoringStatus,
   type WindowStatus,
 } from "@/lib/yip/questionnaire";
+
+/**
+ * The PRIVATE bucket handed-in files live in. Never made public and never
+ * turned into a public URL: these are minors' personal data, so every read is
+ * a short-lived signed URL minted behind a server-side gate — the same posture
+ * as yip-bill-documents.
+ */
+const UPLOAD_BUCKET = "yip-questionnaire-uploads";
 
 // ─── Loose table access ──────────────────────────────────────────
 //
@@ -91,6 +110,8 @@ type QuestionDb = {
   id: string;
   event_id: string | null;
   post_key: string;
+  /** Portfolio this question belongs to — cabinet_minister only, else null. */
+  ministry: string | null;
   body: string;
   display_order: number;
   is_active: boolean;
@@ -134,6 +155,8 @@ type AnswerDb = {
   score: number | null;
   flags: unknown;
   scored_at: string | null;
+  /** jsonb array of {path,name,size,mime,uploaded_at}. Read via parseAnswerFiles. */
+  files: unknown;
 };
 
 const questionsT = (sb: SB) => tbl<QuestionDb>(sb, "questionnaire_questions");
@@ -141,7 +164,90 @@ const windowsT = (sb: SB) => tbl<WindowDb>(sb, "questionnaire_windows");
 const attemptsT = (sb: SB) => tbl<AttemptDb>(sb, "questionnaire_attempts");
 const answersT = (sb: SB) => tbl<AnswerDb>(sb, "questionnaire_answers");
 const selfNomsT = (sb: SB) =>
-  tbl<{ participant_id: string; roles: string[] }>(sb, "self_nominations");
+  tbl<{
+    participant_id: string;
+    roles: string[];
+    ministries: string[] | null;
+  }>(sb, "self_nominations");
+
+/**
+ * The two portfolios on THIS student's Cabinet/Shadow nomination.
+ *
+ * Read from their own nomination row rather than anything the client sent —
+ * the paper a candidate sits is decided by what they nominated for, and a
+ * client that could name its own portfolios could choose the easy two. Returns
+ * [] when there is no nomination or it carries none, which the caller reports
+ * rather than silently handing out an empty paper.
+ */
+async function readMyNominatedMinistries(
+  sb: SB,
+  eventId: string,
+  participantId: string
+): Promise<string[]> {
+  const { data, error } = await selfNomsT(sb)
+    .select("participant_id, roles, ministries")
+    .eq("event_id", eventId)
+    .eq("participant_id", participantId)
+    .maybeSingle();
+  if (error || !data) return [];
+  return Array.isArray(data.ministries)
+    ? data.ministries.filter((m): m is string => typeof m === "string")
+    : [];
+}
+
+/**
+ * Portfolios that real candidates nominated for but that cannot fill a paper.
+ *
+ * Returns one row per short portfolio with how many questions it has and how
+ * many candidates are waiting on it. An empty array means every nominated
+ * portfolio can fill its share of the paper.
+ *
+ * Fails LOUD, not open: if the read errors we report the whole thing as short
+ * rather than reporting all-clear, because the cost of a wrong all-clear is a
+ * cohort sitting a blank paper inside a 30-minute window.
+ */
+async function cabinetCoverageShortfall(
+  sb: SB,
+  eventId: string
+): Promise<{ ministry: string; have: number; candidates: number }[]> {
+  const { data: noms, error } = await selfNomsT(sb)
+    .select("participant_id, roles, ministries")
+    .eq("event_id", eventId);
+  if (error) {
+    return [{ ministry: "could not read the nominations", have: 0, candidates: 0 }];
+  }
+
+  const waiting = new Map<string, { label: string; candidates: number }>();
+  for (const n of noms ?? []) {
+    // Shadow Ministers sit this same paper, so they must be counted here too.
+    if (!nominatedPostKeys(n.roles).includes("cabinet_minister")) continue;
+    if (!Array.isArray(n.ministries)) continue;
+    for (const m of n.ministries) {
+      if (typeof m !== "string" || m.trim() === "") continue;
+      const key = ministryMatchKey(m);
+      const seen = waiting.get(key);
+      if (seen) seen.candidates += 1;
+      else waiting.set(key, { label: m, candidates: 1 });
+    }
+  }
+  if (waiting.size === 0) return [];
+
+  const { questions } = await effectiveQuestions(sb, eventId, "cabinet_minister");
+  const have = new Map<string, number>();
+  for (const q of questions) {
+    const key = ministryMatchKey(q.ministry);
+    have.set(key, (have.get(key) ?? 0) + 1);
+  }
+
+  const short: { ministry: string; have: number; candidates: number }[] = [];
+  for (const [key, info] of waiting) {
+    const count = have.get(key) ?? 0;
+    if (count < CABINET_QUESTIONS_PER_MINISTRY) {
+      short.push({ ministry: info.label, have: count, candidates: info.candidates });
+    }
+  }
+  return short.sort((a, b) => b.candidates - a.candidates);
+}
 const participantsT = (sb: SB) =>
   tbl<{ id: string; full_name: string; constituency_number: number | null }>(
     sb,
@@ -229,10 +335,10 @@ function uniformExpiry(
   startedAt: Date
 ): string {
   const openedAt = windows.find((w) => w.post_key === postKey)?.opened_at;
-  if (!openedAt) return expiryFor(startedAt);
+  if (!openedAt) return expiryFor(startedAt, postKey);
   const parsed = new Date(openedAt);
-  if (Number.isNaN(parsed.getTime())) return expiryFor(startedAt);
-  return expiryFor(parsed);
+  if (Number.isNaN(parsed.getTime())) return expiryFor(startedAt, postKey);
+  return expiryFor(parsed, postKey);
 }
 
 /**
@@ -249,7 +355,7 @@ async function effectiveQuestions(
   postKey: QuestionnairePostKey
 ): Promise<{ questions: QuestionDb[]; source: "chapter" | "national" }> {
   const { data: own } = await questionsT(sb)
-    .select("id, event_id, post_key, body, display_order, is_active")
+    .select("id, event_id, post_key, ministry, body, display_order, is_active")
     .eq("event_id", eventId)
     .eq("post_key", postKey)
     .eq("is_active", true)
@@ -258,7 +364,7 @@ async function effectiveQuestions(
   if (own && own.length > 0) return { questions: own, source: "chapter" };
 
   const { data: national } = await questionsT(sb)
-    .select("id, event_id, post_key, body, display_order, is_active")
+    .select("id, event_id, post_key, ministry, body, display_order, is_active")
     .is("event_id", null)
     .eq("post_key", postKey)
     .eq("is_active", true)
@@ -293,7 +399,9 @@ async function myNominatedPosts(sb: SB, eventId: string, participantId: string) 
     .eq("participant_id", participantId)
     .maybeSingle();
   const roles = Array.isArray(data?.roles) ? data!.roles : [];
-  return roles.filter(isQuestionnairePostKey);
+  // NOT `roles.filter(isQuestionnairePostKey)` — that drops shadow_minister,
+  // whose paper is the Cabinet one. See nominatedPostKeys.
+  return nominatedPostKeys(roles);
 }
 
 /**
@@ -393,13 +501,15 @@ export async function getMyQuestionnaire(
   const counts = new Map<string, { answered: number; total: number }>();
   if (ids.length > 0) {
     const { data: rows } = await answersT(sb)
-      .select("attempt_id, answer_text")
+      .select("attempt_id, answer_text, files")
       .in("attempt_id", ids)
       .limit(500);
     for (const r of rows ?? []) {
       const c = counts.get(r.attempt_id) ?? { answered: 0, total: 0 };
       c.total += 1;
-      if ((r.answer_text ?? "").trim() !== "") c.answered += 1;
+      // Text OR a handed-in file. A candidate who photographed a handwritten
+      // report and typed nothing must not be told "0 of 1 answered".
+      if (answerIsGiven(r.answer_text, r.files)) c.answered += 1;
       counts.set(r.attempt_id, c);
     }
   }
@@ -434,7 +544,13 @@ export type StartedAttempt = {
   postKey: QuestionnairePostKey;
   expiresAt: string;
   submittedAt: string | null;
-  questions: { position: number; text: string; answer: string }[];
+  questions: {
+    position: number;
+    text: string;
+    answer: string;
+    /** Anything already handed in for this question — survives a reload. */
+    files: QuestionnaireAnswerFile[];
+  }[];
 };
 
 export async function startQuestionnaire(
@@ -487,7 +603,35 @@ export async function startQuestionnaire(
     };
   }
 
-  const drawn = drawQuestions(questions, questionsPerAttempt(postKey));
+  // The Cabinet paper is drawn per portfolio (6 + 6), not as one draw over the
+  // merged bank — a single draw could hand a candidate ten Finance questions
+  // and two Health ones when they are judged on both. Every other post is a
+  // straight draw over its whole bank.
+  let drawn: typeof questions;
+  if (postKey === "cabinet_minister") {
+    const myMinistries = await readMyNominatedMinistries(
+      sb,
+      eventId,
+      me.participantId
+    );
+    if (myMinistries.length === 0) {
+      return {
+        success: false,
+        error:
+          "Your nomination does not have two portfolios on it. Tell your organiser.",
+      };
+    }
+    drawn = drawCabinetPaper(questions, myMinistries);
+    if (drawn.length === 0) {
+      return {
+        success: false,
+        error:
+          "No questions have been set up for your portfolios yet. Tell your organiser.",
+      };
+    }
+  } else {
+    drawn = drawQuestions(questions, questionsPerAttempt(postKey));
+  }
   const startedAt = new Date();
 
   // One clock for the whole cohort, anchored on when the window was opened.
@@ -577,7 +721,7 @@ async function loadMyAttempt(
   if (!attempt) return null;
 
   const { data: answers } = await answersT(sb)
-    .select("position, question_text, answer_text")
+    .select("position, question_text, answer_text, files")
     .eq("attempt_id", attempt.id)
     .order("position", { ascending: true })
     .limit(100);
@@ -590,6 +734,7 @@ async function loadMyAttempt(
       position: a.position,
       text: a.question_text,
       answer: a.answer_text ?? "",
+      files: parseAnswerFiles(a.files),
     })),
   };
 }
@@ -636,6 +781,281 @@ export async function saveQuestionnaireAnswer(
 
   if (error) return { success: false, error: error.message };
   return { success: true, data: { saved: true } };
+}
+
+// ─── STUDENT · handing in a file ─────────────────────────────────
+//
+// The Student Journalist paper is ONE 300–500 word news report in 60 minutes.
+// On 2026-08-22, 32 candidates submitted and only 5 had typed anything — 27
+// handed in blank. Typing a full report on a phone inside the window is the
+// suspected cause, so a candidate may hand in a document, or a photo of a
+// handwritten report, as well as or instead of typing.
+//
+// A FILE IS NOT A WAY AROUND THE CLOCK. Every refusal that stops a candidate
+// editing text stops them uploading too — submitted, window shut, own
+// expires_at passed. That is why upload and remove share one gate with save.
+
+/**
+ * The gate every write to one answer row must pass: the caller owns the
+ * attempt, the attempt is still open, and the row exists.
+ *
+ * Mirrors saveQuestionnaireAnswer's checks exactly — deliberately one helper
+ * rather than two copies, because a file route that drifted from the text
+ * route would be a way to keep writing after pens-down.
+ */
+async function requireWritableAnswer(
+  eventId: string,
+  postKeyRaw: string,
+  position: number
+): Promise<
+  | { ok: true; sb: SB; attemptId: string; files: QuestionnaireAnswerFile[] }
+  | { ok: false; error: string }
+> {
+  const me = await requireMe(eventId);
+  if (!me.ok) return { ok: false, error: me.error };
+  if (!isQuestionnairePostKey(postKeyRaw)) {
+    return { ok: false, error: "Unknown post." };
+  }
+  if (!Number.isInteger(position) || position < 1) {
+    return { ok: false, error: "Unknown question." };
+  }
+  const sb = await createServiceClient();
+
+  const { data: attempt } = await attemptsT(sb)
+    .select(
+      "id, event_id, participant_id, post_key, started_at, expires_at, submitted_at, scoring_status, total_score, max_score, pct, score_error"
+    )
+    .eq("event_id", eventId)
+    .eq("participant_id", me.participantId)
+    .eq("post_key", postKeyRaw)
+    .maybeSingle();
+
+  if (!attempt) return { ok: false, error: "You have not started this questionnaire." };
+  if (attempt.submitted_at) {
+    return { ok: false, error: "You have already submitted this questionnaire." };
+  }
+  const windows = await readWindows(sb, eventId);
+  if (!windowOpen(windows, postKeyRaw)) {
+    return { ok: false, error: "This questionnaire is not open right now." };
+  }
+  // Server-side deadline. The countdown on the phone is display only.
+  if (attemptExpired(attempt)) {
+    return { ok: false, error: "Your time is up. Submit what you have." };
+  }
+
+  const { data: answer } = await answersT(sb)
+    .select("id, attempt_id, position, answer_text, files")
+    .eq("attempt_id", attempt.id)
+    .eq("position", position)
+    .maybeSingle();
+  if (!answer) return { ok: false, error: "That question is not part of your paper." };
+
+  return { ok: true, sb, attemptId: attempt.id, files: parseAnswerFiles(answer.files) };
+}
+
+/** Best-effort object delete; the caller decides whether failure matters. */
+async function removeUploadObject(sb: SB, path: string): Promise<void> {
+  const { error } = await sb.storage.from(UPLOAD_BUCKET).remove([path]);
+  if (error) {
+    console.error("[yip-questionnaire-uploads] storage remove failed:", error.message);
+  }
+}
+
+/**
+ * Hand in one file for one answer.
+ *
+ * Everything is validated HERE, from the bytes that actually arrived — the
+ * browser's reported type and size are only a hint, and the extension is
+ * derived from the validated mime, never from the filename. The original
+ * filename survives as display text inside the jsonb and nowhere else.
+ */
+export async function uploadQuestionnaireFile(
+  eventId: string,
+  postKeyRaw: string,
+  position: number,
+  formData: FormData
+): Promise<R<{ files: QuestionnaireAnswerFile[] }>> {
+  const gate = await requireWritableAnswer(eventId, postKeyRaw, position);
+  if (!gate.ok) return { success: false, error: gate.error };
+  const { sb, attemptId } = gate;
+
+  const raw = formData.get("file");
+  if (!raw || typeof raw === "string") {
+    return { success: false, error: "Pick a file first, then tap Add file again." };
+  }
+  const file = raw as File;
+
+  const ext = QUESTIONNAIRE_UPLOAD_MIME_EXT.get(file.type ?? "");
+  if (!ext) {
+    return {
+      success: false,
+      error:
+        "That kind of file can't be used. Send a photo (JPG, PNG, HEIC or WebP), a PDF, or a Word document.",
+    };
+  }
+  if (file.size <= 0) {
+    return { success: false, error: "That file is empty. Pick the file again." };
+  }
+  if (file.size > QUESTIONNAIRE_MAX_FILE_BYTES) {
+    return {
+      success: false,
+      error: `That file is too big — ${Math.round(
+        QUESTIONNAIRE_MAX_FILE_BYTES / (1024 * 1024)
+      )} MB is the most we can take. Take the photo again at a smaller size, or send one page at a time.`,
+    };
+  }
+  if (gate.files.length >= QUESTIONNAIRE_MAX_FILES_PER_ANSWER) {
+    return {
+      success: false,
+      error: `You've already added ${QUESTIONNAIRE_MAX_FILES_PER_ANSWER} files, which is the most allowed. Remove one if you need to swap it.`,
+    };
+  }
+
+  // Read the bytes and re-check the LENGTH THAT ACTUALLY ARRIVED. A client can
+  // lie about File.size; it cannot lie about how many bytes it sent.
+  let buffer: Buffer;
+  try {
+    buffer = Buffer.from(await file.arrayBuffer());
+  } catch {
+    return { success: false, error: "We couldn't read that file. Try picking it again." };
+  }
+  if (buffer.byteLength <= 0 || buffer.byteLength > QUESTIONNAIRE_MAX_FILE_BYTES) {
+    return {
+      success: false,
+      error: `That file is too big — ${Math.round(
+        QUESTIONNAIRE_MAX_FILE_BYTES / (1024 * 1024)
+      )} MB is the most we can take.`,
+    };
+  }
+
+  // The path is built ENTIRELY from server-known values plus a fresh UUID, so
+  // it cannot traverse and one candidate's folder can never name another's.
+  const path = `${eventId}/${attemptId}/${crypto.randomUUID()}.${ext}`;
+  const { error: uploadErr } = await sb.storage
+    .from(UPLOAD_BUCKET)
+    .upload(path, buffer, { contentType: file.type, upsert: false });
+  if (uploadErr) {
+    return {
+      success: false,
+      error: "The upload didn't go through. Check your signal and try once more.",
+    };
+  }
+
+  const entry: QuestionnaireAnswerFile = {
+    path,
+    name: (file.name ?? "").trim().slice(0, 255) || `report.${ext}`,
+    size: buffer.byteLength,
+    mime: file.type,
+    uploaded_at: new Date().toISOString(),
+  };
+  const files = [...gate.files, entry];
+
+  const { error } = await answersT(sb)
+    .update({
+      files,
+      answered_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("attempt_id", attemptId)
+    .eq("position", position);
+  if (error) {
+    // Don't strand the object if the row failed to record it.
+    await removeUploadObject(sb, path);
+    return { success: false, error: "We couldn't save that file. Try once more." };
+  }
+
+  revalidateStudent();
+  return { success: true, data: { files } };
+}
+
+/**
+ * Take one handed-in file back off an answer.
+ *
+ * The path is checked against THIS attempt's own file list before anything is
+ * deleted — a client naming a path is naming a string, not proving it owns it.
+ */
+export async function removeQuestionnaireFile(
+  eventId: string,
+  postKeyRaw: string,
+  position: number,
+  path: string
+): Promise<R<{ files: QuestionnaireAnswerFile[] }>> {
+  const gate = await requireWritableAnswer(eventId, postKeyRaw, position);
+  if (!gate.ok) return { success: false, error: gate.error };
+  const { sb, attemptId } = gate;
+
+  // Ownership, twice over: the path must be one this answer actually holds,
+  // AND it must sit under this attempt's own folder.
+  const owned =
+    typeof path === "string" &&
+    gate.files.some((f) => f.path === path) &&
+    path.startsWith(`${eventId}/${attemptId}/`);
+  if (!owned) {
+    return { success: false, error: "That file is not on your answer." };
+  }
+
+  const files = gate.files.filter((f) => f.path !== path);
+  const { error } = await answersT(sb)
+    .update({ files, updated_at: new Date().toISOString() })
+    .eq("attempt_id", attemptId)
+    .eq("position", position);
+  if (error) {
+    return { success: false, error: "We couldn't remove that file. Try once more." };
+  }
+
+  // Storage last: an orphaned object is harmless, a row still pointing at a
+  // deleted object is a broken link on the organiser's screen.
+  await removeUploadObject(sb, path);
+
+  revalidateStudent();
+  return { success: true, data: { files } };
+}
+
+/**
+ * ORGANISER: a short-lived link to one handed-in file.
+ *
+ * The bucket is PRIVATE and stays private — these are minors' personal data.
+ * Every read is signed here, behind getYipEventAccess, and the link expires in
+ * five minutes. There is no public URL anywhere in this feature.
+ */
+export async function getQuestionnaireFileUrl(
+  eventId: string,
+  attemptId: string,
+  path: string
+): Promise<R<{ url: string }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) {
+    return { success: false, error: "Not authorized to view this event." };
+  }
+  const sb = await createServiceClient();
+
+  // Scope check: the attempt must belong to THIS event, so an attempt id from
+  // another event cannot be read through an event the caller happens to manage.
+  const { data: attempt } = await attemptsT(sb)
+    .select("id, event_id")
+    .eq("id", attemptId)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (!attempt) return { success: false, error: "Not found." };
+
+  // The path must be one THIS attempt actually holds — never signed because a
+  // caller named it.
+  const { data: answers } = await answersT(sb)
+    .select("id, attempt_id, files")
+    .eq("attempt_id", attemptId)
+    .limit(100);
+  const owned = (answers ?? []).some((a) =>
+    parseAnswerFiles(a.files).some((f) => f.path === path)
+  );
+  if (!owned) return { success: false, error: "Not found." };
+
+  const { data, error } = await sb.storage
+    .from(UPLOAD_BUCKET)
+    .createSignedUrl(path, QUESTIONNAIRE_FILE_URL_SECONDS);
+  if (error || !data?.signedUrl) {
+    return { success: false, error: "Could not open that file. Try again." };
+  }
+  return { success: true, data: { url: data.signedUrl } };
 }
 
 export async function submitQuestionnaire(
@@ -692,6 +1112,8 @@ export type PostOverview = {
   questionCount: number;
   questionSource: "chapter" | "national";
   drawSize: number;
+  /** Window length for THIS post — 30 for the three original posts, 60 for the journalist report. */
+  minutes: number;
   nominated: number;
   started: number;
   submitted: number;
@@ -732,7 +1154,8 @@ export async function getQuestionnaireOverview(
       questionCount: questions.length,
       questionSource: source,
       drawSize: Math.min(p.questionsPerAttempt, questions.length),
-      nominated: noms.filter((n) => Array.isArray(n.roles) && n.roles.includes(p.key)).length,
+      minutes: p.attemptMinutes,
+      nominated: noms.filter((n) => nominatedPostKeys(n.roles).includes(p.key)).length,
       started: mine.length,
       submitted: mine.filter((a) => a.submitted_at !== null).length,
       scored: mine.filter((a) => a.scoring_status === "scored").length,
@@ -785,6 +1208,35 @@ export async function setQuestionnaireWindow(
           postKeyRaw
         )} — students who nominated for both cannot sit two at once.`,
       };
+    }
+
+    // COVERAGE GATE — Cabinet only (2026-08-23).
+    //
+    // The Cabinet paper is drawn per portfolio, so a portfolio with no
+    // questions yields a short paper — or, when both of a candidate's
+    // portfolios are empty, no paper at all. On 2026-08-22 that is exactly
+    // what happened: the bank was fully stocked but under different portfolio
+    // names, every one of the 77 candidates drew nothing, and the round was
+    // abandoned 41 seconds in. Nothing warned the organiser beforehand.
+    //
+    // So refuse to open, and name the portfolios that are short. Checked
+    // against the portfolios candidates ACTUALLY NOMINATED FOR, not every
+    // portfolio the event lists — an unchosen portfolio with no questions
+    // harms nobody, and blocking on it would be a false alarm.
+    if (postKeyRaw === "cabinet_minister") {
+      const shortfall = await cabinetCoverageShortfall(sb, eventId);
+      if (shortfall.length > 0) {
+        const named = shortfall
+          .map((s) => `${s.ministry} (${s.have} of ${CABINET_QUESTIONS_PER_MINISTRY}, ${s.candidates} waiting)`)
+          .join("; ");
+        return {
+          success: false,
+          error:
+            `Not opening yet — these portfolios do not have enough questions: ${named}. ` +
+            `Candidates who nominated for them would get a short paper or none at all. ` +
+            `Add the questions, then open.`,
+        };
+      }
     }
   }
 
@@ -944,17 +1396,26 @@ export async function getQuestionnaireResults(
       ? []
       : await readAllPaged<AnswerDb>(() =>
           answersT(sb)
-            .select("id, attempt_id, position, answer_text, red_flag_penalty, score, flags")
+            .select(
+              "id, attempt_id, position, answer_text, files, red_flag_penalty, score, flags"
+            )
             .in(
               "attempt_id",
               attempts.map((a) => a.id)
             )
         );
-  const agg = new Map<string, { answered: number; drawn: number; flags: number }>();
+  const agg = new Map<
+    string,
+    { answered: number; drawn: number; flags: number; files: number }
+  >();
   for (const a of answers) {
-    const c = agg.get(a.attempt_id) ?? { answered: 0, drawn: 0, flags: 0 };
+    const c = agg.get(a.attempt_id) ?? { answered: 0, drawn: 0, flags: 0, files: 0 };
     c.drawn += 1;
-    if ((a.answer_text ?? "").trim() !== "") c.answered += 1;
+    // Text OR a handed-in file. Without this a candidate who photographed a
+    // handwritten report lands in "Nominated, nothing answered" and is dropped
+    // from the ranking entirely — reported as blank when they handed in work.
+    if (answerIsGiven(a.answer_text, a.files)) c.answered += 1;
+    c.files += parseAnswerFiles(a.files).length;
     c.flags += toFlags(a.flags).length;
     agg.set(a.attempt_id, c);
   }
@@ -979,7 +1440,7 @@ export async function getQuestionnaireResults(
   const byId = new Map(people.map((p) => [p.id, p]));
 
   const rows: QuestionnaireResultRow[] = attempts.map((a) => {
-    const c = agg.get(a.id) ?? { answered: 0, drawn: 0, flags: 0 };
+    const c = agg.get(a.id) ?? { answered: 0, drawn: 0, flags: 0, files: 0 };
     const p = byId.get(a.participant_id);
     return {
       attemptId: a.id,
@@ -995,14 +1456,18 @@ export async function getQuestionnaireResults(
       redFlagCount: c.flags,
       answered: c.answered,
       drawn: c.drawn,
+      fileCount: c.files,
     };
   });
 
-  // A paper with nothing written on it is not a candidacy — decision 9 says no
+  // A paper with nothing on it at all is not a candidacy — decision 9 says no
   // answers means not considered. Splitting it out here rather than hiding it in
   // the UI matters: the shortlist cutoff counts scored candidates, so leaving
   // blanks in would push a post past 15 and widen the shortlist from 5 to 10 on
   // the strength of students who never wrote a word.
+  //
+  // "Nothing on it" now means no typed text AND no handed-in file — `answered`
+  // already counts both, so a file-only report ranks like any other paper.
   const ranked = rows.filter((r) => r.answered > 0);
   const blankByKey = new Set(
     rows.filter((r) => r.answered === 0).map((r) => `${r.participantId}:${r.postKey}`)
@@ -1063,6 +1528,12 @@ export async function getQuestionnaireAttemptDetail(
       voice: number | null;
       penalty: number | null;
       flags: string[];
+      /**
+       * Files handed in for this answer. Carries the storage path so the
+       * organiser's screen can ask for a signed URL — never a URL itself, and
+       * never a public one.
+       */
+      files: QuestionnaireAnswerFile[];
     }[];
     maxPerAnswer: number;
     /**
@@ -1092,7 +1563,7 @@ export async function getQuestionnaireAttemptDetail(
 
   const { data: answers } = await answersT(sb)
     .select(
-      "position, question_text, answer_text, score, grounding, depth, voice, red_flag_penalty, flags"
+      "position, question_text, answer_text, files, score, grounding, depth, voice, red_flag_penalty, flags"
     )
     .eq("attempt_id", attemptId)
     .order("position", { ascending: true })
@@ -1111,6 +1582,7 @@ export async function getQuestionnaireAttemptDetail(
         voice: a.voice,
         penalty: a.red_flag_penalty,
         flags: toFlags(a.flags),
+        files: parseAnswerFiles(a.files),
       })),
       maxPerAnswer: MAX_PER_ANSWER,
       analysisNote: attempt.analysis_note ?? null,
@@ -1148,9 +1620,14 @@ export async function exportQuestionnaireCsv(
  * already says the AI only advises and a human confirms, so an outside reading
  * of the same answers is no less legitimate.
  *
- * Papers with nothing written on them are left out: a blank has nothing to
- * analyse and would only pad the file. Within a paper that HAS answers, every
- * drawn question is included even where the answer is blank.
+ * Papers with nothing on them are left out: a blank has nothing to analyse and
+ * would only pad the file. Within a paper that HAS answers, every drawn
+ * question is included even where the answer is blank.
+ *
+ * "Nothing on it" means no typed text AND no handed-in file. A candidate who
+ * photographed a handwritten report belongs in this export — the Files column
+ * says how many pages to go and look at, so a 0-word row is never mistaken for
+ * a question they skipped.
  */
 export async function exportQuestionnaireResponsesCsv(
   eventId: string
@@ -1176,7 +1653,7 @@ export async function exportQuestionnaireResponsesCsv(
   const answers = await readAllPaged<AnswerDb>(() =>
     answersT(sb)
       .select(
-        "id, attempt_id, position, question_text, answer_text, grounding, depth, voice, red_flag_penalty, score, flags"
+        "id, attempt_id, position, question_text, answer_text, files, grounding, depth, voice, red_flag_penalty, score, flags"
       )
       .in(
         "attempt_id",
@@ -1208,8 +1685,8 @@ export async function exportQuestionnaireResponsesCsv(
   const rows: QuestionnaireResponseRow[] = [];
   for (const at of attempts) {
     const mine = byAttempt.get(at.id) ?? [];
-    // Skip a paper with nothing written on it — see the note above.
-    if (!mine.some((a) => (a.answer_text ?? "").trim() !== "")) continue;
+    // Skip a paper with nothing on it at all — see the note above.
+    if (!mine.some((a) => answerIsGiven(a.answer_text, a.files))) continue;
     const p = byId.get(at.participant_id);
     for (const a of [...mine].sort((x, y) => x.position - y.position)) {
       rows.push({
@@ -1220,6 +1697,7 @@ export async function exportQuestionnaireResponsesCsv(
         position: a.position,
         question: a.question_text,
         answer: a.answer_text ?? "",
+        fileCount: parseAnswerFiles(a.files).length,
         score: a.score,
         grounding: a.grounding ?? null,
         depth: a.depth ?? null,
@@ -1230,7 +1708,10 @@ export async function exportQuestionnaireResponsesCsv(
     }
   }
   if (rows.length === 0) {
-    return { success: false, error: "Nobody has written an answer for this event yet." };
+    return {
+      success: false,
+      error: "Nobody has written an answer or handed in a file for this event yet.",
+    };
   }
 
   rows.sort(
@@ -1246,7 +1727,9 @@ export async function exportQuestionnaireResponsesCsv(
       filename: `yip-questionnaire-answers-${eventId.slice(0, 8)}.csv`,
       csv: buildQuestionnaireResponsesCsv(rows),
       students: new Set(rows.map((r) => `${r.fullName}:${r.postKey}`)).size,
-      answers: rows.filter((r) => r.answer.trim() !== "").length,
+      // Counts a file-only answer too — otherwise the toast reports "12
+      // answers" on an export that carries 20.
+      answers: rows.filter((r) => r.answer.trim() !== "" || r.fileCount > 0).length,
     },
   };
 }

@@ -54,6 +54,7 @@ type Summary = {
   added: number;
   skipped: number;
   collegeNotMatched: string[];
+  unverifiable: string[];
   errors: string[];
   created: ImportedDelegate[];
 };
@@ -233,6 +234,7 @@ export function ImportDelegatesButton({
       added: 0,
       skipped: 0,
       collegeNotMatched: [],
+      unverifiable: [],
       errors: [],
       created: [],
     };
@@ -272,6 +274,9 @@ export function ImportDelegatesButton({
       acc.created.push(...res.created);
       for (const c of res.collegeNotMatched) {
         if (!acc.collegeNotMatched.includes(c)) acc.collegeNotMatched.push(c);
+      }
+      for (const u of res.unverifiable) {
+        if (!acc.unverifiable.includes(u)) acc.unverifiable.push(u);
       }
       setProgress({ done: Math.min(i + IMPORT_CHUNK_SIZE, valid.length), total: valid.length });
     }
@@ -439,6 +444,25 @@ export function ImportDelegatesButton({
                 >
                   ⬇ Access codes
                 </button>
+              </div>
+            )}
+
+            {summary.unverifiable.length > 0 && (
+              <div className="rounded-md border border-red-300 bg-red-50 px-3 py-2">
+                <p className="text-xs font-semibold text-red-700">
+                  {summary.unverifiable.length}{" "}
+                  {summary.unverifiable.length === 1 ? "row was" : "rows were"}{" "}
+                  not imported — no email and no phone number:
+                </p>
+                <p className="text-xs text-navy/70 mt-1">
+                  {summary.unverifiable.join(", ")}
+                </p>
+                <p className="text-xs text-navy/50 mt-1">
+                  Repeats are spotted by email or phone, so a row with neither
+                  cannot be checked — uploading this file again would create
+                  those students a second time. Add an email or a phone number
+                  for them and upload just those rows again.
+                </p>
               </div>
             )}
 

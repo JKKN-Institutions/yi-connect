@@ -4,6 +4,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { revalidatePath } from "next/cache";
+import {
+  normaliseRoundLevels,
+  roundLevelScopeKey,
+  scopesOverlap,
+  describeRoundLevels,
+  pickByLevel,
+  type RoundLevel,
+} from "@/lib/yip/round-level";
 
 // yip.scoring_buckets is newer than the generated Database types, so use an
 // untyped client view for it (rows are coerced via rowToBucket; inputs are
@@ -14,7 +22,15 @@ async function bucketsClient(): Promise<SupabaseClient> {
 
 // Configurable scoring buckets — the editable container for the YIP final
 // scoring model (the Scoring Framework admin tab). Super-admin controlled,
-// global, backwired: the results engine reads these (wired in a follow-up).
+// backwired: the results engine reads these (wired in a follow-up).
+//
+// ROUND LEVEL (2026-08)
+// A bucket may now be scoped to chapter / regional / national rounds via
+// `levels`. NULL = every round, which is what every pre-existing bucket means,
+// so nothing changes until a scope is set. Because two rounds may want the same
+// component at different weights, two buckets may now share a bucket_key as
+// long as their level scopes do not overlap — the identity of a row is
+// therefore its `id`, not its bucket_key. See lib/yip/round-level.ts.
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -31,6 +47,8 @@ export type ScoringBucket = {
   display_order: number;
   session_keys: string[];
   is_active: boolean;
+  /** Round levels this bucket applies to. null = every round. */
+  levels: RoundLevel[] | null;
 };
 
 const PATH = "/dashboard/admin/scoring-framework";
@@ -50,10 +68,13 @@ function rowToBucket(row: Record<string, unknown>): ScoringBucket {
       ? (row.session_keys as string[])
       : [],
     is_active: row.is_active !== false,
+    // NULL stays NULL — "every round", the meaning of every pre-levels row.
+    levels: normaliseRoundLevels(row.levels),
   };
 }
 
-export async function listScoringBuckets(): Promise<ScoringBucket[]> {
+/** Every bucket, whatever its scope — the admin catalogue. */
+export async function listAllScoringBuckets(): Promise<ScoringBucket[]> {
   const supabase = await bucketsClient();
   const { data } = await supabase
     .from("scoring_buckets")
@@ -62,7 +83,35 @@ export async function listScoringBuckets(): Promise<ScoringBucket[]> {
   return (data ?? []).map(rowToBucket);
 }
 
+/**
+ * The set of buckets that SCORES a round at `level`.
+ *
+ * The two tiers are never mixed: if any bucket is scoped to this level, that
+ * scoped set is the whole model for the round and the global set is ignored;
+ * otherwise the global set is used. Mixing them would silently double-count a
+ * component that exists in both, and the weightages would no longer total 100.
+ *
+ * Omitting `level` — which is what every existing caller does — returns the
+ * GLOBAL set only. That is deliberate and fail-safe in both directions: today
+ * every bucket is global, so the answer is byte-identical to the old
+ * listScoringBuckets(); and once someone scopes a bucket, a caller that has not
+ * yet been taught about levels keeps using the global model it was written
+ * against rather than silently absorbing another level's buckets.
+ */
+export async function listScoringBuckets(
+  level?: RoundLevel | null
+): Promise<ScoringBucket[]> {
+  const all = await listAllScoringBuckets();
+  const { scoped, global } = pickByLevel(all, level);
+  return scoped.length > 0 ? scoped : global;
+}
+
 export type ScoringBucketInput = {
+  /**
+   * The row being edited. Absent = creating. Identity is the id, not the
+   * bucket_key, because two buckets may share a key at different levels.
+   */
+  id?: string;
   bucket_key: string;
   label: string;
   weightage: number;
@@ -72,9 +121,17 @@ export type ScoringBucketInput = {
   display_order?: number;
   session_keys?: string[];
   is_active?: boolean;
+  /** Round levels; empty / all three / omitted all mean "every round". */
+  levels?: string[] | null;
 };
 
-// Create or update a bucket (unique on bucket_key). Super-admin only.
+// Create or update a bucket. Super-admin only.
+//
+// Identity is the row `id`. A bucket_key alone is no longer unique: the same
+// component may have one bucket for chapter rounds and another for regional
+// ones. When no id is supplied we look for the row holding the SAME key at the
+// SAME scope and update it — which is exactly what the previous
+// upsert(onConflict: bucket_key) did while every bucket was global.
 export async function upsertScoringBucket(
   input: ScoringBucketInput
 ): Promise<ActionResult<ScoringBucket>> {
@@ -108,26 +165,65 @@ export async function upsertScoringBucket(
     return { success: false, error: "Day group must be 1, 2, or none" };
   }
 
+  const levels = normaliseRoundLevels(input.levels);
+
   const supabase = await bucketsClient();
-  const { data, error } = await supabase
+
+  // Every row already holding this key, so we can tell "edit this one" from
+  // "add a second bucket for another level" from "two buckets fighting over the
+  // same level".
+  const { data: siblings } = await supabase
     .from("scoring_buckets")
-    .upsert(
-      {
-        bucket_key,
-        label,
-        weightage,
-        merit_max,
-        jury_max,
-        day_group,
-        display_order: Math.round(Number(input.display_order ?? 0)) || 0,
-        session_keys: input.session_keys ?? [],
-        is_active: input.is_active !== false,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "bucket_key" }
-    )
-    .select()
-    .single();
+    .select("id, levels")
+    .eq("bucket_key", bucket_key);
+
+  const sameKeyRows = (siblings ?? []) as { id: string; levels?: string[] | null }[];
+
+  // The row we are writing: the one named by id, else the one at this exact
+  // scope (the old overwrite-on-same-key behaviour), else a brand new row.
+  const scope = roundLevelScopeKey(levels);
+  const targetId =
+    input.id ??
+    sameKeyRows.find((r) => roundLevelScopeKey(r.levels) === scope)?.id ??
+    null;
+
+  // Two SCOPED buckets must not both claim a level — resolution would be
+  // ambiguous. A global bucket never conflicts: it is the documented fallback
+  // that a level-scoped bucket overrides.
+  const clash = sameKeyRows.find(
+    (r) => r.id !== targetId && scopesOverlap(normaliseRoundLevels(r.levels), levels)
+  );
+  if (clash) {
+    return {
+      success: false,
+      error: `Another component with the key "${bucket_key}" already covers ${describeRoundLevels(
+        levels
+      )}. Change the rounds it applies to, or edit that component instead.`,
+    };
+  }
+
+  const values = {
+    bucket_key,
+    label,
+    weightage,
+    merit_max,
+    jury_max,
+    day_group,
+    display_order: Math.round(Number(input.display_order ?? 0)) || 0,
+    session_keys: input.session_keys ?? [],
+    is_active: input.is_active !== false,
+    levels,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = targetId
+    ? await supabase
+        .from("scoring_buckets")
+        .update(values)
+        .eq("id", targetId)
+        .select()
+        .single()
+    : await supabase.from("scoring_buckets").insert(values).select().single();
 
   if (error || !data) {
     return { success: false, error: error?.message ?? "Failed to save bucket" };
@@ -139,8 +235,12 @@ export async function upsertScoringBucket(
 // Update just the weightage (+ optional merit/jury split) of one bucket — the
 // common edit from the framework table. Keeps merit+jury consistent with the
 // new weightage when a split is present.
+//
+// Takes the row id, not the bucket_key: a key may be held by a chapter bucket
+// and a regional bucket, and keying on it would reweight whichever the database
+// happened to return first.
 export async function setBucketWeightage(input: {
-  bucket_key: string;
+  id: string;
   weightage: number;
   merit_max?: number;
   jury_max?: number;
@@ -153,11 +253,13 @@ export async function setBucketWeightage(input: {
     return { success: false, error: "Weightage must be a whole number between 0 and 100" };
   }
 
+  if (!input.id) return { success: false, error: "No component was specified" };
+
   const supabase = await bucketsClient();
   const { data: existing } = await supabase
     .from("scoring_buckets")
     .select("*")
-    .eq("bucket_key", input.bucket_key)
+    .eq("id", input.id)
     .maybeSingle();
   if (!existing) return { success: false, error: "Bucket not found" };
 
@@ -185,7 +287,7 @@ export async function setBucketWeightage(input: {
       jury_max,
       updated_at: new Date().toISOString(),
     })
-    .eq("bucket_key", input.bucket_key)
+    .eq("id", input.id)
     .select()
     .single();
 
@@ -196,16 +298,17 @@ export async function setBucketWeightage(input: {
   return { success: true, data: rowToBucket(data) };
 }
 
-export async function deleteScoringBucket(
-  bucketKey: string
-): Promise<ActionResult> {
+// Delete ONE bucket, by row id rather than bucket_key: a key may be held by a
+// chapter bucket and a regional bucket, and deleting by key would take both.
+export async function deleteScoringBucket(id: string): Promise<ActionResult> {
   const gate = await requireSuperAdmin();
   if (!gate.ok) return { success: false, error: gate.error };
+  if (!id) return { success: false, error: "No component was specified" };
   const supabase = await bucketsClient();
   const { error } = await supabase
     .from("scoring_buckets")
     .delete()
-    .eq("bucket_key", bucketKey);
+    .eq("id", id);
   if (error) return { success: false, error: error.message };
   revalidatePath(PATH);
   return { success: true, data: null };

@@ -10,6 +10,17 @@
  * committee is only a key in events.committee_topics, so committee links live
  * in events.committee_whatsapp keyed by the committee NUMBER — the identity a
  * chapter keeps when it later attributes a ministry to that number.
+ *
+ * BENCH GROUPS (2026-08-19). Regional rounds split the House into a ruling and
+ * an opposition bench, and each bench has its own group. A bench is neither a
+ * row nor a numbered thing — there are exactly two of them per event — so its
+ * links live in events.bench_whatsapp keyed by the side ('ruling' /
+ * 'opposition'), the same shape committee_whatsapp uses.
+ *
+ * A student can therefore hold up to THREE groups: their party, their committee,
+ * and their bench. Which bench link they see is decided by
+ * yip.participants.party_side, so a student who has no bench yet simply sees no
+ * bench group — never the wrong one.
  */
 
 /** A committee number → invite link map, as stored in events.committee_whatsapp. */
@@ -66,6 +77,59 @@ export function withCommitteeWhatsapp(
   const key = String(committeeNumber);
   if (url === null) delete base[key];
   else base[key] = url;
+  return base;
+}
+
+/** The two benches an event can carry a group for. */
+export type BenchSide = "ruling" | "opposition";
+
+/** A side → invite link map, as stored in events.bench_whatsapp. */
+export type BenchWhatsappMap = Partial<Record<BenchSide, string>>;
+
+/** Plain-English name for a bench, for labels and email copy. */
+export const BENCH_LABEL: Record<BenchSide, string> = {
+  ruling: "Treasury (ruling) bench",
+  opposition: "Opposition bench",
+};
+
+/** True for a value that is actually one of the two benches. */
+export function isBenchSide(v: unknown): v is BenchSide {
+  return v === "ruling" || v === "opposition";
+}
+
+/**
+ * Read one bench's link out of the event's map.
+ *
+ * `side` is the student's yip.participants.party_side, which is NULL until an
+ * organiser sets the benches — so this returns null rather than guessing, in
+ * exactly the same way the jury screen refuses to guess a bench.
+ */
+export function benchWhatsappFor(
+  map: unknown,
+  side: string | null | undefined
+): string | null {
+  if (!isBenchSide(side)) return null;
+  if (!map || typeof map !== "object" || Array.isArray(map)) return null;
+  const v = (map as Record<string, unknown>)[side];
+  return typeof v === "string" && v.trim() !== "" ? v.trim() : null;
+}
+
+/** Set or clear one bench's link, returning a new map (never mutates). */
+export function withBenchWhatsapp(
+  map: unknown,
+  side: BenchSide,
+  url: string | null
+): BenchWhatsappMap {
+  const base: BenchWhatsappMap =
+    map && typeof map === "object" && !Array.isArray(map)
+      ? Object.fromEntries(
+          Object.entries(map as Record<string, unknown>)
+            .filter(([k, v]) => isBenchSide(k) && typeof v === "string")
+            .map(([k, v]) => [k, v as string])
+        )
+      : {};
+  if (url === null) delete base[side];
+  else base[side] = url;
   return base;
 }
 

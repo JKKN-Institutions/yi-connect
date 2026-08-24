@@ -1,5 +1,6 @@
 import "server-only";
 import { clauseTexts, hasClauses } from "@/lib/yip/bill-provisions";
+import { fetchCommitteeTopicForEvent } from "@/lib/yip/committee-topics";
 
 /**
  * Assemble the grounding payloads handed to the out-of-band routine.
@@ -140,13 +141,7 @@ export async function buildParticipantStoryGrounding(
   // AND title = participant.committee_name AND is_active.
   let ministry: ParticipantStoryGrounding["ministry"] = null;
   if (p.committee_name) {
-    const { data: ct } = await svc
-      .from("topics")
-      .select("id, description, linked_scheme")
-      .eq("category", "committee")
-      .eq("title", p.committee_name)
-      .eq("is_active", true)
-      .maybeSingle();
+    const ct = await fetchCommitteeTopicForEvent(svc as never, eventId, p.committee_name);
     ministry = {
       topic: ct?.description ?? null,
       scheme: ct?.linked_scheme ?? null,
@@ -263,13 +258,7 @@ export async function buildRoundNarrativeGrounding(
   );
   const committees: RoundNarrativeGrounding["committees"] = [];
   for (const name of committeeNames) {
-    const { data: ct } = await svc
-      .from("topics")
-      .select("id, description, linked_scheme")
-      .eq("category", "committee")
-      .eq("title", name)
-      .eq("is_active", true)
-      .maybeSingle();
+    const ct = await fetchCommitteeTopicForEvent(svc as never, eventId, name);
     committees.push({
       name,
       topic: ct?.description ?? null,
@@ -898,13 +887,7 @@ export async function buildBillFeedbackGrounding(
   // the catalogue simply stay null.
   let ministry: BillFeedbackGrounding["ministry"] = null;
   if (bill.committee_name) {
-    const { data: ct } = await svc
-      .from("topics")
-      .select("description, linked_scheme")
-      .eq("category", "committee")
-      .eq("title", bill.committee_name)
-      .eq("is_active", true)
-      .maybeSingle();
+    const ct = await fetchCommitteeTopicForEvent(svc as never, eventId, bill.committee_name);
     if (ct) {
       ministry = {
         topic: ct.description ?? null,

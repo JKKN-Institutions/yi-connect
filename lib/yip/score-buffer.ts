@@ -28,6 +28,13 @@ export interface BufferedScore {
     ruckus: boolean;
     suspension: boolean;
   };
+  // Role-dependent criteria (2026-08): the role this delegate was marked in.
+  // A split sheet cannot be submitted without one, so an offline mark taken on
+  // a split sheet must carry it or the flush would be rejected forever. Absent
+  // on every legacy entry and on every unsplit sheet, which submitScore reads
+  // as "no role restriction" — the pre-role behaviour.
+  scoredRoles?: string[] | null;
+  scoredRoleSource?: "auto" | "override" | null;
 }
 
 function getBuffer(): Record<string, BufferedScore> {

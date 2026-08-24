@@ -45,6 +45,8 @@ import {
   Lock,
   AlertTriangle,
   Info,
+  Bell,
+  X,
 } from "lucide-react";
 import { useOfflineSync } from "@/lib/yip/hooks/use-offline-sync";
 import { OfflineSyncBadge } from "@/components/yip/scoring/offline-sync-badge";
@@ -303,7 +305,11 @@ function JuryScoringClientInner({
 
   // Quick-jump bar (Piece 2) + Unfinished strip (Piece 3) state.
   const [quickJump, setQuickJump] = useState("");
-  const [showAllUnfinished, setShowAllUnfinished] = useState(false);
+  // Unfinished notification menu (juror feedback 2026-08-21): the draft
+  // worklist moved out of the inline strip into a bell + count badge that
+  // opens this panel. Purely presentational — it reads the same
+  // `unfinishedRows` and jumps via the same selectManualParticipant.
+  const [unfinishedOpen, setUnfinishedOpen] = useState(false);
   // Phone UX: the digit pad auto-collapses after a successful jump so it stops
   // hiding the bottom criterion row + comments box; the jump FIELD stays
   // visible and the pad reopens from the toggle beside it (or input focus).
@@ -316,20 +322,34 @@ function JuryScoringClientInner({
   // (bottom-left — it sat exactly on the pad's "1" key) hides itself.
   const [jumpBarHeight, setJumpBarHeight] = useState(0);
   const jumpBarObserverRef = useRef<ResizeObserver | null>(null);
+  const jumpBarCleanupRef = useRef<(() => void) | null>(null);
   const jumpBarRef = useCallback((el: HTMLDivElement | null) => {
     jumpBarObserverRef.current?.disconnect();
     jumpBarObserverRef.current = null;
+    jumpBarCleanupRef.current?.();
+    jumpBarCleanupRef.current = null;
     if (!el) {
       setJumpBarHeight(0);
       document.body.removeAttribute("data-yip-jury-jumpbar");
       return;
     }
     document.body.setAttribute("data-yip-jury-jumpbar", "1");
-    const observer = new ResizeObserver(() =>
-      setJumpBarHeight(el.offsetHeight)
-    );
+    // Measure from the bar's TOP EDGE to the bottom of the viewport, not just
+    // its own height. The bar is `fixed`, so its rect is viewport-relative and
+    // scroll-independent, and this picks up the bottom margin AND the iOS
+    // safe-area inset for free — offsetHeight alone misses both, which on a
+    // phone with a home indicator left the pad's bottom row of keys short of
+    // clearance.
+    const measure = () => {
+      const footprint = window.innerHeight - el.getBoundingClientRect().top;
+      setJumpBarHeight(Math.max(el.offsetHeight, Math.round(footprint)));
+    };
+    const observer = new ResizeObserver(measure);
     observer.observe(el);
-    setJumpBarHeight(el.offsetHeight);
+    window.addEventListener("resize", measure);
+    jumpBarCleanupRef.current = () =>
+      window.removeEventListener("resize", measure);
+    measure();
     jumpBarObserverRef.current = observer;
   }, []);
 
@@ -365,6 +385,26 @@ function JuryScoringClientInner({
         : null,
     [activeParticipantRaw]
   );
+
+  // A new delegate means a new sheet — start it at the top.
+  //
+  // Keyed on the delegate's ID, so it fires ONLY on a genuine switch. A juror
+  // scrolling through the criteria of the delegate they are already marking is
+  // never yanked back, which is what makes rapid scoring usable.
+  //
+  // Two frames, not one: selecting a delegate also collapses the digit pad on a
+  // phone, which changes the fixed bar's height and re-measures the clearance
+  // padding, and the keyboard's own dismissal scroll can land after ours. A
+  // single synchronous scrollTo runs before those settle and gets undone. The
+  // rAF pass re-asserts the top once the layout has stopped moving.
+  useEffect(() => {
+    if (!activeParticipant?.id) return;
+    const toTop = () =>
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    toTop();
+    const raf = requestAnimationFrame(() => requestAnimationFrame(toTop));
+    return () => cancelAnimationFrame(raf);
+  }, [activeParticipant?.id]);
 
   // ─── Fetch speaker data ─────────────────────────────────────────
 
@@ -522,6 +562,10 @@ function JuryScoringClientInner({
       status: "draft" | "submitted";
       flags: FlagsState;
       isNewTurn: boolean;
+      // Role-dependent criteria — mirrored into the optimistic row so an
+      // offline switch-away-and-back shows the same role the juror marked in.
+      scoredRoles: string[] | null;
+      scoredRoleSource: "auto" | "override" | null;
       // The server-assigned id when known (the success path always has one).
       // Omitted on the offline/catch path — falls back to the row being
       // edited's existing id, or a synthetic key-only id for a brand-new row
@@ -566,6 +610,8 @@ function JuryScoringClientInner({
         flag_walkout: input.flags.walkout,
         flag_ruckus: input.flags.ruckus,
         flag_suspension: input.flags.suspension,
+        scored_roles: input.scoredRoles,
+        scored_role_source: input.scoredRoleSource,
         participant: {
           id: input.participant.id,
           full_name: input.participant.full_name,
@@ -1097,6 +1143,19 @@ function JuryScoringClientInner({
   };
 
   const selectManualParticipant = async (p: Participant) => {
+    // Dismiss the on-screen keyboard FIRST.
+    //
+    // The quick-jump input is a real numeric input inside the bar that is FIXED
+    // TO THE BOTTOM of the screen, so tapping it opens the phone keyboard and
+    // the browser scrolls that input up into the remaining space — which
+    // scrolls the whole sheet down. Picking a delegate used to leave it there,
+    // with the session name and the delegate's number off screen. Blurring here
+    // ends that scroll before the new sheet renders; the scroll-to-top effect
+    // below then puts the sheet at its start. (Field report 2026-08-21.)
+    if (typeof document !== "undefined") {
+      const el = document.activeElement;
+      if (el instanceof HTMLElement) el.blur();
+    }
     setManualParticipant(p);
     setShowPicker(false);
     setPickerSearch(""); // clear search after picking a participant
@@ -1134,6 +1193,10 @@ function JuryScoringClientInner({
     totalScore: number;
     comments: string;
     status: "draft" | "submitted";
+    // Role-dependent criteria: the role ScoreForm marked this delegate in.
+    // Null on an unsplit sheet — nothing was restricted, so nothing to record.
+    scoredRoles: string[] | null;
+    scoredRoleSource: "auto" | "override" | null;
   }) => {
     if (!activeParticipant || !rubric) {
       return { success: false as const, error: "No participant or rubric loaded" };
@@ -1171,6 +1234,8 @@ function JuryScoringClientInner({
         // #4: when capturing an extra turn, the server assigns the next occurrence
         // and inserts a fresh row instead of overwriting turn 1.
         newTurn: addingTurn,
+        scoredRoles: data.scoredRoles,
+        scoredRoleSource: data.scoredRoleSource,
       });
     } catch (err) {
       // Network failure (offline) — submitScore never reached the server.
@@ -1187,6 +1252,8 @@ function JuryScoringClientInner({
         status: data.status,
         flags,
         isNewTurn: addingTurn,
+        scoredRoles: data.scoredRoles,
+        scoredRoleSource: data.scoredRoleSource,
       });
       // Rethrow — ScoreForm's own catch (buffer write + "no internet"
       // message) must run exactly as before; this handler never swallows it.
@@ -1206,6 +1273,8 @@ function JuryScoringClientInner({
         status: data.status,
         flags,
         isNewTurn: addingTurn,
+        scoredRoles: data.scoredRoles,
+        scoredRoleSource: data.scoredRoleSource,
         savedId: result.data.id,
       });
 
@@ -1364,11 +1433,8 @@ function JuryScoringClientInner({
         : selectedSessionRow.agenda_type === "bill_presentation")
   );
 
-  const UNFINISHED_VISIBLE_CAP = 8;
-  const unfinishedVisible = showAllUnfinished
-    ? unfinishedRows
-    : unfinishedRows.slice(0, UNFINISHED_VISIBLE_CAP);
-  const unfinishedHiddenCount = unfinishedRows.length - unfinishedVisible.length;
+  // The unfinished list now lives in a scrollable notification panel, so it no
+  // longer needs the old "show first 8 + more" cap the inline strip used.
 
   return (
     <div
@@ -1391,6 +1457,101 @@ function JuryScoringClientInner({
           : undefined
       }
     >
+      {/* Unfinished notification menu (juror feedback 2026-08-21: "unfinished
+          participants should be moved to a separate menu like notification").
+          A bell + red count badge; tapping it opens a panel listing this
+          juror's DRAFT rows for the selected session, each jumping straight to
+          that delegate. Replaces the inline strip that used to live in the
+          quick-jump bar. Hidden entirely when nothing is unfinished, so the
+          juror only ever sees it when there is work to finish. */}
+      {unfinishedRows.length > 0 && (
+        <div className="relative flex justify-end">
+          <button
+            type="button"
+            onClick={() => setUnfinishedOpen((v) => !v)}
+            aria-expanded={unfinishedOpen}
+            aria-haspopup="true"
+            aria-label={`${unfinishedRows.length} unfinished ${
+              unfinishedRows.length === 1 ? "participant" : "participants"
+            }`}
+            className="relative touch-manipulation rounded-full border-2 border-gray-200 bg-white p-2.5 hover:bg-gray-50 active:bg-gray-100"
+            style={{ minHeight: "44px", minWidth: "44px" }}
+          >
+            <Bell className="size-5" style={{ color: INK }} />
+            <span
+              className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-bold text-white tabular-nums"
+              aria-hidden="true"
+            >
+              {unfinishedRows.length}
+            </span>
+          </button>
+
+          {unfinishedOpen && (
+            <>
+              {/* Tap-away closer — sits under the panel, over the page. */}
+              <button
+                type="button"
+                aria-hidden="true"
+                tabIndex={-1}
+                onClick={() => setUnfinishedOpen(false)}
+                className="fixed inset-0 z-40 cursor-default"
+              />
+              <div
+                role="dialog"
+                aria-label="Unfinished participants"
+                className="absolute right-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-xl border-2 border-gray-200 bg-white shadow-xl"
+              >
+                <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2.5">
+                  <p
+                    className="text-xs font-bold uppercase tracking-wide"
+                    style={{ color: inkA(0.6) }}
+                  >
+                    Unfinished ({unfinishedRows.length})
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setUnfinishedOpen(false)}
+                    aria-label="Close unfinished list"
+                    className="touch-manipulation rounded-md p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-700"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+                <div className="max-h-72 overflow-y-auto p-2">
+                  {unfinishedRows.map((row) => (
+                    <button
+                      key={row.id}
+                      type="button"
+                      onClick={() => {
+                        setUnfinishedOpen(false);
+                        void selectManualParticipant(row.participant);
+                      }}
+                      className="flex w-full touch-manipulation items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-amber-50 active:bg-amber-100"
+                      style={{ minHeight: "44px", color: "#7a5c1e" }}
+                    >
+                      <span
+                        className="size-2 shrink-0 rounded-full"
+                        aria-hidden="true"
+                        style={{ background: GOLD }}
+                      />
+                      <span className="truncate">
+                        {juryLabel(
+                          row.participant.constituency_number,
+                          row.participant.id
+                        )}
+                      </span>
+                      <span className="ml-auto shrink-0 text-[11px] font-medium text-gray-400">
+                        draft
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {eventLocked && (
         <div
           role="alert"
@@ -1420,6 +1581,11 @@ function JuryScoringClientInner({
           juryAssignmentId={juryAssignmentId}
           existingScore={existingScore}
           lockAfterSubmit={sessionLocksOnSubmit}
+          sessionLabel={
+            selectedSessionRow
+              ? `Day ${selectedSessionRow.day} · ${selectedSessionRow.title}`
+              : null
+          }
           flags={flags}
           onSubmit={handleSubmit}
         />
@@ -1939,7 +2105,7 @@ function JuryScoringClientInner({
           // the form — the content column's md:pr-80 guarantees no overlap.
           // Scrolls internally if the matches/Unfinished strips grow tall;
           // max-h keeps it clear of the sticky 56px header.
-          className="fixed left-0 right-0 bottom-0 z-30 mx-auto mb-3 w-[calc(100%-2rem)] max-w-md rounded-xl border-2 border-gray-200 bg-white/95 px-3 py-2.5 backdrop-blur shadow-[0_-2px_10px_rgba(0,0,0,0.07)] md:left-auto md:right-4 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:mb-0 md:w-72 md:max-h-[calc(100vh-8rem)] md:overflow-y-auto md:shadow-[0_4px_16px_rgba(0,0,0,0.08)]"
+          className="fixed left-0 right-0 bottom-0 z-30 mx-auto mb-[max(0.75rem,env(safe-area-inset-bottom))] w-[calc(100%-2rem)] max-w-md rounded-xl border-2 border-gray-200 bg-white/95 px-3 py-2.5 backdrop-blur shadow-[0_-2px_10px_rgba(0,0,0,0.07)] md:left-auto md:right-4 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:mb-0 md:w-72 md:max-h-[calc(100vh-8rem)] md:overflow-y-auto md:shadow-[0_4px_16px_rgba(0,0,0,0.08)]"
         >
           <label
             htmlFor="quick-jump-input"
@@ -2081,54 +2247,9 @@ function JuryScoringClientInner({
             </div>
           )}
 
-          {/* Unfinished strip (Piece 3) — a lull-time worklist so 15-second
-              partial scores get finished. Draft rows for THIS session only. */}
-          {unfinishedRows.length > 0 && (
-            <div className="mt-2.5 border-t border-gray-100 pt-2">
-              <p
-                className="text-[11px] font-bold"
-                style={{ color: inkA(0.5) }}
-              >
-                Unfinished ({unfinishedRows.length}):
-              </p>
-              <div className="mt-1 flex flex-wrap gap-2">
-                {unfinishedVisible.map((row) => (
-                  <button
-                    key={row.id}
-                    type="button"
-                    onClick={() => void selectManualParticipant(row.participant)}
-                    className="flex shrink-0 touch-manipulation items-center gap-1.5 rounded-full border-2 px-3 py-2 text-xs font-semibold hover:bg-amber-100 active:bg-amber-200"
-                    style={{
-                      minHeight: "40px",
-                      borderColor: `${GOLD}66`,
-                      background: `${GOLD}14`,
-                      color: "#7a5c1e",
-                    }}
-                  >
-                    <span
-                      className="size-2 shrink-0 rounded-full"
-                      aria-hidden="true"
-                      style={{ background: GOLD }}
-                    />
-                    {juryLabel(
-                      row.participant.constituency_number,
-                      row.participant.id
-                    )}
-                  </button>
-                ))}
-                {unfinishedHiddenCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllUnfinished(true)}
-                    className="shrink-0 touch-manipulation rounded-full border-2 border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50"
-                    style={{ minHeight: "40px" }}
-                  >
-                    +{unfinishedHiddenCount} more
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
+          {/* Unfinished moved OUT of this bar into the bell menu at the top of
+              the page (juror feedback 2026-08-21) — the jump bar now carries
+              only the pad + search matches. */}
         </div>
       )}
 

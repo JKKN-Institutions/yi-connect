@@ -34,6 +34,7 @@ import {
   requireVolunteerSession,
 } from "@/lib/yip/auth/yip-session";
 import { isCommitteeEligible } from "@/lib/yip/committee-assignment";
+import { fetchCommitteeTopicForEvent } from "@/lib/yip/committee-topics";
 import { normalizeProvisions, type Clause } from "@/lib/yip/bill-provisions";
 
 type ActionResult<T = null> =
@@ -446,13 +447,8 @@ export async function getCommitteeRoom(input: {
   let topic: string | null = null;
   let scheme: string | null = null;
   {
-    const { data: ct } = await sb
-      .from("topics")
-      .select("description, linked_scheme")
-      .eq("category", "committee")
-      .eq("title", committeeName)
-      .eq("is_active", true)
-      .maybeSingle();
+    // Resolved for this event's round level — see lib/yip/committee-topics.ts.
+    const ct = await fetchCommitteeTopicForEvent(sb as never, eventId, committeeName);
     topic = (ct?.description as string | null) ?? null;
     scheme = (ct?.linked_scheme as string | null) ?? null;
   }

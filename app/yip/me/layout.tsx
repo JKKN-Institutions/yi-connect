@@ -10,6 +10,7 @@ import { GUIDES } from "@/lib/yip/guide/content";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getPrimaryDesk } from "@/lib/yip/participant-desk";
 import { ParticipantBottomNav } from "@/app/yip/me/_components/participant-bottom-nav";
+import { SearchTrigger } from "@/components/yip/search/search-trigger";
 
 interface ParticipantSession {
   type: "participant";
@@ -92,6 +93,11 @@ export default async function ParticipantLayout({
           </Link>
 
           <div className="flex shrink-0 items-center gap-1">
+            {/* Search — icon-sized for the same reason as the jury lane: this
+                is a phone header. A student's palette is limited to the running
+                order, their own party and committee, and their own pages; it
+                never lists other delegates. */}
+            <SearchTrigger variant="icon" />
             {/* Chat entry point — only rendered when the chat flag is ON.
                 Flag off (the default) → no link, nothing changes for students. */}
             {CHAT_ENABLED && (

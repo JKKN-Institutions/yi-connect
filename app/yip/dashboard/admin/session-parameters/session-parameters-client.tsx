@@ -8,7 +8,36 @@ import {
   type SessionParametersConfig,
   type ParameterKind,
 } from "@/app/yip/actions/session-parameters";
+import {
+  ROUND_LEVELS,
+  ROUND_LEVEL_LABELS,
+  describeRoundLevels,
+  type RoundLevel,
+} from "@/lib/yip/round-level";
+import {
+  applicableMax,
+  roleSlugLabel,
+  roleSlugOptions,
+  sheetRoleSlugs,
+} from "@/lib/yip/scoring-roles";
 import { Plus, Trash2, Save, Loader2, Sparkles, X, Pencil } from "lucide-react";
+
+// The role tags offered on each criterion row. Deliberately the SHORT list —
+// the two benches plus the offices that actually differ within a session (a
+// minister answers in Question Hour; the chair presides). The full
+// parliament-role vocabulary is still accepted by the data layer for anything
+// more specific; this is the set worth a one-tap chip.
+const ROLE_TAG_SLUGS = [
+  "side:ruling",
+  "side:opposition",
+  "cabinet_minister",
+  "shadow_minister",
+  "speaker",
+] as const;
+
+const ROLE_TAG_OPTIONS = roleSlugOptions().filter((o) =>
+  (ROLE_TAG_SLUGS as readonly string[]).includes(o.slug)
+);
 
 // agenda_type is a non-unique REFERENCE (used later to map event agenda items
 // to a session). Optional; multiple sessions may share a type.
@@ -35,6 +64,8 @@ type DraftParam = {
   kind: ParameterKind;
   max_score: string;
   weight: string;
+  /** Role slugs this criterion applies to. Empty = everyone. */
+  roles: string[];
 };
 
 const blankParam = (): DraftParam => ({
@@ -43,6 +74,7 @@ const blankParam = (): DraftParam => ({
   kind: "evaluation",
   max_score: "10",
   weight: "1",
+  roles: [],
 });
 
 function slugify(s: string): string {
@@ -61,6 +93,7 @@ function toDraft(c: SessionParametersConfig): DraftParam[] {
     kind: p.kind,
     max_score: String(p.max_score),
     weight: String(p.weight),
+    roles: p.roles ?? [],
   }));
 }
 
@@ -72,16 +105,21 @@ export function SessionParametersClient({
   rubricCriteria: RubricCriterion[];
 }) {
   const router = useRouter();
-  const [editing, setEditing] = useState<string | null>(null); // session_key | "__new__" | null
+  // A session_key is no longer unique — the same session can have one sheet for
+  // chapter rounds and another for regional ones — so the row id identifies
+  // which card is open, being edited, or being removed.
+  const [editing, setEditing] = useState<string | null>(null); // row id | "__new__" | null
   const [sessionKey, setSessionKey] = useState(""); // existing key when editing
   const [name, setName] = useState("");
   const [agendaType, setAgendaType] = useState("");
   const [sessionWeight, setSessionWeight] = useState("1");
   const [displayOrder, setDisplayOrder] = useState("0");
+  const [levels, setLevels] = useState<RoundLevel[]>([]); // empty = every round
   const [params, setParams] = useState<DraftParam[]>([]);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [levelFilter, setLevelFilter] = useState<"all" | RoundLevel>("all");
 
   function startNew() {
     setErr(null);
@@ -91,18 +129,28 @@ export function SessionParametersClient({
     setAgendaType("");
     setSessionWeight("1");
     setDisplayOrder(String((initialConfigs.at(-1)?.display_order ?? 0) + 1));
+    // Pre-select the level being filtered on, so "show regional → add session"
+    // creates a regional sheet rather than another global one.
+    setLevels(levelFilter === "all" ? [] : [levelFilter]);
     setParams([blankParam()]);
   }
 
   function startEdit(c: SessionParametersConfig) {
     setErr(null);
-    setEditing(c.session_key);
+    setEditing(c.id);
     setSessionKey(c.session_key);
     setName(c.label);
     setAgendaType(c.agenda_type ?? "");
     setSessionWeight(String(c.session_weight));
     setDisplayOrder(String(c.display_order));
+    setLevels(c.levels ?? []);
     setParams(toDraft(c));
+  }
+
+  function toggleLevel(l: RoundLevel) {
+    setLevels((prev) =>
+      prev.includes(l) ? prev.filter((x) => x !== l) : [...prev, l]
+    );
   }
 
   function cancel() {
@@ -118,7 +166,26 @@ export function SessionParametersClient({
         kind: "evaluation" as ParameterKind,
         max_score: String(c.max_score),
         weight: "1",
+        roles: [],
       }))
+    );
+  }
+
+  // Role-dependent criteria: tick the sides/roles a criterion applies to.
+  // Nothing ticked = applies to everyone, which is what every criterion on
+  // every existing sheet means and how they must stay.
+  function toggleParamRole(i: number, slug: string) {
+    setParams((prev) =>
+      prev.map((p, idx) =>
+        idx === i
+          ? {
+              ...p,
+              roles: p.roles.includes(slug)
+                ? p.roles.filter((r) => r !== slug)
+                : [...p.roles, slug],
+            }
+          : p
+      )
     );
   }
 
@@ -131,22 +198,50 @@ export function SessionParametersClient({
     return s + (Number.isFinite(n) ? n : 0);
   }, 0);
 
+  // Role-dependent criteria: the maximum each tagged side is actually marked
+  // out of — Σ(their own criteria) + Σ(untagged criteria). This is exactly the
+  // denominator applicableMax() will compute at result time, shown here so the
+  // admin can see "presenter 10 / opposition 10" while the sheet publishes 16.
+  const perRoleMaxes = sheetRoleSlugs(
+    params.map((p) => ({
+      key: p.key,
+      label: p.label,
+      max_score: Number(p.max_score) || 0,
+      roles: p.roles,
+    }))
+  ).map((slug) => ({
+    slug,
+    label: roleSlugLabel(slug),
+    max: applicableMax(
+      params.map((p) => ({
+        key: p.key,
+        label: p.label,
+        max_score: Number(p.max_score) || 0,
+        roles: p.roles,
+      })),
+      [slug]
+    ),
+  }));
+
   async function save() {
     setSaving(true);
     setErr(null);
     const key = editing === "__new__" ? slugify(name) : sessionKey;
     const res = await upsertSessionParameters({
+      id: editing && editing !== "__new__" ? editing : undefined,
       session_key: key,
       label: name,
       agenda_type: agendaType || null,
       display_order: Number(displayOrder),
       session_weight: Number(sessionWeight),
+      levels,
       parameters: params.map((p) => ({
         key: p.key.trim(),
         label: p.label.trim(),
         kind: p.kind,
         max_score: Number(p.max_score),
         weight: Number(p.weight),
+        roles: p.roles.length > 0 ? p.roles : null,
       })),
     });
     setSaving(false);
@@ -159,13 +254,41 @@ export function SessionParametersClient({
   }
 
   async function remove(c: SessionParametersConfig) {
-    if (!confirm(`Remove session "${c.label}"? This deletes its scoring config.`)) return;
-    setBusyKey(c.session_key);
-    const res = await deleteSessionParameters(c.session_key);
-    setBusyKey(null);
+    if (
+      !confirm(
+        `Remove "${c.label}" (${describeRoundLevels(c.levels)})? This deletes its scoring config.`
+      )
+    )
+      return;
+    setBusyId(c.id);
+    const res = await deleteSessionParameters(c.id);
+    setBusyId(null);
     if (res.success) router.refresh();
     else alert(res.error);
   }
+
+  // Group the list by level scope so a growing catalogue stays legible: the
+  // shared sheets first, then each level's overrides.
+  const visible =
+    levelFilter === "all"
+      ? initialConfigs
+      : initialConfigs.filter(
+          (c) => !c.levels?.length || c.levels.includes(levelFilter)
+        );
+
+  const groups = [
+    { key: "*", title: "Every round", rows: visible.filter((c) => !c.levels?.length) },
+    ...ROUND_LEVELS.map((l) => ({
+      key: l,
+      title: `${ROUND_LEVEL_LABELS[l]} rounds only`,
+      rows: visible.filter((c) => c.levels?.length === 1 && c.levels[0] === l),
+    })),
+    {
+      key: "multi",
+      title: "Shared by some rounds",
+      rows: visible.filter((c) => (c.levels?.length ?? 0) > 1),
+    },
+  ].filter((g) => g.rows.length > 0);
 
   return (
     <div className="max-w-[1400px] mx-auto px-6 py-8">
@@ -173,10 +296,13 @@ export function SessionParametersClient({
         <div>
           <h1 className="text-2xl font-bold text-[#1a1a3e]">Session Scoring</h1>
           <p className="mt-1 max-w-2xl text-sm text-[#1a1a3e]/60">
-            The scoreable sessions and their parameters. <strong>Global</strong> —
-            applies to every chapter and event. Session scores are combined into a
-            delegate&apos;s final score using the method set in{" "}
-            <strong>Scoring Rules</strong>. Add, edit, or remove sessions freely.
+            The scoreable sessions and their parameters. A sheet applies to{" "}
+            <strong>every round</strong> unless you restrict it to chapter,
+            regional or national rounds — so a regional round can be scored
+            differently without touching how chapter rounds are scored. Session
+            scores are combined into a delegate&apos;s final score using the
+            method set in <strong>Scoring Rules</strong>. Add, edit, or remove
+            sessions freely.
           </p>
         </div>
         {editing === null && (
@@ -248,6 +374,44 @@ export function SessionParametersClient({
             </label>
           </div>
 
+          {/* Round-level scope. Nothing selected = applies everywhere, which is
+              what every sheet meant before this control existed. */}
+          <div className="mt-4">
+            <p className="text-xs font-medium text-[#1a1a3e]/70">Applies to</p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setLevels([])}
+                className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                  levels.length === 0
+                    ? "border-[#FF9933] bg-[#FF9933]/10 text-[#B35C00]"
+                    : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                Every round
+              </button>
+              {ROUND_LEVELS.map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  onClick={() => toggleLevel(l)}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                    levels.includes(l)
+                      ? "border-[#1a1a3e] bg-[#1a1a3e]/5 text-[#1a1a3e]"
+                      : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {ROUND_LEVEL_LABELS[l]}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-[11px] text-[#1a1a3e]/50">
+              {levels.length === 0
+                ? "Used by chapter, regional and national rounds alike."
+                : `Used only by ${describeRoundLevels(levels)} rounds. Rounds at other levels fall back to a sheet marked “Every round”, and score nothing for this session if there isn’t one.`}
+            </p>
+          </div>
+
           {/* Parameters */}
           <div className="mt-5 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-[#1a1a3e]">
@@ -277,8 +441,9 @@ export function SessionParametersClient({
             {params.map((p, i) => (
               <div
                 key={i}
-                className="grid grid-cols-2 gap-2 rounded-lg border border-gray-200 p-2 sm:grid-cols-[1fr_1fr_140px_90px_90px_40px] sm:items-center sm:border-0 sm:p-0"
+                className="rounded-lg border border-gray-200 p-2 sm:border-0 sm:p-0"
               >
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1fr_140px_90px_90px_40px] sm:items-center">
                 <input
                   placeholder="key_snake_case"
                   value={p.key}
@@ -324,8 +489,58 @@ export function SessionParametersClient({
                   <Trash2 className="size-4" />
                 </button>
               </div>
+
+                {/* Role-dependent criteria. Nothing ticked = applies to
+                    everyone, which is what every criterion on all 13 existing
+                    sheets means — so leaving this alone changes nothing.
+                    Ticking a side restricts the criterion to it, and a student
+                    is then marked (and divided) only by their own subset. */}
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] font-medium text-gray-500">
+                    Applies to
+                  </span>
+                  {p.roles.length === 0 && (
+                    <span className="text-[11px] text-gray-400">everyone</span>
+                  )}
+                  {ROLE_TAG_OPTIONS.map((opt) => {
+                    const on = p.roles.includes(opt.slug);
+                    return (
+                      <button
+                        key={opt.slug}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => toggleParamRole(i, opt.slug)}
+                        className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                          on
+                            ? "border-blue-600 bg-blue-600 text-white"
+                            : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             ))}
           </div>
+
+          {/* What a student is actually marked out of. The published total
+              spans BOTH sides of the House once a sheet is split, and nobody
+              is ever marked out of it — so show each side's own maximum, which
+              is the denominator the results engine will use. */}
+          {params.some((p) => p.roles.length > 0) && (
+            <div className="mt-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+              <span className="font-semibold">Split sheet.</span> Published total{" "}
+              {totalMax}, but each delegate is marked out of their own subset:
+              {perRoleMaxes.map((r) => (
+                <span key={r.slug} className="ml-2 font-medium">
+                  {r.label} {r.max}
+                </span>
+              ))}
+              . Untagged criteria count for everyone.
+            </div>
+          )}
 
           <button
             type="button"
@@ -359,69 +574,116 @@ export function SessionParametersClient({
         </div>
       )}
 
-      {/* Configured sessions */}
-      <div className="mt-6 space-y-3">
-        {initialConfigs.length === 0 && editing === null && (
+      {/* Which rounds to show */}
+      <div className="mt-6 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-[#1a1a3e]/50">Show sheets used by</span>
+        {(["all", ...ROUND_LEVELS] as const).map((f) => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => setLevelFilter(f)}
+            className={`rounded-full border px-3 py-1 text-xs font-medium ${
+              levelFilter === f
+                ? "border-[#1a1a3e] bg-[#1a1a3e] text-white"
+                : "border-gray-300 text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            {f === "all" ? "All rounds" : `${ROUND_LEVEL_LABELS[f]} rounds`}
+          </button>
+        ))}
+      </div>
+
+      {/* Configured sessions, grouped by the rounds they apply to */}
+      <div className="mt-4 space-y-6">
+        {groups.length === 0 && editing === null && (
           <div className="rounded-xl border border-dashed border-gray-300 py-12 text-center text-sm text-gray-500">
-            No sessions yet. Click “Add session” to create one.
+            {initialConfigs.length === 0
+              ? "No sessions yet. Click “Add session” to create one."
+              : "No sessions apply to those rounds yet. Click “Add session” to create one."}
           </div>
         )}
-        {initialConfigs.map((c) => (
-          <div
-            key={c.session_key}
-            className="rounded-xl border border-[#1a1a3e]/10 bg-white p-4 shadow-sm"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="font-semibold text-[#1a1a3e]">
-                  <span className="mr-2 text-[#1a1a3e]/30">{c.display_order}.</span>
-                  {c.label}
-                </p>
-                <p className="text-xs text-[#1a1a3e]/50">
-                  {c.agenda_type ?? "no agenda type"} · total max {c.total_max} ·
-                  session weight {c.session_weight}
-                  {!c.is_active && " · inactive"}
-                </p>
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => startEdit(c)}
-                  className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                  title="Edit"
+        {groups.map((g) => (
+          <section key={g.key}>
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#1a1a3e]/40">
+              {g.title}{" "}
+              <span className="font-normal normal-case tracking-normal">
+                ({g.rows.length})
+              </span>
+            </h2>
+            <div className="space-y-3">
+              {g.rows.map((c) => (
+                <div
+                  key={c.id}
+                  className="rounded-xl border border-[#1a1a3e]/10 bg-white p-4 shadow-sm"
                 >
-                  <Pencil className="size-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => remove(c)}
-                  disabled={busyKey === c.session_key}
-                  className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-                  title="Remove"
-                >
-                  {busyKey === c.session_key ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="size-4" />
-                  )}
-                </button>
-              </div>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {c.parameters.map((p) => (
-                <span
-                  key={p.key}
-                  className={`rounded px-1.5 py-0.5 text-[11px] ${
-                    p.kind === "participation"
-                      ? "bg-blue-50 text-blue-700"
-                      : "bg-gray-100 text-gray-600"
-                  }`}
-                >
-                  {p.label} · {p.max_score} (w{p.weight})
-                </span>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-[#1a1a3e]">
+                        <span className="mr-2 text-[#1a1a3e]/30">{c.display_order}.</span>
+                        {c.label}
+                        <span
+                          className={`ml-2 rounded px-1.5 py-0.5 align-middle text-[10px] font-medium ${
+                            c.levels?.length
+                              ? "bg-[#FF9933]/10 text-[#B35C00]"
+                              : "bg-gray-100 text-gray-500"
+                          }`}
+                        >
+                          {describeRoundLevels(c.levels)}
+                        </span>
+                      </p>
+                      <p className="text-xs text-[#1a1a3e]/50">
+                        {c.agenda_type ?? "no agenda type"} · total max {c.total_max} ·
+                        session weight {c.session_weight}
+                        {!c.is_active && " · inactive"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => startEdit(c)}
+                        className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                        title="Edit"
+                      >
+                        <Pencil className="size-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => remove(c)}
+                        disabled={busyId === c.id}
+                        className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                        title="Remove"
+                      >
+                        {busyId === c.id ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="size-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {c.parameters.map((p) => (
+                      <span
+                        key={p.key}
+                        className={`rounded px-1.5 py-0.5 text-[11px] ${
+                          p.kind === "participation"
+                            ? "bg-blue-50 text-blue-700"
+                            : "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {p.label} · {p.max_score} (w{p.weight})
+                        {p.roles && p.roles.length > 0 && (
+                          <span className="ml-1 font-semibold text-amber-700">
+                            · {p.roles.map(roleSlugLabel).join(" / ")}
+                          </span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
-          </div>
+          </section>
         ))}
       </div>
     </div>

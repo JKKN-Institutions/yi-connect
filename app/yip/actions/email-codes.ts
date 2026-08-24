@@ -22,7 +22,12 @@
 import { Resend } from "resend";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { createServiceClient } from "@/lib/yip/supabase/server";
-import { committeeWhatsappFor } from "@/lib/yip/whatsapp-links";
+import {
+  committeeWhatsappFor,
+  benchWhatsappFor,
+  BENCH_LABEL,
+  isBenchSide,
+} from "@/lib/yip/whatsapp-links";
 import { isUnnamedCommittee } from "@/lib/yip/event-committees";
 import { logYipEmails, settleYipEmails } from "@/lib/yip/email-log";
 import type { YipEmailLogEntry } from "@/lib/yip/email-log";
@@ -86,7 +91,11 @@ type WaRows<T> = {
   single: () => Promise<{ data: T | null; error: WaPgError | null }>;
   then: Promise<{ data: T[] | null; error: WaPgError | null }>["then"];
 };
-type EventWaRow = { name: string | null; committee_whatsapp: unknown };
+type EventWaRow = {
+  name: string | null;
+  committee_whatsapp: unknown;
+  bench_whatsapp: unknown;
+};
 type PartyWaRow = {
   id: string;
   name: string | null;
@@ -111,6 +120,9 @@ function renderCodeEmail(input: {
   partyWhatsapp?: string | null;
   committeeLabel?: string | null;
   committeeWhatsapp?: string | null;
+  /** The student's bench group. Null when they have no bench recorded yet. */
+  benchWhatsapp?: string | null;
+  benchSide?: "ruling" | "opposition" | null;
 }): { subject: string; html: string; text: string } {
   const name = escapeHtml(input.fullName);
   const code = escapeHtml(input.accessCode);
@@ -133,6 +145,14 @@ function renderCodeEmail(input: {
         ? `Your committee — ${input.committeeLabel}`
         : "Your committee",
       url: input.committeeWhatsapp,
+    });
+  }
+  if (input.benchWhatsapp) {
+    groups.push({
+      label: isBenchSide(input.benchSide)
+        ? `Your bench — ${BENCH_LABEL[input.benchSide]}`
+        : "Your bench",
+      url: input.benchWhatsapp,
     });
   }
 
@@ -342,16 +362,17 @@ export async function sendYipAccessCodeEmailsBatch(
   const supabase = await createServiceClient();
 
   const { data: event } = await waTable<EventWaRow>(supabase, "events")
-    .select("name, committee_whatsapp")
+    .select("name, committee_whatsapp, bench_whatsapp")
     .eq("id", eventId)
     .single();
   const eventName = event?.name ?? "Young Indians Parliament";
   const committeeWhatsapp = event?.committee_whatsapp;
+  const benchWhatsapp = event?.bench_whatsapp;
 
   const { data: participants, error } = await supabase
     .from("participants")
     .select(
-      "id, full_name, serial_no, email, access_code, party_id, committee_name, committee_number"
+      "id, full_name, serial_no, email, access_code, party_id, committee_name, committee_number, party_side"
     )
     .eq("event_id", eventId)
     .in("id", participantIds);
@@ -451,6 +472,16 @@ export async function sendYipAccessCodeEmailsBatch(
             : `Committee ${committeeNumber} · ${committeeName}`
           : committeeName,
       committeeWhatsapp: committeeLink,
+      // Resolved from the student's OWN side, so a student with no bench gets
+      // no bench line rather than the wrong group.
+      benchWhatsapp: benchWhatsappFor(
+        benchWhatsapp,
+        (p as { party_side: string | null }).party_side
+      ),
+      benchSide: (p as { party_side: string | null }).party_side as
+        | "ruling"
+        | "opposition"
+        | null,
     });
     sendable.push({
       id: p.id,

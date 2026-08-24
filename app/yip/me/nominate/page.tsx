@@ -31,6 +31,9 @@ export default async function SelfNominationPage() {
       initialOpen={res.success ? res.data.open : false}
       initialRoles={nomination?.roles ?? []}
       initialSubmitted={nomination !== null}
+      eligibleRoles={res.success ? res.data.eligibleRoles : []}
+      offeredMinistries={res.success ? res.data.offeredMinistries : []}
+      initialMinistries={nomination?.ministries ?? []}
       loadError={res.success ? null : res.error}
     />
   );

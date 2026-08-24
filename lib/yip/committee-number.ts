@@ -13,6 +13,7 @@
  */
 
 import type { createServiceClient } from "@/lib/yip/supabase/server";
+import { preferGlobalPerTitle } from "@/lib/yip/committee-topics";
 
 type ServiceClient = Awaited<ReturnType<typeof createServiceClient>>;
 
@@ -31,14 +32,29 @@ export async function getCommitteeNumbering(
 ): Promise<CommitteeNumbering> {
   const { data } = await supabase
     .from("topics")
-    .select("title, topic_number")
+    .select("title, topic_number, levels")
     .eq("category", "committee");
+  const all = (data ?? []) as unknown as Array<{
+    title: string;
+    topic_number: number | null;
+    levels?: string[] | null;
+  }>;
   const numberByName = new Map<string, number>();
   const nameByNumber = new Map<number, string>();
-  for (const r of (data ?? []) as Array<{ title: string; topic_number: number | null }>) {
+  // A committee's number is a PERMANENT global identity, so when a ministry
+  // name is held by both a shared row and a level-scoped one the shared row
+  // keeps the number it has always had. Without this, a level-scoped row read
+  // later in the result set would silently overwrite the number that bills and
+  // scores already join on.
+  for (const r of preferGlobalPerTitle(all)) {
     if (r.topic_number == null || !r.title) continue;
     numberByName.set(norm(r.title), r.topic_number);
-    nameByNumber.set(r.topic_number, r.title);
+  }
+  // nameByNumber keeps EVERY row: numbers must stay globally unique, so the
+  // next-free calculation below has to see the level-scoped ones too.
+  for (const r of all) {
+    if (r.topic_number == null || !r.title) continue;
+    if (!nameByNumber.has(r.topic_number)) nameByNumber.set(r.topic_number, r.title);
   }
   return { numberByName, nameByNumber };
 }

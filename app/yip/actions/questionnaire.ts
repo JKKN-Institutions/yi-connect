@@ -26,6 +26,9 @@ import { enqueueAiDraft, getAiDraft } from "@/lib/yip/ai/drafts";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
+// Imported, never re-exported: see saveManualQuestionnaireMarks for why the
+// writer must not become an exported action in this file.
+import { applyAttemptScores } from "@/lib/yip/questionnaire-scoring";
 import { revalidatePath } from "next/cache";
 import {
   ATTEMPT_MINUTES,
@@ -1540,6 +1543,13 @@ export async function getQuestionnaireAttemptDetail(
      * without a note, which is a valid response.
      */
     analysisNote: string | null;
+    /**
+     * Gates the manual marks form, and is read from the SAME fetch as the
+     * answers rather than from the table row. The row is a snapshot that can be
+     * minutes old; if the routine marked this paper in the meantime, a form
+     * opened off the stale row would overwrite real marks with hand-typed ones.
+     */
+    scoringStatus: string;
   }>
 > {
   const access = await getYipEventAccess(eventId);
@@ -1584,6 +1594,7 @@ export async function getQuestionnaireAttemptDetail(
       })),
       maxPerAnswer: MAX_PER_ANSWER,
       analysisNote: attempt.analysis_note ?? null,
+      scoringStatus: String(attempt.scoring_status ?? ""),
     },
   };
 }
@@ -1759,6 +1770,115 @@ export async function rescoreQuestionnaireAttempt(
   revalidateAdmin(eventId);
   await pingScoringRoutine();
   return { success: true, data: { queued: true } };
+}
+
+/**
+ * Record a PERSON's marks for a paper the automatic scorer cannot read.
+ *
+ * ─── WHY THIS ACTION EXISTS ───────────────────────────────────────────────
+ * A paper handed in as a file rests at `needs_human`: complete, unscored, and
+ * deliberately NOT re-queueable, because the scorer receives answer TEXT only
+ * and would return a near-zero on a photographed report. Until now the app
+ * could SAY "read this one yourself" and could open the pages — but there was
+ * nowhere to put the mark once a person had read them, so a real submission
+ * could never enter the ranking at all.
+ *
+ * ─── WHY IT WRAPS THE LIB INSTEAD OF EXPORTING IT ─────────────────────────
+ * `applyAttemptScores` lives outside any `"use server"` file on purpose: in an
+ * actions file every exported async function is a public HTTP endpoint with no
+ * session behind it, so exporting the writer would let anyone mark any attempt
+ * scored. Importing it here and gating on `canManage` keeps exactly one gated
+ * door onto that writer.
+ *
+ * ─── NO RED FLAGS ON THIS PATH ────────────────────────────────────────────
+ * The rubric's red flags describe machine-detectable tells of text that was not
+ * written by the candidate ("vocabulary inconsistent with a student this age").
+ * A person reading a handwritten report is making a different judgement, and a
+ * penalty they cannot calibrate would silently cost a real candidate marks. So
+ * the manual path submits the three rubric criteria and a zero penalty.
+ */
+export async function saveManualQuestionnaireMarks(
+  eventId: string,
+  attemptId: string,
+  marks: readonly { position: number; grounding: number; depth: number; voice: number }[]
+): Promise<R<{ total: number; max: number; pct: number }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event." };
+  }
+  if (!Array.isArray(marks) || marks.length === 0) {
+    return { success: false, error: "No marks to save." };
+  }
+
+  const sb = await createServiceClient();
+
+  // Scope check: the attempt must belong to THIS event, so an attempt id from
+  // another event cannot be marked through an event the caller happens to
+  // manage.
+  const { data: attempt } = await attemptsT(sb)
+    .select("id, event_id, scoring_status")
+    .eq("id", attemptId)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (!attempt) return { success: false, error: "Not found." };
+
+  // Only a paper actually waiting on a person. Re-checked HERE and not trusted
+  // from the screen: if the routine marked it between the page loading and the
+  // organiser pressing Save, hand-typed marks must not overwrite its marks.
+  if (attempt.scoring_status !== "needs_human") {
+    return {
+      success: false,
+      error:
+        attempt.scoring_status === "scored"
+          ? "This paper has already been marked. Reload the page to see its marks."
+          : "This paper is not waiting on a person, so it cannot be marked by hand.",
+    };
+  }
+
+  // The positions must be ones THIS attempt actually holds — never written
+  // because a caller named them.
+  const { data: ownedRows } = await answersT(sb)
+    .select("position")
+    .eq("attempt_id", attemptId)
+    .limit(100);
+  const owned = new Set((ownedRows ?? []).map((a) => a.position));
+  if (owned.size === 0) return { success: false, error: "This paper has no answers." };
+  for (const m of marks) {
+    if (!owned.has(m.position)) {
+      return { success: false, error: "That paper does not have that question." };
+    }
+  }
+
+  // Every value is clamped to the rubric's own ranges inside applyAttemptScores,
+  // so a hand-typed 99 cannot become 99 marks.
+  const res = await applyAttemptScores(
+    attemptId,
+    marks.map((m) => ({
+      position: m.position,
+      grounding: m.grounding,
+      depth: m.depth,
+      voice: m.voice,
+      redFlagPenalty: 0,
+      flags: [],
+    }))
+  );
+  if (!res.ok) return { success: false, error: res.error };
+
+  await logAuditAction({
+    action_type: "update",
+    target_table: "questionnaire_attempts",
+    target_event_id: eventId,
+    metadata: {
+      attempt_id: attemptId,
+      marked_by: "human",
+      answers: marks.length,
+      total: res.total,
+      max: res.max,
+    },
+  });
+
+  revalidateAdmin(eventId);
+  return { success: true, data: { total: res.total, max: res.max, pct: res.pct } };
 }
 
 // ─── Question-bank review (organiser-only, out-of-band) ──────────────────

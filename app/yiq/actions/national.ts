@@ -14,13 +14,14 @@
  * nationalLadder() in lib/yiq/national.ts against the live entrant count.
  * Ask for a stage the ladder does not contain and the action refuses.
  *
- * WHERE A STAGE SCORE LIVES. national_entries has columns for only two of the
- * three stages, so finals_scores is the durable per-stage store: one row per
- * team per stage at sequence_no STAGE_TOTAL_SEQUENCE_NO for a typed-in paper
- * total, with live on-stage taps appended from 1 upward by the finals
- * console. semifinal_score/rank and finale_score/rank are then MIRRORED from
- * those totals when those two stages publish, because the columns exist and
- * downstream reporting reads them. The Quarter-Final has no mirror column.
+ * WHERE A STAGE SCORE LIVES. finals_scores is the durable per-stage store:
+ * one row per team per stage at sequence_no STAGE_TOTAL_SEQUENCE_NO for a
+ * typed-in paper total, with live on-stage taps appended from 1 upward by the
+ * finals console. All THREE rungs then mirror their score and rank onto
+ * national_entries when the stage publishes — quarterfinal_*, semifinal_* and
+ * finale_* — via STAGE_MIRROR_COLUMNS, so every rung is queryable and no
+ * stage is silently left unmirrored. Those stamps are also what fellAtStage()
+ * reads to tell which rung ended an eliminated team's run.
  *
  * This file is "use server" — only async functions and types may be exported.
  */
@@ -33,6 +34,7 @@ import {
   DEFAULT_FINAL_FIELD_SIZE,
   NATIONAL_STAGES,
   STAGE_LABELS,
+  STAGE_MIRROR_COLUMNS,
   STAGE_TOTAL_SEQUENCE_NO,
   clampFinalFieldSize,
   enteringStatuses,
@@ -60,7 +62,7 @@ type Ok<T> = { success: true } & T;
 const MAX_STAGE_SCORE = 9999;
 
 const ENTRY_COLUMNS =
-  "id, team_id, chapter_name, category, semifinal_score, semifinal_rank, finale_score, finale_rank, status, teams(name)";
+  "id, team_id, chapter_name, category, quarterfinal_score, quarterfinal_rank, semifinal_score, semifinal_rank, finale_score, finale_rank, status, teams(name)";
 
 export type NationalRoundRow = {
   id: string;
@@ -147,7 +149,7 @@ export async function getNationalBoard(
       .order("display_order"),
   ]);
 
-  const entries = (rawEntries ?? []).map(toNationalEntry);
+  const entries = asEntryRows(rawEntries).map(toNationalEntry);
   const rounds = (rawRounds ?? []).map(toRoundRow);
   const ladder = nationalLadder(entries.length, { finalFieldSize: finalField });
 
@@ -383,18 +385,12 @@ export async function recordStageScore(
     return { success: false, error: "Could not save that score." };
   }
 
-  // Mirror onto the column that exists for this stage, if any.
-  if (stage === "national_semifinal") {
-    await svc
-      .from("national_entries")
-      .update({ semifinal_score: round2(score) })
-      .eq("id", entryId);
-  } else if (stage === "national_final") {
-    await svc
-      .from("national_entries")
-      .update({ finale_score: round2(score) })
-      .eq("id", entryId);
-  }
+  // Mirror onto this rung's score column. All three rungs have one, so this
+  // is a lookup rather than a branch — no stage is silently left unmirrored.
+  await svc
+    .from("national_entries")
+    .update({ [STAGE_MIRROR_COLUMNS[stage].score]: round2(score) })
+    .eq("id", entryId);
 
   await svc.from("audit_log").insert({
     actor_user_id: gate.userId,
@@ -446,7 +442,7 @@ export async function publishStageResults(
     .eq("edition_id", edition)
     .eq("category", category);
 
-  const entries = (rawEntries ?? []).map(toNationalEntry);
+  const entries = asEntryRows(rawEntries).map(toNationalEntry);
   if (entries.length === 0) {
     return {
       success: false,
@@ -480,12 +476,15 @@ export async function publishStageResults(
   const outcomes = stageOutcomes(standing, step);
 
   for (const o of outcomes) {
-    const patch: Record<string, unknown> = { status: o.status };
-    // Mirror onto the column that exists for this stage, if any.
-    if (stage === "national_semifinal") {
-      patch.semifinal_score = o.score;
-      patch.semifinal_rank = o.rank;
-    }
+    // Every ranked team gets this rung's score AND rank stamped — survivors
+    // and eliminated alike. fellAtStage() reads those stamps to tell which
+    // rung ended a run, so skipping the eliminated would break the boards.
+    const mirror = STAGE_MIRROR_COLUMNS[stage];
+    const patch: Record<string, unknown> = {
+      status: o.status,
+      [mirror.score]: o.score,
+      [mirror.rank]: o.rank,
+    };
     const { error } = await svc
       .from("national_entries")
       .update(patch)
@@ -554,7 +553,7 @@ export async function declareNationalChampion(
     .eq("edition_id", edition)
     .eq("category", category);
 
-  const entries = (rawEntries ?? []).map(toNationalEntry);
+  const entries = asEntryRows(rawEntries).map(toNationalEntry);
   const ladder = nationalLadder(entries.length, { finalFieldSize });
   const field = stageField(entries, ladder, "national_final");
 
@@ -684,11 +683,34 @@ function isNationalStage(stage: string): stage is NationalStage {
   return (NATIONAL_STAGES as string[]).includes(stage);
 }
 
+/**
+ * national_entries rows, typed against our own explicit RawEntry shape.
+ *
+ * WHY THE CAST: ENTRY_COLUMNS selects quarterfinal_score / quarterfinal_rank.
+ * Both are LIVE in the database (verified against information_schema
+ * 2026-08-24: numeric(10,2) and integer, both nullable), but they are absent
+ * from the checked-in types/yiq/database.ts on origin/master until it is
+ * regenerated. Without this cast supabase-js resolves the select to
+ * SelectQueryError<"column 'quarterfinal_score' does not exist"> and every
+ * downstream .map() fails to typecheck.
+ *
+ * Nothing downstream loses safety — RawEntry is explicit and toNationalEntry
+ * validates every field. Only the select-string check is bypassed.
+ *
+ * REMOVE ME once types/yiq/database.ts is regenerated: delete this helper,
+ * inline `(rows ?? []).map(toNationalEntry)`, and tsc should stay clean.
+ */
+function asEntryRows(rows: unknown): RawEntry[] {
+  return (rows ?? []) as RawEntry[];
+}
+
 type RawEntry = {
   id: string;
   team_id: string;
   chapter_name: string;
   category: string;
+  quarterfinal_score: number | null;
+  quarterfinal_rank: number | null;
   semifinal_score: number | null;
   semifinal_rank: number | null;
   finale_score: number | null;
@@ -705,6 +727,9 @@ function toNationalEntry(row: RawEntry): NationalEntry {
     teamName: team?.name ?? "Unnamed team",
     chapterName: row.chapter_name,
     category: row.category === "senior" ? "senior" : "junior",
+    quarterfinalScore:
+      row.quarterfinal_score === null ? null : Number(row.quarterfinal_score),
+    quarterfinalRank: row.quarterfinal_rank,
     semifinalScore:
       row.semifinal_score === null ? null : Number(row.semifinal_score),
     semifinalRank: row.semifinal_rank,

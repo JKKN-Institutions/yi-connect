@@ -18,6 +18,8 @@ import {
   ladderStep,
   nationalLadder,
   fellAtStage,
+  rankAtStage,
+  STAGE_MIRROR_COLUMNS,
   stageField,
   stagePublished,
   nationalRoundPlan,
@@ -80,6 +82,20 @@ eq("65 chapters (the real ceiling) still runs three stages", shape(65), [
   "semifinal:20->6",
   "final:6->1",
 ]);
+
+console.log("\n── THE TWO DIALS: Final field size, and the 3x max cut ──");
+// The real-world case: ~65 chapter champions per category.
+eq("DIAL A @ Final=6 (default): 65 -> Quarter(65->20) -> Semi(20->6) -> Final",
+  shape(65, 6), ["quarterfinal:65->20", "semifinal:20->6", "final:6->1"]);
+eq("DIAL A @ Final=8: 65 -> Quarter(65->23) -> Semi(23->8) -> Final",
+  shape(65, 8), ["quarterfinal:65->23", "semifinal:23->8", "final:8->1"]);
+eq("  a Final of 8 still runs three stages at 65", stages(65, 8).length, 3);
+// Where the quarter-final first appears moves with the Final size:
+// it is the first field larger than finalField * 3.
+eq("quarter first appears at 19 when the Final seats 6",
+  [stages(18, 6).length, stages(19, 6).length], [2, 3]);
+eq("quarter first appears at 25 when the Final seats 8",
+  [stages(24, 8).length, stages(25, 8).length], [2, 3]);
 
 console.log("\n── the boundaries where a stage drops out of the ladder ──");
 eq("5 -> final only", stages(5), ["final"]);
@@ -222,6 +238,8 @@ const mk = (
   teamName: team,
   chapterName: chapter,
   category,
+  quarterfinalScore: null,
+  quarterfinalRank: null,
   semifinalScore: null,
   semifinalRank: null,
   finaleScore: null,
@@ -363,23 +381,68 @@ console.log("\n── a published stage keeps its whole field (re-publish is ide
 // semifinal_rank is stamped only by the semi, so it tells the two narrowing
 // stages apart without a new column.
 const threeStage = nationalLadder(65);
-const qOut = { ...mk("q", "Quarter casualty", "Erode"), status: "eliminated" as const };
-const sOut = { ...mk("s", "Semi casualty", "Chennai"), status: "eliminated" as const, semifinalRank: 9 };
-check("no semi rank -> fell at the quarter", fellAtStage(qOut, "national_quarterfinal", threeStage));
+// Publishing a rung stamps its rank on EVERY team it ranked, so a run ended
+// at the LAST rung that stamped it. Positive evidence, not absence.
+const qOut = {
+  ...mk("q", "Quarter casualty", "Erode"),
+  status: "eliminated" as const,
+  quarterfinalRank: 44,
+};
+const sOut = {
+  ...mk("s", "Semi casualty", "Chennai"),
+  status: "eliminated" as const,
+  quarterfinalRank: 7,
+  semifinalRank: 9,
+};
+check("stamped at the quarter only -> fell at the quarter",
+  fellAtStage(qOut, "national_quarterfinal", threeStage));
 check("  and not at the semi", !fellAtStage(qOut, "national_semifinal", threeStage));
-check("a semi rank -> fell at the semi", fellAtStage(sOut, "national_semifinal", threeStage));
-check("  and not at the quarter", !fellAtStage(sOut, "national_quarterfinal", threeStage));
+check("stamped at quarter AND semi -> fell at the semi (the LAST stamp)",
+  fellAtStage(sOut, "national_semifinal", threeStage));
+check("  surviving the quarter does not mean falling there",
+  !fellAtStage(sOut, "national_quarterfinal", threeStage));
 check("nobody is ever eliminated at the Final", !fellAtStage(sOut, "national_final", threeStage));
 check("a team still standing never counts as fallen",
   !fellAtStage(mk("ok", "Alive", "Erode"), "national_quarterfinal", threeStage));
 
+eq("rankAtStage reads the rung's own column",
+  [rankAtStage(sOut, "national_quarterfinal"), rankAtStage(sOut, "national_semifinal"), rankAtStage(sOut, "national_final")],
+  [7, 9, null]);
+eq("every rung has a distinct mirror column pair",
+  [STAGE_MIRROR_COLUMNS.national_quarterfinal, STAGE_MIRROR_COLUMNS.national_semifinal, STAGE_MIRROR_COLUMNS.national_final],
+  [
+    { score: "quarterfinal_score", rank: "quarterfinal_rank" },
+    { score: "semifinal_score", rank: "semifinal_rank" },
+    { score: "finale_score", rank: "finale_rank" },
+  ]);
+check("no two rungs share a column",
+  new Set(Object.values(STAGE_MIRROR_COLUMNS).flatMap((c) => [c.score, c.rank])).size === 6);
+
 const twoStage = nationalLadder(12);
-check("with one narrowing stage, every elimination belongs to it",
-  fellAtStage({ ...qOut }, "national_semifinal", twoStage));
+const semiOnlyOut = {
+  ...mk("x", "Out", "Erode"),
+  status: "eliminated" as const,
+  semifinalRank: 8,
+};
+check("with one narrowing stage, its stamp attributes the elimination to it",
+  fellAtStage(semiOnlyOut, "national_semifinal", twoStage));
 check("  and a stage the ladder does not run claims nobody",
-  !fellAtStage({ ...qOut }, "national_quarterfinal", twoStage));
+  !fellAtStage(semiOnlyOut, "national_quarterfinal", twoStage));
 check("with no narrowing stage at all, nobody fell anywhere",
-  !fellAtStage({ ...qOut }, "national_final", nationalLadder(4)));
+  !fellAtStage(semiOnlyOut, "national_final", nationalLadder(4)));
+
+// Recovery: a half-finished publish leaves an eliminated team with no stamp.
+// It must still surface somewhere rather than vanish from every board.
+const unstamped = { ...mk("u", "Unstamped", "Erode"), status: "eliminated" as const };
+check("an unstamped elimination falls back to the first cut it could have faced",
+  fellAtStage(unstamped, "national_quarterfinal", threeStage));
+check("  and appears on exactly one board, never none",
+  ["national_quarterfinal", "national_semifinal", "national_final"]
+    .filter((st) => fellAtStage(unstamped, st as NationalStage, threeStage)).length === 1);
+check("every eliminated team lands on exactly one board",
+  [qOut, sOut, unstamped].every((e) =>
+    ["national_quarterfinal", "national_semifinal", "national_final"]
+      .filter((st) => fellAtStage(e, st as NationalStage, threeStage)).length === 1));
 
 const published = [
   { ...mk("a", "Through", "Erode"), status: "semifinal_qualified" as const, semifinalRank: 1 },

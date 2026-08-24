@@ -101,6 +101,8 @@ export type NationalEntry = {
   teamName: string;
   chapterName: string;
   category: YiqCategory;
+  quarterfinalScore: number | null;
+  quarterfinalRank: number | null;
   semifinalScore: number | null;
   semifinalRank: number | null;
   finaleScore: number | null;
@@ -284,13 +286,48 @@ export function enteringStatuses(
 }
 
 /**
+ * The national_entries columns that mirror each rung's score and rank.
+ *
+ * finals_scores is the durable per-stage store; these columns are the
+ * queryable mirror, written when a stage publishes. Note the Final's columns
+ * are still named `finale_*` — the 2026-08 migration renamed the CHECK VALUE
+ * 'national_finale' to 'national_final', not the columns.
+ */
+export const STAGE_MIRROR_COLUMNS: Record<
+  NationalStage,
+  { score: string; rank: string }
+> = {
+  national_quarterfinal: {
+    score: "quarterfinal_score",
+    rank: "quarterfinal_rank",
+  },
+  national_semifinal: { score: "semifinal_score", rank: "semifinal_rank" },
+  national_final: { score: "finale_score", rank: "finale_rank" },
+};
+
+/** The rank stamped on this entry for one rung, if that rung has published. */
+export function rankAtStage(
+  entry: NationalEntry,
+  stage: NationalStage
+): number | null {
+  if (stage === "national_quarterfinal") return entry.quarterfinalRank;
+  if (stage === "national_semifinal") return entry.semifinalRank;
+  return entry.finaleRank;
+}
+
+/**
  * Did this entry's run end at `stage`?
  *
- * `eliminated` does not say WHICH stage ended a run — but semifinal_rank
- * does, because it is stamped only when the Semi-Final publishes. So an
- * eliminated team carrying a semi-final rank fell at the semi, and one
- * without it fell at the only earlier stage there can be, the quarter-final.
- * That holds for every ladder this competition can produce.
+ * THE RULE: publishing a stage stamps that rung's rank on EVERY team it
+ * ranked — survivors and eliminated alike — so an eliminated team's run ended
+ * at the LAST rung that stamped it. That is positive evidence read straight
+ * off the three rank columns, not an inference from a missing one. (Before
+ * quarterfinal_rank existed this had to guess "no semi rank => fell at the
+ * quarter"; it no longer guesses.)
+ *
+ * Fallback: an eliminated team with no rank on any rung is a half-finished
+ * publish. It is attributed to the first cut it could have faced, so the row
+ * is never invisible on every board at once.
  *
  * It matters for two reasons: a published stage keeps showing who went out,
  * instead of quietly rendering only the survivors; and re-publishing a stage
@@ -302,16 +339,17 @@ export function fellAtStage(
   ladder: LadderStep[]
 ): boolean {
   if (entry.status !== "eliminated") return false;
+  // The Final places its field; it never eliminates anyone.
   if (stage === "national_final") return false;
-  if (!ladder.some((s) => s.stage === stage)) return false;
 
-  const narrowing = ladder.filter((s) => s.stage !== "national_final");
-  if (narrowing.length === 0) return false;
-  if (narrowing.length === 1) return narrowing[0].stage === stage;
+  const narrowing = ladder
+    .filter((s) => s.stage !== "national_final")
+    .map((s) => s.stage);
+  if (!narrowing.includes(stage)) return false;
 
-  return stage === "national_semifinal"
-    ? entry.semifinalRank !== null
-    : entry.semifinalRank === null;
+  const stamped = narrowing.filter((s) => rankAtStage(entry, s) !== null);
+  if (stamped.length === 0) return stage === narrowing[0];
+  return stage === stamped[stamped.length - 1];
 }
 
 /**

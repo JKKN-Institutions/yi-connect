@@ -430,6 +430,72 @@ export type Database = {
   }
   yiq: {
     Tables: {
+      ai_jobs: {
+        Row: {
+          attempts: number
+          chapter_event_id: string | null
+          claimed_at: string | null
+          completed_at: string | null
+          created_at: string
+          edition_id: string | null
+          error_text: string | null
+          id: string
+          kind: string
+          payload: Json
+          result: Json | null
+          status: string
+          subject_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          chapter_event_id?: string | null
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          edition_id?: string | null
+          error_text?: string | null
+          id?: string
+          kind: string
+          payload?: Json
+          result?: Json | null
+          status?: string
+          subject_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          chapter_event_id?: string | null
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          edition_id?: string | null
+          error_text?: string | null
+          id?: string
+          kind?: string
+          payload?: Json
+          result?: Json | null
+          status?: string
+          subject_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_jobs_chapter_event_id_fkey"
+            columns: ["chapter_event_id"]
+            isOneToOne: false
+            referencedRelation: "chapter_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_jobs_edition_id_fkey"
+            columns: ["edition_id"]
+            isOneToOne: false
+            referencedRelation: "editions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attempt_answers: {
         Row: {
           answered_at: string
@@ -1120,8 +1186,10 @@ export type Database = {
           created_at: string
           created_by: string | null
           difficulty: string
+          generated_for_student_id: string | null
           id: string
           is_active: boolean
+          is_ai_generated: boolean
           is_retired: boolean
           media_credit: string | null
           media_url: string | null
@@ -1129,8 +1197,11 @@ export type Database = {
           option_b: string | null
           option_c: string | null
           option_d: string | null
+          pool: string
           question_text: string
           question_type: string
+          reviewed_at: string | null
+          reviewed_by: string | null
           source: string | null
           times_used: number
           topic_id: string
@@ -1144,8 +1215,10 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           difficulty?: string
+          generated_for_student_id?: string | null
           id?: string
           is_active?: boolean
+          is_ai_generated?: boolean
           is_retired?: boolean
           media_credit?: string | null
           media_url?: string | null
@@ -1153,8 +1226,11 @@ export type Database = {
           option_b?: string | null
           option_c?: string | null
           option_d?: string | null
+          pool?: string
           question_text: string
           question_type?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           source?: string | null
           times_used?: number
           topic_id: string
@@ -1168,8 +1244,10 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           difficulty?: string
+          generated_for_student_id?: string | null
           id?: string
           is_active?: boolean
+          is_ai_generated?: boolean
           is_retired?: boolean
           media_credit?: string | null
           media_url?: string | null
@@ -1177,8 +1255,11 @@ export type Database = {
           option_b?: string | null
           option_c?: string | null
           option_d?: string | null
+          pool?: string
           question_text?: string
           question_type?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           source?: string | null
           times_used?: number
           topic_id?: string

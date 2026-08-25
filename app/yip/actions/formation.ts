@@ -969,6 +969,7 @@ export async function closeFormationStep(
         tiedSessionIds: [],
         terminalTiedSessionIds: [],
         runoffOffered: false,
+        unseatedWinners: [],
       },
     };
   }
@@ -996,6 +997,7 @@ export async function closeFormationStep(
   );
 
   const tiedSessionIds: string[] = [];
+  const unseatedWinners: string[] = [];
 
   for (const sessionId of step.session_ids) {
     const status = statusOf.get(sessionId);
@@ -1009,6 +1011,17 @@ export async function closeFormationStep(
     const revealed = await revealResults(sessionId);
     if (!revealed.success) return { success: false, error: revealed.error };
     if (revealed.data.tie) tiedSessionIds.push(sessionId);
+
+    // A reveal can succeed and still seat nobody: the session is flipped to
+    // "revealed" before the winner is worked out, and the seating writes below
+    // that are all conditional. revealResults reads the participant rows back
+    // and reports the shortfall — but only the one-ballot-at-a-time screen was
+    // listening. This is the path that reveals five ballots unattended and then
+    // archives them, so it is the one that most needs to look.
+    const seating = revealed.data.seating;
+    if (seating && seating.seated < seating.expected) {
+      unseatedWinners.push(...seating.unseatedNames);
+    }
   }
 
   if (tiedSessionIds.length > 0) {
@@ -1028,6 +1041,36 @@ export async function closeFormationStep(
         terminalTiedSessionIds,
         runoffOffered:
           terminalTiedSessionIds.length < tiedSessionIds.length,
+        unseatedWinners,
+      },
+    };
+  }
+
+  // Revealed, but somebody who won is not holding their role. Treat this
+  // exactly like a tie: leave the step OPEN and archive NOTHING.
+  //
+  // Archiving here would be the damaging move. clearVoteResults flips every
+  // revealed session to "archived", the control panel only lists
+  // open/closed/revealed, and the formation panel builds its winner display
+  // from the ballots rather than from parliament_role — so the screen would
+  // show the right name highlighted, say "winners recorded", and the bench
+  // would be empty with nothing anywhere pointing at it. The tally is
+  // recoverable (re-revealing recomputes from yip.votes), but nobody would know
+  // to go looking.
+  //
+  // Deliberately NOT auto-seating anyone: this function cannot know why the
+  // write did not land, and guessing at a seat is how the wrong person ends up
+  // holding an office. It stops and names them instead.
+  if (unseatedWinners.length > 0) {
+    revalidatePath(formationPath(eventId));
+    return {
+      success: true,
+      data: {
+        tie: false,
+        tiedSessionIds: [],
+        terminalTiedSessionIds: [],
+        runoffOffered: false,
+        unseatedWinners,
       },
     };
   }
@@ -1051,6 +1094,7 @@ export async function closeFormationStep(
       tiedSessionIds: [],
       terminalTiedSessionIds: [],
       runoffOffered: false,
+      unseatedWinners: [],
     },
   };
 }

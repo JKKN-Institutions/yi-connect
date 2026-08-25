@@ -224,7 +224,30 @@ export function QuestionnaireAdminClient({
    * and swallows it.
    */
   function openHandedInFile(attemptId: string, path: string) {
-    const tab = window.open("", "_blank", "noopener,noreferrer");
+    // NO "noopener" / "noreferrer" HERE, deliberately.
+    //
+    // Per the HTML spec, window.open() returns NULL whenever either is passed.
+    // Passing them silently defeated the whole point of opening the tab early:
+    // the handle was always null, so the blank tab was never given a URL and
+    // sat empty for ever, `tab?.close()` on failure was a no-op that orphaned
+    // it, and every success fell through to the else-branch — which navigated
+    // the ORGANISER'S OWN PAGE away to the PDF. On a phone that reads exactly
+    // as "I tapped it and nothing opened".
+    //
+    // The tab must still be opened synchronously on the click, before the
+    // await: Safari treats a window.open that happens after an async gap as a
+    // popup and swallows it.
+    const tab = window.open("", "_blank");
+    // Sever the opener by hand instead, which is what "noopener" was for — the
+    // new tab must not be able to reach back into this one.
+    if (tab) {
+      try {
+        tab.opener = null;
+      } catch {
+        // Some browsers make `opener` read-only. Not fatal: the tab only ever
+        // shows a signed URL from our own storage.
+      }
+    }
     void (async () => {
       const res = await callAction(() => getQuestionnaireFileUrl(eventId, attemptId, path));
       if (!res.success) {
@@ -232,8 +255,17 @@ export function QuestionnaireAdminClient({
         toast.error(res.error);
         return;
       }
-      if (tab) tab.location.href = res.data.url;
-      else window.location.href = res.data.url;
+      if (tab) {
+        tab.location.href = res.data.url;
+      } else {
+        // The browser blocked the tab outright. Navigating this page away would
+        // lose the organiser's place in the list, so hand them the link instead
+        // and let them decide.
+        toast.error(
+          "Your browser blocked the new tab. Allow pop-ups for this site, then tap the file again.",
+          { duration: 12000 }
+        );
+      }
     })();
   }
 

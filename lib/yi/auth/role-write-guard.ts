@@ -40,6 +40,10 @@ const SUPER_TIER_APPS = [
   "yifi",
   "yuva",
   "yiq",
+  "varnam",
+  // Named ahead of their code: no routes or gates exist for these yet. Listing
+  // an app that does not exist only ever DENIES more, so it is safe; the
+  // dangerous direction is the reverse, which is what bit yiq and varnam.
   "thalir",
   "masoom",
 ];

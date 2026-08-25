@@ -51,6 +51,7 @@ import {
   listQuestionnaireQuestions,
   requestQuestionnaireQuestionReview,
   rescoreQuestionnaireAttempt,
+  saveManualQuestionnaireMarks,
   saveQuestionnaireQuestions,
   setQuestionnaireWindow,
   type PostOverview,
@@ -62,6 +63,7 @@ import {
   formatQuestionnaireTime,
   markingStallWarnings,
   questionnairePostLabel,
+  RUBRIC_CRITERIA,
   shortlistCutoff,
   type QuestionnaireMarkingProgress,
   type QuestionnaireMissingRow,
@@ -83,6 +85,9 @@ async function callAction<T>(
 }
 
 type Detail = Awaited<ReturnType<typeof getQuestionnaireAttemptDetail>>;
+
+/** One question's hand-typed marks, before they are sent to the server. */
+type ManualMark = { grounding: number; depth: number; voice: number };
 
 /** The AI's read of the QUESTION BANK (never of anybody's answers). */
 type QuestionReview = {
@@ -132,6 +137,13 @@ export function QuestionnaireAdminClient({
   const [expanded, setExpanded] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [review, setReview] = useState<QuestionReview>(initialReview);
+  /**
+   * Hand-typed marks for a paper the scorer cannot read, keyed by question
+   * position. Cleared every time a row opens or closes, so numbers typed
+   * against one candidate can never be saved onto the next one.
+   */
+  const [marks, setMarks] = useState<Record<number, Partial<ManualMark>>>({});
+  const [savingMarks, setSavingMarks] = useState(false);
 
   const refresh = useCallback(async () => {
     const [o, r, qr, mp] = await Promise.all([
@@ -309,15 +321,97 @@ export function QuestionnaireAdminClient({
     if (expanded === attemptId) {
       setExpanded(null);
       setDetail(null);
+      setMarks({});
       return;
     }
     setExpanded(attemptId);
     setDetail(null);
+    setMarks({});
     startTransition(async () => {
       const res = await callAction(() =>
         getQuestionnaireAttemptDetail(eventId, attemptId)
       );
       setDetail(res);
+    });
+  }
+
+  /**
+   * Type one criterion's mark for one question.
+   *
+   * Clamped to the rubric's own range as it is typed, so the box never shows a
+   * number the server would quietly reduce — an organiser who types 9 into a
+   * field worth 3 should see it become 3 immediately, not discover it later in
+   * a total that does not add up. An emptied box returns to unset rather than
+   * to zero, because "not judged yet" and "judged worth nothing" must stay
+   * different right up until Save.
+   */
+  function setMark(position: number, key: keyof ManualMark, raw: string, max: number) {
+    setMarks((prev) => {
+      const next = { ...(prev[position] ?? {}) };
+      if (raw.trim() === "") {
+        delete next[key];
+      } else {
+        const n = Math.round(Number(raw));
+        if (!Number.isFinite(n)) return prev;
+        next[key] = Math.min(max, Math.max(0, n));
+      }
+      return { ...prev, [position]: next };
+    });
+  }
+
+  /**
+   * Save a person's marks for a paper handed in as a file.
+   *
+   * Every question must carry a mark before this will send. A blank left as an
+   * implicit zero is the failure this screen exists to prevent — an unread
+   * question and a question judged worth nothing look identical once stored,
+   * and the candidate cannot tell them apart either.
+   */
+  function saveMarks(attemptId: string, positions: number[]) {
+    const filled = positions.map((p) => ({ position: p, mark: marks[p] }));
+    const incomplete = filled.filter(
+      ({ mark }) =>
+        typeof mark?.grounding !== "number" ||
+        typeof mark?.depth !== "number" ||
+        typeof mark?.voice !== "number"
+    );
+    if (incomplete.length > 0) {
+      toast.error(
+        incomplete.length === positions.length
+          ? "Give every question all three marks before saving."
+          : `${incomplete.length} question${incomplete.length === 1 ? " is" : "s are"} still missing a mark.`
+      );
+      return;
+    }
+    setSavingMarks(true);
+    startTransition(async () => {
+      const res = await callAction(() =>
+        saveManualQuestionnaireMarks(
+          eventId,
+          attemptId,
+          filled.map(({ position, mark }) => ({
+            position,
+            grounding: mark!.grounding as number,
+            depth: mark!.depth as number,
+            voice: mark!.voice as number,
+          }))
+        )
+      );
+      setSavingMarks(false);
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(`Marked — ${res.data.total} of ${res.data.max} (${res.data.pct}%).`);
+      setMarks({});
+      // Re-read the paper AND the table: the row must stop saying "read this
+      // one yourself" and start showing the mark, or the organiser cannot tell
+      // the save worked.
+      const fresh = await callAction(() =>
+        getQuestionnaireAttemptDetail(eventId, attemptId)
+      );
+      setDetail(fresh);
+      await refresh();
     });
   }
 
@@ -865,6 +959,61 @@ export function QuestionnaireAdminClient({
                               ? "Not scored"
                               : `${a.score}/${detail.data.maxPerAnswer} · grounding ${a.grounding} · depth ${a.depth} · voice ${a.voice}${a.penalty ? ` · −${a.penalty}` : ""}`}
                           </p>
+                          {/*
+                            The marks boxes. Shown ONLY on a paper waiting on a
+                            person, and only to someone who can manage the event
+                            — a viewer can read the pages but not decide them.
+                            The server re-checks both before it writes.
+                          */}
+                          {canManage && detail.data.scoringStatus === "needs_human" && (
+                            <div
+                              className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-2 rounded-xl border px-3 py-2"
+                              style={{ background: "#fff", borderColor: "#1a1a3e1a" }}
+                            >
+                              {RUBRIC_CRITERIA.map((c) => {
+                                const key = c.key as keyof ManualMark;
+                                const value = marks[a.position]?.[key];
+                                return (
+                                  <label key={c.key} className="flex flex-col gap-1">
+                                    <span
+                                      className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1a1a3e]/55"
+                                      title={c.instruction}
+                                    >
+                                      {c.label}
+                                      <span className="ml-1 text-[#1a1a3e]/35">/{c.max}</span>
+                                    </span>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={c.max}
+                                      step={1}
+                                      inputMode="numeric"
+                                      disabled={savingMarks}
+                                      value={value ?? ""}
+                                      onChange={(e) =>
+                                        setMark(a.position, key, e.target.value, c.max)
+                                      }
+                                      aria-label={`${c.label}, question ${a.position}, out of ${c.max}`}
+                                      className="w-16 rounded-lg border px-2 py-1 text-sm"
+                                      style={{ borderColor: "#1a1a3e26" }}
+                                    />
+                                  </label>
+                                );
+                              })}
+                              <span className="pb-1 text-[11px] text-[#1a1a3e]/55">
+                                {(() => {
+                                  const m = marks[a.position];
+                                  const done =
+                                    typeof m?.grounding === "number" &&
+                                    typeof m?.depth === "number" &&
+                                    typeof m?.voice === "number";
+                                  return done
+                                    ? `= ${m!.grounding! + m!.depth! + m!.voice!} of ${detail.data.maxPerAnswer}`
+                                    : "not marked yet";
+                                })()}
+                              </span>
+                            </div>
+                          )}
                           {a.flags.length > 0 && (
                             <ul className="mt-1 space-y-0.5">
                               {a.flags.map((f) => (
@@ -881,6 +1030,43 @@ export function QuestionnaireAdminClient({
                           )}
                         </div>
                       ))}
+                      {/*
+                        Save the hand-typed marks. Sits under ALL the questions
+                        rather than beside each one, because a paper is judged
+                        as a whole — marking question 1 and wandering off would
+                        leave a part-marked paper in the ranking as though it
+                        had been judged.
+                      */}
+                      {canManage &&
+                        expanded &&
+                        detail.data.scoringStatus === "needs_human" && (
+                          <div
+                            className="flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3"
+                            style={{ background: "#fff", borderColor: "#1a1a3e1a" }}
+                          >
+                            <Button
+                              size="sm"
+                              disabled={savingMarks || isPending}
+                              onClick={() =>
+                                saveMarks(
+                                  expanded,
+                                  detail.data.answers.map((a) => a.position)
+                                )
+                              }
+                            >
+                              {savingMarks ? (
+                                <Loader2 className="size-4 animate-spin" />
+                              ) : (
+                                "Save these marks"
+                              )}
+                            </Button>
+                            <span className="text-[11px] text-[#1a1a3e]/55">
+                              Open the pages above, then give each question its three
+                              marks. Saving puts this paper into the ranking with the
+                              others — the student never sees the marks.
+                            </span>
+                          </div>
+                        )}
                       {canManage && (
                         <Button
                           size="sm"

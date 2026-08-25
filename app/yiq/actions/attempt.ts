@@ -25,6 +25,7 @@ import {
   type PresentedQuestion,
 } from "@/lib/yiq/paper";
 import { gradeAttempt, type AnswerKey } from "@/lib/yiq/scoring";
+import { consumeGrantedRestart } from "@/app/yiq/actions/restart";
 
 export type StartResult =
   | {
@@ -133,6 +134,20 @@ export async function startAttempt(
   }
 
   if (existing && existing.status !== "in_progress" && kind === "online_round") {
+    // A chapter organiser may have granted this student their ONE restart
+    // (app/yiq/actions/restart.ts). It is spent HERE, on the student's own
+    // next start, so the clock begins when they actually get back in rather
+    // than when the organiser clicked. Same paper, same order, same answers.
+    const restart = await consumeGrantedRestart(existing.id);
+    if (restart.resumed) {
+      return buildResume(
+        existing.id,
+        restart.expiresAt,
+        existing.question_order ?? [],
+        paper,
+        session.category
+      );
+    }
     return {
       success: false,
       error: "You have already taken the online round. Only one attempt is allowed.",

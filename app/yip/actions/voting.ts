@@ -130,6 +130,21 @@ export interface VoteResults {
   // Present when an exact tie at a seat boundary needs a runoff. When set, no
   // roles/party-leader are written — the organiser opens a runoff first.
   tie?: ElectionTie | null;
+  // Whether the seats this reveal was supposed to write are ACTUALLY on the
+  // participant rows afterwards. `seated < expected` means an election was
+  // revealed, shows a winner, and yet somebody who won is not holding their
+  // role. Null when the vote seats nobody by nature (a bill or a motion).
+  seating?: SeatingCheck | null;
+}
+
+/** Read back after a reveal — see the block that builds it in revealResults. */
+export interface SeatingCheck {
+  /** Seats this reveal should have written. */
+  expected: number;
+  /** Of those, how many the participant rows actually confirm. */
+  seated: number;
+  /** Who is missing, by name where we have one, so the message can say it. */
+  unseatedNames: string[];
 }
 
 // ─── Tally helper ───────────────────────────────────────────────
@@ -988,6 +1003,68 @@ export async function revealResults(
     }
   }
 
+  // ─── Did the seats actually get written? ──────────────────────────────────
+  //
+  // Every seating block above is CONDITIONAL — on outcome.winnerId, on a
+  // cfg.partyId being present, on the tally not being a tie. But the session was
+  // already flipped to "revealed" at the top of this function, before any of
+  // that ran. So when a condition is not met, the reveal still reports success
+  // and still returns a tally with a winner in it, while nobody holds the role.
+  //
+  // That has happened twice on this platform, and both times it was found by
+  // hand, days later, by querying parliament_role. It is about to be asked to
+  // seat 24 ministers at once.
+  //
+  // So read the rows back and say what is actually there. This changes nothing
+  // and seats nobody — it reports whether the write that was just attempted
+  // landed. A reveal that seated nobody is still a successful reveal; it is the
+  // silence about it that was the defect.
+  const expectedSeats: { id: string; role: string }[] = [];
+  if (session.vote_type === "speaker_election") {
+    if (outcome.speakerId) expectedSeats.push({ id: outcome.speakerId, role: "speaker" });
+    for (const d of outcome.deputyIds) {
+      expectedSeats.push({ id: d, role: "deputy_speaker" });
+    }
+  }
+  if (outcome.partyLeaderId) {
+    expectedSeats.push({ id: outcome.partyLeaderId, role: "party_leader" });
+  }
+  // PM / Deputy PM / Leader of Opposition, and the multi-seat minister rounds,
+  // all write the vote_type itself as the role.
+  if (outcome.winnerId) {
+    expectedSeats.push({ id: outcome.winnerId, role: session.vote_type });
+  }
+  for (const w of outcome.winnerIds) {
+    expectedSeats.push({ id: w, role: session.vote_type });
+  }
+
+  let seating: SeatingCheck | null = null;
+  if (expectedSeats.length > 0) {
+    const { data: seatedRows } = await supabase
+      .from("participants")
+      .select("id, full_name, parliament_role")
+      .in(
+        "id",
+        expectedSeats.map((e) => e.id)
+      );
+    const byId = new Map(
+      (seatedRows ?? []).map((r) => [
+        r.id as string,
+        r as { id: string; full_name: string | null; parliament_role: string | null },
+      ])
+    );
+    // A row that is missing entirely counts as unseated too — never treat "we
+    // could not read it back" as "it is fine".
+    const missing = expectedSeats.filter(
+      (e) => byId.get(e.id)?.parliament_role !== e.role
+    );
+    seating = {
+      expected: expectedSeats.length,
+      seated: expectedSeats.length - missing.length,
+      unseatedNames: missing.map((m) => byId.get(m.id)?.full_name ?? m.id),
+    };
+  }
+
   const results: VoteResults = {
     session: { ...session, status: "revealed" },
     tallies,
@@ -998,6 +1075,7 @@ export async function revealResults(
     deputySpeakerIds: outcome.deputyIds,
     partyLeaderId: outcome.partyLeaderId,
     tie: outcome.tie,
+    seating,
   };
 
   return { success: true, data: results };

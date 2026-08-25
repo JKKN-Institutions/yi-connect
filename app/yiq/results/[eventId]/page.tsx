@@ -33,7 +33,7 @@ export default async function ChapterResultsPage({
 
   const { data: teams } = await svc
     .from("teams")
-    .select("id, name, category, online_total_score, online_rank, status, schools(name)")
+    .select("id, name, category, online_score, online_members_attempted, online_rank, status, online_eliminated_reason, schools(name)")
     .eq("chapter_event_id", eventId)
     .not("online_rank", "is", null)
     .order("online_rank");
@@ -109,9 +109,17 @@ export default async function ChapterResultsPage({
                           {(t.schools as { name: string } | null)?.name}
                         </p>
                       </div>
-                      <span className="yiq-data text-[1.25rem] font-bold">
-                        {t.online_total_score ?? 0}
-                      </span>
+                      <div className="text-right">
+                        <span className="yiq-data text-[1.25rem] font-bold">
+                          {t.online_score ?? 0}
+                        </span>
+                        {/* An average without its denominator reads as a bug:
+                            83 from two sitters and 83 from three are different
+                            achievements, so always show which. */}
+                        <p className="yiq-eyebrow" style={{ color: DIM }}>
+                          avg of {t.online_members_attempted ?? 0}
+                        </p>
+                      </div>
                     </li>
                   ))}
                 </ol>

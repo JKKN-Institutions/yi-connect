@@ -87,7 +87,7 @@ export default async function MyYiqPage() {
             <>
               <h2 className="yiq-display mt-2 text-[1.75rem]">Submitted</h2>
               <p className="mt-2 text-[0.9375rem]" style={{ color: DIM }}>
-                Your paper is recorded. Your team&apos;s total is the sum of its
+                Your paper is recorded. Your team&apos;s score is the average of its
                 members&apos; scores — your chapter publishes rankings after the
                 round closes.
               </p>

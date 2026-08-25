@@ -338,9 +338,14 @@ export async function computeChapterStandings(
       await svc
         .from("teams")
         .update({
-          online_total_score: t.totalScore,
+          // online_score is the canonical column. online_total_score keeps the
+          // same value under its old (now misleading) name while deployed code
+          // still reads it — see yiq_10_average_scoring.sql.
+          online_score: t.score,
+          online_total_score: t.score,
           online_rank: t.rank ?? null,
           online_members_attempted: t.membersAttempted,
+          online_eliminated_reason: t.ineligibleReason,
           status: t.qualified ? "qualified" : "eliminated",
         })
         .eq("id", t.teamId);

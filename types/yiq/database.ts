@@ -1424,8 +1424,10 @@ export type Database = {
           finals_total_score: number | null
           id: string
           name: string
+          online_eliminated_reason: string | null
           online_members_attempted: number
           online_rank: number | null
+          online_score: number | null
           online_total_score: number | null
           registered_ip: string | null
           registered_user_agent: string | null
@@ -1443,8 +1445,10 @@ export type Database = {
           finals_total_score?: number | null
           id?: string
           name: string
+          online_eliminated_reason?: string | null
           online_members_attempted?: number
           online_rank?: number | null
+          online_score?: number | null
           online_total_score?: number | null
           registered_ip?: string | null
           registered_user_agent?: string | null
@@ -1462,8 +1466,10 @@ export type Database = {
           finals_total_score?: number | null
           id?: string
           name?: string
+          online_eliminated_reason?: string | null
           online_members_attempted?: number
           online_rank?: number | null
+          online_score?: number | null
           online_total_score?: number | null
           registered_ip?: string | null
           registered_user_agent?: string | null

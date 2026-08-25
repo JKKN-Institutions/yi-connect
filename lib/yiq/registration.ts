@@ -61,7 +61,7 @@ const PHONE = /^[6-9]\d{9}$/;
  *
  * The category rule is the important one: every member of a team must sit in
  * the SAME category, because Junior and Senior are separate championships and
- * a team's score is the sum of its members. A mixed team would be scoring
+ * a team's score is the average of its members. A mixed team would be scoring
  * across two competitions at once.
  */
 export function validateRegistration(i: RegisterTeamInput): string | null {

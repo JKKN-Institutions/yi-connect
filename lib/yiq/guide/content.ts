@@ -291,7 +291,7 @@ const STUDENT: YiqAudienceGuide = {
           link: { label: "Review my papers", href: "/yiq/me/review" },
         },
         {
-          action: "Your team's score is the sum of everyone's scores.",
+          action: "Your team's score is the average of everyone who sits. At least two of you must sit, or the team is out.",
           detail:
             "Not the average, and not the best one. A teammate who does not sit the paper adds zero, which pulls the team down.",
         },
@@ -350,7 +350,7 @@ const STUDENT: YiqAudienceGuide = {
     },
     {
       q: "A teammate did not sit the paper. Does it matter?",
-      a: "Yes. The team total is the sum of its members' scores, so a member who does not sit adds zero.",
+      a: "Your score still counts. The team score is the average of whoever sits, so a teammate who misses it does not drag you down \u2014 but at least two of you must sit, or the team is out.",
     },
     {
       q: "I reloaded the page in the middle of the paper.",
@@ -478,7 +478,7 @@ const TEACHER: YiqAudienceGuide = {
         {
           action: "Make sure every member sits the paper.",
           detail:
-            "The team score is the sum of its members' scores. A student who does not sit adds zero, so a two-of-three team is competing short.",
+            "The team score is the average of the members who sat, so an absent student no longer drags the team down. But fewer than two sitting and the team is out, whatever the remaining score.",
         },
         {
           action: "Check devices and signal the day before.",

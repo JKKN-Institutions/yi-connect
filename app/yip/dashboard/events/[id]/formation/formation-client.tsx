@@ -613,7 +613,22 @@ export function FormationClient({
           startTransition(async () => {
             const res = await closeFormationStep(eventId, key);
             if (res.success) {
-              if (!res.data.tie) {
+              if (res.data.unseatedWinners.length > 0) {
+                // Revealed, but somebody who won is not holding their role.
+                // The step has deliberately been left open and nothing was
+                // archived, so the ballots are still there to re-reveal. Say
+                // who, and say not to move on — this is the failure that twice
+                // went unnoticed for days.
+                setTieByStep((p) => ({ ...p, [key]: undefined }));
+                toast.error(
+                  `${label} revealed, but ${res.data.unseatedWinners.length} winner${
+                    res.data.unseatedWinners.length === 1 ? "" : "s"
+                  } did not get their role: ${res.data.unseatedWinners.join(", ")}. ` +
+                    `The step has been left open and nothing was archived. Close it again to retry, ` +
+                    `or seat them from Positions — do not move on until the bench is right.`,
+                  { duration: 30000 }
+                );
+              } else if (!res.data.tie) {
                 toast.success(`${label} complete — winners recorded.`);
                 setTieByStep((p) => ({ ...p, [key]: undefined }));
               } else {

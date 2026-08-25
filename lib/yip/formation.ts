@@ -430,6 +430,21 @@ export type FormationCloseResult = {
    */
   terminalTiedSessionIds: string[];
   runoffOffered: boolean;
+  /**
+   * Winners this close revealed who are NOT actually holding their role
+   * afterwards, by name.
+   *
+   * Revealing marks a session revealed BEFORE it works out who won; seating
+   * happens after, and only when the outcome resolved cleanly. When that second
+   * half does not happen the reveal still succeeds, so a bulk close would
+   * archive the tallies and report "winners recorded" over an empty bench. That
+   * has already happened twice, and both times it was found by hand days later.
+   *
+   * Non-empty means the step was left OPEN and nothing was archived — same
+   * treatment as a tie, for the same reason: the outcome is not safe to put
+   * away yet.
+   */
+  unseatedWinners: string[];
 };
 
 /**

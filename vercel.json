@@ -20,6 +20,14 @@
     {
       "path": "/yip/api/cron/formation-drain-emails",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/yiq/api/cron/sweep-attempts",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/yiq/api/cron/round-lifecycle",
+      "schedule": "*/5 * * * *"
     }
   ],
   "headers": [

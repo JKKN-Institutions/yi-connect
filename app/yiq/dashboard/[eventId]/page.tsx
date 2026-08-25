@@ -103,6 +103,30 @@ export default async function ChapterEventPage({
           ))}
         </dl>
 
+        {/* The finals console had NO link anywhere — it was reachable only by
+            typing the URL, which is not a thing to discover on event day. */}
+        {access.canView ? (
+          <nav className="mt-8 flex flex-wrap gap-3">
+            {(["junior", "senior"] as const).map((c) => (
+              <Link
+                key={c}
+                href={`/yiq/dashboard/${eventId}/finals?category=${c}`}
+                className="rounded-full border px-5 py-3 text-[0.875rem] font-bold"
+                style={{ borderColor: RULE, color: PAPER }}
+              >
+                Finals console · {c === "junior" ? "Junior" : "Senior"}
+              </Link>
+            ))}
+            <Link
+              href="/yiq/guide?for=organiser"
+              className="rounded-full border px-5 py-3 text-[0.875rem] font-semibold"
+              style={{ borderColor: RULE, color: DIM }}
+            >
+              How this works
+            </Link>
+          </nav>
+        ) : null}
+
         {access.canManage ? (
           <EventControls
             eventId={eventId}

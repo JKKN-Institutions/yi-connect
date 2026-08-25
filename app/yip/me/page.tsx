@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { clauseTexts } from "@/lib/yip/bill-provisions";
+import { canMovePrivateMemberBill } from "@/lib/yip/bill-sources";
 import {
   committeeWhatsappFor,
   benchWhatsappFor,
@@ -462,6 +463,10 @@ export default async function ParticipantPage() {
   const isPMDesk = role === "prime_minister" || role === "deputy_prime_minister";
   const isShadowDesk = role === "shadow_minister";
   const isOpposition = role === "leader_of_opposition";
+  // A Private Member's Bill is moved by an ordinary Member — never a minister,
+  // a presiding officer, or anyone on official duty. Same helper the organiser's
+  // own form filters its mover list with, and the same one the action re-checks.
+  const canBringPrivateBill = canMovePrivateMemberBill(role);
   // Masthead stamp for the credential hero — e.g. "ERODE · 2026".
   const stampChapter = (event.name?.split(/\s+/)[0] ?? "").toUpperCase();
   const stampYear = event.day1_date
@@ -705,6 +710,26 @@ export default async function ParticipantPage() {
               />
               <p className="mt-1.5 text-xs" style={{ color: inkA(0.55) }}>
                 Track your ministry · file a counter
+              </p>
+            </div>
+          </SectionShell>
+        </Link>
+      )}
+
+      {/* ─── PRIVATE MEMBER'S BILL (any ordinary Member) ────────────── */}
+      {canBringPrivateBill && (
+        <Link href="/yip/me/private-bill" className="block">
+          <SectionShell accent="#6D28D9" className="transition-shadow hover:shadow-md">
+            <div className="px-5 py-4">
+              <SectionHeading
+                eyebrow="Your bill"
+                title="Private Member's Bill"
+                icon={FileText}
+                accent="#6D28D9"
+                trailing={<ChevronRight className="size-5" style={{ color: inkA(0.35) }} />}
+              />
+              <p className="mt-1.5 text-xs" style={{ color: inkA(0.55) }}>
+                Bring your own bill to the House · write it and hand it in
               </p>
             </div>
           </SectionShell>

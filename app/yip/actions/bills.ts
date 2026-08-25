@@ -814,3 +814,230 @@ export async function setBillEarlyUnlock(
   revalidatePath(`/yip/dashboard/events/${eventId}/edit`);
   return { success: true, data: null };
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// STUDENT-SUBMITTED PRIVATE MEMBERS' BILLS
+//
+// Until now a Private Member's Bill could only be typed in by an organiser on
+// the bills dashboard, which meant a student who wrote one had to hand the text
+// over off-platform and hope it was entered before the session. The Regional
+// Round has a "Private Members' Bills" agenda item, so that gap is felt on the
+// day.
+//
+// These three actions let the Member draft and hand in their own, and produce a
+// row IDENTICAL to the one adminCreateBill writes — same source, same null
+// committee_name, same {id,text} provisions, same presenter_1 mirror. Nothing
+// downstream needs to know a student typed it: the organiser board, the
+// projector join and the jury flow all already read that shape.
+//
+// Deliberately NO new window mechanism. Approval is the gate — a bill sits at
+// `submitted` until an organiser approves it on the board they already use, and
+// only an approved bill reaches the floor. Inventing a second window system
+// beside self_nomination_windows and questionnaire_windows would be a third
+// place to forget to open.
+// ═══════════════════════════════════════════════════════════════════════
+
+/** One Private Member's Bill per Member — theirs, and only while eligible. */
+async function assertCanMoveOwnPrivateBill(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  participantId: string,
+  eventId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sess = await requireParticipantSession(participantId, eventId);
+  if (!sess.ok) return { ok: false, error: sess.error };
+  const { data: p } = await supabase
+    .from("participants")
+    .select("id, parliament_role")
+    .eq("id", participantId)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (!p) return { ok: false, error: "Participant not found for this event." };
+  // Same rule the organiser's own form enforces: a Private Member's Bill is
+  // moved by an ordinary Member, never by a government minister, a presiding
+  // officer, or anyone on official duty.
+  if (!canMovePrivateMemberBill(p.parliament_role)) {
+    return {
+      ok: false,
+      error:
+        "A Private Member's Bill is moved by an ordinary Member. Ministers, the Speaker and Deputy Speaker cannot move one.",
+    };
+  }
+  return { ok: true };
+}
+
+/** The caller's own Private Member's Bill, or null if they have not started one. */
+export async function getMyPrivateMemberBill(
+  eventId: string,
+  participantId: string
+): Promise<
+  ActionResult<{
+    bill: {
+      id: string;
+      title: string;
+      objective: string | null;
+      problemStatement: string | null;
+      provisions: string[];
+      status: string;
+    } | null;
+    canSubmit: boolean;
+  }>
+> {
+  const supabase = await createServiceClient();
+  const gate = await assertCanMoveOwnPrivateBill(supabase, participantId, eventId);
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  const { data: row } = await supabase
+    .from("bills")
+    .select("id, title, objective, problem_statement, provisions, status")
+    .eq("event_id", eventId)
+    .eq("source", "private_member")
+    .eq("mover_participant_id", participantId)
+    .maybeSingle();
+
+  if (!row) return { success: true, data: { bill: null, canSubmit: true } };
+
+  const provisions = Array.isArray(row.provisions)
+    ? (row.provisions as { text?: unknown }[])
+        .map((p) => (typeof p?.text === "string" ? p.text : ""))
+        .filter(Boolean)
+    : [];
+
+  return {
+    success: true,
+    data: {
+      bill: {
+        id: row.id as string,
+        title: (row.title as string) ?? "",
+        objective: (row.objective as string | null) ?? null,
+        problemStatement: (row.problem_statement as string | null) ?? null,
+        provisions,
+        status: (row.status as string) ?? "drafting",
+      },
+      canSubmit: true,
+    },
+  };
+}
+
+/**
+ * Save the caller's own Private Member's Bill as a DRAFT.
+ *
+ * Creates it on first save and updates it thereafter — one per Member, keyed on
+ * (event, source, mover). Editing stops once it has been handed in: a bill an
+ * organiser may already have read and approved must not change underneath them.
+ */
+export async function saveMyPrivateMemberBillDraft(
+  eventId: string,
+  participantId: string,
+  data: {
+    title: string;
+    objective?: string;
+    problemStatement?: string;
+    provisions?: string[];
+  }
+): Promise<ActionResult<{ billId: string }>> {
+  const supabase = await createServiceClient();
+  const gate = await assertCanMoveOwnPrivateBill(supabase, participantId, eventId);
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  const title = data.title?.trim();
+  if (!title) return { success: false, error: "Give your bill a title." };
+
+  const provisions = (data.provisions ?? [])
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((text) => ({ id: randomUUID(), text }));
+
+  const { data: existing } = await supabase
+    .from("bills")
+    .select("id, status")
+    .eq("event_id", eventId)
+    .eq("source", "private_member")
+    .eq("mover_participant_id", participantId)
+    .maybeSingle();
+
+  if (existing && existing.status !== "drafting") {
+    return {
+      success: false,
+      error:
+        "You have already handed this bill in — ask an organiser if you need it changed.",
+    };
+  }
+
+  const payload = {
+    event_id: eventId,
+    committee_name: null,
+    title,
+    objective: data.objective?.trim() || null,
+    problem_statement: data.problemStatement?.trim() || null,
+    provisions: provisions as unknown as Json,
+    source: "private_member" as BillSource,
+    mover_participant_id: participantId,
+    // Mirror the mover into presenter_1, exactly as adminCreateBill does — the
+    // projector display and the jury scoring flow both resolve presenter_1 as
+    // "who presents this bill".
+    presenter_1: participantId,
+    status: "drafting",
+    updated_at: new Date().toISOString(),
+  };
+
+  if (existing) {
+    const { error } = await supabase
+      .from("bills")
+      .update(payload as never)
+      .eq("id", existing.id);
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/yip/me/private-bill");
+    return { success: true, data: { billId: existing.id as string } };
+  }
+
+  const { data: created, error } = await supabase
+    .from("bills")
+    .insert(payload as never)
+    .select("id")
+    .single();
+  if (error || !created) {
+    return { success: false, error: error?.message ?? "Could not save your bill." };
+  }
+  revalidatePath("/yip/me/private-bill");
+  return { success: true, data: { billId: created.id as string } };
+}
+
+/**
+ * Hand the bill in. Moves it to `submitted`, which is exactly where an
+ * organiser-typed one lands — so it appears on the bills board with the same
+ * Approve / Reject controls and needs no special handling there.
+ */
+export async function submitMyPrivateMemberBill(
+  eventId: string,
+  participantId: string
+): Promise<ActionResult<{ status: string }>> {
+  const supabase = await createServiceClient();
+  const gate = await assertCanMoveOwnPrivateBill(supabase, participantId, eventId);
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  const { data: bill } = await supabase
+    .from("bills")
+    .select("id, status, title")
+    .eq("event_id", eventId)
+    .eq("source", "private_member")
+    .eq("mover_participant_id", participantId)
+    .maybeSingle();
+  if (!bill) return { success: false, error: "Write your bill first." };
+  if (bill.status !== "drafting") {
+    return { success: false, error: "This bill has already been handed in." };
+  }
+  if (!((bill.title as string) ?? "").trim()) {
+    return { success: false, error: "Give your bill a title before handing it in." };
+  }
+
+  const { error } = await supabase
+    .from("bills")
+    .update({ status: "submitted", updated_at: new Date().toISOString() })
+    .eq("id", bill.id)
+    .eq("status", "drafting"); // no-op if something else moved it first
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/yip/me/private-bill");
+  revalidatePath(`/yip/dashboard/events/${eventId}/bills`);
+  return { success: true, data: { status: "submitted" } };
+}

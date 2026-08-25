@@ -676,7 +676,43 @@ export type QuestionnaireResultRow = {
    * be a photographed page rather than typed text.
    */
   fileCount: number;
+  /**
+   * Which bench this candidate sits on, or null if they hold no side.
+   *
+   * Load-bearing for the Cabinet paper. ONE post serves both benches, so a
+   * single `cabinet_minister` list mixes people competing for entirely
+   * different seats — 12 Cabinet places across the ruling parties and 12
+   * Shadow places across the opposition. Ranked together, the top of the list
+   * is not a shortlist for either contest: on the SRTN round that was 70
+   * ruling and 46 opposition papers in one league table. Rank WITHIN a bench,
+   * and label every row so nobody reads across the two.
+   */
+  bench: "ruling" | "opposition" | null;
 };
+
+/**
+ * The contest a paper belongs to — the post, split by bench where one post
+ * serves both. Use this as the ranking key, never `postKey` alone.
+ */
+export function questionnaireContestKey(
+  postKey: string,
+  bench: "ruling" | "opposition" | null
+): string {
+  return postKey === "cabinet_minister" && bench ? `${postKey}:${bench}` : postKey;
+}
+
+/** What to call the contest on screen. */
+export function questionnaireContestLabel(
+  postKey: string,
+  bench: "ruling" | "opposition" | null
+): string {
+  if (postKey === "cabinet_minister") {
+    if (bench === "ruling") return "Cabinet Minister";
+    if (bench === "opposition") return "Shadow Minister";
+    return "Cabinet / Shadow Minister — no bench";
+  }
+  return questionnairePostLabel(postKey);
+}
 
 /**
  * A student who nominated for a post and has no answers to show for it.
@@ -967,12 +1003,15 @@ export const QUESTIONNAIRE_CSV_HEADERS = [
 ];
 
 export function buildQuestionnaireCsv(rows: readonly QuestionnaireResultRow[]): string {
-  // Rank and the shortlist marker are computed per post over SCORED rows only,
-  // so an unscored attempt never silently occupies a shortlist place.
+  // Rank and the shortlist marker are computed per CONTEST over SCORED rows
+  // only, so an unscored attempt never silently occupies a shortlist place —
+  // and so Cabinet and Shadow candidates, who sit the same paper for different
+  // seats, are never ranked against each other or counted into one cutoff.
   const scoredByPost = new Map<string, number>();
   for (const r of rows) {
     if (r.scoringStatus === "scored") {
-      scoredByPost.set(r.postKey, (scoredByPost.get(r.postKey) ?? 0) + 1);
+      const k = questionnaireContestKey(r.postKey, r.bench);
+      scoredByPost.set(k, (scoredByPost.get(k) ?? 0) + 1);
     }
   }
   const seen = new Map<string, number>();
@@ -980,17 +1019,18 @@ export function buildQuestionnaireCsv(rows: readonly QuestionnaireResultRow[]): 
   const body = rows.map((r) => {
     let rank: number | "" = "";
     let marker = "";
+    const contest = questionnaireContestKey(r.postKey, r.bench);
     if (r.scoringStatus === "scored") {
-      const n = (seen.get(r.postKey) ?? 0) + 1;
-      seen.set(r.postKey, n);
+      const n = (seen.get(contest) ?? 0) + 1;
+      seen.set(contest, n);
       rank = n;
-      marker = n <= shortlistCutoff(scoredByPost.get(r.postKey) ?? 0) ? "Shortlist" : "";
+      marker = n <= shortlistCutoff(scoredByPost.get(contest) ?? 0) ? "Shortlist" : "";
     }
     return [
       rank,
       r.constituencyNumber ?? "",
       r.fullName,
-      questionnairePostLabel(r.postKey),
+      questionnaireContestLabel(r.postKey, r.bench),
       formatQuestionnaireTime(r.submittedAt),
       r.scoringStatus,
       r.totalScore ?? "",

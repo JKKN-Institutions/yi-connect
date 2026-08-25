@@ -62,6 +62,8 @@ import {
   formatFileSize,
   formatQuestionnaireTime,
   markingStallWarnings,
+  questionnaireContestKey,
+  questionnaireContestLabel,
   questionnairePostLabel,
   RUBRIC_CRITERIA,
   shortlistCutoff,
@@ -468,11 +470,16 @@ export function QuestionnaireAdminClient({
     });
   }
 
-  // Scored counts per post drive the shortlist marker.
+  // Scored counts per CONTEST drive the shortlist marker.
+  //
+  // Contest, not post: Cabinet and Shadow candidates sit the same paper but
+  // compete for different seats, so counting them together both mis-ranks them
+  // and widens the shortlist cutoff on a headcount that spans two contests.
   const scoredByPost = new Map<string, number>();
   for (const r of rows) {
     if (r.scoringStatus === "scored") {
-      scoredByPost.set(r.postKey, (scoredByPost.get(r.postKey) ?? 0) + 1);
+      const k = questionnaireContestKey(r.postKey, r.bench);
+      scoredByPost.set(k, (scoredByPost.get(k) ?? 0) + 1);
     }
   }
   const rankSeen = new Map<string, number>();
@@ -782,11 +789,12 @@ export function QuestionnaireAdminClient({
                   {rows.map((r) => {
                     let rank: number | null = null;
                     let shortlisted = false;
+                    const contest = questionnaireContestKey(r.postKey, r.bench);
                     if (r.scoringStatus === "scored") {
-                      const n = (rankSeen.get(r.postKey) ?? 0) + 1;
-                      rankSeen.set(r.postKey, n);
+                      const n = (rankSeen.get(contest) ?? 0) + 1;
+                      rankSeen.set(contest, n);
                       rank = n;
-                      shortlisted = n <= shortlistCutoff(scoredByPost.get(r.postKey) ?? 0);
+                      shortlisted = n <= shortlistCutoff(scoredByPost.get(contest) ?? 0);
                     }
                     return (
                       <tr key={r.attemptId} className="border-b border-[#1a1a3e]/5 align-top">
@@ -811,7 +819,23 @@ export function QuestionnaireAdminClient({
                           />
                         </td>
                         <td className="px-4 py-2 text-[#1a1a3e]/80">
-                          {questionnairePostLabel(r.postKey)}
+                          {/*
+                            Say WHICH contest, not just which paper. Cabinet and
+                            Shadow candidates sit the same paper for different
+                            seats, and "Cabinet / Shadow Minister" on every row
+                            gives an organiser no way to tell them apart while
+                            reading a ranking.
+                          */}
+                          {questionnaireContestLabel(r.postKey, r.bench)}
+                          {r.postKey === "cabinet_minister" && !r.bench && (
+                            <span
+                              className="ml-1 rounded px-1 text-[10px] font-semibold"
+                              style={{ background: "#b4530920", color: "#b45309" }}
+                              title="This candidate has no bench, so they cannot be ranked against either contest."
+                            >
+                              no bench
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-2 text-xs text-[#1a1a3e]/60">
                           {formatQuestionnaireTime(r.submittedAt)}

@@ -52,6 +52,7 @@ import {
   nominatedPostKeys,
   normalizeAnswerText,
   parseAnswerFiles,
+  questionnaireContestKey,
   questionnairePostLabel,
   questionsPerAttempt,
   type QuestionnaireActionResult as R,
@@ -252,10 +253,14 @@ async function cabinetCoverageShortfall(
   return short.sort((a, b) => b.candidates - a.candidates);
 }
 const participantsT = (sb: SB) =>
-  tbl<{ id: string; full_name: string; constituency_number: number | null }>(
-    sb,
-    "participants"
-  );
+  tbl<{
+    id: string;
+    full_name: string;
+    constituency_number: number | null;
+    // The bench a candidate sits on. Needed because the Cabinet paper serves
+    // two separate contests — see QuestionnaireResultRow.bench.
+    party_side: string | null;
+  }>(sb, "participants");
 
 /** PostgREST caps an unbounded select at 1000 rows; a busy event exceeds that. */
 const PAGE = 1000;
@@ -1431,13 +1436,16 @@ export async function getQuestionnaireResults(
   if (needNames.size === 0) {
     return { success: true, data: { rows: [], unscored: 0, missing: [] } };
   }
+  // party_side comes along because the Cabinet paper is TWO contests wearing
+  // one post key — see QuestionnaireResultRow.bench.
   const people = await readAllPaged<{
     id: string;
     full_name: string;
     constituency_number: number | null;
+    party_side: string | null;
   }>(() =>
     participantsT(sb)
-      .select("id, full_name, constituency_number")
+      .select("id, full_name, constituency_number, party_side")
       .in("id", [...needNames])
   );
   const byId = new Map(people.map((p) => [p.id, p]));
@@ -1460,6 +1468,10 @@ export async function getQuestionnaireResults(
       answered: c.answered,
       drawn: c.drawn,
       fileCount: c.files,
+      bench:
+        p?.party_side === "ruling" || p?.party_side === "opposition"
+          ? p.party_side
+          : null,
     };
   });
 
@@ -1476,9 +1488,18 @@ export async function getQuestionnaireResults(
     rows.filter((r) => r.answered === 0).map((r) => `${r.participantId}:${r.postKey}`)
   );
 
-  // Ranked within post, scored first, best first.
+  // Ranked within CONTEST, scored first, best first.
+  //
+  // Contest, not post: the Cabinet paper is sat by both benches, so grouping on
+  // post alone builds one league table out of two separate competitions — 12
+  // Cabinet seats among the ruling parties and 12 Shadow seats among the
+  // opposition. An organiser reading the top of that list is not looking at a
+  // shortlist for either. Grouping by contest keeps each bench's ranking its
+  // own, and the label on screen says which one you are reading.
   ranked.sort((x, y) => {
-    if (x.postKey !== y.postKey) return x.postKey.localeCompare(y.postKey);
+    const xk = questionnaireContestKey(x.postKey, x.bench);
+    const yk = questionnaireContestKey(y.postKey, y.bench);
+    if (xk !== yk) return xk.localeCompare(yk);
     const xs = x.scoringStatus === "scored" ? 0 : 1;
     const ys = y.scoringStatus === "scored" ? 0 : 1;
     if (xs !== ys) return xs - ys;

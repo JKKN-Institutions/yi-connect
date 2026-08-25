@@ -44,6 +44,7 @@ import {
   buildQuestionnaireCsv,
   buildQuestionnaireResponsesCsv,
   CABINET_QUESTIONS_PER_MINISTRY,
+  compareByScoreThenStableKey,
   drawCabinetPaper,
   drawQuestions,
   expiryFor,
@@ -1503,7 +1504,11 @@ export async function getQuestionnaireResults(
     const xs = x.scoringStatus === "scored" ? 0 : 1;
     const ys = y.scoringStatus === "scored" ? 0 : 1;
     if (xs !== ys) return xs - ys;
-    return (y.pct ?? -1) - (x.pct ?? -1);
+    // Same comparator the cut-tie detector uses (compareByScoreThenStableKey)
+    // — a neutral, stable tiebreak so two candidates level on points sit in
+    // the same order here as they do there. See its doc comment: display
+    // order only, never a claim about who wins a tie.
+    return compareByScoreThenStableKey(x, y);
   });
 
   const rankedKeys = new Set(ranked.map((r) => `${r.participantId}:${r.postKey}`));

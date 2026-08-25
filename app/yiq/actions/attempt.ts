@@ -340,7 +340,7 @@ export async function submitAttempt(attemptId: string): Promise<SubmitResult> {
  * stored figures rather than re-grading, so a double submit (or a submit
  * racing the auto-submit) can never change a recorded score.
  */
-async function finaliseAttempt(
+export async function finaliseAttempt(
   attemptId: string,
   status: "submitted" | "auto_submitted"
 ): Promise<{

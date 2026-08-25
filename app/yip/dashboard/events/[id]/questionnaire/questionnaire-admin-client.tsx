@@ -133,6 +133,11 @@ export function QuestionnaireAdminClient({
   const [isPending, startTransition] = useTransition();
   const [confirm, setConfirm] = useState<{ postKey: string; open: boolean } | null>(null);
   const [clearing, setClearing] = useState<string | null>(null);
+  /**
+   * Attempt id waiting on the "score this again" confirm dialog below. Only
+   * set for a paper that is already `scored` — see rescoreAttempt().
+   */
+  const [rescoring, setRescoring] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [editLocked, setEditLocked] = useState(false);
@@ -213,6 +218,31 @@ export function QuestionnaireAdminClient({
       );
       await refresh();
     });
+  }
+
+  /**
+   * Send one paper back to the scorer. Called directly for a `pending` or
+   * `failed` paper — nothing is marked on it yet, so there is nothing to
+   * lose and the button stays one click. A `scored` paper goes through the
+   * confirm dialog first (see the note above that dialog): re-queuing it
+   * discards whatever marks it carries now, including marks a person typed
+   * in by hand for a paper the automated scorer could not read.
+   */
+  function rescoreAttempt(attemptId: string) {
+    startTransition(async () => {
+      const res = await callAction(() => rescoreQuestionnaireAttempt(eventId, attemptId));
+      if (res.success) {
+        toast.success("Queued for re-scoring.");
+        await refresh();
+      } else toast.error(res.error);
+    });
+  }
+
+  function applyRescore() {
+    if (!rescoring) return;
+    const attemptId = rescoring;
+    setRescoring(null);
+    rescoreAttempt(attemptId);
   }
 
   /**
@@ -1128,17 +1158,18 @@ export function QuestionnaireAdminClient({
                           size="sm"
                           variant="outline"
                           disabled={isPending}
-                          onClick={() =>
-                            startTransition(async () => {
-                              const res = await callAction(() =>
-                                rescoreQuestionnaireAttempt(eventId, expanded)
-                              );
-                              if (res.success) {
-                                toast.success("Queued for re-scoring.");
-                                await refresh();
-                              } else toast.error(res.error);
-                            })
-                          }
+                          onClick={() => {
+                            // Gate ONLY when there is something to lose. A
+                            // pending/failed paper has no marks on it yet, so
+                            // rescoring it is harmless and stays one click —
+                            // a gate that fired every time would just teach
+                            // an organiser to click through without reading.
+                            if (detail.data.scoringStatus === "scored") {
+                              setRescoring(expanded);
+                            } else {
+                              rescoreAttempt(expanded);
+                            }
+                          }}
                         >
                           Score this again
                         </Button>
@@ -1428,6 +1459,56 @@ export function QuestionnaireAdminClient({
               style={{ background: "#b45309", color: "#fff" }}
             >
               Clear marks and mark again
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/*
+        ── Confirm re-scoring ONE paper ──
+
+        Same rule as the "Worth a look" card above: a gate that fires on
+        EVERY paper teaches an organiser to click through without reading.
+        This only opens when the paper is already `scored` — a `pending` or
+        `failed` paper has nothing marked on it yet, so re-queuing it stays
+        one click (handled directly by rescoreAttempt()).
+
+        The hazard this closes: some papers were handed in as a file the
+        automated scorer cannot read, so a person hand-typed the marks via
+        "Save these marks". Re-scoring discards those marks and sends the
+        paper back to the same scorer that could not read it the first
+        time — it comes back unmarked. "Are you sure?" would not say that,
+        so this names it.
+      */}
+      <Dialog open={rescoring !== null} onOpenChange={(o) => !o && setRescoring(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Score this paper again?</DialogTitle>
+            <DialogDescription>
+              The marks already on this paper will be discarded, and it goes back into
+              the queue to be scored from scratch.
+            </DialogDescription>
+          </DialogHeader>
+          {detail?.success && detail.data.answers.some((a) => a.files.length > 0) && (
+            <div
+              className="rounded-lg border px-3 py-2 text-sm"
+              style={{ background: "#fffbeb", borderColor: "#fde68a", color: "#92400e" }}
+            >
+              This paper was handed in as a file, which the automated scorer cannot
+              read. If those marks were typed in by hand, this paper will come back
+              unmarked — someone will have to open it and type the marks in again.
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRescoring(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={applyRescore}
+              disabled={isPending}
+              style={{ background: "#b45309", color: "#fff" }}
+            >
+              Discard marks and score again
             </Button>
           </DialogFooter>
         </DialogContent>

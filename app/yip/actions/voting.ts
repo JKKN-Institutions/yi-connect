@@ -130,6 +130,13 @@ export interface VoteResults {
   // Present when an exact tie at a seat boundary needs a runoff. When set, no
   // roles/party-leader are written — the organiser opens a runoff first.
   tie?: ElectionTie | null;
+  // Cabinet/Shadow only: how many of this round's seats are unfilled, and why
+  // — "under_subscribed" (fewer candidates than seats; a runoff can't fill an
+  // empty seat) or "tie_pending" (see `tie` — the existing runoff resolves
+  // it). Undefined for every other vote type; 0 / null once the quota is
+  // fully seated.
+  unfilledSeats?: number;
+  shortfall?: "under_subscribed" | "tie_pending" | null;
   // Whether the seats this reveal was supposed to write are ACTUALLY on the
   // participant rows afterwards. `seated < expected` means an election was
   // revealed, shows a winner, and yet somebody who won is not holding their
@@ -274,6 +281,8 @@ async function resolveOutcome(
       winnerId: null,
       winnerIds: ms.winnerIds,
       tie: ms.tie,
+      unfilledSeats: ms.unfilledSeats,
+      shortfall: ms.shortfall,
     };
   }
 
@@ -1075,6 +1084,8 @@ export async function revealResults(
     deputySpeakerIds: outcome.deputyIds,
     partyLeaderId: outcome.partyLeaderId,
     tie: outcome.tie,
+    unfilledSeats: outcome.unfilledSeats,
+    shortfall: outcome.shortfall,
     seating,
   };
 

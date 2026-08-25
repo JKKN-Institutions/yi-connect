@@ -119,9 +119,28 @@ function reportReveal(
     | { expected: number; seated: number; unseatedNames: string[] }
     | null
     | undefined,
-  successMessage: string
+  successMessage: string,
+  // Cabinet/Shadow only (see computeMultiSeatOutcome): seats this round's
+  // quota left unfilled, and why. Undefined for every other vote type, so
+  // this branch never fires for Speaker / PM / party-leader reveals.
+  unfilledSeats?: number,
+  shortfall?: "under_subscribed" | "tie_pending" | null
 ) {
   if (!seating || seating.seated === seating.expected) {
+    if (shortfall && unfilledSeats && unfilledSeats > 0) {
+      const seatWord = unfilledSeats === 1 ? "seat" : "seats";
+      toast.warning(
+        shortfall === "under_subscribed"
+          ? `${successMessage} ${unfilledSeats} ${seatWord} had no candidate to fill ${
+              unfilledSeats === 1 ? "it" : "them"
+            } — a runoff can't fill an empty seat. Open more nominations, or lower the quota for this round.`
+          : `${successMessage} ${unfilledSeats} ${seatWord} still open, held up by the tie above — open the 60-second runoff to fill ${
+              unfilledSeats === 1 ? "it" : "them"
+            }.`,
+        { duration: 15000 }
+      );
+      return;
+    }
     toast.success(successMessage);
     return;
   }
@@ -876,7 +895,12 @@ export function VoteManager({
         startTransition(async () => {
           const result = await revealResults(voteSession.id);
           if (result.success) {
-            reportReveal(result.data.seating, "Results revealed!");
+            reportReveal(
+              result.data.seating,
+              "Results revealed!",
+              result.data.unfilledSeats,
+              result.data.shortfall
+            );
           } else {
             toast.error(result.error);
           }
@@ -965,7 +989,13 @@ export function VoteManager({
   function handleParallelReveal(sessionId: string) {
     startTransition(async () => {
       const res = await revealResults(sessionId);
-      if (res.success) reportReveal(res.data.seating, "Leader revealed.");
+      if (res.success)
+        reportReveal(
+          res.data.seating,
+          "Leader revealed.",
+          res.data.unfilledSeats,
+          res.data.shortfall
+        );
       else toast.error(res.error);
     });
   }
@@ -2430,6 +2460,12 @@ export function VoteManager({
                               {ms.tie.tiedCount} votes each):{" "}
                               {ms.tie.tiedCandidateIds.map(nameOf).join(", ")}
                             </div>
+                            <div className="text-xs text-amber-700">
+                              {ms.unfilledSeats} {roleWord.toLowerCase()}
+                              {ms.unfilledSeats === 1 ? " seat stays" : " seats stay"}{" "}
+                              open until this is settled — the runoff below
+                              fills {ms.unfilledSeats === 1 ? "it" : "them"}.
+                            </div>
                             <Button
                               size="sm"
                               disabled={isPending}
@@ -2438,6 +2474,26 @@ export function VoteManager({
                             >
                               Open 60-second runoff
                             </Button>
+                          </div>
+                        )}
+                        {/* Fewer candidates stood than there were seats — a
+                            runoff has nobody left to run, so this is NOT the
+                            same as a tie (no button offered here; see
+                            computeMultiSeatOutcome's `shortfall`). */}
+                        {ms.shortfall === "under_subscribed" && (
+                          <div className="space-y-1 rounded-md border border-red-300 bg-red-50 p-2">
+                            <div className="font-medium text-red-800">
+                              {ms.unfilledSeats} {roleWord.toLowerCase()}
+                              {ms.unfilledSeats === 1
+                                ? " seat has"
+                                : " seats have"}{" "}
+                              no candidate.
+                            </div>
+                            <div className="text-xs text-red-700">
+                              A runoff can&apos;t fill an empty seat — open
+                              more nominations for {partyName}, or lower the{" "}
+                              {roleWord.toLowerCase()} quota for this round.
+                            </div>
                           </div>
                         )}
                       </div>

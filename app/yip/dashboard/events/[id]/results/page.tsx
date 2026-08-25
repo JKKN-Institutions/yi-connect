@@ -7,6 +7,7 @@ import {
   getAwardCandidates,
   getResultsFreshness,
   getMarkingCoverage,
+  getAwardAvailability,
 } from "@/app/yip/actions/results";
 import { getAwardOverrides } from "@/app/yip/actions/award-overrides";
 import { getPositionBonusConfigAdmin } from "@/app/yip/actions/positions";
@@ -66,6 +67,10 @@ export default async function ResultsPage({
   // students a single judge marked, and students whose marks span both benches
   // after a no-confidence motion. Read-only — changes no score.
   const markingCoverage = await getMarkingCoverage(id);
+  // Why each award has no winner — a session nobody marked reads very
+  // differently from a session marked with nobody eligible, and the card
+  // cannot tell them apart on its own.
+  const awardAvailability = await getAwardAvailability(id);
 
   return (
     <ResultsClient
@@ -88,6 +93,7 @@ export default async function ResultsPage({
       scoresStale={freshness?.scoresStale ?? false}
       singleJudgeStudents={markingCoverage?.singleJudgeStudents ?? []}
       sideChangeStudents={markingCoverage?.sideChangeStudents ?? []}
+      awardAvailability={awardAvailability}
     />
   );
 }

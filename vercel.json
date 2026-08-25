@@ -1,7 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "regions": ["bom1"],
+  "regions": [
+    "bom1"
+  ],
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
   "crons": [
@@ -19,6 +21,14 @@
     },
     {
       "path": "/yip/api/cron/formation-drain-emails",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/yiq/api/cron/sweep-attempts",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/yiq/api/cron/round-lifecycle",
       "schedule": "*/5 * * * *"
     }
   ],

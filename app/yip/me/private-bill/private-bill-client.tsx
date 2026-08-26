@@ -9,7 +9,11 @@
  * one lands, so it picks up the same Approve / Reject controls with no special
  * handling.
  *
- * Editing stops at hand-in on purpose: an organiser may already have read it.
+ * Editing the bill's TEXT stops at hand-in on purpose: an organiser may
+ * already have read it. The attached DOCUMENT is different — see
+ * lib/yip/bill-document-window.ts (Director ruling 2026-08-26): it stays
+ * attachable/replaceable/removable through 'submitted' too, right up until
+ * an organiser judges the bill.
  */
 
 import { useRef, useState, useTransition } from "react";
@@ -40,6 +44,7 @@ import {
   deleteMyBillDocument,
   type BillDocumentRow,
 } from "@/app/yip/actions/bill-documents";
+import { canEditBillDocument } from "@/lib/yip/bill-document-window";
 
 const INK = "#1a1a3e";
 const SAFFRON = "#C2691A";
@@ -97,6 +102,11 @@ export function PrivateBillClient({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handedIn = status !== "drafting";
+  // The document window is WIDER than the bill-text edit window (Director
+  // ruling 2026-08-26, lib/yip/bill-document-window.ts): a Member may still
+  // attach, replace or remove their document while the bill sits at
+  // 'submitted' — only approved/presented/voting/passed/rejected locks it.
+  const canAttachDoc = canEditBillDocument(status);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = e.target.files?.[0] ?? null;
@@ -393,6 +403,20 @@ export function PrivateBillClient({
             A PDF, scan or slide deck of your bill, if you have one written up
             elsewhere — PDF, image, Word or PowerPoint, 4 MB max.
           </p>
+          {canAttachDoc && handedIn && (
+            <p className="mt-1 text-xs text-[#1a1a3e]/55">
+              You&apos;ve already handed this bill in, but you can still
+              attach, replace or remove its document until an organiser
+              approves or rejects it — doing so won&apos;t change what you
+              handed in.
+            </p>
+          )}
+          {!canAttachDoc && (
+            <p className="mt-1 text-xs text-[#1a1a3e]/55">
+              This bill has been judged, so its document can no longer be
+              changed.
+            </p>
+          )}
         </div>
 
         {doc ? (
@@ -422,7 +446,7 @@ export function PrivateBillClient({
                   <Download className="size-3.5" />
                 )}
               </Button>
-              {!handedIn && (
+              {canAttachDoc && (
                 <Button
                   type="button"
                   size="sm"
@@ -437,10 +461,14 @@ export function PrivateBillClient({
             </div>
           </div>
         ) : (
-          <p className="text-sm text-[#1a1a3e]/45">Nothing attached yet.</p>
+          <p className="text-sm text-[#1a1a3e]/45">
+            {canAttachDoc
+              ? "Nothing attached yet."
+              : "Nothing was attached before this bill was judged."}
+          </p>
         )}
 
-        {!handedIn && (
+        {canAttachDoc && (
           <div className="flex flex-wrap items-center gap-2">
             <Input
               ref={fileInputRef}

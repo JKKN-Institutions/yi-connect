@@ -12,19 +12,20 @@
  * app/yip/actions/questionnaire.ts, unmodified) to open a handed-in file.
  *
  * ─── SCORES ────────────────────────────────────────────────────────────────
+ * A questionnaire mark is a NAMED score belonging to a minor student —
+ * exactly the category lib/yip/auth/event-access.ts documents
+ * `canViewScores` as existing to protect (chair + super-admin only; see also
+ * regional.ts and the three-times-confirmed decision that flipping that
+ * default is not a bug fix). So here, a mark is nulled out server-side for
+ * anyone without `canViewScores`.
+ *
  * The shipped Questionnaire admin screen (getQuestionnaireResults /
- * getQuestionnaireAttemptDetail in app/yip/actions/questionnaire.ts) shows
- * marks to anyone with `canView` on the event — it does not additionally gate
- * on `canViewScores`. That may be a deliberate call (an organiser marking a
- * paper needs to see the mark in front of them) or it may be a gap; either
- * way this file does not lean on it either way. A questionnaire mark is a
- * NAMED score belonging to a minor student — exactly the category
- * lib/yip/auth/event-access.ts documents `canViewScores` as existing to
- * protect (chair + super-admin only; see also regional.ts and the
- * three-times-confirmed decision that flipping that default is not a bug
- * fix). So here — a screen that did not exist before this PR — a mark is
- * nulled out server-side for anyone without `canViewScores`, which is the
- * stricter of the two rules already live in this codebase.
+ * getQuestionnaireAttemptDetail in app/yip/actions/questionnaire.ts) USED to
+ * show marks to anyone with `canView` — that was a real gap, not a deliberate
+ * call, and it is closed as of 2026-08-26 (Director decision: "mark papers,
+ * but not see the league table"). Both functions now null the same score
+ * fields for the same viewers this file already protected, so the two
+ * screens agree.
  */
 
 import { createServiceClient } from "@/lib/yip/supabase/server";

@@ -1,18 +1,31 @@
 "use server";
 
 // ═══════════════════════════════════════════════════════════════════════
-// YIP Committee Bill Repository (national-call ask, 2026-06-12).
+// YIP Bill Document Repository (national-call ask, 2026-06-12; extended
+// 2026-08-26 to also carry a Private Member's Bill's own handed-in file).
 //
-// Committee members upload supporting documents / drawings (+ a short
-// description) for their committee's bill; organisers see everything.
+// TWO OWNERS, ONE TABLE (supabase/migrations/
+// yip_bill_documents_allow_private_member_bills.sql): a row belongs to
+// EXACTLY ONE of `committee_name` or `bill_id` — never both, never neither
+// (CHECK bill_documents_owner_exactly_one). The committee path below is
+// UNCHANGED from 2026-06-12:
+//   * Committee members upload supporting documents / drawings (+ a short
+//     description) for their committee's bill; organisers see everything.
+//   * Up to MAX_DOCS_PER_COMMITTEE, one locked uploader per committee.
+// The bill-owned path is new: a Member writing their own Private Member's
+// Bill alone may attach ONE document to it (upload replaces, doesn't
+// accumulate) — there is no committee, so ownership is "does this bill's
+// mover_participant_id match the caller" instead of committee membership.
+//
 // Participants are MINORS → fail-closed everywhere:
 //   * yip.bill_documents: RLS enabled, NO policies, zero anon/authenticated
 //     grants — these gated server actions (service role) are the ONLY path.
 //   * Storage bucket `yip-bill-documents` is PRIVATE — reads happen via
 //     short-lived signed URLs minted here, never public URLs.
 //   * Student actions verify the httpOnly yip_session cookie owns the
-//     supplied participantId (requireParticipantSession); committee_name is
-//     ALWAYS read from the participant row, never trusted from the client.
+//     supplied participantId (requireParticipantSession); committee_name /
+//     bill ownership is ALWAYS read from the participant/bill row, never
+//     trusted from the client.
 //   * Organiser actions resolve the doc's event server-side, then gate on
 //     getYipEventAccess: canView to list/download, canDelete (CHAIR-ONLY)
 //     to remove rows.
@@ -138,7 +151,10 @@ export type BillDocumentRow = {
   file_size_bytes: number;
   created_at: string;
   uploaded_by: string;
-  committee_name: string;
+  /** Set for a committee document; null for a Private Member's Bill's own file. */
+  committee_name: string | null;
+  /** Set for a Private Member's Bill's own file; null for a committee document. */
+  bill_id: string | null;
   uploader_name: string;
 };
 
@@ -150,7 +166,8 @@ type JoinedDocRow = {
   file_size_bytes: number;
   created_at: string;
   uploaded_by: string;
-  committee_name: string;
+  committee_name: string | null;
+  bill_id: string | null;
   uploader: { full_name: string } | null;
 };
 
@@ -163,6 +180,7 @@ const DOC_SELECT = `
   created_at,
   uploaded_by,
   committee_name,
+  bill_id,
   uploader:participants!bill_documents_uploaded_by_fkey(full_name)
 `;
 
@@ -176,12 +194,14 @@ function toRow(d: JoinedDocRow): BillDocumentRow {
     created_at: d.created_at,
     uploaded_by: d.uploaded_by,
     committee_name: d.committee_name,
+    bill_id: d.bill_id,
     uploader_name: d.uploader?.full_name ?? "—",
   };
 }
 
 function revalidateDocPaths(eventId: string) {
   revalidatePath("/yip/me/bill");
+  revalidatePath("/yip/me/private-bill");
   revalidatePath(`/yip/dashboard/events/${eventId}/bills`);
 }
 
@@ -418,7 +438,7 @@ export async function participantBillDocumentUrl(
   const supabase = await createServiceClient();
   const { data: doc } = await supabase
     .from("bill_documents")
-    .select("id, event_id, committee_name, file_path")
+    .select("id, event_id, committee_name, bill_id, file_path")
     .eq("id", docId)
     .maybeSingle();
   if (!doc) return { success: false, error: "Document not found." };
@@ -427,15 +447,34 @@ export async function participantBillDocumentUrl(
   const sess = await requireParticipantSession(participantId, doc.event_id);
   if (!sess.ok) return { success: false, error: sess.error };
 
-  // Own committee only — a participant can never sign another committee's file.
-  const { data: participant } = await supabase
-    .from("participants")
-    .select("id, committee_name")
-    .eq("id", participantId)
-    .eq("event_id", doc.event_id)
-    .maybeSingle();
-  if (!participant?.committee_name || participant.committee_name !== doc.committee_name) {
-    return { success: false, error: "Document not found." };
+  if (doc.bill_id) {
+    // Bill-owned file — only the bill's own mover may ever sign it, never
+    // trusted from the client; resolved from the bill row itself.
+    // `mover_participant_id` is a newer column not in the generated types
+    // (types/yip/database.ts lags the bill-sources migration) — select("*")
+    // and cast, the same pattern app/yip/actions/bills.ts uses (getBills).
+    const { data: bill } = await supabase
+      .from("bills")
+      .select("*")
+      .eq("id", doc.bill_id)
+      .maybeSingle();
+    const moverId = (bill as { mover_participant_id?: string | null } | null)
+      ?.mover_participant_id;
+    if (!bill || moverId !== participantId) {
+      return { success: false, error: "Document not found." };
+    }
+  } else {
+    // Committee document — own committee only, a participant can never sign
+    // another committee's file.
+    const { data: participant } = await supabase
+      .from("participants")
+      .select("id, committee_name")
+      .eq("id", participantId)
+      .eq("event_id", doc.event_id)
+      .maybeSingle();
+    if (!participant?.committee_name || participant.committee_name !== doc.committee_name) {
+      return { success: false, error: "Document not found." };
+    }
   }
 
   const signed = await createSignedUrl(doc.file_path);
@@ -454,7 +493,7 @@ export async function deleteMyBillDocument(
   const supabase = await createServiceClient();
   const { data: doc } = await supabase
     .from("bill_documents")
-    .select("id, event_id, uploaded_by, file_path")
+    .select("id, event_id, uploaded_by, file_path, bill_id")
     .eq("id", docId)
     .maybeSingle();
   if (!doc) return { success: false, error: "Document not found." };
@@ -465,6 +504,25 @@ export async function deleteMyBillDocument(
   // Uploader self-delete ONLY — committee mates cannot delete each other's docs.
   if (doc.uploaded_by !== participantId) {
     return { success: false, error: "Only the uploader can delete this document." };
+  }
+
+  // A bill-owned file follows the bill's own edit lock: once handed in, the
+  // bill (and anything attached to it) stops changing underneath an organiser
+  // who may already have read it — same rule saveMyPrivateMemberBillDraft
+  // enforces on the form fields.
+  if (doc.bill_id) {
+    const { data: bill } = await supabase
+      .from("bills")
+      .select("status")
+      .eq("id", doc.bill_id)
+      .maybeSingle();
+    if (bill && bill.status !== "drafting") {
+      return {
+        success: false,
+        error:
+          "You have already handed this bill in — ask an organiser if you need it changed.",
+      };
+    }
   }
 
   await removeObject(doc.file_path); // best-effort
@@ -478,6 +536,155 @@ export async function deleteMyBillDocument(
 
   revalidateDocPaths(doc.event_id);
   return { success: true, data: null };
+}
+
+// ─── Private Member's Bill: attach / fetch own document ─────────────────────
+// One Member, writing alone, may attach ONE document to their own Private
+// Member's Bill. There is no committee to lock an uploader against, so
+// ownership is simply "is this bill's mover_participant_id me" — resolved
+// from the bill row, never trusted from the client. Uploading again REPLACES
+// the existing file rather than accumulating a second row (a solo bill has
+// exactly one attachment, or none).
+
+/** The caller's own Private Member's Bill's attached document, or null. */
+export async function getMyPrivateBillDocument(
+  eventId: string,
+  participantId: string
+): Promise<ActionResult<{ document: BillDocumentRow | null }>> {
+  const sess = await requireParticipantSession(participantId, eventId);
+  if (!sess.ok) return { success: false, error: sess.error };
+
+  const supabase = await createServiceClient();
+  const { data: bill } = await supabase
+    .from("bills")
+    .select("id")
+    .eq("event_id", eventId)
+    .eq("source", "private_member")
+    .eq("mover_participant_id", participantId)
+    .maybeSingle();
+  if (!bill) return { success: true, data: { document: null } };
+
+  const { data, error } = await supabase
+    .from("bill_documents")
+    .select(DOC_SELECT)
+    .eq("bill_id", bill.id)
+    .maybeSingle();
+  if (error) return { success: false, error: error.message };
+
+  return {
+    success: true,
+    data: { document: data ? toRow(data as unknown as JoinedDocRow) : null },
+  };
+}
+
+export async function uploadPrivateBillDocument(
+  eventId: string,
+  participantId: string,
+  input: { fileBase64: string; fileName: string; contentType: string }
+): Promise<ActionResult<{ id: string }>> {
+  const sess = await requireParticipantSession(participantId, eventId);
+  if (!sess.ok) return { success: false, error: sess.error };
+
+  const supabase = await createServiceClient();
+
+  const { data: bill } = await supabase
+    .from("bills")
+    .select("id, status")
+    .eq("event_id", eventId)
+    .eq("source", "private_member")
+    .eq("mover_participant_id", participantId)
+    .maybeSingle();
+  if (!bill) {
+    return {
+      success: false,
+      error: "Write your bill first, then attach a document to it.",
+    };
+  }
+  if (bill.status !== "drafting") {
+    return {
+      success: false,
+      error:
+        "You have already handed this bill in — ask an organiser if you need it changed.",
+    };
+  }
+
+  if (!input.fileBase64) {
+    return { success: false, error: "Choose a file to upload." };
+  }
+  if (input.fileBase64.length > MAX_BASE64_CHARS) {
+    return { success: false, error: "File is too large — 4 MB max." };
+  }
+  const ext = BILL_DOC_CONTENT_TYPES.get(input.contentType ?? "");
+  if (!ext) {
+    return {
+      success: false,
+      error:
+        "Unsupported file type — upload a PDF, image (PNG/JPG/WebP/HEIC), Word or PowerPoint file.",
+    };
+  }
+
+  // One document per bill: replace, don't accumulate. Look up any existing
+  // attachment first so uploading again swaps it out cleanly.
+  const { data: existingDoc } = await supabase
+    .from("bill_documents")
+    .select("id, file_path")
+    .eq("bill_id", bill.id)
+    .maybeSingle();
+
+  const baseName = (input.fileName ?? "document").replace(/\.[^.]+$/, "");
+  const fileSlug = slugify(baseName, "document");
+  const path = `events/${eventId}/private-bills/${bill.id}/${crypto.randomUUID()}-${fileSlug}.${ext}`;
+
+  const uploaded = await uploadBase64(path, input.fileBase64, input.contentType);
+  if (!uploaded.ok) return { success: false, error: uploaded.error };
+
+  const fileName = (input.fileName ?? "").trim().slice(0, 255) || `${fileSlug}.${ext}`;
+
+  if (existingDoc) {
+    const { data: updated, error } = await supabase
+      .from("bill_documents")
+      .update({
+        uploaded_by: participantId,
+        file_path: path,
+        file_name: fileName,
+        content_type: input.contentType,
+        file_size_bytes: uploaded.bytes,
+      })
+      .eq("id", existingDoc.id)
+      .select("id")
+      .single();
+    if (error || !updated) {
+      await removeObject(path); // don't strand the new object if the row update failed
+      return { success: false, error: error?.message ?? "Failed to save the document." };
+    }
+    await removeObject(existingDoc.file_path); // best-effort — clear the file it replaced
+    revalidateDocPaths(eventId);
+    return { success: true, data: { id: updated.id } };
+  }
+
+  const { data: inserted, error } = await supabase
+    .from("bill_documents")
+    .insert({
+      event_id: eventId,
+      committee_name: null,
+      bill_id: bill.id,
+      uploaded_by: participantId,
+      description: "",
+      file_path: path,
+      file_name: fileName,
+      content_type: input.contentType,
+      file_size_bytes: uploaded.bytes,
+    })
+    .select("id")
+    .single();
+
+  if (error || !inserted) {
+    await removeObject(path);
+    return { success: false, error: error?.message ?? "Failed to save the document." };
+  }
+
+  revalidateDocPaths(eventId);
+  return { success: true, data: { id: inserted.id } };
 }
 
 // ─── List all documents (organiser) ─────────────────────────────────────────
@@ -495,7 +702,42 @@ export async function listBillDocuments(
     .from("bill_documents")
     .select(DOC_SELECT)
     .eq("event_id", eventId)
+    // Committee documents only — a Private Member's Bill's own file (bill_id
+    // set, committee_name null) has its own section; CommitteeDocumentsSection
+    // groups purely by committee_name and must never see a null one.
+    .is("bill_id", null)
     .order("committee_name", { ascending: true })
+    .order("created_at", { ascending: false });
+  if (error) return { success: false, error: error.message };
+
+  return {
+    success: true,
+    data: ((data ?? []) as unknown as JoinedDocRow[]).map(toRow),
+  };
+}
+
+// ─── List every Private Member's Bill's attached document (organiser) ──────
+
+/**
+ * Every bill-owned document in this event, for the organiser's bills board —
+ * one row per bill that has a document attached (bills with none simply have
+ * no entry). Keyed by `bill_id` client-side so each BillColumn can look up
+ * its own bill's document, if any.
+ */
+export async function listPrivateBillDocuments(
+  eventId: string
+): Promise<ActionResult<BillDocumentRow[]>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) {
+    return { success: false, error: "Not authorized to view this event" };
+  }
+
+  const supabase = await createServiceClient();
+  const { data, error } = await supabase
+    .from("bill_documents")
+    .select(DOC_SELECT)
+    .eq("event_id", eventId)
+    .not("bill_id", "is", null)
     .order("created_at", { ascending: false });
   if (error) return { success: false, error: error.message };
 

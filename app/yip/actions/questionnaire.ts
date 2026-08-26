@@ -1127,6 +1127,13 @@ export type PostOverview = {
   started: number;
   submitted: number;
   scored: number;
+  /**
+   * Handed-in FILES across this post's papers (not candidates — an answer can
+   * carry up to QUESTIONNAIRE_MAX_FILES_PER_ANSWER). Shown next to "Download
+   * all files" so an organiser knows the count before clicking — a post can
+   * have far more submitted papers than papers that actually carry a file.
+   */
+  files: number;
 };
 
 export async function getQuestionnaireOverview(
@@ -1151,6 +1158,25 @@ export async function getQuestionnaireOverview(
       .eq("event_id", eventId)
   );
 
+  // One batched query for every post's file count, rather than one per post —
+  // same shape as getQuestionnaireResults' answers fetch.
+  const filesAnswers =
+    attempts.length === 0
+      ? []
+      : await readAllPaged<{ attempt_id: string; files: unknown }>(() =>
+          answersT(sb)
+            .select("attempt_id, files")
+            .in(
+              "attempt_id",
+              attempts.map((a) => a.id)
+            )
+        );
+  const fileCountByAttempt = new Map<string, number>();
+  for (const a of filesAnswers) {
+    const n = parseAnswerFiles(a.files).length;
+    if (n > 0) fileCountByAttempt.set(a.attempt_id, (fileCountByAttempt.get(a.attempt_id) ?? 0) + n);
+  }
+
   const posts: PostOverview[] = [];
   for (const p of QUESTIONNAIRE_POSTS) {
     const { questions, source } = await effectiveQuestions(sb, eventId, p.key);
@@ -1168,6 +1194,7 @@ export async function getQuestionnaireOverview(
       started: mine.length,
       submitted: mine.filter((a) => a.submitted_at !== null).length,
       scored: mine.filter((a) => a.scoring_status === "scored").length,
+      files: mine.reduce((sum, a) => sum + (fileCountByAttempt.get(a.id) ?? 0), 0),
     });
   }
 

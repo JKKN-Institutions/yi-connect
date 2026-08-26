@@ -12,22 +12,43 @@
  * Editing stops at hand-in on purpose: an organiser may already have read it.
  */
 
-import { useState, useTransition } from "react";
-import { Loader2, Plus, Send, Trash2 } from "lucide-react";
+import { useRef, useState, useTransition } from "react";
+import {
+  Download,
+  FileText,
+  Loader2,
+  Plus,
+  Send,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/yip/ui/button";
 import { Card, CardContent } from "@/components/yip/ui/card";
 import { Input } from "@/components/yip/ui/input";
 import { Label } from "@/components/yip/ui/label";
 import { Textarea } from "@/components/yip/ui/textarea";
+import { formatBytes } from "@/lib/yip/media";
 import {
   getMyPrivateMemberBill,
   saveMyPrivateMemberBillDraft,
   submitMyPrivateMemberBill,
 } from "@/app/yip/actions/bills";
+import {
+  uploadPrivateBillDocument,
+  participantBillDocumentUrl,
+  deleteMyBillDocument,
+  type BillDocumentRow,
+} from "@/app/yip/actions/bill-documents";
 
 const INK = "#1a1a3e";
 const SAFFRON = "#C2691A";
+
+// Same 4 MB cap + mime allowlist bill-documents.ts enforces server-side
+// (BILL_DOC_CONTENT_TYPES) — this is only the advisory client-side check.
+const DOC_MAX_FILE_BYTES = 4 * 1024 * 1024;
+const DOC_ACCEPT =
+  "application/pdf,image/png,image/jpeg,image/webp,image/heic,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
 export type MyPrivateBill = {
   id: string;
@@ -44,12 +65,14 @@ export function PrivateBillClient({
   participantName,
   initialBill,
   initialError,
+  initialDocument,
 }: {
   eventId: string;
   participantId: string;
   participantName: string;
   initialBill: MyPrivateBill | null;
   initialError: string | null;
+  initialDocument: BillDocumentRow | null;
 }) {
   // Seeded from the server render — no load-on-mount effect, and no spinner on
   // a phone in a hall.
@@ -65,7 +88,128 @@ export function PrivateBillClient({
   const [isPending, startTransition] = useTransition();
   const [saving, setSaving] = useState(false);
 
+  // Attached document — a solo bill carries at most one; uploading again
+  // replaces it (see uploadPrivateBillDocument).
+  const [doc, setDoc] = useState<BillDocumentRow | null>(initialDocument);
+  const [pickedFile, setPickedFile] = useState<File | null>(null);
+  const [docUploading, setDocUploading] = useState(false);
+  const [docBusy, setDocBusy] = useState(false); // download / remove in flight
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const handedIn = status !== "drafting";
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = e.target.files?.[0] ?? null;
+    if (selected && selected.size > DOC_MAX_FILE_BYTES) {
+      toast.error("4 MB max — compress the file and try again.");
+      e.target.value = "";
+      setPickedFile(null);
+      return;
+    }
+    setPickedFile(selected);
+  }
+
+  function readAsBase64(f: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const comma = result.indexOf(",");
+        resolve(comma >= 0 ? result.slice(comma + 1) : result);
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(f);
+    });
+  }
+
+  async function handleUploadDoc() {
+    if (!pickedFile) {
+      toast.error("Choose a file first.");
+      return;
+    }
+    setDocUploading(true);
+    try {
+      const fileBase64 = await readAsBase64(pickedFile);
+      const res = await uploadPrivateBillDocument(eventId, participantId, {
+        fileBase64,
+        fileName: pickedFile.name,
+        contentType: pickedFile.type,
+      });
+      if (!res.success) {
+        toast.error(res.error);
+      } else {
+        toast.success(doc ? "Document replaced." : "Document attached.");
+        setPickedFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        setDoc({
+          id: res.data.id,
+          file_name: pickedFile.name,
+          description: "",
+          content_type: pickedFile.type,
+          file_size_bytes: pickedFile.size,
+          created_at: new Date().toISOString(),
+          uploaded_by: participantId,
+          committee_name: null,
+          bill_id: null,
+          uploader_name: participantName,
+        });
+      }
+    } catch {
+      toast.error("Could not read the file. Try again.");
+    }
+    setDocUploading(false);
+  }
+
+  function handleDownloadDoc() {
+    if (!doc) return;
+    // NO "noopener" / "noreferrer" here, deliberately — per the HTML spec
+    // window.open() returns NULL whenever either is passed, so the tab handle
+    // below would always be null and the signed URL would never be delivered.
+    // Opened synchronously (before the await) because Safari treats a
+    // window.open after an async gap as a popup and swallows it.
+    const tab = window.open("", "_blank");
+    if (tab) {
+      try {
+        tab.opener = null; // sever it by hand — what "noopener" was for
+      } catch {
+        // Read-only in some browsers; not fatal, the tab only ever shows a
+        // signed URL from our own storage.
+      }
+    }
+    setDocBusy(true);
+    void (async () => {
+      const res = await participantBillDocumentUrl(doc.id, participantId);
+      setDocBusy(false);
+      if (!res.success) {
+        tab?.close();
+        toast.error(res.error);
+        return;
+      }
+      if (tab) {
+        tab.location.href = res.data.url;
+      } else {
+        toast.error(
+          "Your browser blocked the new tab. Allow pop-ups for this site, then try again.",
+          { duration: 10000 }
+        );
+      }
+    })();
+  }
+
+  function handleRemoveDoc() {
+    if (!doc) return;
+    setDocBusy(true);
+    startTransition(async () => {
+      const res = await deleteMyBillDocument(doc.id, participantId);
+      setDocBusy(false);
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Document removed.");
+      setDoc(null);
+    });
+  }
 
   function save(then?: () => void) {
     if (!title.trim()) {
@@ -235,6 +379,93 @@ export function PrivateBillClient({
             </Button>
           )}
         </div>
+      </div>
+
+      <div
+        className="mt-7 rounded-xl border border-dashed p-4 space-y-3"
+        style={{ borderColor: "#1a1a3e26" }}
+      >
+        <div>
+          <Label className="text-sm font-medium">
+            Attach a document (optional)
+          </Label>
+          <p className="mt-0.5 text-xs text-[#1a1a3e]/55">
+            A PDF, scan or slide deck of your bill, if you have one written up
+            elsewhere — PDF, image, Word or PowerPoint, 4 MB max.
+          </p>
+        </div>
+
+        {doc ? (
+          <div className="flex items-start gap-2 rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
+            <FileText className="mt-0.5 size-4 shrink-0 text-gray-400" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-gray-800">
+                {doc.file_name}
+              </p>
+              <p className="mt-0.5 text-[11px] text-gray-400">
+                {formatBytes(doc.file_size_bytes)} ·{" "}
+                {new Date(doc.created_at).toLocaleDateString()}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={docBusy}
+                onClick={handleDownloadDoc}
+                className="h-7 px-2"
+              >
+                {docBusy ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Download className="size-3.5" />
+                )}
+              </Button>
+              {!handedIn && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={docBusy}
+                  onClick={handleRemoveDoc}
+                  className="h-7 px-2 text-red-500 hover:text-red-600"
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-[#1a1a3e]/45">Nothing attached yet.</p>
+        )}
+
+        {!handedIn && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              ref={fileInputRef}
+              type="file"
+              accept={DOC_ACCEPT}
+              disabled={docUploading}
+              onChange={handleFileChange}
+              className="max-w-xs"
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={docUploading || !pickedFile}
+              onClick={handleUploadDoc}
+            >
+              {docUploading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Upload className="size-4" />
+              )}
+              {doc ? "Replace" : "Attach"}
+            </Button>
+          </div>
+        )}
       </div>
 
       {!handedIn && (

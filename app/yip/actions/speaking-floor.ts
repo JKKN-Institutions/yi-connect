@@ -3,6 +3,10 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
+import {
+  requireLeadershipRole,
+  PRESIDING_ROLES as LEADERSHIP_PRESIDING_ROLES,
+} from "@/lib/yip/auth/leadership";
 import { OFFICIAL_DUTY_ROLES } from "@/lib/yip/constants";
 import { revalidatePath } from "next/cache";
 
@@ -15,13 +19,21 @@ import { revalidatePath } from "next/cache";
  * shows a public fairness meter ("N of M have spoken"). See migration
  * 20260704090000_yip_speaking_floor.sql.
  *
- * AUTH — two gates, never mixed (CLAUDE.md YIP model):
+ * AUTH — three gates, never mixed (CLAUDE.md YIP model):
  *   • Student self-service (requestToSpeak / withdraw / getMySpeakingStatus) trusts
  *     the signed `yip_session` participant cookie — the same layer castVote uses,
  *     because yip.* writes go through the service client (RLS-bypassing) so the
  *     server action IS the authorization boundary.
- *   • Chair actions (call / markSpoken / skip / getSpeakingFloor) gate on
+ *   • Organiser actions (call / markSpoken / skip / getSpeakingFloor) gate on
  *     getYipEventAccess(eventId).canManage (canView for the read). Fail CLOSED.
+ *   • Presiding-officer actions (speakerCallSpeaker / speakerMarkSpoken /
+ *     speakerSkipSpeakingRequest / getSpeakerSpeakingFloor) mirror the organiser
+ *     ones field-for-field (see buildSpeakingFloorState / gateRequestForSpeaker)
+ *     but gate on requireLeadershipRole(..., PRESIDING_ROLES) instead — the
+ *     Speaker/Deputy Speaker runs the floor from their own desk (Director
+ *     decision 2026-08-26). Both the presiding officer AND the organiser may
+ *     act; the organiser can overrule (last-write-wins, no locking — same
+ *     posture as speaker.ts's motion rulings). Fail CLOSED.
  *
  * The fairness signal (turns spoken per member) is DERIVED at read time —
  * completed agenda_speakers (the formal roster / Now-Speaking console) PLUS
@@ -99,7 +111,9 @@ type ServiceClient = Awaited<ReturnType<typeof createServiceClient>>;
 // the floor" denominator, so they're excluded from the fairness math. Duty
 // officials (OFFICIAL_DUTY_ROLES — Parliamentary Administrator / Journalist)
 // are officials of the House, not competing MPs, and are excluded the same way.
-const PRESIDING_ROLES = new Set(["speaker", "deputy_speaker"]);
+// Sourced from lib/yip/auth/leadership.ts so the fairness exclusion and the
+// presiding-officer auth gate never drift apart.
+const PRESIDING_ROLES: Set<string> = new Set(LEADERSHIP_PRESIDING_ROLES);
 
 interface EligibleMember {
   id: string;
@@ -366,17 +380,14 @@ export async function getSpeakingFloorStats(
 // CHAIR (control panel — canView to read, canManage to act)
 // ═══════════════════════════════════════════════════════════════════
 
-/** The full live floor for the Chair: the fairness-sorted queue with names +
- *  per-member turn counts + the 3rd-turn flag, plus the House-wide stats. */
-export async function getSpeakingFloor(
+// Shared by getSpeakingFloor (organiser) and getSpeakerSpeakingFloor (presiding
+// officer) — same fairness computation and queue-sorting for both callers, no
+// gate here (callers check their own auth first). Keeps the two Speaking Floor
+// screens describing the exact same queue, never two independently-derived ones.
+async function buildSpeakingFloorState(
+  supabase: ServiceClient,
   eventId: string
-): Promise<ActionResult<SpeakingFloorState>> {
-  const access = await getYipEventAccess(eventId);
-  if (!access.canView) {
-    return { success: false, error: "Not authorized to view this event" };
-  }
-  const supabase = await createServiceClient();
-
+): Promise<SpeakingFloorState> {
   const { data: event } = await supabase
     .from("events")
     .select("current_agenda_item_id, speaking_placard_enabled")
@@ -457,19 +468,30 @@ export async function getSpeakingFloor(
     );
 
   return {
-    success: true,
-    data: {
-      hasLiveItem: !!currentItemId,
-      liveItemTitle,
-      placardEnabled,
-      board,
-      queue,
-      calledEntry,
-      spokenCount,
-      totalParticipants: totalEligible,
-      waitingCount: queue.length,
-    },
+    hasLiveItem: !!currentItemId,
+    liveItemTitle,
+    placardEnabled,
+    board,
+    queue,
+    calledEntry,
+    spokenCount,
+    totalParticipants: totalEligible,
+    waitingCount: queue.length,
   };
+}
+
+/** The full live floor for the Chair: the fairness-sorted queue with names +
+ *  per-member turn counts + the 3rd-turn flag, plus the House-wide stats. */
+export async function getSpeakingFloor(
+  eventId: string
+): Promise<ActionResult<SpeakingFloorState>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) {
+    return { success: false, error: "Not authorized to view this event" };
+  }
+  const supabase = await createServiceClient();
+  const data = await buildSpeakingFloorState(supabase, eventId);
+  return { success: true, data };
 }
 
 // Resolve the event for a request id and gate the caller on canManage.
@@ -552,6 +574,138 @@ export async function skipSpeakingRequest(
   if (error) return { success: false, error: error.message };
 
   revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: null };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PRESIDING OFFICER (Speaker's Desk — the student who is actually chairing)
+// ═══════════════════════════════════════════════════════════════════
+// Mirrors the CHAIR section above field-for-field. Both the presiding officer
+// AND the organiser may run the floor from their own screen; the organiser can
+// overrule (last-write-wins, no locking — same posture as speaker.ts's motion
+// rulings, per the Director's 2026-08-26 decision). Every action here re-checks
+// requireLeadershipRole server-side — the client-supplied participantId is
+// never trusted on its own (an ordinary MP cannot drive the floor by calling
+// these with someone else's id, and a non-presiding role is refused even with
+// their own id/session). No self-call guard is added beyond what callSpeaker
+// already does above (it has none) — this mirrors, not tightens, that rule.
+
+/** Same read as getSpeakingFloor, gated for the presiding officer instead of
+ *  the organiser. Participant + role checked server-side on every call. */
+export async function getSpeakerSpeakingFloor(
+  eventId: string,
+  participantId: string
+): Promise<ActionResult<SpeakingFloorState>> {
+  const gate = await requireLeadershipRole(
+    participantId,
+    eventId,
+    LEADERSHIP_PRESIDING_ROLES
+  );
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  const supabase = await createServiceClient();
+  const data = await buildSpeakingFloorState(supabase, eventId);
+  return { success: true, data };
+}
+
+// Gate + resolve a request for the presiding officer — mirrors gateRequest
+// above but authorizes via requireLeadershipRole, and scopes the request
+// lookup to eventId (closes a cross-event IDOR, same pattern as
+// loadMotionForSpeaker in speaker.ts).
+async function gateRequestForSpeaker(
+  eventId: string,
+  participantId: string,
+  requestId: string
+): Promise<{ ok: true; supabase: ServiceClient } | { ok: false; error: string }> {
+  const gate = await requireLeadershipRole(
+    participantId,
+    eventId,
+    LEADERSHIP_PRESIDING_ROLES
+  );
+  if (!gate.ok) return { ok: false, error: gate.error };
+
+  const supabase = await createServiceClient();
+  const { data: req } = await supabase
+    .from("speaking_requests")
+    .select("id")
+    .eq("id", requestId)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (!req) return { ok: false, error: "Request not found for this event" };
+
+  return { ok: true, supabase };
+}
+
+/** Presiding-officer counterpart to callSpeaker — identical field writes. */
+export async function speakerCallSpeaker(
+  eventId: string,
+  participantId: string,
+  requestId: string
+): Promise<ActionResult> {
+  const g = await gateRequestForSpeaker(eventId, participantId, requestId);
+  if (!g.ok) return { success: false, error: g.error };
+  const { supabase } = g;
+
+  await supabase
+    .from("speaking_requests")
+    .update({ status: "waiting", called_at: null })
+    .eq("event_id", eventId)
+    .eq("status", "called")
+    .neq("id", requestId);
+
+  const { error } = await supabase
+    .from("speaking_requests")
+    .update({ status: "called", called_at: new Date().toISOString() })
+    .eq("id", requestId)
+    .in("status", ["waiting", "called"]);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/me/speaker`);
+  return { success: true, data: null };
+}
+
+/** Presiding-officer counterpart to markSpoken — identical field writes. */
+export async function speakerMarkSpoken(
+  eventId: string,
+  participantId: string,
+  requestId: string
+): Promise<ActionResult> {
+  const g = await gateRequestForSpeaker(eventId, participantId, requestId);
+  if (!g.ok) return { success: false, error: g.error };
+  const { supabase } = g;
+
+  const { error } = await supabase
+    .from("speaking_requests")
+    .update({ status: "spoken", resolved_at: new Date().toISOString() })
+    .eq("id", requestId)
+    .in("status", ["waiting", "called"]);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/me/speaker`);
+  return { success: true, data: null };
+}
+
+/** Presiding-officer counterpart to skipSpeakingRequest — identical field writes. */
+export async function speakerSkipSpeakingRequest(
+  eventId: string,
+  participantId: string,
+  requestId: string
+): Promise<ActionResult> {
+  const g = await gateRequestForSpeaker(eventId, participantId, requestId);
+  if (!g.ok) return { success: false, error: g.error };
+  const { supabase } = g;
+
+  const { error } = await supabase
+    .from("speaking_requests")
+    .update({ status: "skipped", resolved_at: new Date().toISOString() })
+    .eq("id", requestId)
+    .in("status", ["waiting", "called"]);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/me/speaker`);
   return { success: true, data: null };
 }
 

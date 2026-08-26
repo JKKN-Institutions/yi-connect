@@ -708,18 +708,41 @@ function BillColumn({
 }) {
   const [docBusy, setDocBusy] = useState(false);
 
-  // Same signed-URL-then-open pattern as CommitteeDocumentsSection's
-  // handleDownload (organiserBillDocumentUrl, gated on canView server-side).
-  async function handleDownloadDoc() {
+  // The bucket is PRIVATE — there is no URL until organiserBillDocumentUrl
+  // mints a signed one, so the blank tab must open synchronously on the
+  // click, before that await, or Safari treats the later window.open as a
+  // popup and swallows it (fix #999, questionnaire-admin-client.tsx).
+  function handleDownloadDoc() {
     if (!attachedDocument) return;
-    setDocBusy(true);
-    const result = await organiserBillDocumentUrl(attachedDocument.id);
-    setDocBusy(false);
-    if (result.success) {
-      window.open(result.data.url, "_blank", "noopener,noreferrer");
-    } else {
-      toast.error(result.error);
+    // NO "noopener" / "noreferrer" here, deliberately — window.open() returns
+    // NULL whenever either is passed, which would defeat the early-open.
+    const tab = window.open("", "_blank");
+    if (tab) {
+      try {
+        tab.opener = null; // sever it by hand — what "noopener" was for
+      } catch {
+        // Read-only in some browsers; not fatal, the tab only ever shows a
+        // signed URL from our own storage.
+      }
     }
+    setDocBusy(true);
+    void (async () => {
+      const result = await organiserBillDocumentUrl(attachedDocument.id);
+      setDocBusy(false);
+      if (!result.success) {
+        tab?.close();
+        toast.error(result.error);
+        return;
+      }
+      if (tab) {
+        tab.location.href = result.data.url;
+      } else {
+        toast.error(
+          "Your browser blocked the new tab. Allow pop-ups for this site, then tap the file again.",
+          { duration: 12000 }
+        );
+      }
+    })();
   }
 
   const side =
@@ -1065,15 +1088,40 @@ function CommitteeDocumentsSection({
     grouped.set(key, list);
   }
 
-  async function handleDownload(docId: string) {
-    setBusyDocId(docId);
-    const result = await organiserBillDocumentUrl(docId);
-    setBusyDocId(null);
-    if (result.success) {
-      window.open(result.data.url, "_blank", "noopener,noreferrer");
-    } else {
-      toast.error(result.error);
+  // The bucket is PRIVATE — there is no URL until organiserBillDocumentUrl
+  // mints a signed one, so the blank tab must open synchronously on the
+  // click, before that await, or Safari treats the later window.open as a
+  // popup and swallows it (fix #999, questionnaire-admin-client.tsx).
+  function handleDownload(docId: string) {
+    // NO "noopener" / "noreferrer" here, deliberately — window.open() returns
+    // NULL whenever either is passed, which would defeat the early-open.
+    const tab = window.open("", "_blank");
+    if (tab) {
+      try {
+        tab.opener = null; // sever it by hand — what "noopener" was for
+      } catch {
+        // Read-only in some browsers; not fatal, the tab only ever shows a
+        // signed URL from our own storage.
+      }
     }
+    setBusyDocId(docId);
+    void (async () => {
+      const result = await organiserBillDocumentUrl(docId);
+      setBusyDocId(null);
+      if (!result.success) {
+        tab?.close();
+        toast.error(result.error);
+        return;
+      }
+      if (tab) {
+        tab.location.href = result.data.url;
+      } else {
+        toast.error(
+          "Your browser blocked the new tab. Allow pop-ups for this site, then tap the file again.",
+          { duration: 12000 }
+        );
+      }
+    })();
   }
 
   function confirmDelete() {

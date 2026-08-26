@@ -19,8 +19,9 @@ import {
   MOTION_STATUS_COLORS,
   type MotionStatus,
 } from "@/lib/yip/motions";
-import { Gavel, Vote, CheckCircle2, ListOrdered, type LucideIcon } from "lucide-react";
+import { Gavel, Vote, CheckCircle2, ListOrdered, Hand, type LucideIcon } from "lucide-react";
 import { ministryLabel, type MinistryPortfolio } from "@/lib/yip/cabinet";
+import { SpeakerSpeakingFloor } from "./speaking-floor-panel";
 import {
   SectionShell,
   SectionHeading,
@@ -215,6 +216,10 @@ export function SpeakerClient({
           {error}
         </div>
       )}
+
+      <Section title="Speaking Floor" icon={Hand} accent={GREEN}>
+        <SpeakerSpeakingFloor eventId={eventId} participantId={participantId} />
+      </Section>
 
       <Section title={`Question Hour (${questions.length})`} icon={ListOrdered} accent={GOLD}>
         {questions.length === 0 ? (

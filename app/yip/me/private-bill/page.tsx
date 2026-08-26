@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { getMyPrivateMemberBill } from "@/app/yip/actions/bills";
+import { getMyPrivateBillDocument } from "@/app/yip/actions/bill-documents";
 import { PrivateBillClient } from "./private-bill-client";
 
 // A Member's own Private Member's Bill.
@@ -22,6 +23,7 @@ export default async function PrivateMemberBillPage() {
   }
 
   const res = await getMyPrivateMemberBill(session.eventId, session.id);
+  const docRes = await getMyPrivateBillDocument(session.eventId, session.id);
 
   return (
     <PrivateBillClient
@@ -30,6 +32,7 @@ export default async function PrivateMemberBillPage() {
       participantName={session.name}
       initialBill={res.success ? res.data.bill : null}
       initialError={res.success ? null : res.error}
+      initialDocument={docRes.success ? docRes.data.document : null}
     />
   );
 }

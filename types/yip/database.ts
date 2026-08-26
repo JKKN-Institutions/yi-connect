@@ -1294,7 +1294,8 @@ export type Database = {
       }
       bill_documents: {
         Row: {
-          committee_name: string
+          bill_id: string | null
+          committee_name: string | null
           content_type: string
           created_at: string
           description: string
@@ -1308,7 +1309,8 @@ export type Database = {
           uploaded_by: string
         }
         Insert: {
-          committee_name: string
+          bill_id?: string | null
+          committee_name?: string | null
           content_type: string
           created_at?: string
           description?: string
@@ -1322,7 +1324,8 @@ export type Database = {
           uploaded_by: string
         }
         Update: {
-          committee_name?: string
+          bill_id?: string | null
+          committee_name?: string | null
           content_type?: string
           created_at?: string
           description?: string
@@ -1336,6 +1339,13 @@ export type Database = {
           uploaded_by?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "bill_documents_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "bill_documents_event_id_fkey"
             columns: ["event_id"]

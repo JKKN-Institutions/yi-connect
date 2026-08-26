@@ -114,6 +114,8 @@ interface BillsClientProps {
   eventId: string;
   initialBills: BillWithMembers[];
   initialDocuments: BillDocumentRow[];
+  /** Every Private Member's Bill's own attached document, keyed by bill_id below. */
+  initialBillDocuments: BillDocumentRow[];
   /** Chair-only (getYipEventAccess.canDelete) — gates the Delete buttons. */
   canDelete: boolean;
   /** Chair + organiser (canManage) — gates the manual Add Bill action. */
@@ -128,6 +130,7 @@ export function BillsClient({
   eventId,
   initialBills,
   initialDocuments,
+  initialBillDocuments,
   canDelete,
   canManage,
   committees,
@@ -135,6 +138,43 @@ export function BillsClient({
 }: BillsClientProps) {
   const router = useRouter();
   const [bills, setBills] = useState(initialBills);
+  const [downloadingAll, setDownloadingAll] = useState(false);
+
+  // One attached document per bill, at most — looked up by bill id so each
+  // BillColumn can render its own bill's file, if any.
+  const billDocumentByBillId = new Map<string, BillDocumentRow>();
+  for (const d of initialBillDocuments) {
+    if (d.bill_id) billDocumentByBillId.set(d.bill_id, d);
+  }
+
+  async function handleDownloadAllPrivateBills() {
+    setDownloadingAll(true);
+    try {
+      const res = await fetch(
+        `/yip/dashboard/events/${eventId}/bills/private-bills-zip`
+      );
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        toast.error(body?.error ?? "Could not build the download.");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "private-members-bills.zip";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Could not build the download. Try again.");
+    } finally {
+      setDownloadingAll(false);
+    }
+  }
   const [isPending, startTransition] = useTransition();
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
@@ -250,6 +290,10 @@ export function BillsClient({
     return (a.committee_name ?? "").localeCompare(b.committee_name ?? "");
   });
 
+  const hasPrivateMemberBills = bills.some(
+    (b) => billSourceOf(b) === "private_member"
+  );
+
   function handleApprove(billId: string, title: string) {
     setConfirmDialog({
       open: true,
@@ -312,6 +356,21 @@ export function BillsClient({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {hasPrivateMemberBills && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={downloadingAll}
+              onClick={handleDownloadAllPrivateBills}
+            >
+              {downloadingAll ? (
+                <Loader2 className="size-4 mr-1 animate-spin" />
+              ) : (
+                <Download className="size-4 mr-1" />
+              )}
+              Download all (Private Member&apos;s Bills)
+            </Button>
+          )}
           {canManage && (
             <Button size="sm" onClick={() => setAddOpen(true)}>
               <Plus className="size-4 mr-1" />
@@ -375,6 +434,7 @@ export function BillsClient({
               key={b.id}
               eventId={eventId}
               bill={b}
+              attachedDocument={billDocumentByBillId.get(b.id) ?? null}
               onApprove={handleApprove}
               onReject={handleReject}
               isPending={isPending}
@@ -633,16 +693,35 @@ const SOURCE_BILL_COLORS = {
 function BillColumn({
   eventId,
   bill,
+  attachedDocument,
   onApprove,
   onReject,
   isPending,
 }: {
   eventId: string;
   bill: BillWithMembers | null;
+  /** This bill's own attached document (Private Member's Bill only), if any. */
+  attachedDocument: BillDocumentRow | null;
   onApprove: (billId: string, title: string) => void;
   onReject: (billId: string, title: string) => void;
   isPending: boolean;
 }) {
+  const [docBusy, setDocBusy] = useState(false);
+
+  // Same signed-URL-then-open pattern as CommitteeDocumentsSection's
+  // handleDownload (organiserBillDocumentUrl, gated on canView server-side).
+  async function handleDownloadDoc() {
+    if (!attachedDocument) return;
+    setDocBusy(true);
+    const result = await organiserBillDocumentUrl(attachedDocument.id);
+    setDocBusy(false);
+    if (result.success) {
+      window.open(result.data.url, "_blank", "noopener,noreferrer");
+    } else {
+      toast.error(result.error);
+    }
+  }
+
   const side =
     bill?.party_side === "ruling" || bill?.party_side === "opposition"
       ? bill.party_side
@@ -819,6 +898,44 @@ function BillColumn({
               </div>
             )}
 
+            {/* Attached document (Private Member's Bill's own handed-in file) */}
+            {source === "private_member" && (
+              <div>
+                <p className="text-xs text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                  <FolderOpen className="size-3" />
+                  Attached document
+                </p>
+                {attachedDocument ? (
+                  <div className="mt-1.5 flex items-center gap-2 rounded-md border border-gray-100 bg-gray-50 px-2 py-1.5">
+                    <FileText className="size-4 shrink-0 text-gray-400" />
+                    <p className="min-w-0 flex-1 truncate text-xs font-medium text-gray-700">
+                      {attachedDocument.file_name}
+                    </p>
+                    <p className="shrink-0 text-[11px] text-gray-400">
+                      {formatBytes(attachedDocument.file_size_bytes)}
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={docBusy}
+                      onClick={handleDownloadDoc}
+                      className="h-6 px-1.5 shrink-0"
+                    >
+                      {docBusy ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Download className="size-3.5" />
+                      )}
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="mt-1 text-xs text-gray-400">
+                    No document attached — written on the form only.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Committee Members */}
             {source === "committee" && (
             <div>
@@ -937,11 +1054,15 @@ function CommitteeDocumentsSection({
   const [isPending, startTransition] = useTransition();
 
   // Group by committee_name (rows arrive committee-sorted from the server).
+  // listBillDocuments() filters to committee-owned rows only (bill_id null),
+  // so committee_name is always set here — a Private Member's Bill's own
+  // file has its own section (BillColumn) and never reaches this list.
   const grouped = new Map<string, BillDocumentRow[]>();
   for (const doc of documents) {
-    const list = grouped.get(doc.committee_name) ?? [];
+    const key = doc.committee_name ?? "Unassigned";
+    const list = grouped.get(key) ?? [];
     list.push(doc);
-    grouped.set(doc.committee_name, list);
+    grouped.set(key, list);
   }
 
   async function handleDownload(docId: string) {

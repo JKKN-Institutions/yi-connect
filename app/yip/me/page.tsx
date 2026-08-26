@@ -74,6 +74,7 @@ import { CommitteeBillsList, type DashboardCommitteeBill } from "./committee-bil
 import { getMySelfNomination } from "@/app/yip/actions/self-nomination";
 import { selfNominationRoleLabels } from "@/lib/yip/self-nomination";
 import { getMyQuestionnaire } from "@/app/yip/actions/questionnaire";
+import { getMyPrivateMemberBill } from "@/app/yip/actions/bills";
 
 // ─── Session parsing ─────────────────────────────────────────────
 
@@ -115,6 +116,45 @@ function formatDate(dateStr: string): string {
     month: "long",
     year: "numeric",
   });
+}
+
+// Plain-English status for a Member's own Private Member's Bill card. Never
+// shows the raw database word (drafting/submitted/…) — a student reading
+// their own profile should not have to decode a status code. A rejected bill
+// is FINAL (Director decision, 2026-08) — the wording here must never suggest
+// trying again, unlike the private-bill page's own "waiting for an organiser"
+// copy (shown for every non-drafting status there, rejected included), which
+// the Director has separately declined to change. Do not copy that mistake.
+function privateBillStatusMeta(status: string): { label: string; color: string } {
+  switch (status) {
+    case "drafting":
+      return { label: "Still writing", color: inkA(0.55) };
+    case "submitted":
+      return { label: "Handed in — waiting for an organiser", color: "#2563eb" };
+    case "rejected":
+      return { label: "Not accepted — this decision is final", color: "#9A3324" };
+    case "approved":
+      return { label: "Approved — ready for the House", color: GREEN };
+    case "presented":
+      return { label: "On the floor now", color: SAFFRON };
+    case "passed":
+      return { label: "Passed by the House", color: GREEN };
+    default:
+      return { label: "Handed in", color: inkA(0.55) };
+  }
+}
+
+// A short, recognisable taste of what the Member actually wrote — the
+// objective if they gave one, else the problem statement — trimmed so the
+// card never grows taller than the invitation it replaces. No attachments or
+// full clause list here; this is a "yes, this is mine" glance, not a reader.
+function privateBillSnippet(bill: {
+  objective: string | null;
+  problemStatement: string | null;
+}): string | null {
+  const text = (bill.objective || bill.problemStatement || "").trim();
+  if (!text) return null;
+  return text.length > 110 ? `${text.slice(0, 110).trimEnd()}…` : text;
 }
 
 // ─── Page Component ──────────────────────────────────────────────
@@ -467,6 +507,33 @@ export default async function ParticipantPage() {
   // a presiding officer, or anyone on official duty. Same helper the organiser's
   // own form filters its mover list with, and the same one the action re-checks.
   const canBringPrivateBill = canMovePrivateMemberBill(role);
+
+  // The Member's OWN Private Member's Bill, if they have started one. Reuses
+  // the exact same read the full /yip/me/private-bill page uses — the action
+  // re-keys off this participant's own session id, never an id from the
+  // client — so this card and that page can never disagree about what was
+  // written or where it stands. Only fetched for a Member eligible to bring
+  // one at all; an ineligible Member sees no card either way (unchanged).
+  let myPrivateBill: {
+    title: string;
+    objective: string | null;
+    problemStatement: string | null;
+    status: string;
+  } | null = null;
+  if (canBringPrivateBill) {
+    const privateBillRes = await getMyPrivateMemberBill(event.id, participant.id);
+    if (privateBillRes.success) {
+      myPrivateBill = privateBillRes.data.bill;
+    }
+  }
+  const myPrivateBillView = myPrivateBill
+    ? {
+        title: myPrivateBill.title,
+        snippet: privateBillSnippet(myPrivateBill),
+        ...privateBillStatusMeta(myPrivateBill.status),
+      }
+    : null;
+
   // Masthead stamp for the credential hero — e.g. "ERODE · 2026".
   const stampChapter = (event.name?.split(/\s+/)[0] ?? "").toUpperCase();
   const stampYear = event.day1_date
@@ -716,7 +783,12 @@ export default async function ParticipantPage() {
         </Link>
       )}
 
-      {/* ─── PRIVATE MEMBER'S BILL (any ordinary Member) ────────────── */}
+      {/* ─── PRIVATE MEMBER'S BILL (any ordinary Member) ──────────────
+          Once a Member has started one, this card shows THEIRS — title,
+          status in plain words, and enough of what they wrote to recognise
+          it — instead of a bare invitation that looks identical before and
+          after they hand a bill in. No bill yet → the original invitation,
+          unchanged. */}
       {canBringPrivateBill && (
         <Link href="/yip/me/private-bill" className="block">
           <SectionShell accent="#6D28D9" className="transition-shadow hover:shadow-md">
@@ -728,9 +800,31 @@ export default async function ParticipantPage() {
                 accent="#6D28D9"
                 trailing={<ChevronRight className="size-5" style={{ color: inkA(0.35) }} />}
               />
-              <p className="mt-1.5 text-xs" style={{ color: inkA(0.55) }}>
-                Bring your own bill to the House · write it and hand it in
-              </p>
+              {myPrivateBillView ? (
+                <div className="mt-1.5">
+                  <p
+                    className="truncate text-sm font-semibold"
+                    style={{ color: INK }}
+                  >
+                    {myPrivateBillView.title}
+                  </p>
+                  <p
+                    className="mt-0.5 text-xs font-medium"
+                    style={{ color: myPrivateBillView.color }}
+                  >
+                    {myPrivateBillView.label}
+                  </p>
+                  {myPrivateBillView.snippet && (
+                    <p className="mt-1 text-xs" style={{ color: inkA(0.55) }}>
+                      {myPrivateBillView.snippet}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-1.5 text-xs" style={{ color: inkA(0.55) }}>
+                  Bring your own bill to the House · write it and hand it in
+                </p>
+              )}
             </div>
           </SectionShell>
         </Link>

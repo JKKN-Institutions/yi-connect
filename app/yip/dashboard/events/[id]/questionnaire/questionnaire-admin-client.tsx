@@ -62,6 +62,7 @@ import {
   formatFileSize,
   formatQuestionnaireTime,
   markingStallWarnings,
+  questionnaireAllowsFileUpload,
   questionnaireContestKey,
   questionnaireContestLabel,
   questionnairePostLabel,
@@ -130,6 +131,9 @@ export function QuestionnaireAdminClient({
   const [missing, setMissing] = useState(initialMissing);
   const [error, setError] = useState<string | null>(initialError);
   const [progress, setProgress] = useState(initialProgress);
+  /** Post key currently zipping its handed-in files, or null — busy state
+   *  for the "Download all files" button on that post's card. */
+  const [downloadingFilesPost, setDownloadingFilesPost] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [confirm, setConfirm] = useState<{ postKey: string; open: boolean } | null>(null);
   const [clearing, setClearing] = useState<string | null>(null);
@@ -502,6 +506,44 @@ export function QuestionnaireAdminClient({
     });
   }
 
+  /**
+   * Every handed-in FILE for ONE post, foldered by candidate — the "get them
+   * all in one go" a marking screen that opens one file at a time cannot
+   * give. Scoped to the post the organiser is looking at (matches the screen,
+   * which already runs one post at a time — see setQuestionnaireWindow's
+   * "ONE POST AT A TIME" rule); never all posts at once.
+   *
+   * A Route Handler, not a server action, because the response is a file —
+   * same reasoning as the Private Member's Bills zip
+   * (app/yip/dashboard/events/[id]/bills/private-bills-zip/route.ts).
+   */
+  function handleDownloadPostFiles(postKey: string, label: string) {
+    setDownloadingFilesPost(postKey);
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/yip/dashboard/events/${eventId}/questionnaire/questionnaire-files-zip?post=${encodeURIComponent(postKey)}`
+        );
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as { error?: string } | null;
+          toast.error(body?.error ?? "Could not build the download.");
+          return;
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${label}-files.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch {
+        toast.error("Could not build the download. Try again.");
+      } finally {
+        setDownloadingFilesPost(null);
+      }
+    })();
+  }
+
   // Scored counts per CONTEST drive the shortlist marker.
   //
   // Contest, not post: Cabinet and Shadow candidates sit the same paper but
@@ -738,6 +780,30 @@ export function QuestionnaireAdminClient({
                     >
                       <Eraser className="size-3" />
                       Clear marks and mark again
+                    </button>
+                  )}
+                  {/*
+                    Only for a post that takes a handed-in file at all
+                    (questionnaireAllowsFileUpload — never hardcoded to
+                    Journalist), and only once at least one exists — the
+                    count in the label IS the "how many am I getting" answer,
+                    so nobody assumes it covers every paper on this post.
+                  */}
+                  {questionnaireAllowsFileUpload(p.postKey) && p.files > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadPostFiles(p.postKey, p.label)}
+                      disabled={isPending || downloadingFilesPost === p.postKey}
+                      className="inline-flex items-center gap-1 text-xs font-medium"
+                      style={{ color: SAFFRON }}
+                      title="Every handed-in file for this post, one ZIP, one folder per candidate."
+                    >
+                      {downloadingFilesPost === p.postKey ? (
+                        <Loader2 className="size-3 animate-spin" />
+                      ) : (
+                        <Download className="size-3" />
+                      )}
+                      Download all files ({p.files})
                     </button>
                   )}
                 </div>

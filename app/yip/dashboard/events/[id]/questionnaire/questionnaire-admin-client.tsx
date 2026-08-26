@@ -133,6 +133,13 @@ export function QuestionnaireAdminClient({
   const [isPending, startTransition] = useTransition();
   const [confirm, setConfirm] = useState<{ postKey: string; open: boolean } | null>(null);
   const [clearing, setClearing] = useState<string | null>(null);
+  /**
+   * Attempt id waiting on the "score this again" confirm dialog below. Only
+   * set for a paper that already has something to lose: `scored` (marks
+   * exist) or `needs_human` (a person set it aside on purpose because the
+   * scorer cannot read it) — see rescoreAttempt().
+   */
+  const [rescoring, setRescoring] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [editLocked, setEditLocked] = useState(false);
@@ -213,6 +220,39 @@ export function QuestionnaireAdminClient({
       );
       await refresh();
     });
+  }
+
+  /**
+   * Send one paper back to the scorer. Called directly for a `pending` or
+   * `failed` paper — nothing is marked on it yet and it was never set
+   * aside on purpose, so there is nothing to lose and the button stays one
+   * click. A `scored` or `needs_human` paper goes through the confirm
+   * dialog first (see the note above that dialog): re-queuing a `scored`
+   * paper discards whatever marks it carries now, including marks a person
+   * typed in by hand; re-queuing a `needs_human` paper sends it to a
+   * scorer that already could not read it, so it comes back unmarked
+   * instead of getting a mark.
+   *
+   * `rescoreQuestionnaireAttempt` itself (app/yip/actions/questionnaire.ts)
+   * does not check the paper's current status before re-queuing it — this
+   * dialog is the only guard today. A server-side check there would be the
+   * stronger fix; noted as a follow-up, not done here.
+   */
+  function rescoreAttempt(attemptId: string) {
+    startTransition(async () => {
+      const res = await callAction(() => rescoreQuestionnaireAttempt(eventId, attemptId));
+      if (res.success) {
+        toast.success("Queued for re-scoring.");
+        await refresh();
+      } else toast.error(res.error);
+    });
+  }
+
+  function applyRescore() {
+    if (!rescoring) return;
+    const attemptId = rescoring;
+    setRescoring(null);
+    rescoreAttempt(attemptId);
   }
 
   /**
@@ -1128,17 +1168,23 @@ export function QuestionnaireAdminClient({
                           size="sm"
                           variant="outline"
                           disabled={isPending}
-                          onClick={() =>
-                            startTransition(async () => {
-                              const res = await callAction(() =>
-                                rescoreQuestionnaireAttempt(eventId, expanded)
-                              );
-                              if (res.success) {
-                                toast.success("Queued for re-scoring.");
-                                await refresh();
-                              } else toast.error(res.error);
-                            })
-                          }
+                          onClick={() => {
+                            // Gate ONLY when there is something to lose:
+                            // `scored` (marks would be discarded) or
+                            // `needs_human` (this paper was set aside ON
+                            // PURPOSE because the scorer cannot read it — see
+                            // the confirm dialog below). A pending/failed
+                            // paper has neither, so rescoring it is harmless
+                            // and stays one click — a gate that fired every
+                            // time would just teach an organiser to click
+                            // through without reading.
+                            const status = detail.data.scoringStatus;
+                            if (status === "scored" || status === "needs_human") {
+                              setRescoring(expanded);
+                            } else {
+                              rescoreAttempt(expanded);
+                            }
+                          }}
                         >
                           Score this again
                         </Button>
@@ -1428,6 +1474,86 @@ export function QuestionnaireAdminClient({
               style={{ background: "#b45309", color: "#fff" }}
             >
               Clear marks and mark again
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/*
+        ── Confirm re-scoring ONE paper ──
+
+        Same rule as the "Worth a look" card above: a gate that fires on
+        EVERY paper teaches an organiser to click through without reading.
+        This only opens when the paper already has something to lose — a
+        `pending` or `failed` paper has neither marks nor a "set aside on
+        purpose" status, so re-queuing it stays one click (handled directly
+        by rescoreAttempt()).
+
+        ONE dialog, copy varies off `detail.data.scoringStatus`, because the
+        two hazards are different:
+
+        · `scored` — some papers were handed in as a file the automated
+          scorer cannot read, so a person hand-typed the marks via "Save
+          these marks". Re-scoring discards those marks and sends the paper
+          back to the same scorer that could not read it the first time —
+          it comes back unmarked.
+        · `needs_human` — this paper was set aside BECAUSE the scorer
+          cannot read it, and rescoreQuestionnaireAttempt() re-queues it
+          with no check on that (app/yip/actions/questionnaire.ts — a
+          server-side guard there would be the stronger fix, not done in
+          this change). Sending it back does not get it marked; it only
+          drops the paper off the "read this one yourself" list.
+
+        "Are you sure?" would say neither of those, so this names them.
+      */}
+      <Dialog open={rescoring !== null} onOpenChange={(o) => !o && setRescoring(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {detail?.success && detail.data.scoringStatus === "needs_human"
+                ? "Send this to the automatic scorer?"
+                : "Score this paper again?"}
+            </DialogTitle>
+            <DialogDescription>
+              {detail?.success && detail.data.scoringStatus === "needs_human"
+                ? "This paper is waiting for a person to read it — that is why it is not in the automated ranking yet. Sending it to the automatic scorer will not get it marked, and it drops off the list of papers waiting to be read by hand."
+                : "The marks already on this paper will be discarded, and it goes back into the queue to be scored from scratch."}
+            </DialogDescription>
+          </DialogHeader>
+          {detail?.success && detail.data.scoringStatus === "needs_human" ? (
+            <div
+              className="rounded-lg border px-3 py-2 text-sm"
+              style={{ background: "#f0fdf4", borderColor: "#bbf7d0", color: "#166534" }}
+            >
+              The safe path is above: open the pages, give each question its marks,
+              and press &quot;Save these marks&quot;. That is what puts this paper
+              into the ranking.
+            </div>
+          ) : (
+            detail?.success &&
+            detail.data.answers.some((a) => a.files.length > 0) && (
+              <div
+                className="rounded-lg border px-3 py-2 text-sm"
+                style={{ background: "#fffbeb", borderColor: "#fde68a", color: "#92400e" }}
+              >
+                This paper was handed in as a file, which the automated scorer cannot
+                read. If those marks were typed in by hand, this paper will come back
+                unmarked — someone will have to open it and type the marks in again.
+              </div>
+            )
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRescoring(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={applyRescore}
+              disabled={isPending}
+              style={{ background: "#b45309", color: "#fff" }}
+            >
+              {detail?.success && detail.data.scoringStatus === "needs_human"
+                ? "Send to the scorer anyway"
+                : "Discard marks and score again"}
             </Button>
           </DialogFooter>
         </DialogContent>

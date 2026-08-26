@@ -1399,6 +1399,45 @@ export async function saveQuestionnaireQuestions(
   return { success: true, data: { count: bodies.length } };
 }
 
+/**
+ * Turn the ranked list into a plain marking roster for a viewer without
+ * `canViewScores` (Director decision 2026-08-26: "mark papers, but not see
+ * the league table"). Two things must go, not just the numbers:
+ *
+ *   1. The score fields themselves — pct/totalScore/maxScore/redFlagCount —
+ *      are nulled so they never reach the browser.
+ *   2. The ROW ORDER, because the input array is already sorted best-first
+ *      within each contest. Handing that order to the client and only
+ *      hiding the percentage in the UI would still leak an approximate rank
+ *      from row position alone. Re-sorting by contest then name is a neutral
+ *      order that carries no scoring information.
+ *
+ * `scoringStatus` (scored / needs_human / pending / failed), `answered`,
+ * `drawn` and `fileCount` are left untouched — an organiser hand-marking a
+ * `needs_human` paper still needs to find it and see what was handed in.
+ */
+function stripScoresForRoster(
+  rows: readonly QuestionnaireResultRow[]
+): QuestionnaireResultRow[] {
+  return rows
+    .map((r) => ({
+      ...r,
+      pct: null,
+      totalScore: null,
+      maxScore: null,
+      redFlagCount: 0,
+    }))
+    .sort((x, y) => {
+      const xk = questionnaireContestKey(x.postKey, x.bench);
+      const yk = questionnaireContestKey(y.postKey, y.bench);
+      if (xk !== yk) return xk.localeCompare(yk);
+      return (
+        x.fullName.localeCompare(y.fullName) ||
+        x.attemptId.localeCompare(y.attemptId)
+      );
+    });
+}
+
 export async function getQuestionnaireResults(
   eventId: string
 ): Promise<
@@ -1559,10 +1598,14 @@ export async function getQuestionnaireResults(
     (a, b) => a.postKey.localeCompare(b.postKey) || a.fullName.localeCompare(b.fullName)
   );
 
+  // Marks are chapter-chair (+ national/super-admin) only — an ordinary
+  // organiser keeps the roster (name, post, submitted/status, files) for
+  // hand-marking, but not the ranking or any score number. See
+  // stripScoresForRoster's doc comment.
   return {
     success: true,
     data: {
-      rows: ranked,
+      rows: access.canViewScores ? ranked : stripScoresForRoster(ranked),
       unscored: ranked.filter((r) => r.scoringStatus !== "scored").length,
       missing,
     },
@@ -1632,6 +1675,14 @@ export async function getQuestionnaireAttemptDetail(
     .order("position", { ascending: true })
     .limit(100);
 
+  // Marks are chapter-chair (+ national/super-admin) only. A viewer without
+  // canViewScores keeps everything needed to hand-mark a `needs_human` paper
+  // — the question, the candidate's own answer text, and any handed-in files
+  // — but never the computed rubric numbers, the red-flag penalty/labels, or
+  // the AI's qualitative read of the paper (analysis_note), all of which are
+  // outputs of the scoring machinery, not the candidate's own work.
+  const canSeeScores = access.canViewScores;
+
   return {
     success: true,
     data: {
@@ -1639,16 +1690,16 @@ export async function getQuestionnaireAttemptDetail(
         position: a.position,
         question: a.question_text,
         answer: a.answer_text ?? "",
-        score: a.score,
-        grounding: a.grounding,
-        depth: a.depth,
-        voice: a.voice,
-        penalty: a.red_flag_penalty,
-        flags: toFlags(a.flags),
+        score: canSeeScores ? a.score : null,
+        grounding: canSeeScores ? a.grounding : null,
+        depth: canSeeScores ? a.depth : null,
+        voice: canSeeScores ? a.voice : null,
+        penalty: canSeeScores ? a.red_flag_penalty : null,
+        flags: canSeeScores ? toFlags(a.flags) : [],
         files: parseAnswerFiles(a.files),
       })),
       maxPerAnswer: MAX_PER_ANSWER,
-      analysisNote: attempt.analysis_note ?? null,
+      analysisNote: canSeeScores ? (attempt.analysis_note ?? null) : null,
       scoringStatus: String(attempt.scoring_status ?? ""),
     },
   };
@@ -1658,8 +1709,15 @@ export async function exportQuestionnaireCsv(
   eventId: string
 ): Promise<R<{ filename: string; csv: string; unscored: number }>> {
   const access = await getYipEventAccess(eventId);
-  if (!access.canManage) {
-    return { success: false, error: "Not authorized to export this event." };
+  // This file IS the league table (rank, score, percent) — chapter-chair
+  // (+ national/super-admin) only, same as reading it on screen. An ordinary
+  // organiser keeps canManage for everything else on this page; this export
+  // alone needs canViewScores (Director decision 2026-08-26).
+  if (!access.canViewScores) {
+    return {
+      success: false,
+      error: "Only the chapter chair can export scores for this event.",
+    };
   }
   const res = await getQuestionnaireResults(eventId);
   if (!res.success) return res;
@@ -1697,8 +1755,17 @@ export async function exportQuestionnaireResponsesCsv(
   eventId: string
 ): Promise<R<{ filename: string; csv: string; students: number; answers: number }>> {
   const access = await getYipEventAccess(eventId);
-  if (!access.canManage) {
-    return { success: false, error: "Not authorized to export this event." };
+  // Every row in this file also carries that answer's score, grounding,
+  // depth, voice, penalty and flags — it is a marks export with the writing
+  // attached, not a scores-free transcript. Chapter-chair (+ national/
+  // super-admin) only, same as exportQuestionnaireCsv (Director decision
+  // 2026-08-26).
+  if (!access.canViewScores) {
+    return {
+      success: false,
+      error:
+        "Only the chapter chair can export answers for this event — this file includes each answer's marks.",
+    };
   }
   const sb = await createServiceClient();
 

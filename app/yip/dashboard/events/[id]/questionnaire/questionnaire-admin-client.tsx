@@ -104,6 +104,7 @@ export function QuestionnaireAdminClient({
   eventId,
   eventName,
   canManage,
+  canViewScores,
   initialPosts,
   minutes,
   initialRows,
@@ -116,6 +117,18 @@ export function QuestionnaireAdminClient({
   eventId: string;
   eventName: string;
   canManage: boolean;
+  /**
+   * Marks — the ranked league table, per-answer scores, and both CSV
+   * exports — are chapter-chair (+ national/super-admin) only (Director
+   * decision 2026-08-26: "mark papers, but not see the league table"). An
+   * ordinary organiser (canManage but not canViewScores) still opens a
+   * paper and hand-marks a `needs_human` one; they just never see anyone's
+   * score or rank. Every row this screen renders already comes back from
+   * the server with score fields nulled when this is false — this flag only
+   * decides how the UI explains that, so it must never be used to show a
+   * number the server did not send.
+   */
+  canViewScores: boolean;
   initialPosts: PostOverview[];
   minutes: number;
   initialRows: QuestionnaireResultRow[];
@@ -599,7 +612,12 @@ export function QuestionnaireAdminClient({
   const rankSeen = new Map<string, number>();
 
   const stallWarnings = progress ? markingStallWarnings(progress) : [];
-  const watch = buildQuestionnaireWatchList(rows);
+  // "Worth a look" reads straight off pct/redFlagCount, both of which the
+  // server already nulled for a viewer without canViewScores — never build
+  // or show it for them, rather than trust it to come out empty on its own.
+  const watch = canViewScores
+    ? buildQuestionnaireWatchList(rows)
+    : { flaggedHigh: [], cutTies: [] };
   const worthALook = watch.flaggedHigh.length + watch.cutTies.length;
 
   return (
@@ -624,13 +642,19 @@ export function QuestionnaireAdminClient({
           <Button variant="outline" onClick={() => startTransition(refresh)} disabled={isPending}>
             <RefreshCw className="size-4" /> Refresh
           </Button>
-          {canManage && (
+          {/*
+            Both files carry marks (this one has grounding/depth/voice/penalty
+            per answer, not just names and writing) — chapter-chair only, same
+            as the ranked table below. canManage stays true for an ordinary
+            organiser; canViewScores does not.
+          */}
+          {canViewScores && (
             <>
               <Button
                 variant="outline"
                 onClick={doExportResponses}
                 disabled={isPending || rows.length === 0}
-                title="Every question and answer, for reading yourself or handing to another tool. Includes student names."
+                title="Every question, answer and mark, for reading yourself or handing to another tool. Includes student names."
               >
                 <Download className="size-4" /> Export answers
               </Button>
@@ -655,9 +679,20 @@ export function QuestionnaireAdminClient({
       <div className="flex items-start gap-2 rounded-xl border border-[#1a1a3e]/10 bg-[#1a1a3e]/[0.02] px-4 py-3">
         <Info className="mt-0.5 size-4 shrink-0" style={{ color: SAFFRON }} />
         <p className="text-sm text-[#1a1a3e]/70">
-          The ranking below is a <b>suggestion to read, not a decision</b>. Nobody is
-          promoted, assigned or dropped by it — you confirm the shortlist yourself.
-          Students never see their score.
+          {canViewScores ? (
+            <>
+              The ranking below is a <b>suggestion to read, not a decision</b>. Nobody
+              is promoted, assigned or dropped by it — you confirm the shortlist
+              yourself. Students never see their score.
+            </>
+          ) : (
+            <>
+              <b>Marks and the ranking are visible to the chapter chair only.</b> You
+              can still open any paper below, read what was handed in, and mark one
+              waiting on a person — you just will not see anyone&apos;s score.
+              Students never see their score either.
+            </>
+          )}
         </p>
       </div>
 
@@ -914,12 +949,16 @@ export function QuestionnaireAdminClient({
               <table className="w-full text-sm">
                 <thead className="border-b border-[#1a1a3e]/10 text-left text-xs text-[#1a1a3e]/55">
                   <tr>
-                    <th className="px-4 py-2 font-semibold">#</th>
+                    {canViewScores && <th className="px-4 py-2 font-semibold">#</th>}
                     <th className="px-4 py-2 font-semibold">Student</th>
                     <th className="px-4 py-2 font-semibold">Post</th>
                     <th className="px-4 py-2 font-semibold">Submitted</th>
-                    <th className="px-4 py-2 text-right font-semibold">Score</th>
-                    <th className="px-4 py-2 text-right font-semibold">Flags</th>
+                    <th className="px-4 py-2 text-right font-semibold">
+                      {canViewScores ? "Score" : "Status"}
+                    </th>
+                    {canViewScores && (
+                      <th className="px-4 py-2 text-right font-semibold">Flags</th>
+                    )}
                     <th className="px-4 py-2" />
                   </tr>
                 </thead>
@@ -928,7 +967,11 @@ export function QuestionnaireAdminClient({
                     let rank: number | null = null;
                     let shortlisted = false;
                     const contest = questionnaireContestKey(r.postKey, r.bench);
-                    if (r.scoringStatus === "scored") {
+                    // Rank and the shortlist marker are themselves the
+                    // ranking — computed and shown only when canViewScores.
+                    // A row without it still carries scoringStatus, so a
+                    // needs_human paper is just as findable.
+                    if (canViewScores && r.scoringStatus === "scored") {
                       const n = (rankSeen.get(contest) ?? 0) + 1;
                       rankSeen.set(contest, n);
                       rank = n;
@@ -936,17 +979,19 @@ export function QuestionnaireAdminClient({
                     }
                     return (
                       <tr key={r.attemptId} className="border-b border-[#1a1a3e]/5 align-top">
-                        <td className="px-4 py-2 font-mono text-xs text-[#1a1a3e]/60">
-                          {rank ?? "—"}
-                          {shortlisted && (
-                            <span
-                              className="ml-1 rounded px-1 text-[10px] font-semibold"
-                              style={{ background: `${GREEN}1a`, color: GREEN }}
-                            >
-                              ▲
-                            </span>
-                          )}
-                        </td>
+                        {canViewScores && (
+                          <td className="px-4 py-2 font-mono text-xs text-[#1a1a3e]/60">
+                            {rank ?? "—"}
+                            {shortlisted && (
+                              <span
+                                className="ml-1 rounded px-1 text-[10px] font-semibold"
+                                style={{ background: `${GREEN}1a`, color: GREEN }}
+                              >
+                                ▲
+                              </span>
+                            )}
+                          </td>
+                        )}
                         <td className="px-4 py-2">
                           <ParticipantNameButton
                             eventId={eventId}
@@ -980,7 +1025,16 @@ export function QuestionnaireAdminClient({
                         </td>
                         <td className="px-4 py-2 text-right">
                           {r.scoringStatus === "scored" ? (
-                            <span className="font-semibold">{r.pct}%</span>
+                            canViewScores ? (
+                              <span className="font-semibold">{r.pct}%</span>
+                            ) : (
+                              // canViewScores is false, so the server already
+                              // nulled r.pct — show that marking is DONE
+                              // without a number, never the raw (null) value.
+                              <span className="text-xs font-semibold" style={{ color: GREEN }}>
+                                marked
+                              </span>
+                            )
                           ) : r.scoringStatus === "needs_human" ? (
                             /*
                               Not a failure and not "not scored" — the paper is
@@ -1027,13 +1081,15 @@ export function QuestionnaireAdminClient({
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-2 text-right text-xs">
-                          {r.redFlagCount > 0 ? (
-                            <span style={{ color: "#b45309" }}>{r.redFlagCount}</span>
-                          ) : (
-                            <span className="text-[#1a1a3e]/30">—</span>
-                          )}
-                        </td>
+                        {canViewScores && (
+                          <td className="px-4 py-2 text-right text-xs">
+                            {r.redFlagCount > 0 ? (
+                              <span style={{ color: "#b45309" }}>{r.redFlagCount}</span>
+                            ) : (
+                              <span className="text-[#1a1a3e]/30">—</span>
+                            )}
+                          </td>
+                        )}
                         <td className="px-4 py-2 text-right">
                           <button
                             type="button"
@@ -1117,9 +1173,18 @@ export function QuestionnaireAdminClient({
                             </ul>
                           )}
                           <p className="mt-1 text-[11px] text-[#1a1a3e]/55">
-                            {a.score == null
-                              ? "Not scored"
-                              : `${a.score}/${detail.data.maxPerAnswer} · grounding ${a.grounding} · depth ${a.depth} · voice ${a.voice}${a.penalty ? ` · −${a.penalty}` : ""}`}
+                            {/*
+                              The server already nulls a.score for a viewer
+                              without canViewScores, so a.score == null is
+                              true for BOTH "genuinely not scored yet" and
+                              "scored, but hidden from you" — say which one
+                              this is rather than let the two look identical.
+                            */}
+                            {!canViewScores && detail.data.scoringStatus === "scored"
+                              ? "Marked — marks are visible to the chapter chair only."
+                              : a.score == null
+                                ? "Not scored"
+                                : `${a.score}/${detail.data.maxPerAnswer} · grounding ${a.grounding} · depth ${a.depth} · voice ${a.voice}${a.penalty ? ` · −${a.penalty}` : ""}`}
                           </p>
                           {/*
                             The marks boxes. Shown ONLY on a paper waiting on a

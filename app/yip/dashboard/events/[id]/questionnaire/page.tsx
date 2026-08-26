@@ -45,6 +45,7 @@ export default async function QuestionnairePage({
       eventId={id}
       eventName={event?.name ?? ""}
       canManage={access.canManage}
+      canViewScores={access.canViewScores}
       initialPosts={overview.success ? overview.data.posts : []}
       minutes={overview.success ? overview.data.minutes : 30}
       initialRows={results.success ? results.data.rows : []}

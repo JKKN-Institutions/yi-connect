@@ -918,27 +918,49 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                         seats,
                         seatType
                       );
-                      if (ms.winnerIds.length === 0) return null;
+                      // A shortfall is still worth a line on the big screen
+                      // even when NOTHING was won this round (a full tie, or
+                      // no candidates at all) — otherwise the screen shows
+                      // nothing and the room is left guessing why.
+                      if (ms.winnerIds.length === 0 && !ms.shortfall) return null;
                       const nameOf = (id: string) =>
                         voteCandidates.find((c) => c.id === id)?.full_name ??
                         "Unknown";
+                      const roleWord =
+                        seatType === "cabinet_minister"
+                          ? "Cabinet Minister"
+                          : "Shadow Minister";
                       return (
                         <div className="space-y-3">
-                          <p className="text-lg text-gray-500 uppercase tracking-widest">
-                            {seatType === "cabinet_minister"
-                              ? "Elected Cabinet Ministers"
-                              : "Elected Shadow Ministers"}
-                          </p>
-                          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
-                            {ms.winnerIds.map((id) => (
-                              <span
-                                key={id}
-                                className="text-4xl font-black text-amber-400 yip-winner-pop"
-                              >
-                                {nameOf(id)}
-                              </span>
-                            ))}
-                          </div>
+                          {ms.winnerIds.length > 0 && (
+                            <>
+                              <p className="text-lg text-gray-500 uppercase tracking-widest">
+                                {seatType === "cabinet_minister"
+                                  ? "Elected Cabinet Ministers"
+                                  : "Elected Shadow Ministers"}
+                              </p>
+                              <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+                                {ms.winnerIds.map((id) => (
+                                  <span
+                                    key={id}
+                                    className="text-4xl font-black text-amber-400 yip-winner-pop"
+                                  >
+                                    {nameOf(id)}
+                                  </span>
+                                ))}
+                              </div>
+                            </>
+                          )}
+                          {ms.shortfall && (
+                            <p className="text-xl font-semibold text-red-400">
+                              {ms.unfilledSeats} {roleWord}
+                              {ms.unfilledSeats === 1 ? " seat" : " seats"}{" "}
+                              still open —{" "}
+                              {ms.shortfall === "under_subscribed"
+                                ? "no candidate"
+                                : "tied, runoff pending"}
+                            </p>
+                          )}
                         </div>
                       );
                     })()}

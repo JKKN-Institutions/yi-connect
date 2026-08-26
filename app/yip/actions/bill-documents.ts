@@ -39,6 +39,10 @@ import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
+import {
+  canEditBillDocument,
+  BILL_DOCUMENT_LOCKED_MESSAGE,
+} from "@/lib/yip/bill-document-window";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -506,22 +510,18 @@ export async function deleteMyBillDocument(
     return { success: false, error: "Only the uploader can delete this document." };
   }
 
-  // A bill-owned file follows the bill's own edit lock: once handed in, the
-  // bill (and anything attached to it) stops changing underneath an organiser
-  // who may already have read it — same rule saveMyPrivateMemberBillDraft
-  // enforces on the form fields.
+  // A bill-owned file follows the bill's own document-attach window (Director
+  // ruling 2026-08-26, lib/yip/bill-document-window.ts): a Member may still
+  // remove it while the bill is 'drafting' OR 'submitted' — the lock only
+  // engages once an organiser has judged the bill.
   if (doc.bill_id) {
     const { data: bill } = await supabase
       .from("bills")
       .select("status")
       .eq("id", doc.bill_id)
       .maybeSingle();
-    if (bill && bill.status !== "drafting") {
-      return {
-        success: false,
-        error:
-          "You have already handed this bill in — ask an organiser if you need it changed.",
-      };
+    if (bill && !canEditBillDocument(bill.status)) {
+      return { success: false, error: BILL_DOCUMENT_LOCKED_MESSAGE };
     }
   }
 
@@ -545,6 +545,13 @@ export async function deleteMyBillDocument(
 // from the bill row, never trusted from the client. Uploading again REPLACES
 // the existing file rather than accumulating a second row (a solo bill has
 // exactly one attachment, or none).
+//
+// The attach/replace/remove WINDOW is not "only while drafting" — see
+// lib/yip/bill-document-window.ts (Director ruling 2026-08-26): a Member may
+// still attach, replace or remove their document while the bill sits at
+// 'submitted', up until an organiser judges it (approved/rejected, or moved
+// to the floor). Attaching never changes the bill's own status — it only adds
+// or replaces the file underneath it.
 
 /** The caller's own Private Member's Bill's attached document, or null. */
 export async function getMyPrivateBillDocument(
@@ -600,12 +607,8 @@ export async function uploadPrivateBillDocument(
       error: "Write your bill first, then attach a document to it.",
     };
   }
-  if (bill.status !== "drafting") {
-    return {
-      success: false,
-      error:
-        "You have already handed this bill in — ask an organiser if you need it changed.",
-    };
+  if (!canEditBillDocument(bill.status)) {
+    return { success: false, error: BILL_DOCUMENT_LOCKED_MESSAGE };
   }
 
   if (!input.fileBase64) {

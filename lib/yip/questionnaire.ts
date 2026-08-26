@@ -715,6 +715,51 @@ export function questionnaireContestLabel(
 }
 
 /**
+ * Order two ranked rows by score, best first — with one fixed, meaning-free
+ * tiebreak so two candidates level on points land in the same order every
+ * time, everywhere this list gets sorted.
+ *
+ * WHY: `pct` alone leaves equal scores in whatever order the input array
+ * happened to arrive in. This module builds the ranked list in two separate
+ * places — the screen an organiser reads, and the cut-tie detector below
+ * that warns about candidates straddling the shortlist line — and each one
+ * receives that array from a different query. Sorting each independently on
+ * `pct` alone let the same tie land in a different order depending on which
+ * one ran, so the cut-tie warning could name a different person than the
+ * screen was showing. Exporting one comparator and using it in both places
+ * closes that gap for good.
+ *
+ * The tiebreak decides DISPLAY ORDER ONLY — it is not, and must never
+ * become, a merit judgement. Per the Director: shortlist ties are broken by
+ * a named person, on the record, never by code (2026-08-15/16). So the keys
+ * below are deliberately facts nobody could read as "did better" —
+ * constituency number and attempt id are both assigned before the paper is
+ * ever sat, long before any answer is scored. Neither carries an opinion.
+ * Two rows with equal `pct` are still, correctly, a tie: this only fixes
+ * which of their names is drawn first when both need a position on screen.
+ */
+export function compareByScoreThenStableKey(
+  a: Pick<QuestionnaireResultRow, "pct" | "constituencyNumber" | "attemptId">,
+  b: Pick<QuestionnaireResultRow, "pct" | "constituencyNumber" | "attemptId">
+): number {
+  const byPct = (b.pct ?? -1) - (a.pct ?? -1);
+  if (byPct !== 0) return byPct;
+  // Neutral tiebreak #1 — roll-number order, not a ranking of merit. A
+  // missing constituency number is not "better" than a present one, so
+  // nulls sort last rather than first.
+  const ac = a.constituencyNumber;
+  const bc = b.constituencyNumber;
+  if (ac !== bc) {
+    if (ac == null) return 1;
+    if (bc == null) return -1;
+    return ac - bc;
+  }
+  // Neutral tiebreak #2 — final total order so the sort is fully
+  // deterministic even if two rows somehow share a constituency number.
+  return a.attemptId.localeCompare(b.attemptId);
+}
+
+/**
  * A student who nominated for a post and has no answers to show for it.
  *
  * The ranking only ever contained students who handed something in, so a
@@ -810,8 +855,10 @@ export function buildQuestionnaireWatchList(
 
   for (const [postKey, unsorted] of byPost) {
     // Best first — the same order the table ranks in, sorted here rather than
-    // assumed so this cannot quietly disagree with the screen.
-    const ranked = [...unsorted].sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1));
+    // assumed so this cannot quietly disagree with the screen. Same
+    // comparator as the screen's sort (compareByScoreThenStableKey) so a tie
+    // can never land in a different order in the two places.
+    const ranked = [...unsorted].sort(compareByScoreThenStableKey);
     const cutoff = shortlistCutoff(ranked.length);
 
     ranked.forEach((r, i) => {

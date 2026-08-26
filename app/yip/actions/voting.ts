@@ -30,6 +30,7 @@ import {
 import type { Tables, Json } from "@/types/yip/database";
 import { revalidatePath } from "next/cache";
 import type { RollupEntry, RollupOption } from "@/lib/yip/election-rollup";
+import { PARTY_LEADER_LABEL_ONLY_ROLES } from "@/lib/yip/constants";
 
 type VoteSession = Tables<{ schema: "yip" }, "vote_sessions">;
 type Vote = Tables<{ schema: "yip" }, "votes">;
@@ -973,11 +974,19 @@ export async function revealResults(
   }
 
   // Keep parties.party_leader_id consistent with parliament_role: if a sitting
-  // party leader was just elected to a bench seat (PM / Speaker / minister, …),
+  // party leader was just elected to a bench seat (Speaker / minister / …),
   // their role is no longer party_leader — so clear the now-stale "leader" label
   // on any party they were leading. Cheap reconciliation over this event's
   // parties; a party_leader election itself leaves the winner flagged
   // party_leader, so it is never wrongly cleared.
+  //
+  // EXEMPT: prime_minister / deputy_prime_minister / leader_of_opposition
+  // (Director ruling 2026-08-26, PARTY_LEADER_LABEL_ONLY_ROLES) keep their
+  // party's leader pointer even though their role isn't literally
+  // party_leader — they show as the party's leader NAME ONLY, no bonus,
+  // because positionBonuses is keyed on parliament_role and theirs is never
+  // rewritten away from their senior post. Every other role is unaffected and
+  // still gets cleared exactly as before.
   {
     const { data: leaderParties } = await supabase
       .from("parties")
@@ -990,7 +999,7 @@ export async function revealResults(
         .from("participants")
         .select("id")
         .in("id", leaderIds)
-        .eq("parliament_role", "party_leader");
+        .in("parliament_role", ["party_leader", ...PARTY_LEADER_LABEL_ONLY_ROLES]);
       const stillSet = new Set((stillLeaders ?? []).map((p) => p.id));
       for (const lp of leaderParties) {
         if (!stillSet.has(lp.party_leader_id as string)) {

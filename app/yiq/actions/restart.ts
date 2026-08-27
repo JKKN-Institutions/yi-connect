@@ -536,9 +536,27 @@ export async function consumeGrantedRestart(
   // The decision is re-derived from the attempt, not read off the grant: the
   // grant says a restart was authorised, the attempt says how much time it is
   // worth. `alreadyRestarted` is false here because this IS that restart.
-  const decision = canRestart(toRestartAttempt(attempt), {
-    alreadyRestarted: false,
-  });
+  //
+  // A lost last-answer read refuses the resume rather than guessing. The
+  // grant is NOT consumed, so the student can try again in a moment and
+  // still has their one restart.
+  const lastAnswered = await fetchLastAnswered(svc, [attempt.id]);
+  if (lastAnswered === null) {
+    console.log(
+      JSON.stringify({
+        tag: "yiq_restart",
+        verdict: "consume_refused",
+        attemptId,
+        reason: "last_answered_unreadable",
+      })
+    );
+    return { resumed: false };
+  }
+
+  const decision = canRestart(
+    toRestartAttempt(attempt, lastAnswered.get(attempt.id) ?? null),
+    { alreadyRestarted: false }
+  );
   if (!decision.ok) {
     console.log(
       JSON.stringify({

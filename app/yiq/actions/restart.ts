@@ -273,12 +273,24 @@ export async function listRestartCandidates(
     ((grants ?? []) as GrantRow[]).map((g) => [g.student_id, g])
   );
 
+  // FAIL CLOSED, same posture as the grants read above: without this, every
+  // student looks like they answered nothing and the panel would offer each
+  // of them a full paper.
+  const lastAnswered = await fetchLastAnswered(
+    svc,
+    rows.map((a) => a.id)
+  );
+  if (lastAnswered === null) {
+    return { success: false, error: LAST_ANSWERED_UNREADABLE };
+  }
+
   const candidates: RestartCandidate[] = rows.map((a) => {
     const grant = grantByStudent.get(a.student_id) ?? null;
-    const decision = canRestart(toRestartAttempt(a), {
+    const shaped = toRestartAttempt(a, lastAnswered.get(a.id) ?? null);
+    const decision = canRestart(shaped, {
       alreadyRestarted: Boolean(grant),
     });
-    const remainingMs = computeRemainingMs(toRestartAttempt(a)) ?? 0;
+    const remainingMs = computeRemainingMs(shaped) ?? 0;
     const s = studentById.get(a.student_id);
 
     return {

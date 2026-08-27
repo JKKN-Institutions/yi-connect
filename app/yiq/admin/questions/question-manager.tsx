@@ -94,6 +94,7 @@ export function QuestionManager({
   pageSize,
   retiredCount,
   loadError,
+  initialTopicId = "",
 }: {
   topics: Topic[];
   initialRows: QuestionBankRow[];
@@ -101,6 +102,14 @@ export function QuestionManager({
   pageSize: number;
   retiredCount: number;
   loadError: string | null;
+  /**
+   * Pre-selected topic, from ?topic= on the URL — the "Bank depth by topic"
+   * rows on /yiq/admin link straight here. Seeds the dropdown so it AGREES
+   * with the list the server already filtered; without it the control would
+   * read "All topics" over a filtered list, and the next filter change would
+   * silently widen the results back out.
+   */
+  initialTopicId?: string;
 }) {
   const [rows, setRows] = useState<QuestionBankRow[]>(initialRows);
   const [total, setTotal] = useState(initialTotal);
@@ -108,7 +117,7 @@ export function QuestionManager({
   const [pending, start] = useTransition();
 
   // filters
-  const [topicId, setTopicId] = useState("");
+  const [topicId, setTopicId] = useState(initialTopicId);
   const [category, setCategory] = useState("");
   const [difficulty, setDifficulty] = useState("");
   const [activeOnly, setActiveOnly] = useState(false);
@@ -739,6 +748,47 @@ export function QuestionManager({
       </section>
 
       {/* ---------------- The list ----------------------------------------- */}
+      {/*
+        The SAME controls above the list as below it. With a 428-question
+        bank the only pager was under fifty full-height cards, which is why
+        the Director could not reach most of the bank — the buttons existed
+        and were simply unreachable without a very long scroll.
+      */}
+      {total > pageSize ? (
+        <div
+          className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t pt-4"
+          style={{ borderColor: RULE }}
+        >
+          <span className="yiq-data text-[0.8125rem]" style={{ color: DIM }}>
+            Showing {(page - 1) * pageSize + 1}–
+            {Math.min(page * pageSize, total)} of {total}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => refresh(page - 1)}
+              disabled={pending || page <= 1}
+              className="rounded-full border px-4 py-2 text-[0.8125rem] font-bold disabled:opacity-40"
+              style={{ borderColor: RULE, color: PAPER }}
+            >
+              ← Previous
+            </button>
+            <span className="yiq-data text-[0.8125rem]" style={{ color: DIM }}>
+              {page} / {pageCount}
+            </span>
+            <button
+              type="button"
+              onClick={() => refresh(page + 1)}
+              disabled={pending || page >= pageCount}
+              className="rounded-full border px-4 py-2 text-[0.8125rem] font-bold disabled:opacity-40"
+              style={{ borderColor: RULE, color: PAPER }}
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <ul className="mt-4 grid gap-2.5" aria-busy={pending}>
         {rows.length === 0 ? (
           <li

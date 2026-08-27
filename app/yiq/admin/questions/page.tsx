@@ -20,7 +20,11 @@ const RULE = "rgba(247,244,237,0.14)";
  * PLATFORM master data — gated by requireYiqSuperAdmin(), not by the
  * event-scoped gate. A change here reaches every chapter in the country.
  */
-export default async function YiqQuestionBankPage() {
+export default async function YiqQuestionBankPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ topic?: string | string[] }>;
+}) {
   const gate = await requireYiqSuperAdmin();
   if (!gate.ok) {
     return (
@@ -31,6 +35,17 @@ export default async function YiqQuestionBankPage() {
     );
   }
 
+  // ?topic=<uuid> arrives from the "Bank depth by topic" rows on /yiq/admin.
+  // Validated as a UUID rather than passed through: it reaches a database
+  // filter, and a value from a URL is never trusted on the way there.
+  const params = await searchParams;
+  const raw = Array.isArray(params?.topic) ? params.topic[0] : params?.topic;
+  const topicId =
+    typeof raw === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw)
+      ? raw
+      : null;
+
   const svc = await createServiceClient();
 
   const [{ data: topics }, initial, { count: retiredCount }, { count: awaitingReview }] =
@@ -40,7 +55,7 @@ export default async function YiqQuestionBankPage() {
       .select("id, slug, name")
       .eq("is_active", true)
       .order("display_order"),
-    listQuestions({ page: 1 }),
+    listQuestions({ page: 1, topicId }),
     svc
       .from("questions")
       .select("id", { count: "exact", head: true })
@@ -98,6 +113,7 @@ export default async function YiqQuestionBankPage() {
 
         <QuestionManager
           topics={topics ?? []}
+          initialTopicId={topicId ?? ""}
           initialRows={initial.success ? initial.rows : []}
           initialTotal={initial.success ? initial.total : 0}
           pageSize={initial.success ? initial.pageSize : 25}

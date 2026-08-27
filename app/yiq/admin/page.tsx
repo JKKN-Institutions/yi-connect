@@ -117,18 +117,28 @@ export default async function YiqAdminPage() {
               const n = counts.get(t.id) ?? 0;
               const thin = n < 20;
               return (
-                <li
-                  key={t.id}
-                  className="flex items-center justify-between rounded-xl px-4 py-3"
-                  style={{ background: "rgba(247,244,237,0.05)" }}
-                >
-                  <span className="text-[0.9375rem] font-semibold">{t.name}</span>
-                  <span
-                    className="yiq-data text-[1rem] font-bold"
-                    style={{ color: thin ? SAFFRON : PAPER }}
+                <li key={t.id}>
+                  {/*
+                    A LINK, not a decorative row. These looked clickable and
+                    were not, which is the worst of both — and with 428
+                    questions across nine topics, jumping straight to one
+                    topic is the fastest way into the bank.
+                  */}
+                  <Link
+                    href={`/yiq/admin/questions?topic=${t.id}`}
+                    className="flex items-center justify-between rounded-xl px-4 py-3 transition-opacity hover:opacity-80"
+                    style={{ background: "rgba(247,244,237,0.05)" }}
                   >
-                    {n}
-                  </span>
+                    <span className="text-[0.9375rem] font-semibold">
+                      {t.name}
+                    </span>
+                    <span
+                      className="yiq-data text-[1rem] font-bold"
+                      style={{ color: thin ? SAFFRON : PAPER }}
+                    >
+                      {n}
+                    </span>
+                  </Link>
                 </li>
               );
             })}

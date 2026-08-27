@@ -8,6 +8,10 @@ import {
   PRESIDING_ROLES as LEADERSHIP_PRESIDING_ROLES,
 } from "@/lib/yip/auth/leadership";
 import { OFFICIAL_DUTY_ROLES } from "@/lib/yip/constants";
+import {
+  getSpeakingFloorScope,
+  scopeToLiveSession,
+} from "@/lib/yip/speaking-floor-scope";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -37,7 +41,17 @@ import { revalidatePath } from "next/cache";
  *
  * The fairness signal (turns spoken per member) is DERIVED at read time —
  * completed agenda_speakers (the formal roster / Now-Speaking console) PLUS
- * spoken speaking_requests — never denormalised, so it cannot drift.
+ * spoken speaking_requests — never denormalised, so it cannot drift. This is
+ * EVENT-WIDE and cumulative by design (turns don't reset each session) — see
+ * computeTurnData below, which is deliberately NOT scoped to the live agenda
+ * item the way the ACTIVE queue is.
+ *
+ * SESSION SCOPE — every ACTIVE (waiting/called) request belongs to exactly
+ * one agenda item (see lib/yip/speaking-floor-scope.ts). All reads/writes of
+ * the active set go through that file's helpers rather than trusting that
+ * expireActiveSpeakingRequests already cleared the previous session — that
+ * best-effort cleanup can fail silently, and a raised hand must not follow
+ * the House into the next debate regardless.
  */
 
 type ActionResult<T = null> =
@@ -230,19 +244,33 @@ export async function requestToSpeak(): Promise<
     };
   }
 
-  // Already have an active placard? Report it (idempotent), don't stack rows.
+  // Already have an active placard? Report it (idempotent), don't stack rows
+  // — but only if it's for THIS live session. The DB's one-active-row
+  // invariant (unique index) is event-wide, not session-wide, so a stale
+  // 'waiting'/'called' row can survive here if expireActiveSpeakingRequests
+  // failed on an earlier agenda transition (best-effort, see that file). A
+  // stale row like that no longer belongs to any queue anyone can see —
+  // retire it here before raising a fresh hand, otherwise the unique index
+  // would silently block the insert below with nothing left to show it in.
   const { data: existing } = await supabase
     .from("speaking_requests")
-    .select("id, status")
+    .select("id, status, agenda_item_id")
     .eq("event_id", sess.eventId)
     .eq("participant_id", sess.id)
     .in("status", ["waiting", "called"])
     .maybeSingle();
   if (existing) {
-    return {
-      success: true,
-      data: { status: existing.status === "called" ? "called" : "already_waiting" },
-    };
+    if (existing.agenda_item_id === event.current_agenda_item_id) {
+      return {
+        success: true,
+        data: { status: existing.status === "called" ? "called" : "already_waiting" },
+      };
+    }
+    await supabase
+      .from("speaking_requests")
+      .update({ status: "expired", resolved_at: new Date().toISOString() })
+      .eq("id", existing.id)
+      .in("status", ["waiting", "called"]);
   }
 
   const { error } = await supabase.from("speaking_requests").insert({
@@ -270,11 +298,16 @@ export async function withdrawSpeakingRequest(): Promise<ActionResult> {
     return { success: false, error: "Not signed in as a participant" };
   }
   const supabase = await createServiceClient();
+  const { activeAgendaItemFilter } = await getSpeakingFloorScope(
+    supabase,
+    sess.eventId
+  );
   const { error } = await supabase
     .from("speaking_requests")
     .update({ status: "withdrawn", resolved_at: new Date().toISOString() })
     .eq("event_id", sess.eventId)
     .eq("participant_id", sess.id)
+    .eq("agenda_item_id", activeAgendaItemFilter)
     .in("status", ["waiting", "called"]);
   if (error) return { success: false, error: error.message };
   return { success: true, data: null };
@@ -312,6 +345,7 @@ export async function getMySpeakingStatus(): Promise<
     .from("speaking_requests")
     .select("id, participant_id, status, requested_at")
     .eq("event_id", sess.eventId)
+    .eq("agenda_item_id", scopeToLiveSession(currentItemId))
     .in("status", ["waiting", "called"])
     .order("requested_at", { ascending: true });
   const rows = active ?? [];
@@ -363,6 +397,7 @@ export async function getSpeakingFloorStats(
     .from("speaking_requests")
     .select("id", { count: "exact", head: true })
     .eq("event_id", eventId)
+    .eq("agenda_item_id", scopeToLiveSession(event?.current_agenda_item_id ?? null))
     .eq("status", "waiting");
 
   return {
@@ -433,10 +468,14 @@ async function buildSpeakingFloorState(
 
   // Phone-placard queue (only meaningful when the placard is on, but always read
   // so a queue left over from a just-disabled placard still resolves cleanly).
+  // Scoped to the LIVE agenda item — see lib/yip/speaking-floor-scope.ts. A hand
+  // raised for a debate that has since ended must not surface here even if the
+  // best-effort expiry cleanup on the agenda transition silently failed.
   const { data: reqs } = await supabase
     .from("speaking_requests")
     .select("id, participant_id, status, requested_at")
     .eq("event_id", eventId)
+    .eq("agenda_item_id", scopeToLiveSession(currentItemId))
     .in("status", ["waiting", "called"])
     .order("requested_at", { ascending: true });
   const requests = reqs ?? [];
@@ -494,11 +533,16 @@ export async function getSpeakingFloor(
   return { success: true, data };
 }
 
-// Resolve the event for a request id and gate the caller on canManage.
+// Resolve the event for a request id and gate the caller on canManage. Also
+// resolves the live-session scope once here so every mutation below can
+// confirm it's still acting on the CURRENT session's request, not a stale one
+// left over from a session the House has since moved past (see
+// lib/yip/speaking-floor-scope.ts) — closes the race window between the
+// Chair's queue rendering and the Chair clicking an action on it.
 async function gateRequest(
   requestId: string
 ): Promise<
-  | { ok: true; supabase: ServiceClient; eventId: string }
+  | { ok: true; supabase: ServiceClient; eventId: string; agendaScope: string }
   | { ok: false; error: string }
 > {
   const supabase = await createServiceClient();
@@ -512,7 +556,16 @@ async function gateRequest(
   if (!access.canManage) {
     return { ok: false, error: "Not authorized to manage this event" };
   }
-  return { ok: true, supabase, eventId: req.event_id };
+  const { activeAgendaItemFilter } = await getSpeakingFloorScope(
+    supabase,
+    req.event_id
+  );
+  return {
+    ok: true,
+    supabase,
+    eventId: req.event_id,
+    agendaScope: activeAgendaItemFilter,
+  };
 }
 
 /** Call a member to the mic. Only one member is 'called' at a time — any other
@@ -521,12 +574,13 @@ async function gateRequest(
 export async function callSpeaker(requestId: string): Promise<ActionResult> {
   const g = await gateRequest(requestId);
   if (!g.ok) return { success: false, error: g.error };
-  const { supabase, eventId } = g;
+  const { supabase, eventId, agendaScope } = g;
 
   await supabase
     .from("speaking_requests")
     .update({ status: "waiting", called_at: null })
     .eq("event_id", eventId)
+    .eq("agenda_item_id", agendaScope)
     .eq("status", "called")
     .neq("id", requestId);
 
@@ -534,6 +588,7 @@ export async function callSpeaker(requestId: string): Promise<ActionResult> {
     .from("speaking_requests")
     .update({ status: "called", called_at: new Date().toISOString() })
     .eq("id", requestId)
+    .eq("agenda_item_id", agendaScope)
     .in("status", ["waiting", "called"]);
   if (error) return { success: false, error: error.message };
 
@@ -545,12 +600,13 @@ export async function callSpeaker(requestId: string): Promise<ActionResult> {
 export async function markSpoken(requestId: string): Promise<ActionResult> {
   const g = await gateRequest(requestId);
   if (!g.ok) return { success: false, error: g.error };
-  const { supabase, eventId } = g;
+  const { supabase, eventId, agendaScope } = g;
 
   const { error } = await supabase
     .from("speaking_requests")
     .update({ status: "spoken", resolved_at: new Date().toISOString() })
     .eq("id", requestId)
+    .eq("agenda_item_id", agendaScope)
     .in("status", ["waiting", "called"]);
   if (error) return { success: false, error: error.message };
 
@@ -564,12 +620,13 @@ export async function skipSpeakingRequest(
 ): Promise<ActionResult> {
   const g = await gateRequest(requestId);
   if (!g.ok) return { success: false, error: g.error };
-  const { supabase, eventId } = g;
+  const { supabase, eventId, agendaScope } = g;
 
   const { error } = await supabase
     .from("speaking_requests")
     .update({ status: "skipped", resolved_at: new Date().toISOString() })
     .eq("id", requestId)
+    .eq("agenda_item_id", agendaScope)
     .in("status", ["waiting", "called"]);
   if (error) return { success: false, error: error.message };
 
@@ -611,12 +668,16 @@ export async function getSpeakerSpeakingFloor(
 // Gate + resolve a request for the presiding officer — mirrors gateRequest
 // above but authorizes via requireLeadershipRole, and scopes the request
 // lookup to eventId (closes a cross-event IDOR, same pattern as
-// loadMotionForSpeaker in speaker.ts).
+// loadMotionForSpeaker in speaker.ts). Also resolves the live-session scope,
+// same reasoning as gateRequest above.
 async function gateRequestForSpeaker(
   eventId: string,
   participantId: string,
   requestId: string
-): Promise<{ ok: true; supabase: ServiceClient } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; supabase: ServiceClient; agendaScope: string }
+  | { ok: false; error: string }
+> {
   const gate = await requireLeadershipRole(
     participantId,
     eventId,
@@ -633,7 +694,11 @@ async function gateRequestForSpeaker(
     .maybeSingle();
   if (!req) return { ok: false, error: "Request not found for this event" };
 
-  return { ok: true, supabase };
+  const { activeAgendaItemFilter } = await getSpeakingFloorScope(
+    supabase,
+    eventId
+  );
+  return { ok: true, supabase, agendaScope: activeAgendaItemFilter };
 }
 
 /** Presiding-officer counterpart to callSpeaker — identical field writes. */
@@ -644,12 +709,13 @@ export async function speakerCallSpeaker(
 ): Promise<ActionResult> {
   const g = await gateRequestForSpeaker(eventId, participantId, requestId);
   if (!g.ok) return { success: false, error: g.error };
-  const { supabase } = g;
+  const { supabase, agendaScope } = g;
 
   await supabase
     .from("speaking_requests")
     .update({ status: "waiting", called_at: null })
     .eq("event_id", eventId)
+    .eq("agenda_item_id", agendaScope)
     .eq("status", "called")
     .neq("id", requestId);
 
@@ -657,6 +723,7 @@ export async function speakerCallSpeaker(
     .from("speaking_requests")
     .update({ status: "called", called_at: new Date().toISOString() })
     .eq("id", requestId)
+    .eq("agenda_item_id", agendaScope)
     .in("status", ["waiting", "called"]);
   if (error) return { success: false, error: error.message };
 
@@ -673,12 +740,13 @@ export async function speakerMarkSpoken(
 ): Promise<ActionResult> {
   const g = await gateRequestForSpeaker(eventId, participantId, requestId);
   if (!g.ok) return { success: false, error: g.error };
-  const { supabase } = g;
+  const { supabase, agendaScope } = g;
 
   const { error } = await supabase
     .from("speaking_requests")
     .update({ status: "spoken", resolved_at: new Date().toISOString() })
     .eq("id", requestId)
+    .eq("agenda_item_id", agendaScope)
     .in("status", ["waiting", "called"]);
   if (error) return { success: false, error: error.message };
 
@@ -695,12 +763,13 @@ export async function speakerSkipSpeakingRequest(
 ): Promise<ActionResult> {
   const g = await gateRequestForSpeaker(eventId, participantId, requestId);
   if (!g.ok) return { success: false, error: g.error };
-  const { supabase } = g;
+  const { supabase, agendaScope } = g;
 
   const { error } = await supabase
     .from("speaking_requests")
     .update({ status: "skipped", resolved_at: new Date().toISOString() })
     .eq("id", requestId)
+    .eq("agenda_item_id", agendaScope)
     .in("status", ["waiting", "called"]);
   if (error) return { success: false, error: error.message };
 

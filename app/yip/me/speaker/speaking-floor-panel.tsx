@@ -59,7 +59,16 @@ export function SpeakerSpeakingFloor({
     );
   }
 
-  const { board, queue, calledEntry, spokenCount, totalParticipants, placardEnabled } = data;
+  const {
+    board,
+    queue,
+    calledEntry,
+    spokenCount,
+    totalParticipants,
+    placardEnabled,
+    hasLiveItem,
+    liveItemTitle,
+  } = data;
   const pct =
     totalParticipants > 0 ? Math.round((spokenCount / totalParticipants) * 100) : 0;
   const yetToSpeak = board.filter((m) => m.turns === 0);
@@ -69,6 +78,14 @@ export function SpeakerSpeakingFloor({
       {/* Fairness meter — same wording as the organiser panel. */}
       <SectionShell accent={GOLD}>
         <div className="px-5 py-4">
+          {/* Which session this queue belongs to — same wording as the
+              organiser's control panel, so the two screens never disagree
+              about what the queue is for. */}
+          <p className="mb-2 text-xs" style={{ color: inkA(0.45) }}>
+            {hasLiveItem
+              ? `Live session: ${liveItemTitle ?? "Untitled item"}`
+              : "No live session right now"}
+          </p>
           <div className="mb-1 flex items-center justify-between text-xs">
             <span className="font-medium" style={{ color: inkA(0.7) }}>
               {spokenCount} of {totalParticipants} have spoken

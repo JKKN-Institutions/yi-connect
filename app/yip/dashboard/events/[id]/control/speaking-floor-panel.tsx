@@ -129,6 +129,15 @@ export function SpeakingFloorPanel({
           )}
         </div>
 
+        {/* Which session this queue belongs to — the raise-to-speak queue is
+            scoped to this item and clears when the House moves on, even if a
+            hand was never explicitly lowered (see speaking-floor-scope.ts). */}
+        <p className="mt-1 text-xs text-gray-500">
+          {data.hasLiveItem
+            ? `Live session: ${data.liveItemTitle ?? "Untitled item"}`
+            : "No live session right now"}
+        </p>
+
         {/* Fairness meter — detailed (Chair). Public aggregate mirrors on the
             projector. */}
         <div className="mt-2">

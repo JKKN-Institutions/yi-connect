@@ -1,7 +1,7 @@
 ---
-session_name: "yiq"
+session_name: "yiq-wave2"
 directory: "/Users/omm/PROJECTS/yi-connect/.worktrees/yiq-wave2"
-created: 2026-08-24
+created: 2026-08-27
 last_active: 2026-08-27
 status: active
 tags:
@@ -9,10 +9,10 @@ tags:
   - terminal
 ---
 
-# yiq
+# yiq-wave2
 
 **Directory:** `/Users/omm/PROJECTS/yi-connect/.worktrees/yiq-wave2`
-**Created:** 2026-08-24
+**Created:** 2026-08-27
 
 ## Goals
 _No goals defined yet._
@@ -21,9 +21,8 @@ _No goals defined yet._
 _No decisions recorded yet._
 
 ## Captured Notes
-- **[22:03] Session ended** — Auto-created on first exit
+- **[07:35] Session ended** — Auto-created on first exit
 
-- **[13:42] Session ended**
-- **[19:11] Session ended**
+- **[07:50] Session ended**
 ## Related Sessions
 _No related session notes yet. Sessions working in this directory will auto-link here._

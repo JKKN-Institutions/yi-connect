@@ -3,6 +3,11 @@ import { redirect } from "next/navigation";
 import { getYiqSession } from "@/lib/yiq/auth/yiq-session";
 import { createServiceClient } from "@/lib/yiq/supabase/server";
 import { signOut } from "../actions/auth";
+import {
+  checkStudentSessionLive,
+  STALE_SESSION_HEADING,
+  STALE_SESSION_MESSAGE,
+} from "@/lib/yiq/auth/stale-session";
 import { STATUS_LABELS, type ChapterEventStatus } from "@/lib/yiq/constants";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +24,42 @@ export default async function MyYiqPage() {
   if (!session || session.type !== "student") redirect("/yiq/login");
 
   const svc = await createServiceClient();
+
+  // A signed cookie is not proof the student still exists — a team can be
+  // deleted or re-registered under them. Say so explicitly rather than
+  // rendering a page with blank fields they cannot diagnose.
+  const liveness = await checkStudentSessionLive(svc as never, {
+    id: session.id,
+    teamId: session.teamId,
+  });
+  if (!liveness.live) {
+    return (
+      <main
+        id="yiq-main"
+        className="flex min-h-screen flex-col items-center justify-center px-5"
+        style={{ background: INK, color: PAPER }}
+      >
+        <div className="w-full max-w-md">
+          <Link href="/yiq" className="yiq-display text-[1.375rem]">
+            YIQ
+          </Link>
+          <h1 className="yiq-display mt-6 text-[2rem]">{STALE_SESSION_HEADING}</h1>
+          <p className="mt-3 text-[0.9375rem] leading-relaxed" style={{ color: DIM }}>
+            {STALE_SESSION_MESSAGE}
+          </p>
+          <form action={signOut} className="mt-6">
+            <button
+              type="submit"
+              className="rounded-full px-5 py-2.5 text-[0.9375rem] font-medium"
+              style={{ background: SAFFRON, color: INK }}
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      </main>
+    );
+  }
 
   const [{ data: team }, { data: event }, { data: attempts }] = await Promise.all([
     svc

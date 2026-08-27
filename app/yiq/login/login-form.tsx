@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { signInWithCode } from "../actions/auth";
 
-export function LoginForm() {
+export function LoginForm({ redirectTo }: { redirectTo?: string }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [code, setCode] = useState("");
@@ -19,7 +19,9 @@ export function LoginForm() {
         setError(res.error);
         return;
       }
-      router.push("/yiq/me");
+      // Honour where they were trying to go. Already validated server-side
+      // by safeYiqRedirect, so this is a same-site /yiq path or nothing.
+      router.push(redirectTo || "/yiq/me");
       router.refresh();
     });
   }

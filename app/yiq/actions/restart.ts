@@ -390,9 +390,15 @@ export async function grantRestart(input: {
     .eq("student_id", attempt.student_id)
     .maybeSingle()) as { data: Pick<GrantRow, "id" | "granted_ms"> | null };
 
-  const decision = canRestart(toRestartAttempt(attempt), {
-    alreadyRestarted: Boolean(existing),
-  });
+  const lastAnswered = await fetchLastAnswered(svc, [attempt.id]);
+  if (lastAnswered === null) {
+    return { success: false, error: LAST_ANSWERED_UNREADABLE };
+  }
+
+  const decision = canRestart(
+    toRestartAttempt(attempt, lastAnswered.get(attempt.id) ?? null),
+    { alreadyRestarted: Boolean(existing) }
+  );
 
   if (!decision.ok) {
     if (decision.reason === "already_restarted" && existing) {

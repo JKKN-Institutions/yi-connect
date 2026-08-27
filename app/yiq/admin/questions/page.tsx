@@ -33,7 +33,8 @@ export default async function YiqQuestionBankPage() {
 
   const svc = await createServiceClient();
 
-  const [{ data: topics }, initial, { count: retiredCount }] = await Promise.all([
+  const [{ data: topics }, initial, { count: retiredCount }, { count: awaitingReview }] =
+    await Promise.all([
     svc
       .from("topics")
       .select("id, slug, name")
@@ -44,6 +45,14 @@ export default async function YiqQuestionBankPage() {
       .from("questions")
       .select("id", { count: "exact", head: true })
       .eq("is_retired", true),
+    // Drafted by a model, never read by a person. These may only appear on a
+    // practice paper until someone signs them off (Director rule 7).
+    svc
+      .from("questions")
+      .select("id", { count: "exact", head: true })
+      .is("reviewed_at", null)
+      .eq("is_ai_generated", true)
+      .eq("is_retired", false),
   ]);
 
   return (
@@ -75,6 +84,17 @@ export default async function YiqQuestionBankPage() {
           rather than deleting it — a question that has been sat is part of a
           graded result and cannot be removed.
         </p>
+
+        {awaitingReview && awaitingReview > 0 ? (
+          <Link
+            href="/yiq/admin/questions/review"
+            className="mt-4 inline-block rounded-full px-4 py-2 text-[0.875rem] font-medium"
+            style={{ background: SAFFRON, color: INK }}
+          >
+            {awaitingReview} question{awaitingReview === 1 ? "" : "s"} awaiting your
+            review
+          </Link>
+        ) : null}
 
         <QuestionManager
           topics={topics ?? []}

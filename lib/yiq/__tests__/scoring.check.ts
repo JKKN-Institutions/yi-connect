@@ -12,7 +12,7 @@
  */
 import {
   gradeAttempt, rollUpTeam, rankTeams, bestIndividual, finalsTotal,
-  type MemberResult,
+  MIN_MEMBERS_SAT, type MemberResult,
 } from "../scoring";
 
 let pass = 0, fail = 0;
@@ -70,44 +70,72 @@ const r7 = gradeAttempt(key,
   { marksPerQuestion: 1, negativeMarks: 1 });
 eq("empty string is unanswered, not wrong", r7.wrongCount, 0);
 
-console.log("\n── team rollup ──");
-const mk = (id: string, n: string, s: number, t: number | null, a = true): MemberResult =>
-  ({ studentId: id, studentName: n, score: s, timeTakenSeconds: t, attempted: a });
+console.log("\n-- team rollup: AVERAGE of those who sat --");
+const mk = (id: string, n: string, sc: number, t: number | null, a = true): MemberResult =>
+  ({ studentId: id, studentName: n, score: sc, timeTakenSeconds: t, attempted: a });
 
 const tA = rollUpTeam("A", "Alpha", "senior", [mk("1","Aarav",82,600), mk("2","Diya",76,700), mk("3","Karthik",91,500)]);
-eq("team total is the SUM of members", tA.totalScore, 249);
-eq("membersAttempted", tA.membersAttempted, 3);
+eq("3 sat: average not sum", tA.score, 83);          // 249/3, NOT 249
+eq("  membersAttempted", tA.membersAttempted, 3);
+eq("  eligible", tA.eligible, true);
 
-const tB = rollUpTeam("B", "Bravo", "senior", [mk("4","X",90,400), mk("5","Y",0,null,false), mk("6","Z",90,400)]);
-eq("absent member contributes 0", tB.totalScore, 180);
-eq("absent member not counted as attempted", tB.membersAttempted, 2);
-eq("absent member's time excluded", tB.totalTimeSeconds, 800);
+const tB = rollUpTeam("B", "Bravo", "senior", [mk("4","X",88,400), mk("5","Y",0,null,false), mk("6","Z",90,400)]);
+eq("2 of 3 sat: averages only the two", tB.score, 89);
+eq("  absent member does NOT drag it down", tB.eligible, true);
+eq("  absent member's time excluded", tB.totalTimeSeconds, 800);
 
-console.log("\n── ranking ──");
-const teams = [
-  rollUpTeam("t1","One","senior",[mk("a","A",100,300)]),
-  rollUpTeam("t2","Two","senior",[mk("b","B",100,200)]),   // same score, faster
-  rollUpTeam("t3","Three","senior",[mk("c","C",50,100)]),
-];
-const ranked = rankTeams(teams, 2);
-eq("faster team wins the tie", ranked[0].teamName, "Two");
+// THE RULING THIS ENCODES: under the old sum, Bravo (178) lost to Alpha (249)
+// despite both its students outscoring all three of Alpha's.
+check("the ill-teammate injustice is gone: Bravo now beats Alpha", tB.score > tA.score,
+      `Bravo ${tB.score} vs Alpha ${tA.score}`);
+
+console.log("\n-- the floor of two --");
+const solo = rollUpTeam("S", "Solo", "junior", [mk("1","Star",100,300), mk("2","Away",0,null,false), mk("3","Also",0,null,false)]);
+eq("1 sat: ineligible however high the score", solo.eligible, false);
+eq("  reason is machine-readable", solo.ineligibleReason, "insufficient_members");
+const none = rollUpTeam("N", "None", "junior", [mk("1","A",0,null,false), mk("2","B",0,null,false)]);
+eq("0 sat: ineligible", none.eligible, false);
+eq("  score is 0, not NaN", none.score, 0);
+
+console.log("\n-- ranking --");
+const ranked = rankTeams([
+  rollUpTeam("t1","One","senior",[mk("a","A",100,300), mk("b","B",100,300)]),
+  rollUpTeam("t2","Two","senior",[mk("c","C",100,200), mk("d","D",100,200)]),  // same avg, faster
+  rollUpTeam("t3","Three","senior",[mk("e","E",50,100), mk("f","F",50,100)]),
+], 2);
+eq("faster average time wins the tie", ranked[0].teamName, "Two");
 eq("  slower is 2nd", ranked[1].teamName, "One");
 eq("top 2 qualify", ranked.filter(t=>t.qualified).map(t=>t.teamName), ["Two","One"]);
-eq("3rd does not qualify", ranked[2].qualified, false);
+eq("3rd does not", ranked[2].qualified, false);
 
-// True tie ACROSS the cut line must not be silently dropped.
-const tied = [
-  rollUpTeam("x1","P","junior",[mk("a","A",100,300)]),
-  rollUpTeam("x2","Q","junior",[mk("b","B",50,200)]),
-  rollUpTeam("x3","R","junior",[mk("c","C",50,200)]),   // identical to Q
-];
-const rankedTied = rankTeams(tied, 2);
-eq("a genuine tie on the cut line is carried through",
-   rankedTied.filter(t=>t.qualified).length, 3);
+// A one-member team scoring 100 must NOT outrank real teams.
+const withSolo = rankTeams([
+  rollUpTeam("r1","Real","junior",[mk("a","A",60,300), mk("b","B",60,300)]),
+  rollUpTeam("r2","SoloStar","junior",[mk("c","C",100,100), mk("d","D",0,null,false)]),
+], 5);
+eq("a 1-member 100 ranks BELOW a real team on 60", withSolo[0].teamName, "Real");
+eq("  and never qualifies", withSolo.find(t=>t.teamName==="SoloStar")?.qualified, false);
+check("  even with slots to spare", withSolo.filter(t=>t.qualified).length === 1);
+
+// The Director kept: a genuine dead heat at the cut carries everyone through.
+const tied = rankTeams([
+  rollUpTeam("x1","P","junior",[mk("a","A",100,300), mk("b","B",100,300)]),
+  rollUpTeam("x2","Q","junior",[mk("c","C",50,200), mk("d","D",50,200)]),
+  rollUpTeam("x3","R","junior",[mk("e","E",50,200), mk("f","F",50,200)]),   // identical to Q
+], 2);
+eq("a true tie at the cut carries all through", tied.filter(t=>t.qualified).length, 3);
+
+// Average time, not total: a 3-member team must not lose for sitting one more paper.
+const three = rollUpTeam("m3","Three","senior",[mk("a","A",80,300), mk("b","B",80,300), mk("c","C",80,300)]);
+const two   = rollUpTeam("m2","Two","senior",  [mk("d","D",80,310), mk("e","E",80,310)]);
+const byAvg = rankTeams([three, two], 1);
+eq("tie-break uses AVERAGE time, so the 3-member team wins", byAvg[0].teamName, "Three");
 
 eq("empty field does not crash", rankTeams([], 10).length, 0);
-const single = rankTeams([rollUpTeam("s","S","junior",[mk("a","A",10,10)])], 10);
-eq("fewer teams than slots: all qualify", single[0].qualified, true);
+const only = rankTeams([rollUpTeam("s","S","junior",[mk("a","A",10,10), mk("b","B",10,10)])], 10);
+eq("fewer teams than slots: all eligible qualify", only[0].qualified, true);
+const allIneligible = rankTeams([rollUpTeam("z","Z","junior",[mk("a","A",99,10)])], 10);
+eq("a field of only ineligible teams qualifies nobody", allIneligible.filter(t=>t.qualified).length, 0);
 
 console.log("\n── best individual ──");
 const best = bestIndividual([mk("1","Low",10,100), mk("2","High",99,900), mk("3","Tie",99,50)]);
@@ -118,6 +146,45 @@ eq("empty -> null", bestIndividual([]), null);
 console.log("\n── finals total ──");
 eq("sums round points", finalsTotal([10,10,5,-5]), 20);
 eq("empty -> 0", finalsTotal([]), 0);
+
+console.log("\n── a disqualified member counts as NOT having sat (Director, 2026-08-27) ──");
+// computeChapterStandings only reads attempts whose status is 'submitted' or
+// 'auto_submitted'. A DISQUALIFIED attempt never reaches rollUpTeam at all, so
+// the cheat's score cannot drag or lift the team average — it simply is not
+// there. For a 2-member team that leaves the honest teammate alone below the
+// floor, and the team goes out.
+//
+// The Director confirmed that on 2026-08-27, choosing it over "the team
+// survives on the remaining score": a team must not be able to GAIN by having
+// a weak member removed. These checks exist so nobody quietly softens the rule
+// later without a new decision.
+{
+  const twoMemberTeam = rollUpTeam("t-dq", "Two, one caught", "junior", [
+    { studentId: "s-honest", studentName: "Honest", score: 26, timeTakenSeconds: 900, attempted: true },
+    // The disqualified member: their row never arrives, so attempted is false.
+    { studentId: "s-caught", studentName: "Caught", score: 0, timeTakenSeconds: 0, attempted: false },
+  ]);
+  eq("  the team is INELIGIBLE, not scored on one member", twoMemberTeam.eligible, false);
+  eq("  and the reason is recorded", twoMemberTeam.ineligibleReason, "insufficient_members");
+  eq("  only one member is counted as having sat", twoMemberTeam.membersAttempted, 1);
+  eq("  both are still counted as registered", twoMemberTeam.membersTotal, 2);
+
+  // The same removal on a 3-member team leaves 2 — still eligible, and the
+  // average is over the two who actually sat, NOT over three.
+  const threeMemberTeam = rollUpTeam("t-dq3", "Three, one caught", "senior", [
+    { studentId: "a", studentName: "A", score: 24, timeTakenSeconds: 800, attempted: true },
+    { studentId: "b", studentName: "B", score: 18, timeTakenSeconds: 900, attempted: true },
+    { studentId: "c", studentName: "Caught", score: 0, timeTakenSeconds: 0, attempted: false },
+  ]);
+  eq("  a 3-member team survives one disqualification", threeMemberTeam.eligible, true);
+  eq("  the average is over the TWO who sat, not three", threeMemberTeam.score, 21);
+  check(
+    "  a removed member does NOT drag the average toward zero",
+    threeMemberTeam.score === 21,
+    `got ${threeMemberTeam.score}; dividing by three would give 14`
+  );
+  eq("  the tie-break time counts only the two who sat", threeMemberTeam.totalTimeSeconds, 1700);
+}
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

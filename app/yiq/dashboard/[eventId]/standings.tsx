@@ -38,7 +38,7 @@ function Table({
                 <tr className="yiq-eyebrow" style={{ color: DIM }}>
                   <th className="py-2 pr-3 font-medium">#</th>
                   <th className="py-2 pr-3 font-medium">Team</th>
-                  <th className="py-2 pr-3 text-right font-medium">Score</th>
+                  <th className="py-2 pr-3 text-right font-medium">Avg</th>
                   <th className="py-2 pr-3 text-right font-medium">Sat</th>
                   <th className="py-2 text-right font-medium">Time</th>
                 </tr>
@@ -52,10 +52,17 @@ function Table({
                     <td className="py-2.5 pr-3">
                       <span
                         className="yiq-data inline-grid h-7 w-7 place-items-center rounded-lg text-[0.75rem] font-bold"
+                        title={
+                          t.eligible
+                            ? undefined
+                            : "Fewer than 2 members sat — this team is out"
+                        }
                         style={
                           t.qualified
                             ? { background: SAFFRON, color: "#0a1633" }
-                            : { background: "rgba(247,244,237,0.08)", color: DIM }
+                            : t.eligible
+                              ? { background: "rgba(247,244,237,0.08)", color: DIM }
+                              : { background: "rgba(200,69,47,0.18)", color: "#ffb4a6" }
                         }
                       >
                         {t.rank}
@@ -65,14 +72,18 @@ function Table({
                       {t.teamName}
                     </td>
                     <td className="yiq-data py-2.5 pr-3 text-right text-[1rem] font-bold">
-                      {t.totalScore}
+                      {t.score}
                     </td>
                     <td
                       className="yiq-data py-2.5 pr-3 text-right text-[0.875rem]"
                       style={{
-                        color:
-                          t.membersAttempted < t.membersTotal ? SAFFRON : DIM,
+                        color: !t.eligible
+                          ? "#ffb4a6"
+                          : t.membersAttempted < t.membersTotal
+                            ? SAFFRON
+                            : DIM,
                       }}
+                      title="How many of the team sat — the average is over these"
                     >
                       {t.membersAttempted}/{t.membersTotal}
                     </td>
@@ -123,9 +134,11 @@ export function Standings({
     <section className="mt-10 rounded-2xl border p-6" style={{ borderColor: RULE }}>
       <h2 className="yiq-display text-[1.75rem]">Online round standings</h2>
       <p className="mt-2 text-[0.9375rem]" style={{ color: DIM }}>
-        A team&apos;s score is the total of its members&apos;. Ties are broken
-        by total time, and a team level with the last qualifier on both is
-        carried through rather than dropped.
+        A team&apos;s score is the <strong>average</strong> of the members who
+        sat, so an absent teammate no longer drags the team down. A team where
+        fewer than two members sat is out whatever the remaining score. Ties
+        break on average time, and a team genuinely level with the last
+        qualifier is carried through rather than dropped.
       </p>
       <div className="mt-7 grid gap-9 lg:grid-cols-2">
         <Table

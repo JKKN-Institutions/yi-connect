@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { displayLabelFor } from "@/lib/yiq/option-order";
 import { useRouter } from "next/navigation";
 import { saveAnswer, submitAttempt, type SubmitResult } from "../actions/attempt";
 import { formatClock, secondsRemaining, type OptionKey, type PresentedQuestion } from "@/lib/yiq/paper";
@@ -157,7 +158,7 @@ export function QuizClient({
         <p className="mt-7 text-[0.9375rem] leading-relaxed" style={{ color: DIM }}>
           {isMock
             ? "Practice scores don't count. Take it as often as you like before the real round."
-            : "Your team's total is the sum of its members' scores. Rankings are published by your chapter after the round closes."}
+            : "Your team's score is the average of the members who sit, so a teammate who misses it will not drag you down. Rankings are published by your chapter after the round closes."}
         </p>
 
         <button
@@ -252,7 +253,7 @@ export function QuizClient({
         ) : null}
 
         <div className="mt-5 grid gap-2.5">
-          {q.options.map((o) => (
+          {q.options.map((o, oi) => (
             <button
               key={o.key}
               type="button"
@@ -262,7 +263,10 @@ export function QuizClient({
               disabled={submitting}
               aria-pressed={answers[q.id] === o.key}
             >
-              <span className="yiq-option-key">{o.key}</span>
+              {/* Labelled by POSITION, not by the canonical key. The server
+                  may hand these back in a per-student order, and printing the
+                  canonical key would read as "c, a, d, b" to the student. */}
+              <span className="yiq-option-key">{displayLabelFor(oi)}</span>
               <span className="pt-0.5">{o.text}</span>
             </button>
           ))}

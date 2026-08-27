@@ -26,6 +26,7 @@ import {
   type ReviewQuestionSource,
 } from "@/lib/yiq/review";
 import type { OptionKey } from "@/lib/yiq/paper";
+import { applyOptionOrder } from "@/lib/yiq/option-order";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -169,7 +170,7 @@ export async function getReview(attemptId: string): Promise<GetReviewResult> {
   const { data: attempt } = await svc
     .from("attempts")
     .select(
-      "id, student_id, chapter_event_id, is_mock, status, score, correct_count, wrong_count, unanswered_count, time_taken_seconds, submitted_at, question_order, papers(name)"
+      "id, student_id, chapter_event_id, is_mock, status, score, correct_count, wrong_count, unanswered_count, time_taken_seconds, submitted_at, question_order, papers(name, shuffle_options)"
     )
     .eq("id", attemptId)
     .maybeSingle();
@@ -203,6 +204,13 @@ export async function getReview(attemptId: string): Promise<GetReviewResult> {
   const reveal = g.canReveal;
   const order: string[] = attempt.question_order ?? [];
 
+  // The paper's own setting, so the review reproduces the option order this
+  // student actually sat. Defaults to false if the paper row is missing —
+  // showing the authored order is a nuisance, guessing is worse.
+  const shuffleOptions = Boolean(
+    (attempt.papers as { shuffle_options?: boolean } | null)?.shuffle_options
+  );
+
   // A paper with no stored order has nothing to walk. Return the summary.
   const ids = order.length > 0 ? order : [];
 
@@ -226,7 +234,7 @@ export async function getReview(attemptId: string): Promise<GetReviewResult> {
         topic: (r.topics as { name: string } | null)?.name ?? null,
         questionText: r.question_text,
         mediaUrl: r.media_url,
-        options: toOptions(r),
+        options: toOptions(r, attemptId, shuffleOptions),
         correctOption: r.correct_option,
         explanation: r.answer_explanation,
       }));
@@ -242,7 +250,7 @@ export async function getReview(attemptId: string): Promise<GetReviewResult> {
         topic: (r.topics as { name: string } | null)?.name ?? null,
         questionText: r.question_text,
         mediaUrl: r.media_url,
-        options: toOptions(r),
+        options: toOptions(r, attemptId, shuffleOptions),
       }));
     }
   }
@@ -304,16 +312,26 @@ export async function getReview(attemptId: string): Promise<GetReviewResult> {
   };
 }
 
+/**
+ * The four options, IN THE ORDER THIS STUDENT SAW THEM.
+ *
+ * The paper is rendered with a per-student option order
+ * (lib/yiq/option-order.ts). The review screen MUST reproduce it: a student
+ * comparing their answer against the correct one, with the options in a
+ * different order from the one they sat, cannot tell whether they were right.
+ * The order is derived, not stored, so passing the same two ids is enough.
+ */
 function toOptions(row: {
+  id: string;
   option_a: string | null;
   option_b: string | null;
   option_c: string | null;
   option_d: string | null;
-}): ReviewOption[] {
-  return [
+}, attemptId: string, shuffle: boolean): ReviewOption[] {
+  return applyOptionOrder([
     { key: "a" as OptionKey, text: row.option_a ?? "" },
     { key: "b" as OptionKey, text: row.option_b ?? "" },
     { key: "c" as OptionKey, text: row.option_c ?? "" },
     { key: "d" as OptionKey, text: row.option_d ?? "" },
-  ];
+  ], attemptId, row.id, shuffle);
 }

@@ -29,7 +29,7 @@ export default async function RegisterPage() {
         <p className="mt-3 max-w-xl text-[0.9375rem] leading-relaxed" style={{ color: "#5a6480" }}>
           A team is 2 or 3 students from the same school, all in the same
           category. Every member sits the online round on their own device, and
-          the team&apos;s score is the total of its members. You&apos;ll get an
+          the team&apos;s score is the average of the members who sit — at least two must sit. You&apos;ll get an
           access code for each student at the end — keep them safe.
         </p>
 

@@ -16,6 +16,11 @@
 
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yiq/supabase/server";
+import { applyOptionOrder } from "@/lib/yiq/option-order";
+import {
+  checkStudentSessionLive,
+  STALE_SESSION_MESSAGE,
+} from "@/lib/yiq/auth/stale-session";
 import { requireStudentSession } from "@/lib/yiq/auth/yiq-session";
 import {
   LATE_WRITE_GRACE_MS,
@@ -25,6 +30,7 @@ import {
   type PresentedQuestion,
 } from "@/lib/yiq/paper";
 import { gradeAttempt, type AnswerKey } from "@/lib/yiq/scoring";
+import { consumeGrantedRestart } from "@/app/yiq/actions/restart";
 
 export type StartResult =
   | {
@@ -51,6 +57,17 @@ export async function startAttempt(
   const { session } = gate;
 
   const svc = await createServiceClient();
+
+  // A signed cookie is not proof the student still exists. Check BEFORE the
+  // round-status checks below, or a student whose team was deleted is told
+  // "the round is not open" — which is both wrong and unactionable.
+  const liveness = await checkStudentSessionLive(svc as never, {
+    id: session.id,
+    teamId: session.teamId,
+  });
+  if (!liveness.live) {
+    return { success: false, error: STALE_SESSION_MESSAGE };
+  }
 
   // ---- Locate the published paper for this category ---------------------
   const { data: event } = await svc
@@ -133,6 +150,20 @@ export async function startAttempt(
   }
 
   if (existing && existing.status !== "in_progress" && kind === "online_round") {
+    // A chapter organiser may have granted this student their ONE restart
+    // (app/yiq/actions/restart.ts). It is spent HERE, on the student's own
+    // next start, so the clock begins when they actually get back in rather
+    // than when the organiser clicked. Same paper, same order, same answers.
+    const restart = await consumeGrantedRestart(existing.id);
+    if (restart.resumed) {
+      return buildResume(
+        existing.id,
+        restart.expiresAt,
+        existing.question_order ?? [],
+        paper,
+        session.category
+      );
+    }
     return {
       success: false,
       error: "You have already taken the online round. Only one attempt is allowed.",
@@ -212,16 +243,18 @@ async function buildResume(
         { key: "c" as OptionKey, text: r.option_c ?? "" },
         { key: "d" as OptionKey, text: r.option_d ?? "" },
       ];
-      // NOTE: option shuffling is deliberately NOT applied. The stored answer
-      // is the option KEY, so re-ordering options on each render would make a
-      // saved answer point at a different text. Shuffling options safely needs
-      // a per-attempt stored permutation — a later change, not a silent one.
+      // Per-student option order (lib/yiq/option-order.ts). Each option keeps
+      // its CANONICAL key, which is what the client submits and what
+      // attempt_answers.selected_option stores — so a permutation cannot make
+      // a saved answer point at different text, and scoring is untouched.
+      // The order is DERIVED from (attemptId, questionId), so it is identical
+      // on every reload and on a resumed attempt after a restart.
       return {
         id: r.id,
         topic: (r.topics as { name: string } | null)?.name ?? "",
         text: r.question_text,
         mediaUrl: r.media_url,
-        options: opts,
+        options: applyOptionOrder(opts, attemptId, r.id, paper.shuffle_options),
       };
     });
 

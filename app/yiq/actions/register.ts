@@ -10,6 +10,7 @@
 
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { enqueueTeamCodeEmails } from "@/lib/yiq/email/queue";
 import { createServiceClient } from "@/lib/yiq/supabase/server";
 import { generateStudentCode, generateTeamCode } from "@/lib/yiq/access-code";
 import { categoryForClass } from "@/lib/yiq/constants";
@@ -244,6 +245,23 @@ export async function registerTeam(
       ip,
     },
   });
+
+  // Email the access codes (Director rule 4, 2026-08-25): the teacher gets
+  // every code, each student gets only their own.
+  //
+  // DELIBERATELY NOT AWAITED FOR SUCCESS. This only writes rows to
+  // yiq.email_queue — the cron does the sending — and it never throws. A
+  // registration that is already written must not be reported as failed
+  // because a queue insert had a bad minute; the teacher still sees every
+  // code on the confirmation screen, and the codes can be re-sent from the
+  // organiser's panel. Logged, never branched on.
+  const queued = await enqueueTeamCodeEmails({ teamId });
+  if (!queued.ok) {
+    console.error("[yiq] access-code emails were not queued", {
+      teamId,
+      reason: queued.reason,
+    });
+  }
 
   revalidatePath("/yiq/dashboard");
 

@@ -2,17 +2,21 @@
  * YIQ scoring — pure functions, no I/O. Kept separate from the server
  * actions so the rules are testable and readable on their own.
  *
- * MODEL (Director decision, 2026-08-24)
+ * MODEL (Director decision 2026-08-24, REVISED by ruling 2026-08-25)
  *   Teams register upfront. Every member sits the online MCQ paper on their
- *   own. The TEAM's online score is the SUM of its members' scores. Teams are
- *   ranked within (chapter_event, category); the top N advance to the Chapter
- *   Finals. Individual scores are retained separately for the Best Individual
- *   Quizzer award.
+ *   own. The TEAM's online score is the AVERAGE of the members who SAT —
+ *   not the sum — with a FLOOR OF TWO: a team where fewer than two members
+ *   sat is OUT, whatever that one member scored.
  *
- * Deliberate consequence: a team that fields fewer members scores lower. That
- * is intended — the deck's unit of competition is the team, and a full team is
- * part of what is being tested. `membersAttempted` is carried on the rollup so
- * an organiser can always see WHY a team ranked low.
+ * WHY IT CHANGED. Under the sum, a member who was ill counted as a zero and
+ * ended a strong team's run: a 2-member team scoring 88 and 90 lost to a
+ * 3-member team averaging 83. Averaging fixes that, but a plain average opens
+ * the reverse abuse — enter three students, sit only the strongest, win on one
+ * score. The floor of two closes it without punishing bad luck.
+ *
+ * `membersAttempted` and `membersTotal` are carried on every rollup because an
+ * average without its denominator is unreadable: 83 from two sitters and 83
+ * from three are different achievements, and an organiser must see which.
  */
 
 export type AnswerKey = { questionId: string; correctOption: string | null };
@@ -121,11 +125,22 @@ export type MemberResult = {
   attempted: boolean;
 };
 
+/** Fewer than this many members sitting and the team is out (2026-08-25). */
+export const MIN_MEMBERS_SAT = 2;
+
 export type TeamRollup = {
   teamId: string;
   teamName: string;
   category: "junior" | "senior";
-  totalScore: number;
+  /**
+   * The team's AVERAGE across the members who sat, rounded to 2dp. Zero when
+   * the team is ineligible — read `eligible` rather than inferring from this.
+   */
+  score: number;
+  /** False when fewer than MIN_MEMBERS_SAT sat. Such a team never qualifies. */
+  eligible: boolean;
+  /** Machine-readable reason when `eligible` is false. */
+  ineligibleReason: "insufficient_members" | null;
   membersAttempted: number;
   membersTotal: number;
   /** Sum of members' time — the tie-break. Faster team wins a tie. */
@@ -147,7 +162,12 @@ export function rollUpTeam(
     teamId,
     teamName,
     category,
-    totalScore: round2(attempted.reduce((s, m) => s + m.score, 0)),
+    score: attempted.length
+      ? round2(attempted.reduce((s, m) => s + m.score, 0) / attempted.length)
+      : 0,
+    eligible: attempted.length >= MIN_MEMBERS_SAT,
+    ineligibleReason:
+      attempted.length >= MIN_MEMBERS_SAT ? null : "insufficient_members",
     membersAttempted: attempted.length,
     membersTotal: members.length,
     totalTimeSeconds: attempted.reduce(
@@ -173,10 +193,19 @@ export function rankTeams(
   teams: TeamRollup[],
   qualifyingCount: number
 ): TeamRollup[] {
+  // Ineligible teams (fewer than MIN_MEMBERS_SAT sat) sort BELOW every
+  // eligible team no matter what their one member scored — otherwise a
+  // single strong student would rank first and the floor would mean nothing.
+  // They still receive a rank so an organiser can see them on the board and
+  // understand why they are out.
   const sorted = [...teams].sort(
     (a, b) =>
-      b.totalScore - a.totalScore ||
-      a.totalTimeSeconds - b.totalTimeSeconds ||
+      Number(b.eligible) - Number(a.eligible) ||
+      b.score - a.score ||
+      // Tie-break on AVERAGE time, not total. The score is an average, so a
+      // total would punish a 3-member team for having sat one more paper —
+      // the tie-break must not contradict the scoring model.
+      avgTime(a) - avgTime(b) ||
       a.teamName.localeCompare(b.teamName)
   );
 
@@ -186,18 +215,39 @@ export function rankTeams(
 
   if (sorted.length === 0) return sorted;
 
-  const cutIndex = Math.min(qualifyingCount, sorted.length) - 1;
-  const cut = sorted[cutIndex];
+  const eligible = sorted.filter((t) => t.eligible);
+  if (eligible.length === 0) {
+    for (const t of sorted) t.qualified = false;
+    return sorted;
+  }
+
+  const cut = eligible[Math.min(qualifyingCount, eligible.length) - 1];
 
   for (const t of sorted) {
+    if (!t.eligible) {
+      t.qualified = false;
+      continue;
+    }
     t.qualified =
       (t.rank ?? Infinity) <= qualifyingCount ||
-      // Level with the last qualifier on BOTH score and time — a true tie.
-      (t.totalScore === cut.totalScore &&
-        t.totalTimeSeconds === cut.totalTimeSeconds);
+      // Director ruling 2026-08-25: a GENUINE dead heat at the cut-off —
+      // level on both score and time — carries every tied team through
+      // rather than dropping one on a coin-flip. A chapter may therefore
+      // run its finals with 11 or 12 teams, and that is intended.
+      (t.score === cut.score && avgTime(t) === avgTime(cut));
   }
 
   return sorted;
+}
+
+/**
+ * Mean seconds per member who sat. Zero sitters yields Infinity so an empty
+ * team never wins a tie-break by appearing infinitely fast.
+ */
+function avgTime(t: TeamRollup): number {
+  return t.membersAttempted > 0
+    ? t.totalTimeSeconds / t.membersAttempted
+    : Number.POSITIVE_INFINITY;
 }
 
 /**

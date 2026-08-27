@@ -22,6 +22,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/yiq/api/cron/drain-emails",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/yiq/api/cron/sweep-attempts",
       "schedule": "*/5 * * * *"
     },

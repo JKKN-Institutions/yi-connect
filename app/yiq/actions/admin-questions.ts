@@ -33,6 +33,11 @@ import {
   type QuestionInput,
   type QuestionWritePayload,
 } from "@/lib/yiq/question-csv";
+import {
+  partitionForApproval,
+  APPROVAL_REFUSAL_TEXT,
+  type ReviewableQuestion,
+} from "@/lib/yiq/question-review";
 
 type Ok<T> = { success: true } & T;
 type OkPlain = { success: true };
@@ -102,6 +107,9 @@ export async function listQuestions(
   if (filter.difficulty) q = q.eq("difficulty", filter.difficulty);
   if (filter.questionType) q = q.eq("question_type", filter.questionType);
   if (typeof filter.isActive === "boolean") q = q.eq("is_active", filter.isActive);
+  if (filter.pool) q = q.eq("pool", filter.pool);
+  if (filter.needsReview === true) q = q.is("reviewed_at", null).eq("is_ai_generated", true);
+  if (filter.needsReview === false) q = q.not("reviewed_at", "is", null);
   // Retired questions are hidden unless asked for — they are history, not bank.
   if (!filter.includeRetired) q = q.eq("is_retired", false);
 
@@ -511,5 +519,140 @@ export async function importQuestions(
     inserted,
     skipped,
     errors: [...errors, ...writeErrors],
+  };
+}
+
+// ---------------------------------------------------------------------
+// The human sign-off (Director rule 7: "AI draft + HUMAN approval")
+// ---------------------------------------------------------------------
+
+export type ApproveQuestionsResult =
+  | {
+      success: true;
+      approved: number;
+      /** Ones that were NOT promoted, each with a readable reason. */
+      refused: { id: string; reason: string }[];
+    }
+  | { success: false; error: string };
+
+/**
+ * Promote drafted questions into the competition pool, recording WHO signed
+ * them off and WHEN.
+ *
+ * PLATFORM master data — `requireYiqSuperAdmin()`, not the event-scoped
+ * gate. Approving a question here puts it in front of every student in the
+ * country, so it is not a chapter organiser's decision.
+ *
+ * WHY IT RE-READS EVERY ROW. The client sends ids, never state. The
+ * decision to promote is made server-side from the row as it stands right
+ * now, because a question may have been edited, retired or already
+ * approved between the reviewer loading the list and clicking approve.
+ *
+ * PARTIAL BY DESIGN. One malformed question does not block the rest of the
+ * batch; it comes back in `refused` with the reason, and the reviewer fixes
+ * it and tries again. An all-or-nothing batch of 200 would be unusable.
+ */
+export async function approveQuestions(
+  ids: string[]
+): Promise<ApproveQuestionsResult> {
+  const gate = await requireYiqSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  const unique = [...new Set((ids ?? []).filter((i) => typeof i === "string" && i))];
+  if (unique.length === 0) {
+    return { success: false, error: "No questions were selected." };
+  }
+  // A reviewer cannot meaningfully read more than this in one sitting, and
+  // an unbounded id list is an unbounded query.
+  if (unique.length > 250) {
+    return {
+      success: false,
+      error: "Approve at most 250 questions at a time.",
+    };
+  }
+
+  const svc = await createServiceClient();
+
+  const { data: rows, error } = await svc
+    .from("questions")
+    .select(
+      "id, pool, is_active, is_retired, reviewed_at, question_type, question_text, option_a, option_b, option_c, option_d, correct_option, answer_explanation"
+    )
+    .in("id", unique);
+
+  if (error) {
+    console.error("[yiq] approveQuestions read failed", error);
+    return { success: false, error: "Could not read those questions." };
+  }
+
+  const shaped: ReviewableQuestion[] = (rows ?? []).map((r) => ({
+    id: r.id,
+    pool: r.pool,
+    isActive: r.is_active,
+    isRetired: r.is_retired,
+    reviewedAt: r.reviewed_at,
+    questionType: r.question_type,
+    questionText: r.question_text,
+    optionA: r.option_a,
+    optionB: r.option_b,
+    optionC: r.option_c,
+    optionD: r.option_d,
+    correctOption: r.correct_option,
+    answerExplanation: r.answer_explanation,
+  }));
+
+  const { approve, refuse } = partitionForApproval(shaped);
+
+  // An id the caller sent that came back from NO row is reported too, rather
+  // than silently vanishing from the tally.
+  const found = new Set(shaped.map((q) => q.id));
+  const missing = unique.filter((id) => !found.has(id));
+
+  let approved = 0;
+  if (approve.length > 0) {
+    const { data: updated, error: updErr } = await svc
+      .from("questions")
+      .update({
+        pool: "competition",
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: gate.personId,
+      })
+      // Re-assert the preconditions in the WHERE clause, not just in the
+      // read above: two reviewers clicking at the same instant must not
+      // both count the same question.
+      .in("id", approve)
+      .is("reviewed_at", null)
+      .eq("is_retired", false)
+      .select("id");
+
+    if (updErr) {
+      console.error("[yiq] approveQuestions update failed", updErr);
+      return { success: false, error: "Could not approve those questions." };
+    }
+    approved = (updated ?? []).length;
+  }
+
+  await svc.from("audit_log").insert({
+    actor_label: gate.email ?? "unknown",
+    action: "questions_approved",
+    entity_type: "question",
+    detail: {
+      requested: unique.length,
+      approved,
+      refused: refuse.length,
+      missing: missing.length,
+    },
+  });
+
+  revalidatePath(ADMIN_PATH);
+  revalidatePath("/yiq/admin");
+
+  return {
+    success: true,
+    approved,
+    refused: [
+      ...refuse.map((r) => ({ id: r.id, reason: APPROVAL_REFUSAL_TEXT[r.reason] })),
+      ...missing.map((id) => ({ id, reason: "That question no longer exists." })),
+    ],
   };
 }

@@ -39,7 +39,7 @@ create table if not exists yiq.attempt_restarts (
   chapter_event_id uuid references yiq.chapter_events(id) on delete cascade,
 
   -- Exactly how much time was handed back, computed SERVER-SIDE from the
-  -- original attempt (expires_at - submitted_at, clamped). Never a number
+  -- original attempt (expires_at - last answer, clamped). Never a number
   -- that came from a client. > 0 is a hard constraint: a restart that
   -- grants nothing is a refusal, not a row.
   granted_ms integer not null check (granted_ms > 0),

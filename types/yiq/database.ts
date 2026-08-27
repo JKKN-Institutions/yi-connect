@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.4"
+    PostgrestVersion: "14.17"
   }
   yi: {
     Tables: {
@@ -544,6 +544,79 @@ export type Database = {
           },
         ]
       }
+      attempt_restarts: {
+        Row: {
+          attempt_id: string
+          chapter_event_id: string | null
+          consumed_at: string | null
+          created_at: string
+          granted_at: string
+          granted_by_label: string | null
+          granted_by_user_id: string | null
+          granted_ms: number
+          id: string
+          new_expires_at: string | null
+          new_started_at: string | null
+          reason: string
+          student_id: string
+          updated_at: string
+        }
+        Insert: {
+          attempt_id: string
+          chapter_event_id?: string | null
+          consumed_at?: string | null
+          created_at?: string
+          granted_at?: string
+          granted_by_label?: string | null
+          granted_by_user_id?: string | null
+          granted_ms: number
+          id?: string
+          new_expires_at?: string | null
+          new_started_at?: string | null
+          reason: string
+          student_id: string
+          updated_at?: string
+        }
+        Update: {
+          attempt_id?: string
+          chapter_event_id?: string | null
+          consumed_at?: string | null
+          created_at?: string
+          granted_at?: string
+          granted_by_label?: string | null
+          granted_by_user_id?: string | null
+          granted_ms?: number
+          id?: string
+          new_expires_at?: string | null
+          new_started_at?: string | null
+          reason?: string
+          student_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attempt_restarts_attempt_id_fkey"
+            columns: ["attempt_id"]
+            isOneToOne: false
+            referencedRelation: "attempts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attempt_restarts_chapter_event_id_fkey"
+            columns: ["chapter_event_id"]
+            isOneToOne: false
+            referencedRelation: "chapter_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attempt_restarts_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attempts: {
         Row: {
           chapter_event_id: string | null
@@ -805,6 +878,88 @@ export type Database = {
           yi_year?: number
         }
         Relationships: []
+      }
+      email_queue: {
+        Row: {
+          attempts: number
+          chapter_event_id: string | null
+          claimed_at: string | null
+          created_at: string
+          dedupe_key: string
+          id: string
+          kind: string
+          last_error: string | null
+          payload: Json
+          recipient: string
+          recipient_name: string | null
+          sent_at: string | null
+          status: string
+          student_id: string | null
+          subject: string
+          team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          chapter_event_id?: string | null
+          claimed_at?: string | null
+          created_at?: string
+          dedupe_key: string
+          id?: string
+          kind: string
+          last_error?: string | null
+          payload?: Json
+          recipient: string
+          recipient_name?: string | null
+          sent_at?: string | null
+          status?: string
+          student_id?: string | null
+          subject: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          chapter_event_id?: string | null
+          claimed_at?: string | null
+          created_at?: string
+          dedupe_key?: string
+          id?: string
+          kind?: string
+          last_error?: string | null
+          payload?: Json
+          recipient?: string
+          recipient_name?: string | null
+          sent_at?: string | null
+          status?: string
+          student_id?: string | null
+          subject?: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_queue_chapter_event_id_fkey"
+            columns: ["chapter_event_id"]
+            isOneToOne: false
+            referencedRelation: "chapter_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_queue_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_queue_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       finals_round_questions: {
         Row: {
@@ -1420,6 +1575,9 @@ export type Database = {
           category: string
           chapter_event_id: string
           created_at: string
+          disqualified_at: string | null
+          disqualified_by: string | null
+          disqualified_reason: string | null
           finals_rank: number | null
           finals_total_score: number | null
           id: string
@@ -1433,6 +1591,7 @@ export type Database = {
           registered_user_agent: string | null
           school_id: string
           status: string
+          status_before_disqualification: string | null
           team_code: string
           updated_at: string
         }
@@ -1441,6 +1600,9 @@ export type Database = {
           category: string
           chapter_event_id: string
           created_at?: string
+          disqualified_at?: string | null
+          disqualified_by?: string | null
+          disqualified_reason?: string | null
           finals_rank?: number | null
           finals_total_score?: number | null
           id?: string
@@ -1454,6 +1616,7 @@ export type Database = {
           registered_user_agent?: string | null
           school_id: string
           status?: string
+          status_before_disqualification?: string | null
           team_code: string
           updated_at?: string
         }
@@ -1462,6 +1625,9 @@ export type Database = {
           category?: string
           chapter_event_id?: string
           created_at?: string
+          disqualified_at?: string | null
+          disqualified_by?: string | null
+          disqualified_reason?: string | null
           finals_rank?: number | null
           finals_total_score?: number | null
           id?: string
@@ -1475,6 +1641,7 @@ export type Database = {
           registered_user_agent?: string | null
           school_id?: string
           status?: string
+          status_before_disqualification?: string | null
           team_code?: string
           updated_at?: string
         }
@@ -1530,7 +1697,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      attempt_last_answered: {
+        Args: { p_attempt_ids: string[] }
+        Returns: {
+          attempt_id: string
+          last_answered_at: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

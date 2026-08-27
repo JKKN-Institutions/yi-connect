@@ -6,6 +6,8 @@ import { STATUS_LABELS, type ChapterEventStatus } from "@/lib/yiq/constants";
 import { Forbidden403 } from "../../_components/Forbidden403";
 import { EventControls } from "./event-controls";
 import { Standings } from "./standings";
+import { RestartPanel } from "./restart-panel";
+import { EventAdminPanel } from "./event-admin-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -128,11 +130,20 @@ export default async function ChapterEventPage({
         ) : null}
 
         {access.canManage ? (
-          <EventControls
-            eventId={eventId}
-            status={event.status as ChapterEventStatus}
-            resultsPublished={Boolean(event.results_published_at)}
-          />
+          <>
+            <EventControls
+              eventId={eventId}
+              status={event.status as ChapterEventStatus}
+              resultsPublished={Boolean(event.results_published_at)}
+            />
+            {/* The qualifying line and disqualification (Director rules 5 + 8). */}
+            <EventAdminPanel
+              eventId={eventId}
+              initialQualifyingCount={event.qualifying_team_count ?? undefined}
+            />
+            {/* The one restart an organiser may grant (Director rule 3). */}
+            <RestartPanel eventId={eventId} />
+          </>
         ) : (
           <p className="mt-8 text-[0.875rem]" style={{ color: DIM }}>
             You have view-only access to this chapter.

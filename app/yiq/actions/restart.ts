@@ -55,16 +55,14 @@ const ATTEMPT_COLUMNS =
 type ServiceClient = Awaited<ReturnType<typeof createServiceClient>>;
 
 /**
- * `yiq.attempt_restarts` ships in supabase/migrations/yiq_12_attempt_restarts.sql
- * but is not yet in the generated types (types/yiq/database.ts is regenerated
- * separately and is not this change's file to edit). ONE narrow, documented
- * escape hatch rather than casts scattered through the file — every row that
- * comes back is immediately shaped into GrantRow below.
+ * `yiq.attempt_restarts` (supabase/migrations/yiq_12_attempt_restarts.sql).
+ * Fully typed since the schema was applied and types/yiq/database.ts was
+ * regenerated on 2026-08-27 — the temporary `as any` escape hatch this
+ * function used to hold is gone. Kept as a one-line helper only so the four
+ * call sites read the same way.
  */
 function restarts(svc: ServiceClient) {
-  return (svc as unknown as {
-    from: (t: string) => ReturnType<ServiceClient["from"]>;
-  }).from("attempt_restarts") as any;
+  return svc.from("attempt_restarts");
 }
 
 type GrantRow = {
@@ -131,15 +129,9 @@ async function fetchLastAnswered(
 ): Promise<Map<string, string> | null> {
   if (attemptIds.length === 0) return new Map();
 
-  const { data, error } = await (svc as unknown as {
-    rpc: (
-      fn: string,
-      args: Record<string, unknown>
-    ) => Promise<{
-      data: { attempt_id: string; last_answered_at: string | null }[] | null;
-      error: unknown;
-    }>;
-  }).rpc("attempt_last_answered", { p_attempt_ids: attemptIds });
+  const { data, error } = await svc.rpc("attempt_last_answered", {
+    p_attempt_ids: attemptIds,
+  });
 
   if (error) {
     console.error("[yiq] attempt_last_answered failed", error);

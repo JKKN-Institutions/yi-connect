@@ -46,7 +46,14 @@ const MIN = 60 * 1000;
 const T0 = Date.parse("2026-09-12T10:00:00.000Z");
 const iso = (ms: number) => new Date(ms).toISOString();
 
-/** A 30-minute paper that stopped `stoppedAfterMin` minutes in. */
+/**
+ * A 30-minute paper whose student stopped answering 12 minutes in.
+ *
+ * NOTE THE DEFAULT `submittedAt`: it is the DEADLINE, not the stop point.
+ * That is what really happens — `auto_submitted` is only ever stamped at or
+ * after `expires_at`, by the sweeper or by the late-start guard. Building
+ * the fixture any other way would hide the exact bug this suite now guards.
+ */
 function attempt(over: Partial<RestartAttempt> = {}): RestartAttempt {
   return {
     id: "a1",
@@ -54,7 +61,8 @@ function attempt(over: Partial<RestartAttempt> = {}): RestartAttempt {
     status: "auto_submitted",
     startedAt: iso(T0),
     expiresAt: iso(T0 + 30 * MIN),
-    submittedAt: iso(T0 + 12 * MIN),
+    submittedAt: iso(T0 + 30 * MIN),
+    lastAnsweredAt: iso(T0 + 12 * MIN),
     ...over,
   };
 }
@@ -62,26 +70,58 @@ function attempt(over: Partial<RestartAttempt> = {}): RestartAttempt {
 const ok = { alreadyRestarted: false };
 
 console.log("\n── computeRemainingMs ──");
-eq("30-min paper stopped at 12 min -> 18 min left", computeRemainingMs(attempt()), 18 * MIN);
+eq("30-min paper, last answer at 12 min -> 18 min left", computeRemainingMs(attempt()), 18 * MIN);
 eq(
-  "stopped exactly on the deadline -> 0",
-  computeRemainingMs(attempt({ submittedAt: iso(T0 + 30 * MIN) })),
+  "last answer on the deadline -> 0",
+  computeRemainingMs(attempt({ lastAnsweredAt: iso(T0 + 30 * MIN) })),
   0
 );
 eq(
-  "closed AFTER the deadline (the sweeper) -> 0, never negative",
-  computeRemainingMs(attempt({ submittedAt: iso(T0 + 47 * MIN) })),
+  "an answer recorded AFTER the deadline -> 0, never negative",
+  computeRemainingMs(attempt({ lastAnsweredAt: iso(T0 + 47 * MIN) })),
   0
 );
 eq(
-  "stopped one second in -> the rest of the paper",
-  computeRemainingMs(attempt({ submittedAt: iso(T0 + 1000) })),
+  "last answer one second in -> the rest of the paper",
+  computeRemainingMs(attempt({ lastAnsweredAt: iso(T0 + 1000) })),
   30 * MIN - 1000
 );
 eq(
   "sub-second precision is floored to whole seconds",
-  computeRemainingMs(attempt({ submittedAt: iso(T0 + 12 * MIN + 400) })),
+  computeRemainingMs(attempt({ lastAnsweredAt: iso(T0 + 12 * MIN + 400) })),
   18 * MIN - 1000
+);
+eq(
+  "answered NOTHING -> the whole paper is owed, measured from the start",
+  computeRemainingMs(attempt({ lastAnsweredAt: null })),
+  30 * MIN
+);
+
+console.log("\n── THE REGRESSION: submitted_at must not be the clock ──");
+// This is the bug that made the entire feature dead on arrival. Every
+// auto_submitted row has submitted_at >= expires_at, so a computation based
+// on it returned 0 for EVERY student, including the dead phone this feature
+// exists for. If any of these three go back to 0, the feature is dead again.
+eq(
+  "phone dies at 12 min, sweeper stamps 35 min later -> still 18 min owed",
+  computeRemainingMs(
+    attempt({ submittedAt: iso(T0 + 65 * MIN), lastAnsweredAt: iso(T0 + 12 * MIN) })
+  ),
+  18 * MIN
+);
+eq(
+  "phone dies at 2 min, sweeper stamps at the deadline -> 28 min owed",
+  computeRemainingMs(
+    attempt({ submittedAt: iso(T0 + 30 * MIN), lastAnsweredAt: iso(T0 + 2 * MIN) })
+  ),
+  28 * MIN
+);
+check(
+  "a dead-phone paper is ALLOWED, not refused as no_time_left",
+  canRestart(
+    attempt({ submittedAt: iso(T0 + 65 * MIN), lastAnsweredAt: iso(T0 + 12 * MIN) }),
+    ok
+  ).ok === true
 );
 eq("full paper length", computeDurationMs(attempt()), 30 * MIN);
 
@@ -103,9 +143,14 @@ eq(
   null
 );
 eq(
-  "stopped before it started -> null, not 30 minutes of credit",
-  computeRemainingMs(attempt({ submittedAt: iso(T0 - MIN) })),
+  "an answer recorded before the paper started -> null, not a full paper",
+  computeRemainingMs(attempt({ lastAnsweredAt: iso(T0 - MIN) })),
   null
+);
+eq(
+  "an unparseable last answer falls back to the start, not to NaN",
+  computeRemainingMs(attempt({ lastAnsweredAt: "yesterday" })),
+  30 * MIN
 );
 eq("no wall-clock input: repeat reads are identical", computeRemainingMs(attempt()), computeRemainingMs(attempt()));
 
@@ -136,10 +181,15 @@ function refusal(name: string, a: RestartAttempt, opts = ok, want?: string) {
     d.ok ? "was ALLOWED" : `reason ${d.reason} want ${want}`
   );
 }
-refusal("a paper that used its full time is refused", attempt({ submittedAt: iso(T0 + 30 * MIN) }), ok, "no_time_left");
 refusal(
-  "a paper closed after its deadline is refused",
-  attempt({ submittedAt: iso(T0 + 44 * MIN) }),
+  "a student who answered right up to the deadline is refused",
+  attempt({ lastAnsweredAt: iso(T0 + 30 * MIN) }),
+  ok,
+  "no_time_left"
+);
+refusal(
+  "an answer timestamped after the deadline is refused",
+  attempt({ lastAnsweredAt: iso(T0 + 44 * MIN) }),
   ok,
   "no_time_left"
 );
@@ -162,21 +212,21 @@ refusal(
 );
 refusal(
   "already-restarted beats every other yes",
-  attempt({ submittedAt: iso(T0 + 1000) }),
+  attempt({ lastAnsweredAt: iso(T0 + 1000) }),
   { alreadyRestarted: true },
   "already_restarted"
 );
 refusal("missing timestamps refuse", attempt({ submittedAt: null }), ok, "malformed_timestamps");
 refusal("malformed timestamps refuse", attempt({ expiresAt: "not-a-date" }), ok, "malformed_timestamps");
 refusal(
-  "a stop before the start refuses rather than granting a whole paper",
-  attempt({ submittedAt: iso(T0 - 1) }),
+  "an answer before the start refuses rather than granting a whole paper",
+  attempt({ lastAnsweredAt: iso(T0 - 1) }),
   ok,
   "malformed_timestamps"
 );
 refusal(
   "a paper with less than a second left is refused",
-  attempt({ submittedAt: iso(T0 + 30 * MIN - 400) }),
+  attempt({ lastAnsweredAt: iso(T0 + 30 * MIN - 400) }),
   ok,
   "no_time_left"
 );

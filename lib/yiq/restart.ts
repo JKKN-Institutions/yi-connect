@@ -79,12 +79,28 @@ function floorToSecond(msValue: number): number {
 /**
  * How much of the paper the student never got to use.
  *
- *     remaining = expires_at - submitted_at
+ *     remaining = expires_at - (when the student actually stopped)
  *
- * `submitted_at` is when the attempt ACTUALLY stopped, whether the student
- * pressed submit, the round closed under them, or the sweeper closed an
- * abandoned paper. If it stopped at or after the deadline the student used
- * their whole clock and the answer is 0.
+ * WHICH CLOCK IS "STOPPED" — this is the whole subtlety of this file.
+ *
+ * `submitted_at` is NOT it, and using it was a bug that made this entire
+ * feature dead on arrival (found 2026-08-25, fixed 2026-08-27 on the
+ * Director's ruling). Only an `auto_submitted` attempt ever reaches here —
+ * `canRestart` refuses every other status — and `auto_submitted` is stamped
+ * in exactly three places (app/yiq/actions/attempt.ts:119, :330, and both
+ * sweepers), ALL of which fire at or after `expires_at`. So
+ * `expires_at - submitted_at` was always <= 0 and every single candidate
+ * came back `no_time_left`, including the dead-phone case this feature
+ * exists for.
+ *
+ * The student's LAST ANSWER is when the paper really stopped. A phone that
+ * dies at minute 10 leaves its last `attempt_answers.answered_at` at minute
+ * 10; the sweeper's timestamp only records when a machine noticed, which
+ * may be half an hour later and says nothing about the student.
+ *
+ * If they answered NOTHING, `started_at` is the only honest stop point —
+ * they got no part of the paper, so the whole clock is owed. The organiser
+ * still has to grant it; this function only says how much.
  *
  * `now` is deliberately NOT an input: this is a historical fact about a
  * finished attempt, and reading it against the wall clock would quietly
@@ -101,12 +117,19 @@ export function computeRemainingMs(attempt: RestartAttempt): number | null {
   // A deadline at or before the start is not a paper anyone sat.
   if (expires <= started) return null;
 
-  // A finished attempt with no stopping point is a corrupt row. There is no
-  // safe default here, so refuse rather than guess with the wall clock.
-  const stopped = ms(attempt.submittedAt);
-  if (stopped === null) return null;
-  // Stopping before you started is a corrupt row, not a full paper of credit.
+  // A finished attempt with no stopping point at all is a corrupt row. The
+  // value is no longer used for the arithmetic, but its ABSENCE still means
+  // this row never went through finalise, so refuse rather than guess.
+  if (ms(attempt.submittedAt) === null) return null;
+
+  // Where the student actually got to. No answers at all -> they got nowhere.
+  const lastAnswer = ms(attempt.lastAnsweredAt);
+  const stopped = lastAnswer === null ? started : lastAnswer;
+
+  // Answering before you started, or after your own deadline, is a corrupt
+  // row. Clamp into the paper rather than paying out on a bad timestamp.
   if (stopped < started) return null;
+  if (stopped > expires) return 0;
 
   const remaining = expires - stopped;
   return remaining <= 0 ? 0 : floorToSecond(remaining);

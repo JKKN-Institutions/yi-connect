@@ -180,3 +180,155 @@
     transition-duration: 0.001ms !important;
   }
 }
+
+/* =====================================================================
+   THE DECK
+   ---------------------------------------------------------------------
+   A quiz is a deck of cards, so it looks like one.
+
+   THE SIGNATURE IS THE STACK. Cards sit behind the live one with real
+   offset, so a student SEES how much is left without reading a number.
+   In a round with a clock running, "how far through am I" is information,
+   and a physical stack carries it faster than "12 / 30" does.
+
+   THE FLIP IS THE TEACHING MOMENT, and it is practice-only. The back of
+   the card is not decoration — it is the explanation. A bare tick teaches
+   nothing, and in a REASONING quiz the working is the entire value. That
+   is what a flashcard has always done; this just does it on a phone.
+
+   Everything else stays flat and quiet: no gradients, no glow, nothing
+   that says "made for a seven-year-old" to a Class 12 student.
+   ===================================================================== */
+
+.yiq-stack {
+  position: relative;
+  /* Room for the two cards peeking out behind the live one. */
+  padding-bottom: 14px;
+}
+
+/* The cards still to come. Purely presentational — aria-hidden in the
+   markup, because a screen reader should hear the question, not the
+   furniture. */
+.yiq-stack-behind {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 18px;
+  background: var(--yiq-paper);
+  border: 1px solid var(--yiq-rule-paper);
+}
+.yiq-stack-behind[data-depth="1"] {
+  transform: translateY(7px) scale(0.985);
+  opacity: 0.55;
+}
+.yiq-stack-behind[data-depth="2"] {
+  transform: translateY(14px) scale(0.97);
+  opacity: 0.3;
+}
+
+/* The flip. `perspective` lives on the wrapper so the rotation reads as
+   depth rather than a squash. */
+.yiq-card-3d {
+  position: relative;
+  perspective: 1400px;
+}
+.yiq-card-faces {
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 420ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.yiq-card-faces[data-turned="true"] {
+  transform: rotateY(180deg);
+}
+.yiq-card-face {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: 18px;
+  background: var(--yiq-paper);
+  border: 1px solid var(--yiq-rule-paper);
+  padding: 20px;
+}
+.yiq-card-face--back {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(180deg);
+  overflow-y: auto;
+}
+
+/* The verdict colours the card's EDGE, not the whole screen. A full-screen
+   flash on every answer is exhausting over thirty questions. */
+.yiq-card-face--back[data-correct="true"] {
+  border-color: var(--yiq-green);
+  box-shadow: inset 0 0 0 2px var(--yiq-green);
+}
+.yiq-card-face--back[data-correct="false"] {
+  border-color: var(--yiq-vermilion);
+  box-shadow: inset 0 0 0 2px var(--yiq-vermilion);
+}
+
+/* The per-question clock, as a ring. Peripheral vision catches a shrinking
+   arc without the student having to stop and read a number. */
+.yiq-ring {
+  --yiq-ring-pct: 100;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(
+    var(--yiq-ring-colour, var(--yiq-ink)) calc(var(--yiq-ring-pct) * 1%),
+    rgba(10, 22, 51, 0.12) 0
+  );
+}
+.yiq-ring > span {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--yiq-paper);
+  display: grid;
+  place-items: center;
+  font-family: var(--yiq-data);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The streak, as a spine of marks rather than a badge. Deliberately small:
+   it is a reward for the student, not a scoreboard. */
+.yiq-streak {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+.yiq-streak i {
+  width: 4px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--yiq-saffron);
+  display: block;
+}
+.yiq-streak i[data-dim="true"] {
+  background: rgba(10, 22, 51, 0.16);
+}
+
+/* Someone who has asked for less motion gets a crossfade instead of a
+   rotation, and no stack movement at all. The information is identical. */
+@media (prefers-reduced-motion: reduce) {
+  .yiq-card-faces {
+    transition: opacity 160ms linear;
+  }
+  .yiq-card-faces[data-turned="true"] {
+    transform: none;
+  }
+  .yiq-card-faces[data-turned="true"] .yiq-card-face--front {
+    opacity: 0;
+  }
+  .yiq-card-face--back {
+    transform: none;
+  }
+  .yiq-stack-behind {
+    transform: none;
+  }
+}

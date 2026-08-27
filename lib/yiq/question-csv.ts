@@ -98,6 +98,15 @@ export type QuestionFilter = {
   search?: string | null;
   isActive?: boolean | null;
   includeRetired?: boolean;
+  /** 'practice' | 'competition' | 'either'. Null/absent means every pool. */
+  pool?: string | null;
+  /**
+   * true  -> only questions still awaiting a human read (drafted by a model,
+   *          never reviewed). This is the review queue.
+   * false -> only questions a person has already signed off.
+   * absent-> no filter on review state.
+   */
+  needsReview?: boolean | null;
   page?: number;
   pageSize?: number;
 };

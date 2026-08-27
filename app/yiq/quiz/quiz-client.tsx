@@ -157,7 +157,7 @@ export function QuizClient({
         <p className="mt-7 text-[0.9375rem] leading-relaxed" style={{ color: DIM }}>
           {isMock
             ? "Practice scores don't count. Take it as often as you like before the real round."
-            : "Your team's total is the sum of its members' scores. Rankings are published by your chapter after the round closes."}
+            : "Your team's score is the average of the members who sit, so a teammate who misses it will not drag you down. Rankings are published by your chapter after the round closes."}
         </p>
 
         <button

@@ -39,6 +39,13 @@ export type RestartAttempt = {
   startedAt: string | null | undefined;
   expiresAt: string | null | undefined;
   submittedAt: string | null | undefined;
+  /**
+   * `max(attempt_answers.answered_at)` for this attempt — the last moment the
+   * student demonstrably had the paper in front of them, and the clock this
+   * decision is actually made on. See computeRemainingMs for why NOT
+   * `submittedAt`. `null` when they answered nothing.
+   */
+  lastAnsweredAt: string | null | undefined;
 };
 
 /** Machine-readable refusals. The UI maps these to sentences; logs keep these. */

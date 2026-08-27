@@ -20,6 +20,7 @@ import {
   restartTimestamps,
   validateReason,
   MAX_RESTART_MS,
+  MIN_USEFUL_RESUME_MS,
   type RestartAttempt,
 } from "../restart";
 
@@ -238,18 +239,85 @@ if (!d.ok) {
   check("decision was ok", false, d.reason);
 } else {
   const t = restartTimestamps(d, RESUME);
-  eq("new deadline is NOW + the time that was left", t.expiresAt, iso(RESUME + 18 * MIN));
-  eq("start is shifted forward by the time already used", t.startedAt, iso(RESUME - 12 * MIN));
+  check("a resume with no round close is allowed", t !== null);
+  if (t) {
+    eq("new deadline is NOW + the time that was left", t.expiresAt, iso(RESUME + 18 * MIN));
+    eq("start is shifted forward by the time already used", t.startedAt, iso(RESUME - 12 * MIN));
+    eq(
+      "so the paper is still exactly 30 minutes long",
+      Date.parse(t.expiresAt) - Date.parse(t.startedAt),
+      30 * MIN
+    );
+    check(
+      "the dead-phone hours are NOT counted as answering time (tie-break stays honest)",
+      Date.parse(t.startedAt) > T0 + 12 * MIN,
+      "started_at was not shifted"
+    );
+    check("nothing was clamped when there is no closing time", t.clampedByRoundClose === false);
+  }
+}
+
+console.log("\n── the round's closing time is a HARD CEILING (Director, 2026-08-27) ──");
+// The student is owed 18 minutes. Everything below varies only WHEN they come
+// back relative to the bell.
+if (d.ok) {
+  // Comes back with 40 minutes to spare -> nothing to clamp.
+  const roomy = restartTimestamps(d, RESUME, RESUME + 40 * MIN);
+  check("plenty of time left: the full 18 minutes is given", roomy !== null);
+  if (roomy) {
+    eq("  deadline is NOW + 18 min", roomy.expiresAt, iso(RESUME + 18 * MIN));
+    check("  and it is not marked as clamped", roomy.clampedByRoundClose === false);
+  }
+
+  // Comes back 5 minutes before the bell -> gets 5, not 18.
+  const tight = restartTimestamps(d, RESUME, RESUME + 5 * MIN);
+  check("5 minutes before the bell: the resume is still allowed", tight !== null);
+  if (tight) {
+    eq("  deadline is the BELL, not now+18", tight.expiresAt, iso(RESUME + 5 * MIN));
+    check("  and it is marked as clamped", tight.clampedByRoundClose === true);
+    check(
+      "  the student never runs past the round close",
+      Date.parse(tight.expiresAt) <= RESUME + 5 * MIN
+    );
+  }
+
+  // Exactly the granted time left -> allowed, and NOT flagged as clamped.
+  const exact = restartTimestamps(d, RESUME, RESUME + 18 * MIN);
+  check("exactly 18 minutes left: allowed", exact !== null);
+  if (exact) check("  not reported as clamped", exact.clampedByRoundClose === false);
+
+  // Under a minute left -> refuse, so the one restart is not burned.
   eq(
-    "so the paper is still exactly 30 minutes long",
-    Date.parse(t.expiresAt) - Date.parse(t.startedAt),
-    30 * MIN
+    "40 seconds before the bell: REFUSED, the restart is not spent",
+    restartTimestamps(d, RESUME, RESUME + 40 * 1000),
+    null
   );
-  check(
-    "the dead-phone hours are NOT counted as answering time (tie-break stays honest)",
-    Date.parse(t.startedAt) > T0 + 12 * MIN,
-    "started_at was not shifted"
+  eq(
+    "exactly at the bell: refused",
+    restartTimestamps(d, RESUME, RESUME),
+    null
   );
+  eq(
+    "after the bell: refused, never a negative clock",
+    restartTimestamps(d, RESUME, RESUME - 5 * MIN),
+    null
+  );
+  eq("the useful-resume floor is one minute", MIN_USEFUL_RESUME_MS, 60 * 1000);
+
+  // A junk closing time must not silently become "no time".
+  const junk = restartTimestamps(d, RESUME, Number.NaN);
+  check("an unparseable closing time falls back to the full grant", junk !== null);
+  if (junk) eq("  full 18 minutes", junk.expiresAt, iso(RESUME + 18 * MIN));
+
+  // The tie-break must stay honest even when the clamp bites.
+  const clamped = restartTimestamps(d, RESUME, RESUME + 5 * MIN);
+  if (clamped) {
+    eq(
+      "a clamped resume still shifts the start by the time actually used",
+      clamped.startedAt,
+      iso(RESUME - 12 * MIN)
+    );
+  }
 }
 
 console.log("\n── reason text ──");

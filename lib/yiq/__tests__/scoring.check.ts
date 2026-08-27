@@ -147,5 +147,44 @@ console.log("\n── finals total ──");
 eq("sums round points", finalsTotal([10,10,5,-5]), 20);
 eq("empty -> 0", finalsTotal([]), 0);
 
+console.log("\n── a disqualified member counts as NOT having sat (Director, 2026-08-27) ──");
+// computeChapterStandings only reads attempts whose status is 'submitted' or
+// 'auto_submitted'. A DISQUALIFIED attempt never reaches rollUpTeam at all, so
+// the cheat's score cannot drag or lift the team average — it simply is not
+// there. For a 2-member team that leaves the honest teammate alone below the
+// floor, and the team goes out.
+//
+// The Director confirmed that on 2026-08-27, choosing it over "the team
+// survives on the remaining score": a team must not be able to GAIN by having
+// a weak member removed. These checks exist so nobody quietly softens the rule
+// later without a new decision.
+{
+  const twoMemberTeam = rollUpTeam("t-dq", "Two, one caught", "junior", [
+    { studentId: "s-honest", studentName: "Honest", score: 26, timeTakenSeconds: 900, attempted: true },
+    // The disqualified member: their row never arrives, so attempted is false.
+    { studentId: "s-caught", studentName: "Caught", score: 0, timeTakenSeconds: 0, attempted: false },
+  ]);
+  eq("  the team is INELIGIBLE, not scored on one member", twoMemberTeam.eligible, false);
+  eq("  and the reason is recorded", twoMemberTeam.ineligibleReason, "insufficient_members");
+  eq("  only one member is counted as having sat", twoMemberTeam.membersAttempted, 1);
+  eq("  both are still counted as registered", twoMemberTeam.membersTotal, 2);
+
+  // The same removal on a 3-member team leaves 2 — still eligible, and the
+  // average is over the two who actually sat, NOT over three.
+  const threeMemberTeam = rollUpTeam("t-dq3", "Three, one caught", "senior", [
+    { studentId: "a", studentName: "A", score: 24, timeTakenSeconds: 800, attempted: true },
+    { studentId: "b", studentName: "B", score: 18, timeTakenSeconds: 900, attempted: true },
+    { studentId: "c", studentName: "Caught", score: 0, timeTakenSeconds: 0, attempted: false },
+  ]);
+  eq("  a 3-member team survives one disqualification", threeMemberTeam.eligible, true);
+  eq("  the average is over the TWO who sat, not three", threeMemberTeam.score, 21);
+  check(
+    "  a removed member does NOT drag the average toward zero",
+    threeMemberTeam.score === 21,
+    `got ${threeMemberTeam.score}; dividing by three would give 14`
+  );
+  eq("  the tie-break time counts only the two who sat", threeMemberTeam.totalTimeSeconds, 1700);
+}
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

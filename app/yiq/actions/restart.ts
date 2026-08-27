@@ -565,7 +565,56 @@ export async function consumeGrantedRestart(
   const grantedMs = Math.min(decision.grantedMs, grant.granted_ms);
   if (grantedMs <= 0) return { resumed: false };
 
-  const stamps = restartTimestamps({ ...decision, grantedMs }, Date.now());
+  // THE ROUND'S CLOSING TIME IS A HARD CEILING (Director ruling, 2026-08-27).
+  // A student whose phone died keeps every minute they were owed right up to
+  // the bell, but not past it — the round closes for everyone at the same
+  // moment and the standings are computed from it. Read from the event rather
+  // than trusted from anywhere else.
+  let roundClosesAtMs: number | null = null;
+  if (attempt.chapter_event_id) {
+    const { data: ev } = await svc
+      .from("chapter_events")
+      .select("online_round_closes_at")
+      .eq("id", attempt.chapter_event_id)
+      .maybeSingle();
+    const parsed = ev?.online_round_closes_at
+      ? Date.parse(ev.online_round_closes_at)
+      : NaN;
+    if (Number.isFinite(parsed)) roundClosesAtMs = parsed;
+  }
+
+  const stamps = restartTimestamps(
+    { ...decision, grantedMs },
+    Date.now(),
+    roundClosesAtMs
+  );
+
+  // Under a minute left before the bell. Do NOT consume the grant — the
+  // student keeps their one restart rather than spending it on forty
+  // seconds they cannot use.
+  if (stamps === null) {
+    console.log(
+      JSON.stringify({
+        tag: "yiq_restart",
+        verdict: "consume_refused",
+        attemptId,
+        reason: "too_close_to_round_close",
+      })
+    );
+    return { resumed: false };
+  }
+
+  if (stamps.clampedByRoundClose) {
+    console.log(
+      JSON.stringify({
+        tag: "yiq_restart",
+        verdict: "resumed_clamped",
+        attemptId,
+        grantedMs,
+        newExpiresAt: stamps.expiresAt,
+      })
+    );
+  }
 
   // CLAIM FIRST. Whoever flips consumed_at from null owns the restart; a
   // second concurrent start finds nothing to claim and resumes normally

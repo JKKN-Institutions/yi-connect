@@ -212,9 +212,21 @@ export function canRestart(
 }
 
 /**
+ * The least time worth resuming for. Handing a student back into a paper
+ * with under a minute on the clock is not a second chance, it is a taunt —
+ * and it burns their one restart to do it.
+ */
+export const MIN_USEFUL_RESUME_MS = 60 * 1000;
+
+/**
  * The two timestamps to write when the student ACTUALLY returns.
  *
- * `expiresAt` is the easy half: now + the time they were given.
+ * `expiresAt` is now + the time they were given, CLAMPED TO THE ROUND'S
+ * CLOSING TIME (Director ruling, 2026-08-27). A student whose phone died
+ * keeps every minute they were owed right up to the bell, but not past it:
+ * the round closes for everyone at the same moment, and standings are
+ * computed from it. `roundClosesAt` is null for a chapter with no scheduled
+ * close, in which case there is nothing to clamp to.
  *
  * `startedAt` is the half that is easy to get wrong. `time_taken_seconds`
  * is computed at finalise as (submitted_at - started_at), and it is the
@@ -222,16 +234,31 @@ export function canRestart(
  * original start were left in place, the hours a dead phone spent on a
  * charger would be counted as time this student spent answering, and their
  * team would lose every tie. So the start is shifted forward by exactly the
- * gap, which keeps (new expiry - new start) equal to the original paper
- * length and keeps the recorded time honest.
+ * time they actually used, which keeps the recorded time honest whether or
+ * not the clamp bit.
+ *
+ * Returns `null` when the clamp leaves less than MIN_USEFUL_RESUME_MS. The
+ * caller must NOT consume the grant in that case — the student keeps their
+ * one restart rather than spending it on forty seconds.
  */
 export function restartTimestamps(
   decision: Extract<RestartDecision, { ok: true }>,
-  nowMs: number = Date.now()
-): { startedAt: string; expiresAt: string } {
+  nowMs: number = Date.now(),
+  roundClosesAtMs: number | null = null
+): { startedAt: string; expiresAt: string; clampedByRoundClose: boolean } | null {
+  const wanted = nowMs + decision.grantedMs;
+
+  const capped =
+    roundClosesAtMs !== null && Number.isFinite(roundClosesAtMs)
+      ? Math.min(wanted, roundClosesAtMs)
+      : wanted;
+
+  if (capped - nowMs < MIN_USEFUL_RESUME_MS) return null;
+
   return {
     startedAt: new Date(nowMs - decision.usedMs).toISOString(),
-    expiresAt: new Date(nowMs + decision.grantedMs).toISOString(),
+    expiresAt: new Date(capped).toISOString(),
+    clampedByRoundClose: capped < wanted,
   };
 }
 

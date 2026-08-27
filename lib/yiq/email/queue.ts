@@ -299,9 +299,9 @@ export async function enqueueTeamCodeEmails(input: {
       return { ok: true, queued: 0, skipped, duplicates: 0 };
     }
 
-    // yiq.email_queue is not in types/yiq/database.ts (never regenerated for
-    // this migration), so this one call is untyped — the house pattern from
-    // app/yi-future/api/cron/drain-emails/route.tsx.
+    // yiq.email_queue IS typed since types/yiq/database.ts was regenerated on
+    // 2026-08-27. The cast stays only because `.upsert` with `onConflict` on a
+    // generated Insert type is awkward to satisfy; the shape is asserted below.
     const { data, error } = (await svc
       .from("email_queue" as never)
       .upsert(rows as never, {

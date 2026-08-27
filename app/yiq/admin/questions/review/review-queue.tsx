@@ -23,7 +23,15 @@ export type ReviewRow = {
   difficulty: string | null;
   category: string | null;
   source: string | null;
-  topics?: { name: string | null } | null;
+  /**
+   * NOT `topics` — listQuestions() FLATTENS the PostgREST embed into
+   * topic_name/topic_slug and drops the nested object entirely. Declaring the
+   * nested shape here as optional made TypeScript accept it silently and it
+   * was `undefined` on every row in production, so every question rendered as
+   * "No topic". Required, not optional, so a future shape change fails tsc
+   * instead of failing quietly on screen.
+   */
+  topic_name: string | null;
 };
 
 const KEYS = ["a", "b", "c", "d"] as const;
@@ -141,7 +149,7 @@ export function ReviewQueue({
                 />
                 <div className="min-w-0 flex-1">
                   <p className="text-[0.75rem] uppercase tracking-wide" style={{ color: DIM }}>
-                    {q.topics?.name ?? "No topic"} · {q.difficulty ?? "?"} ·{" "}
+                    {q.topic_name ?? "No topic"} · {q.difficulty ?? "?"} ·{" "}
                     {q.category ?? "?"}
                     {q.source ? ` · ${q.source}` : ""}
                   </p>

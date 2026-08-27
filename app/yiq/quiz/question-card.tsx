@@ -1,5 +1,12 @@
-"use client";
+/*
+ * No "use client" directive on purpose. This is imported ONLY by
+ * quiz-client.tsx, which is already a client component, so it joins the
+ * client bundle by inheritance. Marking it as an entry point makes Next
+ * treat every prop as a server-boundary prop and reject the onChoose
+ * callback, which is not what is happening here.
+ */
 
+import { useEffect, useRef, useState } from "react";
 import { displayLabelFor } from "@/lib/yiq/option-order";
 import { streakLabel } from "@/lib/yiq/practice-feedback";
 import type { CardFeedback } from "@/lib/yiq/practice-feedback";
@@ -56,8 +63,38 @@ export function QuestionCard({
   secondsPerQuestion: number | null;
   saving: boolean;
 }) {
-  const turned = feedback !== null;
   const remaining = Math.max(0, total - index - 1);
+
+  /*
+   * THE TURN. The card rotates to edge-on, the content is swapped while it
+   * is invisible, and it rotates back. `shown` therefore lags `feedback` by
+   * exactly one half-turn — which is what makes the swap unseeable.
+   *
+   * Driven by a timer rather than a transitionend event on purpose: a
+   * backgrounded tab does not fire transitionend, and a card stuck edge-on
+   * with the student's answer behind it would be unrecoverable.
+   */
+  const [shown, setShown] = useState<CardFeedback | null>(feedback);
+  const [turning, setTurning] = useState(false);
+  const timers = useRef<number[]>([]);
+
+  useEffect(() => {
+    if (feedback === shown) return;
+    setTurning(true);
+    timers.current.push(
+      window.setTimeout(() => {
+        setShown(feedback);
+        setTurning(false);
+      }, 200)
+    );
+    return () => {
+      timers.current.forEach(window.clearTimeout);
+      timers.current = [];
+    };
+    // `shown` is deliberately not a dependency: it is what this effect sets,
+    // and including it would re-run the turn on its own result.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feedback]);
 
   const ringPct =
     secondsLeft !== null && secondsPerQuestion
@@ -74,10 +111,18 @@ export function QuestionCard({
       {remaining >= 2 ? <div className="yiq-stack-behind" data-depth="2" aria-hidden="true" /> : null}
 
       <div className="yiq-card-3d">
-        <div className="yiq-card-faces" data-turned={turned ? "true" : "false"}>
+        <div
+          className="yiq-card-faces"
+          data-turning={turning ? "true" : "false"}
+          data-turned={shown ? "true" : "false"}
+        >
           {/* ─────────────── FRONT: the question ─────────────── */}
+          {/* One face at a time. The old two-face version forced the
+              explanation to inherit the height of a four-option question,
+              leaving a card two-thirds empty under two lines of text. */}
+          {shown ? null : (
           <div
-            className="yiq-card-face yiq-card-face--front"
+            className="yiq-card-face"
             /* Blocking selection is the other half of the anti-AI measures:
                a student who cannot copy the question has to retype it, which
                takes longer than the clock allows. */
@@ -167,14 +212,15 @@ export function QuestionCard({
               {saving ? "Saving…" : chosen ? "Answer saved" : ""}
             </p>
           </div>
+          )}
 
           {/* ─────────────── BACK: why ─────────────── */}
           {/* Rendered only when there is something to say, so a scored paper
               never has an answer-shaped element in its DOM at all. */}
-          {feedback ? (
+          {shown ? (
             <div
-              className="yiq-card-face yiq-card-face--back"
-              data-correct={feedback.correct ? "true" : "false"}
+              className="yiq-card-face"
+              data-correct={shown.correct ? "true" : "false"}
               role="status"
               aria-live="polite"
             >
@@ -182,12 +228,12 @@ export function QuestionCard({
                 <p
                   className="yiq-display text-[1.25rem]"
                   style={{
-                    color: feedback.correct
+                    color: shown.correct
                       ? "var(--yiq-green)"
                       : "var(--yiq-vermilion)",
                   }}
                 >
-                  {feedback.correct ? "Right" : "Not this time"}
+                  {shown.correct ? "Right" : "Not this time"}
                 </p>
 
                 {streakText ? (
@@ -210,7 +256,7 @@ export function QuestionCard({
                 ) : null}
               </div>
 
-              {!feedback.correct ? (
+              {!shown.correct ? (
                 <p
                   className="mt-2 text-[0.875rem]"
                   style={{ color: "var(--yiq-on-paper-dim)" }}
@@ -219,11 +265,11 @@ export function QuestionCard({
                   <strong style={{ color: "var(--yiq-on-paper)" }}>
                     {(() => {
                       const at = question.options.findIndex(
-                        (o) => o.key === feedback.correctOption
+                        (o) => o.key === shown.correctOption
                       );
                       return at >= 0
                         ? `${displayLabelFor(at).toUpperCase()} — ${question.options[at].text}`
-                        : feedback.correctOption.toUpperCase();
+                        : shown.correctOption.toUpperCase();
                     })()}
                   </strong>
                   .
@@ -234,7 +280,7 @@ export function QuestionCard({
                 className="mt-3 text-[0.9375rem] leading-relaxed"
                 style={{ color: "var(--yiq-on-paper)" }}
               >
-                {feedback.explanation ??
+                {shown.explanation ??
                   "No explanation was written for this question."}
               </p>
             </div>

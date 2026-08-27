@@ -42,7 +42,13 @@ export const MIN_QUESTION_LENGTH = 10;
 
 /** Page-size ceiling for the bank list — the server clamps to this. */
 export const QUESTION_PAGE_SIZE_MAX = 50;
-export const QUESTION_PAGE_SIZE_DEFAULT = 25;
+/**
+ * 50, not 25. The bank passed 400 questions on 2026-08-27 and 25 a page
+ * meant 18 pages with no way to jump — the Director could not reach most of
+ * it. The list is text-only, so 50 rows is a longer scroll, not a slower
+ * page.
+ */
+export const QUESTION_PAGE_SIZE_DEFAULT = 50;
 
 /** Most rows one CSV may carry, so a bad paste cannot run away with a write. */
 export const QUESTION_IMPORT_ROW_CAP = 1000;

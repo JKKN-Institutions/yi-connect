@@ -92,7 +92,10 @@ type AttemptRow = {
   question_order: string[] | null;
 };
 
-function toRestartAttempt(a: AttemptRow): RestartAttempt {
+function toRestartAttempt(
+  a: AttemptRow,
+  lastAnsweredAt: string | null
+): RestartAttempt {
   return {
     id: a.id,
     isMock: a.is_mock,
@@ -100,8 +103,59 @@ function toRestartAttempt(a: AttemptRow): RestartAttempt {
     startedAt: a.started_at,
     expiresAt: a.expires_at,
     submittedAt: a.submitted_at,
+    lastAnsweredAt,
   };
 }
+
+/**
+ * `max(attempt_answers.answered_at)` for each attempt — the clock the whole
+ * restart decision is made on (see lib/yiq/restart.ts computeRemainingMs for
+ * why NOT `submitted_at`).
+ *
+ * Goes through the `yiq.attempt_last_answered` aggregate rather than reading
+ * answer rows: the organiser's panel asks about up to 1000 attempts at once,
+ * which is ~30,000 answer rows, over PostgREST's row cap — and that cap
+ * TRUNCATES SILENTLY. A truncated read would look like "this student never
+ * answered anything", which computeRemainingMs correctly treats as "they got
+ * nowhere" and would pay out a FULL paper. Aggregating server-side returns
+ * one bounded row per attempt, so there is nothing to truncate.
+ *
+ * Returns `null` on failure — NEVER an empty map. Callers must fail closed:
+ * an empty map is indistinguishable from "nobody answered anything", which
+ * is the maximum-payout answer. This is the one read in this file where
+ * degrading gracefully would hand out free time.
+ */
+async function fetchLastAnswered(
+  svc: ServiceClient,
+  attemptIds: string[]
+): Promise<Map<string, string> | null> {
+  if (attemptIds.length === 0) return new Map();
+
+  const { data, error } = await (svc as unknown as {
+    rpc: (
+      fn: string,
+      args: Record<string, unknown>
+    ) => Promise<{
+      data: { attempt_id: string; last_answered_at: string | null }[] | null;
+      error: unknown;
+    }>;
+  }).rpc("attempt_last_answered", { p_attempt_ids: attemptIds });
+
+  if (error) {
+    console.error("[yiq] attempt_last_answered failed", error);
+    return null;
+  }
+
+  const map = new Map<string, string>();
+  for (const row of data ?? []) {
+    if (row.last_answered_at) map.set(row.attempt_id, row.last_answered_at);
+  }
+  return map;
+}
+
+/** The fail-closed message for a lost last-answer read. One wording, one place. */
+const LAST_ANSWERED_UNREADABLE =
+  "Could not work out when these papers actually stopped, so the time owed cannot be calculated safely. Try again in a moment.";
 
 // ---------------------------------------------------------------------
 // The organiser's list

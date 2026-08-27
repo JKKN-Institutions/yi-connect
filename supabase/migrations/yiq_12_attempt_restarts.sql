@@ -105,3 +105,52 @@ create trigger yiq_touch_attempt_restarts before update on yiq.attempt_restarts
 -- ---------------------------------------------------------------------
 alter table yiq.attempt_restarts enable row level security;
 grant select, insert, update, delete on yiq.attempt_restarts to service_role;
+
+-- =====================================================================
+-- WHEN DID THE PAPER ACTUALLY STOP?  (added 2026-08-27)
+--
+-- The original version of this feature computed the time owed as
+-- (expires_at - submitted_at). That was dead on arrival: `auto_submitted`
+-- is stamped in three places and every one of them fires at or after
+-- expires_at, so the subtraction was always <= 0 and EVERY candidate came
+-- back "no time left" — including the dead-phone case this whole feature
+-- exists for.
+--
+-- The honest clock is the student's LAST ANSWER. `submitted_at` records
+-- when a machine noticed an abandoned paper, which may be half an hour
+-- after the phone died and says nothing about the student.
+--
+-- WHY A FUNCTION AND NOT A RAW SELECT. The organiser's panel needs the
+-- last answer for up to 1000 attempts at once. Pulling the raw answer
+-- rows would be ~30,000 rows, over PostgREST's row cap, and the cap
+-- TRUNCATES SILENTLY — some students would get a wrong (too generous or
+-- too mean) grant with nothing in the logs. Aggregating server-side
+-- returns exactly one bounded row per attempt, so there is nothing to
+-- truncate.
+--
+-- WHY NOT A TRIGGER-MAINTAINED COLUMN. Answering a question is the
+-- hottest write path in the platform (~150,000 inserts across a round);
+-- a trigger on every one of them to serve a screen an organiser opens
+-- occasionally is the wrong trade.
+-- =====================================================================
+create or replace function yiq.attempt_last_answered(p_attempt_ids uuid[])
+returns table (attempt_id uuid, last_answered_at timestamptz)
+language sql
+stable
+security definer
+set search_path = yiq, public
+as $fn$
+  select aa.attempt_id, max(aa.answered_at) as last_answered_at
+  from yiq.attempt_answers aa
+  where aa.attempt_id = any(p_attempt_ids)
+    and aa.answered_at is not null
+  group by aa.attempt_id;
+$fn$;
+
+-- MANDATORY and DELIBERATELY NARROW. `security definer` means this runs as
+-- the owner, so PUBLIC execute would hand anonymous callers a read into
+-- attempt_answers. Revoke first, then grant only the service role the app
+-- actually runs as. (See memory: a PUBLIC EXECUTE grant has leaked data in
+-- this database before.)
+revoke all on function yiq.attempt_last_answered(uuid[]) from public;
+grant execute on function yiq.attempt_last_answered(uuid[]) to service_role;

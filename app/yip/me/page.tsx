@@ -1374,6 +1374,31 @@ export default async function ParticipantPage() {
       {/* ─── SKILL PROFILE (Phase 19/F) ──────────────────────────── */}
       <SkillProfileCard profile={skillProfile} />
 
+      {/* ─── WHERE YOU STAND (the comparison half of the profile) ── */}
+      <SectionShell accent={SAFFRON}>
+        <div className="px-5 py-4">
+          <SectionHeading
+            eyebrow="The Comparison"
+            title="Where You Stand"
+            icon={Landmark}
+            accent={SAFFRON}
+            trailing={
+              <Link
+                href="/yip/me/profile"
+                className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
+                style={{ background: `${SAFFRON}14`, color: SAFFRON }}
+              >
+                Open
+                <ChevronRight className="size-4" />
+              </Link>
+            }
+          />
+          <p className="mt-1.5 text-xs" style={{ color: inkA(0.55) }}>
+            Your record set against the House you sat in
+          </p>
+        </div>
+      </SectionShell>
+
       {/* ─── RESULTS (if published) ─────────────────────────────── */}
       {event.results_published_at ? (
         result ? (

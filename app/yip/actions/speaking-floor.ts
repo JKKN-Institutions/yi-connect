@@ -218,6 +218,55 @@ interface EligibleMember {
 // from the Now-Speaking data already captured for jury scoring. Returns the
 // speaking-eligible roster (House minus presiding officers) with each member's
 // turn count, plus how many of them have spoken at least once.
+/**
+ * Fair call order for the hand-raise queue (Director, 2026-08-28).
+ *
+ * Two rules, in this order:
+ *   1. FEWEST TURNS FIRST, ties broken by who raised their hand first. A member
+ *      who has never spoken always outranks one who has, however fast the other
+ *      was with their thumbs.
+ *   2. THEN ALTERNATE THE BENCHES, so the ruling side cannot take consecutive
+ *      turns while the opposition waits, and vice versa.
+ *
+ * Alternation is applied ON TOP of rule 1 rather than instead of it: each bench
+ * is ordered by the fairness rule first, then the two are interleaved. The side
+ * whose leading member has the stronger claim (fewer turns, then longer wait)
+ * opens. When one bench runs out, the rest of the other follows unchanged — a
+ * lopsided queue is drained, never stalled. Members with no bench recorded keep
+ * their fairness order and follow at the end; with every participant assigned a
+ * side today that list is empty, but it must not silently drop anyone.
+ */
+function orderQueueFairly(
+  entries: SpeakingFloorEntry[]
+): SpeakingFloorEntry[] {
+  const byFairness = (a: SpeakingFloorEntry, b: SpeakingFloorEntry) =>
+    a.turns - b.turns || a.requestedAt.localeCompare(b.requestedAt);
+
+  const sorted = [...entries].sort(byFairness);
+  const ruling = sorted.filter((e) => e.partySide === "ruling");
+  const opposition = sorted.filter((e) => e.partySide === "opposition");
+  const unaligned = sorted.filter(
+    (e) => e.partySide !== "ruling" && e.partySide !== "opposition"
+  );
+
+  // Whichever bench's front-runner has the stronger claim speaks first.
+  let takeRuling =
+    ruling.length > 0 &&
+    (opposition.length === 0 || byFairness(ruling[0], opposition[0]) <= 0);
+
+  const out: SpeakingFloorEntry[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < ruling.length || j < opposition.length) {
+    if (takeRuling && i < ruling.length) out.push(ruling[i++]);
+    else if (!takeRuling && j < opposition.length) out.push(opposition[j++]);
+    else if (i < ruling.length) out.push(ruling[i++]);
+    else out.push(opposition[j++]);
+    takeRuling = !takeRuling;
+  }
+  return [...out, ...unaligned];
+}
+
 async function computeTurnData(
   supabase: ServiceClient,
   eventId: string
@@ -232,11 +281,12 @@ async function computeTurnData(
     .eq("event_id", eventId);
   const itemIds = (items ?? []).map((i) => i.id);
 
-  let formal: { participant_id: string | null }[] = [];
+  let formal: { participant_id: string | null; agenda_item_id: string | null }[] =
+    [];
   if (itemIds.length > 0) {
     const { data } = await supabase
       .from("agenda_speakers")
-      .select("participant_id")
+      .select("participant_id, agenda_item_id")
       .in("agenda_item_id", itemIds)
       .eq("status", "completed");
     formal = data ?? [];
@@ -244,14 +294,33 @@ async function computeTurnData(
 
   const { data: spoken } = await supabase
     .from("speaking_requests")
-    .select("participant_id")
+    .select("participant_id, agenda_item_id")
     .eq("event_id", eventId)
     .eq("status", "spoken");
 
+  // ONE TURN PER OCCASION. Since the floor's Call started mirroring onto
+  // agenda_speakers, a single floor turn leaves a trace in BOTH tables — a
+  // completed agenda_speakers row AND a 'spoken' speaking_request. Counting
+  // both rows credited that member twice and pushed them down the fairness
+  // order faster than someone who spoke just as often through the aide
+  // console, which writes only agenda_speakers.
+  //
+  // agenda_speakers is therefore the primary record, and a 'spoken' request is
+  // only counted when that member has NO completed row for the same agenda
+  // item — i.e. a turn taken before the mirror existed, or one whose broadcast
+  // failed (the mirror is non-fatal by design). A member who genuinely speaks
+  // twice in one debate still gets two agenda_speakers rows and two turns.
   const turnCounts = new Map<string, number>();
-  for (const r of [...formal, ...(spoken ?? [])]) {
-    const pid = r.participant_id;
-    if (pid) turnCounts.set(pid, (turnCounts.get(pid) ?? 0) + 1);
+  const formalPairs = new Set<string>();
+  for (const r of formal) {
+    if (!r.participant_id) continue;
+    formalPairs.add(`${r.participant_id}|${r.agenda_item_id ?? ""}`);
+    turnCounts.set(r.participant_id, (turnCounts.get(r.participant_id) ?? 0) + 1);
+  }
+  for (const r of spoken ?? []) {
+    if (!r.participant_id) continue;
+    if (formalPairs.has(`${r.participant_id}|${r.agenda_item_id ?? ""}`)) continue;
+    turnCounts.set(r.participant_id, (turnCounts.get(r.participant_id) ?? 0) + 1);
   }
 
   const { data: parts } = await supabase
@@ -573,12 +642,9 @@ async function buildSpeakingFloorState(
 
   const calledEntry =
     requests.filter((r) => r.status === "called").map(build)[0] ?? null;
-  const queue = requests
-    .filter((r) => r.status === "waiting")
-    .map(build)
-    .sort(
-      (a, b) => a.turns - b.turns || a.requestedAt.localeCompare(b.requestedAt)
-    );
+  const queue = orderQueueFairly(
+    requests.filter((r) => r.status === "waiting").map(build)
+  );
 
   return {
     hasLiveItem: !!currentItemId,

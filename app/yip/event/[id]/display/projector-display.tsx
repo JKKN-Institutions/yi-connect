@@ -588,7 +588,12 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
       {/* F5 — Live banner (fixed at top, above everything) */}
       {liveBanner.active && liveBanner.text && (
         <div
-          className="fixed inset-x-0 top-0 z-50 flex w-full items-center justify-center gap-4 bg-[#dc2626] px-8 py-4 text-3xl font-bold text-white shadow-lg animate-pulse"
+          // The flash is the Chair's choice per broadcast (Director,
+          // 2026-08-28). A steady banner is the one to leave up for a long
+          // stretch; a flashing one earns attention but wears the room down.
+          className={`fixed inset-x-0 top-0 z-50 flex w-full items-center justify-center gap-4 bg-[#dc2626] px-8 py-4 text-3xl font-bold text-white shadow-lg${
+            liveBanner.pulse ? " animate-pulse" : ""
+          }`}
           role="status"
           aria-live="polite"
         >

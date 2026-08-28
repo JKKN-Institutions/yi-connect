@@ -2283,6 +2283,9 @@ function LiveBannerBroadcastSection({
 }) {
   const [text, setText] = useState(initialText ?? "");
   const [active, setActive] = useState(initialActive);
+  // Flashing is the long-standing behaviour, so it stays the default; the Chair
+  // turns it off for a banner meant to sit on screen for a while.
+  const [pulse, setPulse] = useState(true);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -2295,7 +2298,7 @@ function LiveBannerBroadcastSection({
     if (!canPush) return;
     setError(null);
     startTransition(async () => {
-      const result = await pushLiveBanner(eventId, trimmed);
+      const result = await pushLiveBanner(eventId, trimmed, pulse);
       if (result.success) {
         setActive(true);
       } else {
@@ -2352,6 +2355,20 @@ function LiveBannerBroadcastSection({
             {error}
           </div>
         )}
+        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={pulse}
+            onChange={(e) => setPulse(e.target.checked)}
+            className="size-3.5 accent-red-600"
+          />
+          <span>
+            Flash the banner
+            <span className="ml-1 opacity-70">
+              — off keeps it steady on screen, better for a notice you leave up
+            </span>
+          </span>
+        </label>
         <div className="flex gap-2">
           <Button
             onClick={onPush}

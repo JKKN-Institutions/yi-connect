@@ -937,9 +937,9 @@ export function VoteManager({
   function handleClearResult() {
     setConfirmDialog({
       open: true,
-      title: "Clear result & show the session",
+      title: "Clear the screen & show the session",
       description:
-        "Take this result off the big screen and return to the live session view? The result stays fully on record — this only changes what the projector shows.",
+        "Take this vote off the big screen and return to the live session view? Every vote cast stays fully on record — this only changes what the projector shows. A vote that is still open is never affected.",
       action: () => {
         startTransition(async () => {
           const result = await clearVoteResults(eventId);
@@ -2547,10 +2547,16 @@ export function VoteManager({
                     Start new vote
                   </Button>
                 )}
-              {/* Take the finished result off the projector and return to the
-                  live session/bill view. Shown for every revealed vote type —
-                  a lingering result of any kind hides the session screen. */}
-              {isRevealed && (
+              {/* Take the finished vote off the projector and return to the
+                  live session/bill view. Shown for every finished vote —
+                  a lingering one of any kind hides the session screen.
+
+                  CLOSED counts, not just REVEALED (Director, 2026-08-28, from
+                  the SRTN floor). A Chair who closed a ballot without revealing
+                  it had no button here at all, so the "vote closed" screen
+                  stayed up with no way back. Never shown while a vote is OPEN —
+                  clearing mid-ballot would cut off everyone still voting. */}
+              {(isRevealed || isClosed) && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -2559,7 +2565,7 @@ export function VoteManager({
                   className="flex-1 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
                 >
                   <EyeOff className="size-3.5 mr-1" />
-                  Clear result &amp; show session
+                  {isRevealed ? "Clear result & show session" : "Dismiss & show session"}
                 </Button>
               )}
             </div>

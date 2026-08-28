@@ -670,14 +670,23 @@ export async function openVote(
   return { success: true, data: { sessionId: data.id, checkinWarning } };
 }
 
-// ─── Clear Result (dismiss a revealed vote from the projector) ────
-// A revealed vote stays pinned to the projector — and hides the bill/session
+// ─── Clear Result (dismiss a finished vote from the projector) ────
+// A finished vote stays pinned to the projector — and hides the bill/session
 // view — until it leaves the display set (the projector + getActiveVoteSession
 // only show open/closed/revealed). 'archived' is a terminal, non-displayed
-// status: clearing archives every REVEALED session for the event so the big
+// status: clearing archives every finished session for the event so the big
 // screen falls back to the live session (the Erode 2026 sticky-results gap).
-// Open/closed (mid-vote) sessions are left untouched. Stored standings live on
-// the bill / participant rows, so this only changes what the screen shows.
+//
+// CLOSED counts as finished, not just REVEALED (Director, 2026-08-28, from the
+// SRTN floor: "many times after a bill it stuck with old vote closed screen").
+// The lifecycle is open → closed → revealed → archived, and a Chair who closes
+// a ballot without revealing it left the session at 'closed' — which this
+// action skipped and which showed no clear button at all, so the screen could
+// never be recovered for the rest of the sitting.
+//
+// OPEN sessions are still left untouched: archiving a ballot mid-vote would
+// silently disenfranchise everyone still voting. Stored standings live on the
+// bill / participant rows, so this only changes what the screen shows.
 export async function clearVoteResults(
   eventId: string
 ): Promise<ActionResult<{ cleared: number }>> {
@@ -690,7 +699,7 @@ export async function clearVoteResults(
     .from("vote_sessions")
     .update({ status: "archived" })
     .eq("event_id", eventId)
-    .eq("status", "revealed")
+    .in("status", ["closed", "revealed"])
     .select("id");
 
   if (error) return { success: false, error: error.message };

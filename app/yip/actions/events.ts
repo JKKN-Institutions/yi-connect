@@ -1384,7 +1384,21 @@ const LIVE_BANNER_MAX_LEN = 280;
 
 export async function pushLiveBanner(
   eventId: string,
-  text: string
+  text: string,
+  /**
+   * Whether the projector banner flashes (Director, 2026-08-28). Defaults to
+   * true — how the banner always behaved — so a caller that omits it sees no
+   * change. A flashing banner earns attention but wears the room down over a
+   * long stretch, so the Chair now chooses per broadcast.
+   *
+   * Carried on the BROADCAST only, deliberately not stored on the event. There
+   * is no column for it and adding one was not available, and the alternative —
+   * writing to a column that does not exist — would fail the whole update and
+   * break banner pushes outright. The cost of not storing it: a projector
+   * RELOADED while a banner is up comes back flashing until the next push,
+   * which is one tap to correct.
+   */
+  pulse: boolean = true
 ): Promise<ActionResult<null>> {
   const access = await getYipEventAccess(eventId);
   if (!access.canManage) {
@@ -1432,7 +1446,7 @@ export async function pushLiveBanner(
   await channel.send({
     type: "broadcast",
     event: "update",
-    payload: { active: true, text: trimmed },
+    payload: { active: true, text: trimmed, pulse },
   });
   await supabase.removeChannel(channel);
 

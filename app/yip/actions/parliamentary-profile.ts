@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { getYipSession } from "@/lib/yip/auth/yip-session";
 import {
   KEY_MAX,
   classifyAxis,
@@ -94,9 +95,24 @@ function bandFor(percentile: number): string {
   return "Building";
 }
 
-export async function getParliamentaryProfile(
-  participantId: string
-): Promise<ParliamentaryProfile | null> {
+/**
+ * Returns the CALLING member's own profile. Takes no id ON PURPOSE.
+ *
+ * This file is "use server", so every export here is a callable endpoint. An
+ * earlier draft took `participantId` as an argument and read on the service
+ * client, which bypasses RLS — meaning anyone could have posted any id and read
+ * any student's standing. The subject is therefore resolved from the signed
+ * participant cookie and from nowhere else; there is no id to tamper with.
+ *
+ * A member seeing their own comparison is the whole point of the feature and is
+ * safe. A member seeing somebody else's is the thing PR #1009 was opened to
+ * stop, when named marks for 345 minors turned out to be readable.
+ */
+export async function getParliamentaryProfile(): Promise<ParliamentaryProfile | null> {
+  const session = await getYipSession();
+  if (!session || session.type !== "participant") return null;
+  const participantId = session.id;
+
   const supabase = await createServiceClient();
 
   const { data: me } = await supabase

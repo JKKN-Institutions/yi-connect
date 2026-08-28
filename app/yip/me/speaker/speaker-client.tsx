@@ -206,8 +206,11 @@ export function SpeakerClient({
         >
           Speaker&apos;s Desk
         </h1>
+        {/* Names all three sections below, not just motions — a presiding
+            officer reading "rule on motions" had no reason to scroll to the
+            speaking floor that runs the House. */}
         <p className="text-sm mt-1.5" style={{ color: inkA(0.6) }}>
-          {roleLabel} · rule on motions for the House
+          {roleLabel} · run the floor, follow Question Hour, rule on motions
         </p>
       </header>
 

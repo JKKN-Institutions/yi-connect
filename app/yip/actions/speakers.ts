@@ -8,6 +8,10 @@ import {
   type ScoreableParticipant,
 } from "@/app/yip/actions/scoring";
 import { revalidatePath } from "next/cache";
+import {
+  completeSpeakingRows,
+  setLiveSpeakerCore,
+} from "@/lib/yip/live-speaker";
 
 // Live-session speaker control. Organiser writes gated on canManage + run on
 // the service client (yip.* RLS read-only for authenticated). Previously
@@ -389,38 +393,6 @@ export async function getNowSpeakingData(
   };
 }
 
-type SpeakerServiceClient = Awaited<ReturnType<typeof createServiceClient>>;
-
-/**
- * Mark EVERY currently-'speaking' row for an agenda item as completed, mirroring
- * advanceSpeaker's bookkeeping (status='completed', ended_at, actual_seconds
- * from started_at). Completing the 'speaking' row is exactly what advanceSpeaker
- * does when it moves on, so this stays compatible with a mid-way planned queue.
- */
-async function completeSpeakingRows(
-  supabase: SpeakerServiceClient,
-  agendaItemId: string
-): Promise<void> {
-  const { data: rows } = await supabase
-    .from("agenda_speakers")
-    .select("id, started_at")
-    .eq("agenda_item_id", agendaItemId)
-    .eq("status", "speaking");
-
-  for (const r of rows ?? []) {
-    const actualSeconds = r.started_at
-      ? Math.round((Date.now() - new Date(r.started_at).getTime()) / 1000)
-      : null;
-    await supabase
-      .from("agenda_speakers")
-      .update({
-        status: "completed",
-        ended_at: new Date().toISOString(),
-        actual_seconds: actualSeconds,
-      })
-      .eq("id", r.id);
-  }
-}
 
 /**
  * setLiveSpeaker — the tapped participant becomes the sole live speaker for the
@@ -465,88 +437,11 @@ export async function setLiveSpeaker(
     return { success: false, error: "That participant isn't in this event." };
   }
 
-  // Bounded retry: both the one-'speaking'-per-item partial index and the
-  // unique(agenda_item_id, speaking_order) constraint surface as 23505 when two
-  // volunteers tap at once. On collision we re-complete + re-set so the LAST tap
-  // wins cleanly; human taps settle in a single extra pass.
-  for (let attempt = 0; attempt < 4; attempt++) {
-    // Double-tap / already-live is a no-op.
-    const { data: speaking } = await supabase
-      .from("agenda_speakers")
-      .select("participant_id")
-      .eq("agenda_item_id", agendaItemId)
-      .eq("status", "speaking");
-    if (
-      speaking &&
-      speaking.length === 1 &&
-      speaking[0].participant_id === participantId
-    ) {
-      return { success: true, data: { currentParticipantId: participantId } };
-    }
+  const res = await setLiveSpeakerCore(supabase, agendaItemId, participantId);
+  if (!res.ok) return { success: false, error: res.error };
 
-    // 1) Complete every currently-'speaking' row FIRST (never two speaking).
-    await completeSpeakingRows(supabase, agendaItemId);
-
-    // 2) Reuse this participant's existing row for the item if one exists
-    //    (repeat speakers in debate, or a planned-queue row), else insert fresh.
-    const { data: mine } = await supabase
-      .from("agenda_speakers")
-      .select("id")
-      .eq("agenda_item_id", agendaItemId)
-      .eq("participant_id", participantId)
-      .order("speaking_order", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const nowIso = new Date().toISOString();
-    let conflict = false;
-
-    if (mine) {
-      const { error } = await supabase
-        .from("agenda_speakers")
-        .update({
-          status: "speaking",
-          started_at: nowIso,
-          ended_at: null,
-          actual_seconds: null,
-        })
-        .eq("id", mine.id);
-      if (error) {
-        if (error.code === "23505") conflict = true;
-        else return { success: false, error: error.message };
-      }
-    } else {
-      const { data: maxRow } = await supabase
-        .from("agenda_speakers")
-        .select("speaking_order")
-        .eq("agenda_item_id", agendaItemId)
-        .order("speaking_order", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      const nextOrder = (maxRow?.speaking_order ?? 0) + 1;
-      const { error } = await supabase.from("agenda_speakers").insert({
-        agenda_item_id: agendaItemId,
-        participant_id: participantId,
-        status: "speaking",
-        started_at: nowIso,
-        speaking_order: nextOrder,
-      });
-      if (error) {
-        if (error.code === "23505") conflict = true;
-        else return { success: false, error: error.message };
-      }
-    }
-
-    if (!conflict) {
-      revalidatePath(`/yip/dashboard/events/${eventId}/control`);
-      return { success: true, data: { currentParticipantId: participantId } };
-    }
-  }
-
-  return {
-    success: false,
-    error: "Another volunteer just changed the speaker — try again.",
-  };
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: { currentParticipantId: participantId } };
 }
 
 /**

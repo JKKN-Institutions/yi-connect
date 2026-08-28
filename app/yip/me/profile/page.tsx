@@ -90,9 +90,14 @@ function FootprintRow({ line }: { line: FootprintLine }) {
   // builds its map only from doers), so it is described that way. Calling it
   // "the House median" would overstate it whenever most of the House did none.
   const context =
-    line.houseDidAny > 0
-      ? `Typical among the ${line.houseDidAny} who did: ${line.houseMedian}`
-      : "You are the first to do this";
+    line.houseDidAny === 0
+      ? // houseDidAny counts everyone who did this AT ALL, the member included.
+        // Zero therefore means nobody has — which also means `you` is zero, so
+        // this can never be phrased as "you are the first".
+        "No one has done this yet"
+      : line.houseDidAny === 1 && line.you > 0
+        ? "You are the only one so far"
+        : `Typical among the ${line.houseDidAny} who did: ${line.houseMedian}`;
   return (
     <div className="flex items-center justify-between gap-3 py-2">
       <div className="min-w-0">

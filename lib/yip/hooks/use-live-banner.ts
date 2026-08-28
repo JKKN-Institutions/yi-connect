@@ -28,15 +28,21 @@ interface LiveBannerBroadcast {
 export function useLiveBanner(
   eventId: string,
   initialActive: boolean,
-  initialText: string | null
+  initialText: string | null,
+  /**
+   * Seeded from the event row (`live_banner_pulse`), so a projector that
+   * reloads mid-banner paints it the way the Chair set it instead of coming
+   * back flashing. Defaults to true — the banner's long-standing behaviour —
+   * for a caller that has no stored value to hand.
+   */
+  initialPulse: boolean = true
 ): LiveBannerState {
   const supabase = createClient();
   const [active, setActive] = useState<boolean>(initialActive);
   const [text, setText] = useState<string | null>(initialText);
-  // Seeded true rather than from the event row: the choice rides the broadcast
-  // and is not stored, so a projector reloaded mid-banner comes back flashing
-  // until the next push. See pushLiveBanner for why it is not persisted.
-  const [pulse, setPulse] = useState<boolean>(true);
+  // pushLiveBanner writes the column and sends the broadcast from the same
+  // argument, so the seed below and any incoming payload always agree.
+  const [pulse, setPulse] = useState<boolean>(initialPulse);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // Re-sync if initial props change (e.g. parent refetches event).
@@ -47,6 +53,10 @@ export function useLiveBanner(
   useEffect(() => {
     setText(initialText);
   }, [initialText]);
+
+  useEffect(() => {
+    setPulse(initialPulse);
+  }, [initialPulse]);
 
   useEffect(() => {
     if (channelRef.current) {

@@ -28,6 +28,9 @@ interface SpeakerInfo {
   parliament_role: string | null;
   party_side: string | null;
   party_number: number | null;
+  /** The member's parliamentary identity in this project (101..296 at Erode),
+   *  so the projector shows it wherever it names who holds the floor. */
+  constituency_number: number | null;
   constituency_name: string | null;
   constituency_state: string | null;
   school_name: string;
@@ -113,11 +116,19 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
     voteSession.agenda_item_id === currentAgendaItem?.id &&
     (isOpen || isClosed || (isRevealed && tallies.length > 0));
 
-  // F5 — live banner (breaking-news strip)
+  // F5 — live banner (breaking-news strip). The flash setting is read from the
+  // event row so a projector RELOADED mid-banner paints it the way the Chair
+  // set it; live changes still arrive on the broadcast. Both come from the one
+  // argument pushLiveBanner was called with, so they cannot disagree.
+  // live_banner_pulse exists in the DB but is not in the generated types yet;
+  // anything other than an explicit false means flash, which is the behaviour
+  // the banner has always had.
   const liveBanner = useLiveBanner(
     eventId,
     (event?.live_banner_active ?? false) === true,
-    event?.live_banner_text ?? null
+    event?.live_banner_text ?? null,
+    (event as unknown as { live_banner_pulse?: boolean | null } | null)
+      ?.live_banner_pulse !== false
   );
 
   // AI Moment — director-curated scene (yip.projector_moments). A live vote
@@ -372,6 +383,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
           parliament_role,
           party_side,
           party_number,
+          constituency_number,
           constituency_name,
           constituency_state,
           school_name
@@ -1263,15 +1275,51 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                 </div>
               )}
 
-            {/* Current speaker (only for non-question-hour items) */}
-            {currentAgendaItem.agenda_type !== "question_hour" && currentSpeaker && (
-              <div className="mx-auto max-w-2xl rounded-2xl border border-gray-800 bg-gray-900 p-6">
+            {/* Current speaker — who holds the floor right now. Shown on EVERY
+                session including Question Hour (Director, live event 2026-08-28).
+                It does not duplicate the question's submitter above: that is who
+                WROTE the question, this is who is on their feet, and they are
+                usually different people. During Question Hour the question is
+                the hero of the screen, so the card renders compact and reads as
+                an attribution strip beneath it rather than competing with it. */}
+            {currentSpeaker && (
+              <div
+                className={cn(
+                  "mx-auto max-w-2xl rounded-2xl border border-gray-800 bg-gray-900",
+                  currentAgendaItem.agenda_type === "question_hour"
+                    ? "p-4"
+                    : "p-6"
+                )}
+              >
                 <p className="mb-1 text-xs uppercase tracking-widest text-gray-500">
                   Now Speaking
                 </p>
-                <p className="text-3xl font-bold text-white lg:text-4xl">
+                <p
+                  className={cn(
+                    "font-bold text-white",
+                    currentAgendaItem.agenda_type === "question_hour"
+                      ? "text-2xl lg:text-3xl"
+                      : "text-3xl lg:text-4xl"
+                  )}
+                >
                   {currentSpeaker.full_name}
                 </p>
+                {/* Constituency number sits WITH the name, not in the small
+                    print: it is the member's identity in the House. Guarded for
+                    null even though the live roster is fully populated — a
+                    projector must never paint "Const. No. null" at 4xl. */}
+                {currentSpeaker.constituency_number != null && (
+                  <p
+                    className={cn(
+                      "mt-1 font-semibold tracking-wide text-[#FF9933]",
+                      currentAgendaItem.agenda_type === "question_hour"
+                        ? "text-lg lg:text-xl"
+                        : "text-2xl lg:text-3xl"
+                    )}
+                  >
+                    Const. No. {currentSpeaker.constituency_number}
+                  </p>
+                )}
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
                   {currentSpeaker.parliament_role && (
                     <span className="rounded-full bg-gray-800 px-4 py-1 text-sm text-gray-200">

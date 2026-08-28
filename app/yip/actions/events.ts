@@ -1391,12 +1391,13 @@ export async function pushLiveBanner(
    * change. A flashing banner earns attention but wears the room down over a
    * long stretch, so the Chair now chooses per broadcast.
    *
-   * Carried on the BROADCAST only, deliberately not stored on the event. There
-   * is no column for it and adding one was not available, and the alternative —
-   * writing to a column that does not exist — would fail the whole update and
-   * break banner pushes outright. The cost of not storing it: a projector
-   * RELOADED while a banner is up comes back flashing until the next push,
-   * which is one tap to correct.
+   * STORED on the event (`live_banner_pulse`) as well as carried on the
+   * broadcast, in the same update as the text and the active flag. The broadcast
+   * is what moves connected projectors immediately; the column is what a
+   * projector reads when it paints fresh, so one RELOADED mid-banner comes back
+   * exactly as the Chair set it instead of flashing on its own. Both sides are
+   * written from this one argument, so they cannot disagree. The column defaults
+   * to true, which is the old behaviour, so nothing already on screen changes.
    */
   pulse: boolean = true
 ): Promise<ActionResult<null>> {
@@ -1417,11 +1418,14 @@ export async function pushLiveBanner(
     };
   }
 
-  // live_banner_* columns exist in DB (migration adding live_banner_text
-  // + live_banner_active) but may not be in generated types yet.
+  // live_banner_* columns exist in DB (live_banner_text + live_banner_active,
+  // and live_banner_pulse) but may not be in generated types yet. All three go
+  // in ONE update so a projector can never read a banner whose flash setting
+  // belongs to the previous push.
   const patch = {
     live_banner_text: trimmed,
     live_banner_active: true,
+    live_banner_pulse: pulse,
   } ;
 
   const { error } = await supabase

@@ -2263,6 +2263,13 @@ export function ControlPanel({
         eventId={eventId}
         initialActive={(event.live_banner_active ?? false) === true}
         initialText={event.live_banner_text ?? null}
+        // live_banner_pulse exists in the DB but is not in the generated types
+        // yet. Anything other than an explicit false means flash, which is what
+        // the banner has always done.
+        initialPulse={
+          (event as unknown as { live_banner_pulse?: boolean | null })
+            .live_banner_pulse !== false
+        }
       />
 
       {/* === AI Moments: director-curated AI scenes for the projector === */}
@@ -2276,16 +2283,20 @@ function LiveBannerBroadcastSection({
   eventId,
   initialActive,
   initialText,
+  initialPulse,
 }: {
   eventId: string;
   initialActive: boolean;
   initialText: string | null;
+  initialPulse: boolean;
 }) {
   const [text, setText] = useState(initialText ?? "");
   const [active, setActive] = useState(initialActive);
-  // Flashing is the long-standing behaviour, so it stays the default; the Chair
-  // turns it off for a banner meant to sit on screen for a while.
-  const [pulse, setPulse] = useState(true);
+  // Seeded from the stored choice so reopening the control panel shows the
+  // banner that is actually on the projector. Flashing is the long-standing
+  // behaviour and stays the default; the Chair turns it off for a banner meant
+  // to sit on screen for a while.
+  const [pulse, setPulse] = useState(initialPulse);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 

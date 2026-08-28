@@ -113,11 +113,19 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
     voteSession.agenda_item_id === currentAgendaItem?.id &&
     (isOpen || isClosed || (isRevealed && tallies.length > 0));
 
-  // F5 — live banner (breaking-news strip)
+  // F5 — live banner (breaking-news strip). The flash setting is read from the
+  // event row so a projector RELOADED mid-banner paints it the way the Chair
+  // set it; live changes still arrive on the broadcast. Both come from the one
+  // argument pushLiveBanner was called with, so they cannot disagree.
+  // live_banner_pulse exists in the DB but is not in the generated types yet;
+  // anything other than an explicit false means flash, which is the behaviour
+  // the banner has always had.
   const liveBanner = useLiveBanner(
     eventId,
     (event?.live_banner_active ?? false) === true,
-    event?.live_banner_text ?? null
+    event?.live_banner_text ?? null,
+    (event as unknown as { live_banner_pulse?: boolean | null } | null)
+      ?.live_banner_pulse !== false
   );
 
   // AI Moment — director-curated scene (yip.projector_moments). A live vote

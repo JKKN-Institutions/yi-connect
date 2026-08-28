@@ -13,6 +13,10 @@ import {
   scopeToLiveSession,
 } from "@/lib/yip/speaking-floor-scope";
 import { revalidatePath } from "next/cache";
+import {
+  completeSpeakingRows,
+  setLiveSpeakerCore,
+} from "@/lib/yip/live-speaker";
 
 /**
  * SPEAKING FLOOR — the raise-to-speak queue (speaking equity).
@@ -120,6 +124,76 @@ export interface MySpeakingStatus {
 }
 
 type ServiceClient = Awaited<ReturnType<typeof createServiceClient>>;
+
+// ─── Jury broadcast mirror ────────────────────────────────────────
+//
+// The Speaking Floor tracks WHOSE TURN IT IS (yip.speaking_requests). The jury
+// screens read WHO IS AT THE MIC from a different table — the sole
+// yip.agenda_speakers row with status='speaking' (getCurrentSpeaker, and the
+// jury client's postgres_changes subscription on that table). Before this, the
+// two never met: calling a member from the floor left every juror looking at
+// "Waiting for next speaker", and only the "Now Speaking (Speaker's aide)"
+// volunteer console could open a scoring form.
+//
+// These mirror one onto the other so a Call opens the jury's form and a
+// Spoken/Skip closes it. The mirror is DELIBERATELY non-fatal: the queue write
+// has already succeeded and is what the floor's fairness depends on, so a
+// broadcast failure must not fail the Speaker's tap. It is logged rather than
+// swallowed — never discard a write error in silence.
+
+async function broadcastLiveSpeaker(
+  supabase: ServiceClient,
+  agendaScope: string,
+  requestId: string
+): Promise<void> {
+  // Scoped to agendaScope on purpose: when no session is live that value is a
+  // sentinel uuid that matches nothing (see getSpeakingFloorScope), so this
+  // finds no row and we broadcast nothing — rather than trying to write an
+  // agenda_speakers row against an agenda item that does not exist.
+  const { data: req } = await supabase
+    .from("speaking_requests")
+    .select("participant_id")
+    .eq("id", requestId)
+    .eq("agenda_item_id", agendaScope)
+    .maybeSingle();
+  if (!req?.participant_id) return;
+  const res = await setLiveSpeakerCore(supabase, agendaScope, req.participant_id);
+  if (!res.ok) {
+    console.error(
+      `[speaking-floor] jury broadcast failed for request ${requestId}: ${res.error}`
+    );
+  }
+}
+
+// Close the jury's form when the member sits down — but ONLY if the member who
+// just sat is the one the jury currently has open. If the aide has since put
+// someone else up, clearing here would yank that juror's screen mid-score.
+async function clearLiveSpeakerIfMine(
+  supabase: ServiceClient,
+  agendaScope: string,
+  requestId: string
+): Promise<void> {
+  // Scoped to agendaScope on purpose: when no session is live that value is a
+  // sentinel uuid that matches nothing (see getSpeakingFloorScope), so this
+  // finds no row and we broadcast nothing — rather than trying to write an
+  // agenda_speakers row against an agenda item that does not exist.
+  const { data: req } = await supabase
+    .from("speaking_requests")
+    .select("participant_id")
+    .eq("id", requestId)
+    .eq("agenda_item_id", agendaScope)
+    .maybeSingle();
+  if (!req?.participant_id) return;
+  const { data: live } = await supabase
+    .from("agenda_speakers")
+    .select("id")
+    .eq("agenda_item_id", agendaScope)
+    .eq("status", "speaking")
+    .eq("participant_id", req.participant_id);
+  if (!live || live.length === 0) return;
+  await completeSpeakingRows(supabase, agendaScope);
+}
+
 
 // Presiding officers preside; they are not part of the "who got to speak from
 // the floor" denominator, so they're excluded from the fairness math. Duty
@@ -592,6 +666,8 @@ export async function callSpeaker(requestId: string): Promise<ActionResult> {
     .in("status", ["waiting", "called"]);
   if (error) return { success: false, error: error.message };
 
+  await broadcastLiveSpeaker(supabase, agendaScope, requestId);
+
   revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: null };
 }
@@ -609,6 +685,8 @@ export async function markSpoken(requestId: string): Promise<ActionResult> {
     .eq("agenda_item_id", agendaScope)
     .in("status", ["waiting", "called"]);
   if (error) return { success: false, error: error.message };
+
+  await clearLiveSpeakerIfMine(supabase, agendaScope, requestId);
 
   revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: null };
@@ -629,6 +707,8 @@ export async function skipSpeakingRequest(
     .eq("agenda_item_id", agendaScope)
     .in("status", ["waiting", "called"]);
   if (error) return { success: false, error: error.message };
+
+  await clearLiveSpeakerIfMine(supabase, agendaScope, requestId);
 
   revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: null };
@@ -727,6 +807,8 @@ export async function speakerCallSpeaker(
     .in("status", ["waiting", "called"]);
   if (error) return { success: false, error: error.message };
 
+  await broadcastLiveSpeaker(supabase, agendaScope, requestId);
+
   revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   revalidatePath(`/yip/me/speaker`);
   return { success: true, data: null };
@@ -750,6 +832,8 @@ export async function speakerMarkSpoken(
     .in("status", ["waiting", "called"]);
   if (error) return { success: false, error: error.message };
 
+  await clearLiveSpeakerIfMine(supabase, agendaScope, requestId);
+
   revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   revalidatePath(`/yip/me/speaker`);
   return { success: true, data: null };
@@ -772,6 +856,8 @@ export async function speakerSkipSpeakingRequest(
     .eq("agenda_item_id", agendaScope)
     .in("status", ["waiting", "called"]);
   if (error) return { success: false, error: error.message };
+
+  await clearLiveSpeakerIfMine(supabase, agendaScope, requestId);
 
   revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   revalidatePath(`/yip/me/speaker`);

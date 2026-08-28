@@ -15,7 +15,6 @@ import {
   HOUSE_MOTION_VOTE_TYPE,
   houseMotionOutcome,
   houseMotionText,
-  isHouseMotionValue,
   isHouseMotionVoteType,
   normalizeMotionText,
   type HouseMotionConfig,
@@ -1601,27 +1600,13 @@ export async function castVote(
     if (!elig.ok) return { success: false, error: elig.error };
   }
 
-  // Reject junk / non-candidate values before they pollute the tally.
+  // Reject junk / non-candidate values before they pollute the tally. A House
+  // motion is constrained there too (aye / nay / abstain, exact match) — the
+  // rule lives in validateVoteValue so it holds on EVERY cast path, not just
+  // this one: the volunteer kiosk and the organiser floor-capture paths call
+  // the same function.
   const valid = validateVoteValue(session, voteValue);
   if (!valid.ok) return { success: false, error: valid.error };
-
-  // A House motion is Aye / Nay / Abstain and nothing else. Enforced HERE
-  // because validateVoteValue's final arm ALLOWS any value for a vote type it
-  // does not know about — an allow-by-default must never be what decides which
-  // ballots count in a live vote.
-  //
-  // Exact match, deliberately: the row is inserted with the value as sent, so
-  // accepting "AYE" or " aye" would store a SECOND spelling of the same answer
-  // and split the tally into two bars that no longer add up.
-  if (
-    isHouseMotionVoteType(session.vote_type) &&
-    !isHouseMotionValue(voteValue)
-  ) {
-    return {
-      success: false,
-      error: "Invalid vote — must be Aye, Nay, or Abstain",
-    };
-  }
 
   // Party-scoped elections (party leader + the party's cabinet/shadow ministers):
   // only members of that party may vote. (Each party elects its own leader, and

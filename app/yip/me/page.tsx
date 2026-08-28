@@ -703,20 +703,25 @@ export default async function ParticipantPage() {
       {/* ─── VOTE NOW (live ballot, inline — no navigation to /me/vote) ─ */}
       <VoteClient initialSession={session} embedded />
 
-      {/* ─── PRESIDING OFFICER — MOTION QUEUE (Speaker / Deputy Speaker) ─ */}
+      {/* ─── PRESIDING OFFICER — SPEAKER'S DESK (Speaker / Deputy Speaker) ─
+          Titled for the WHOLE screen, not one section of it. This card was
+          called "Motion Queue" and described only motions, so a Speaker had no
+          way to know the speaking floor and the Question Hour list live behind
+          it too — and nothing else on My Desk links there. Verified on the SRTN
+          round: the floor console was live and unfindable. */}
       {isPresiding && (
         <Link href="/yip/me/speaker" className="block">
           <SectionShell accent={GOLD} className="transition-shadow hover:shadow-md">
             <div className="px-5 py-4">
               <SectionHeading
                 eyebrow="Preside"
-                title="Motion Queue"
+                title="Speaker's Desk"
                 icon={Gavel}
                 accent={GOLD}
                 trailing={<ChevronRight className="size-5" style={{ color: inkA(0.35) }} />}
               />
               <p className="mt-1.5 text-xs" style={{ color: inkA(0.55) }}>
-                Admit, reject and put motions to the House
+                Call members to speak, see Question Hour, rule on motions
               </p>
             </div>
           </SectionShell>

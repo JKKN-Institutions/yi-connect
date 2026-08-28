@@ -261,11 +261,27 @@ export async function getParliamentaryProfile(
     .select("submitted_by")
     .eq("event_id", eventId)
     .neq("status", "rejected");
+  // motions records its mover as raised_by_id, not participant_id.
   const { data: mRows } = await supabase
     .from("motions")
-    .select("participant_id")
+    .select("raised_by_id")
     .eq("event_id", eventId);
-  const { data: bRows } = await supabase
+  // bills.mover_participant_id has no FK (house style) and is absent from the
+  // generated types, so it is read through a loose client — the same pattern
+  // getBills uses for the identical column.
+  const looseBills = supabase as unknown as {
+    from: (t: string) => {
+      select: (c: string) => {
+        eq: (
+          k: string,
+          v: unknown
+        ) => Promise<{
+          data: Array<{ mover_participant_id: string | null }> | null;
+        }>;
+      };
+    };
+  };
+  const { data: bRows } = await looseBills
     .from("bills")
     .select("mover_participant_id")
     .eq("event_id", eventId);
@@ -275,7 +291,7 @@ export async function getParliamentaryProfile(
     (qRows ?? []).map((r) => ({ pid: r.submitted_by as string | null }))
   );
   const motions = countBy(
-    (mRows ?? []).map((r) => ({ pid: r.participant_id as string | null }))
+    (mRows ?? []).map((r) => ({ pid: r.raised_by_id as string | null }))
   );
   const bills = countBy(
     (bRows ?? []).map((r) => ({

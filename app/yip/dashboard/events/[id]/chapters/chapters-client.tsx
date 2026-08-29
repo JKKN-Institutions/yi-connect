@@ -9,7 +9,7 @@ import {
   ClipboardPaste,
   MapPin,
   Search,
-  UserRound,
+  Users,
 } from "lucide-react";
 import {
   SectionHeading,
@@ -28,19 +28,33 @@ import {
   type BulkAssignReport,
   type ChapterAssignmentProgress,
   type ChapterOption,
+  type RosterParticipant,
   type SchoolChapterGroup,
-  type UnschooledParticipant,
 } from "@/app/yip/actions/chapter-assign";
 
 /**
  * Record which Yi chapter sent each student to this round.
  *
- * Two paths, because the roster has two shapes. Most students carry a school
- * name, so one dropdown per SCHOOL sets everyone from it at once (196 students
- * across 124 schools on the live SRTN round — school-level is roughly a fifth
- * of the work). The handful with a blank school cannot be reached that way at
- * all, so they get their own section with per-student dropdowns rather than
- * being quietly left behind.
+ * CHAPTER IS THE AXIS. Recognition at a regional round is computed per chapter;
+ * school decides nothing. So the roster is grouped by CHAPTER, and "Not assigned
+ * yet" is the group at the top — on every live round today it holds the entire
+ * roster, which is the state this screen is built around rather than an edge
+ * case to mop up afterwards.
+ *
+ * The previous school-first layout was unusable in practice: four of the five
+ * live 2026 rounds (WR Ahmedabad, ER Durg, Durg Chapter, Ahmedabad Chapter —
+ * 531 students) carry NO school on a single row, so the main list rendered
+ * empty. School now appears only as a second line under each name, where it
+ * still helps an organiser recognise a student on SRTN, the one round that has
+ * it.
+ *
+ * SEARCH IS THE NAVIGATION. A roster runs to ~200 names and an organiser is
+ * usually hunting for one. It matches name or school, and works whether or not
+ * anything has been assigned.
+ *
+ * The school shortcuts — paste a list, or one dropdown per school — appear only
+ * when the roster actually carries schools. They are a real saving on SRTN and
+ * simply absent everywhere else.
  *
  * Every chapter shown is one of the event's OWN zone's; the server refuses
  * anything else, so a mis-paste cannot file a student under another region.
@@ -126,22 +140,22 @@ export function ChaptersClient({
   zone,
   chapters,
   migrationApplied,
+  participants,
   schools,
-  noSchool,
   progress,
 }: {
   eventId: string;
   zone: string | null;
   chapters: ChapterOption[];
   migrationApplied: boolean;
+  participants: RosterParticipant[];
   schools: SchoolChapterGroup[];
-  noSchool: UnschooledParticipant[];
   progress: ChapterAssignmentProgress;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [query, setQuery] = useState("");
-  const [personQuery, setPersonQuery] = useState("");
+  const [nameQuery, setNameQuery] = useState("");
+  const [schoolQuery, setSchoolQuery] = useState("");
   const [paste, setPaste] = useState("");
   const [report, setReport] = useState<BulkAssignReport | null>(null);
 
@@ -161,21 +175,62 @@ export function ChaptersClient({
   );
 
   const visibleSchools = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = schoolQuery.trim().toLowerCase();
     if (!q) return schools;
     return schools.filter((s) => s.schoolName.toLowerCase().includes(q));
-  }, [schools, query]);
+  }, [schools, schoolQuery]);
 
-  // The no-school list is not always the handful it is on the SRTN round. Two
-  // other live regional rounds (WR Ahmedabad, ER Durg) were imported with NO
-  // school on any row, so this list is their ENTIRE roster — 163 and 115 names.
-  // Without its own filter those students are rendered but not findable, which
-  // is the same outcome as leaving them out.
-  const visibleNoSchool = useMemo(() => {
-    const q = personQuery.trim().toLowerCase();
-    if (!q) return noSchool;
-    return noSchool.filter((p) => p.fullName.toLowerCase().includes(q));
-  }, [noSchool, personQuery]);
+  /**
+   * The roster folded by chapter, and filtered by the search box.
+   *
+   * Grouping happens HERE rather than on the server so a chapter just chosen
+   * moves that student into their new group immediately, instead of leaving
+   * them sitting under "Not assigned yet" until the refresh lands.
+   *
+   * Empty groups are dropped, so "Not assigned yet" is shown exactly when
+   * somebody is unfiled — which today, on every live round, is everybody.
+   */
+  const groups = useMemo(() => {
+    const q = nameQuery.trim().toLowerCase();
+    const buckets = new Map<
+      string,
+      { chapterId: string | null; people: RosterParticipant[] }
+    >();
+
+    for (const p of participants) {
+      if (
+        q &&
+        !p.fullName.toLowerCase().includes(q) &&
+        !p.schoolName.toLowerCase().includes(q)
+      ) {
+        continue;
+      }
+      const chapterId =
+        p.id in personOverride ? personOverride[p.id] : p.chapterId;
+      const key = chapterId ?? "";
+      const bucket = buckets.get(key) ?? { chapterId, people: [] };
+      bucket.people.push(p);
+      buckets.set(key, bucket);
+    }
+
+    return [...buckets.values()]
+      .map((b) => ({
+        chapterId: b.chapterId,
+        // A chapter deactivated after students were filed under it is no longer
+        // in the picklist. Say so plainly instead of printing a raw id.
+        label: b.chapterId
+          ? (chapterName.get(b.chapterId) ?? "Chapter no longer listed")
+          : "Not assigned yet",
+        people: b.people,
+      }))
+      .sort((a, b) => {
+        if (a.chapterId === null) return -1;
+        if (b.chapterId === null) return 1;
+        return a.label.localeCompare(b.label);
+      });
+  }, [participants, personOverride, nameQuery, chapterName]);
+
+  const matchCount = groups.reduce((n, g) => n + g.people.length, 0);
 
   // A write is only possible when the column exists AND the event has a zone to
   // scope the picklist to. Both are shown as banners below, so a disabled
@@ -294,16 +349,8 @@ export function ChaptersClient({
               />
             </div>
             <p className="mt-2 text-[12px]" style={{ color: inkA(0.6) }}>
-              {progress.unassignedSchools.length} school
-              {progress.unassignedSchools.length === 1 ? "" : "s"} still to do
-              {progress.unassignedWithoutSchool > 0 && (
-                <>
-                  {" · "}
-                  {progress.unassignedWithoutSchool} student
-                  {progress.unassignedWithoutSchool === 1 ? "" : "s"} with no
-                  school on the roster
-                </>
-              )}
+              {progress.unassigned} student
+              {progress.unassigned === 1 ? "" : "s"} still to file
               {isPending && " · saving…"}
             </p>
           </div>
@@ -365,110 +412,18 @@ export function ChaptersClient({
         </div>
       )}
 
-      {/* ── Paste-in ───────────────────────────────────────────── */}
+      {/* ── The roster, by chapter ─────────────────────────────── */}
       <SectionShell>
         <div className="p-4">
           <SectionHeading
-            eyebrow="Fastest path"
-            title="Paste a school-to-chapter list"
-            icon={ClipboardPaste}
+            eyebrow={`${participants.length} student${participants.length === 1 ? "" : "s"} on this round`}
+            title="Students by chapter"
+            icon={Users}
           />
           <p className="mt-2 text-[13px] leading-relaxed" style={{ color: inkA(0.7) }}>
-            One line per school, as{" "}
-            <code className="rounded px-1" style={{ background: inkA(0.06) }}>
-              school name,chapter
-            </code>
-            . Chapter names are matched however you type them. Anything that
-            doesn&apos;t match is listed back to you — nothing is dropped quietly.
-          </p>
-          <textarea
-            value={paste}
-            onChange={(e) => setPaste(e.target.value)}
-            disabled={!canWrite || isPending}
-            rows={5}
-            spellCheck={false}
-            placeholder={`Government Higher Secondary School, Erode\nSt Joseph's Matriculation, Salem`}
-            className="mt-3 w-full rounded-md border px-3 py-2 font-mono text-[12px] leading-relaxed disabled:opacity-50"
-            style={{ borderColor: inkA(0.15), color: INK }}
-          />
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={applyPaste}
-              disabled={!canWrite || isPending || !paste.trim()}
-              className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-              style={{ background: INK }}
-            >
-              {isPending ? "Applying…" : "Apply list"}
-            </button>
-            {report && (
-              <button
-                type="button"
-                onClick={() => setReport(null)}
-                className="rounded-lg px-3 py-2 text-sm font-medium"
-                style={{ color: inkA(0.6) }}
-              >
-                Clear result
-              </button>
-            )}
-          </div>
-
-          {report && (
-            <div
-              className="mt-3 rounded-lg border p-3 text-[13px]"
-              style={{ borderColor: inkA(0.12), background: inkA(0.03) }}
-            >
-              <p className="font-semibold" style={{ color: INK }}>
-                {report.matchedParticipants} student
-                {report.matchedParticipants === 1 ? "" : "s"} filed across{" "}
-                {report.appliedRows} school
-                {report.appliedRows === 1 ? "" : "s"}
-              </p>
-              {report.unresolved.length === 0 ? (
-                <p className="mt-1" style={{ color: GREEN }}>
-                  Every line applied.
-                </p>
-              ) : (
-                <>
-                  <p className="mt-2 font-semibold" style={{ color: "#b42318" }}>
-                    {report.unresolved.length} line
-                    {report.unresolved.length === 1 ? "" : "s"} did not apply
-                  </p>
-                  <ul className="mt-1.5 space-y-1">
-                    {report.unresolved.map((u, i) => (
-                      <li
-                        key={`${u.schoolName}-${u.chapterName}-${i}`}
-                        className="leading-snug"
-                        style={{ color: inkA(0.75) }}
-                      >
-                        <span className="font-medium">
-                          {u.schoolName || "(blank school)"} →{" "}
-                          {u.chapterName || "(blank chapter)"}
-                        </span>
-                        <span style={{ color: inkA(0.55) }}>
-                          {" "}
-                          — {REASON_LABEL[u.reason]}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      </SectionShell>
-
-      {/* ── Per school ─────────────────────────────────────────── */}
-      <SectionShell>
-        <div className="p-4">
-          <SectionHeading
-            eyebrow={`${schools.length} school${schools.length === 1 ? "" : "s"} on the roster`}
-            title="Assign by school"
-            icon={Building2}
-          />
-          <p className="mt-2 text-[13px] leading-relaxed" style={{ color: inkA(0.7) }}>
-            One choice covers everyone from that school.
+            Everyone starts under{" "}
+            <span className="font-semibold">Not assigned yet</span>. Pick a
+            chapter on a student and they move under it straight away.
           </p>
 
           <div className="relative mt-3">
@@ -477,140 +432,266 @@ export function ChaptersClient({
               style={{ color: inkA(0.4) }}
             />
             <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Find a school"
+              value={nameQuery}
+              onChange={(e) => setNameQuery(e.target.value)}
+              placeholder="Find a student by name"
               className="w-full rounded-md border py-2 pl-9 pr-3 text-sm"
               style={{ borderColor: inkA(0.15), color: INK }}
             />
           </div>
+          {nameQuery.trim() !== "" && (
+            <p className="mt-1.5 text-[12px]" style={{ color: inkA(0.55) }}>
+              {matchCount} match{matchCount === 1 ? "" : "es"}
+            </p>
+          )}
 
-          <div className="mt-3 space-y-2">
-            {visibleSchools.length === 0 && (
-              <p className="py-6 text-center text-[13px]" style={{ color: inkA(0.5) }}>
-                {schools.length === 0
-                  ? "No student on this round has a school recorded — assign them one at a time below."
-                  : `No school matches “${query}”.`}
-              </p>
-            )}
-            {visibleSchools.map((s) => {
-              const value =
-                s.schoolName in schoolOverride
-                  ? schoolOverride[s.schoolName]
-                  : s.chapterId;
-              return (
+          {participants.length === 0 ? (
+            <p className="py-6 text-center text-[13px]" style={{ color: inkA(0.5) }}>
+              No students have been imported to this round yet.
+            </p>
+          ) : matchCount === 0 ? (
+            <p className="py-6 text-center text-[13px]" style={{ color: inkA(0.5) }}>
+              No student matches &ldquo;{nameQuery.trim()}&rdquo;.
+            </p>
+          ) : (
+            groups.map((g) => (
+              <div key={g.chapterId ?? "unassigned"} className="mt-4">
                 <div
-                  key={s.schoolName}
-                  className="rounded-lg border p-3"
-                  style={{
-                    borderColor: value ? `${GREEN}33` : inkA(0.1),
-                    background: value ? `${GREEN}08` : "#ffffff",
-                  }}
+                  className="flex items-baseline justify-between gap-3 border-b pb-1.5"
+                  style={{ borderColor: inkA(0.1) }}
                 >
                   <p
-                    className="text-[13px] font-semibold leading-snug"
-                    style={{ color: INK }}
+                    className="text-[14px] font-semibold"
+                    style={{ ...SERIF, color: g.chapterId ? INK : SAFFRON }}
                   >
-                    {s.schoolName}
+                    {g.label}
                   </p>
-                  <p className="mt-0.5 text-[12px]" style={{ color: inkA(0.55) }}>
-                    {s.participantCount} student
-                    {s.participantCount === 1 ? "" : "s"}
-                    {s.mixed && !(s.schoolName in schoolOverride) && (
-                      <span style={{ color: SAFFRON }}>
-                        {" · currently split across chapters — choosing here sets all of them"}
-                      </span>
-                    )}
-                  </p>
-                  <div className="mt-2">
-                    <ChapterSelect
-                      chapters={chapters}
-                      value={value}
-                      disabled={!canWrite || isPending}
-                      ariaLabel={`Chapter for ${s.schoolName}`}
-                      onChange={(chapterId) => assignSchool(s.schoolName, chapterId)}
-                    />
-                  </div>
+                  <span
+                    className="shrink-0 text-[12px] tabular-nums"
+                    style={{ color: inkA(0.55) }}
+                  >
+                    {g.people.length} student{g.people.length === 1 ? "" : "s"}
+                  </span>
                 </div>
-              );
-            })}
-          </div>
+                <div className="mt-2 space-y-2">
+                  {/* The student sits in this group precisely because their
+                      chapter — override included — is g.chapterId, so that is
+                      also what the dropdown shows. */}
+                  {g.people.map((p) => (
+                    <div
+                      key={p.id}
+                      className="rounded-lg border p-3"
+                      style={{
+                        borderColor: g.chapterId ? `${GREEN}33` : inkA(0.1),
+                        background: g.chapterId ? `${GREEN}08` : "#ffffff",
+                      }}
+                    >
+                      <p
+                        className="text-[13px] font-semibold leading-snug"
+                        style={{ color: INK }}
+                      >
+                        {p.fullName}
+                      </p>
+                      {/* School is a recognition aid only — blank on most
+                          rounds, and never what anything is counted by. */}
+                      <p className="mt-0.5 text-[12px]" style={{ color: inkA(0.5) }}>
+                        {p.schoolName || "No school on the roster"}
+                      </p>
+                      <div className="mt-2">
+                        <ChapterSelect
+                          chapters={chapters}
+                          value={g.chapterId}
+                          disabled={!canWrite || isPending}
+                          ariaLabel={`Chapter for ${p.fullName}`}
+                          onChange={(chapterId) => assignPerson(p.id, chapterId)}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </SectionShell>
 
-      {/* ── No school on the roster ────────────────────────────── */}
-      {noSchool.length > 0 && (
-        <SectionShell accent={SAFFRON}>
-          <div className="p-4">
-            <SectionHeading
-              eyebrow="Cannot be reached by school"
-              title={`${noSchool.length} student${noSchool.length === 1 ? "" : "s"} with no school on the roster`}
-              icon={UserRound}
-              accent={SAFFRON}
-            />
-            <p className="mt-2 text-[13px] leading-relaxed" style={{ color: inkA(0.7) }}>
-              These names came in without a school, so no list or paste can reach
-              them. Set each one here, or they will be left out of their
-              chapter&apos;s tally.
-            </p>
-            {noSchool.length > 12 && (
+      {/* ── School shortcuts ───────────────────────────────────────
+          Only when the roster actually carries schools. On a round imported
+          without them these would be two empty boxes promising a faster path
+          that cannot reach a single student. */}
+      {schools.length > 0 && (
+        <>
+          <SectionShell>
+            <div className="p-4">
+              <SectionHeading
+                eyebrow="Shortcut"
+                title="Paste a school-to-chapter list"
+                icon={ClipboardPaste}
+              />
+              <p className="mt-2 text-[13px] leading-relaxed" style={{ color: inkA(0.7) }}>
+                One line per school, as{" "}
+                <code className="rounded px-1" style={{ background: inkA(0.06) }}>
+                  school name,chapter
+                </code>
+                . Chapter names are matched however you type them. Anything that
+                doesn&apos;t match is listed back to you — nothing is dropped quietly.
+              </p>
+              <textarea
+                value={paste}
+                onChange={(e) => setPaste(e.target.value)}
+                disabled={!canWrite || isPending}
+                rows={5}
+                spellCheck={false}
+                placeholder={`Government Higher Secondary School, Erode\nSt Joseph's Matriculation, Salem`}
+                className="mt-3 w-full rounded-md border px-3 py-2 font-mono text-[12px] leading-relaxed disabled:opacity-50"
+                style={{ borderColor: inkA(0.15), color: INK }}
+              />
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={applyPaste}
+                  disabled={!canWrite || isPending || !paste.trim()}
+                  className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  style={{ background: INK }}
+                >
+                  {isPending ? "Applying…" : "Apply list"}
+                </button>
+                {report && (
+                  <button
+                    type="button"
+                    onClick={() => setReport(null)}
+                    className="rounded-lg px-3 py-2 text-sm font-medium"
+                    style={{ color: inkA(0.6) }}
+                  >
+                    Clear result
+                  </button>
+                )}
+              </div>
+
+              {report && (
+                <div
+                  className="mt-3 rounded-lg border p-3 text-[13px]"
+                  style={{ borderColor: inkA(0.12), background: inkA(0.03) }}
+                >
+                  <p className="font-semibold" style={{ color: INK }}>
+                    {report.matchedParticipants} student
+                    {report.matchedParticipants === 1 ? "" : "s"} filed across{" "}
+                    {report.appliedRows} school
+                    {report.appliedRows === 1 ? "" : "s"}
+                  </p>
+                  {report.unresolved.length === 0 ? (
+                    <p className="mt-1" style={{ color: GREEN }}>
+                      Every line applied.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="mt-2 font-semibold" style={{ color: "#b42318" }}>
+                        {report.unresolved.length} line
+                        {report.unresolved.length === 1 ? "" : "s"} did not apply
+                      </p>
+                      <ul className="mt-1.5 space-y-1">
+                        {report.unresolved.map((u, i) => (
+                          <li
+                            key={`${u.schoolName}-${u.chapterName}-${i}`}
+                            className="leading-snug"
+                            style={{ color: inkA(0.75) }}
+                          >
+                            <span className="font-medium">
+                              {u.schoolName || "(blank school)"} →{" "}
+                              {u.chapterName || "(blank chapter)"}
+                            </span>
+                            <span style={{ color: inkA(0.55) }}>
+                              {" "}
+                              — {REASON_LABEL[u.reason]}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </SectionShell>
+
+          {/* ── Per school ─────────────────────────────────────────── */}
+          <SectionShell>
+            <div className="p-4">
+              <SectionHeading
+                eyebrow={`Shortcut · ${schools.length} school${schools.length === 1 ? "" : "s"} on this roster`}
+                title="Assign a whole school at once"
+                icon={Building2}
+              />
+              <p className="mt-2 text-[13px] leading-relaxed" style={{ color: inkA(0.7) }}>
+                One choice covers everyone from that school. Each student still shows
+                up under their chapter in the list above.
+              </p>
+
               <div className="relative mt-3">
                 <Search
                   className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2"
                   style={{ color: inkA(0.4) }}
                 />
                 <input
-                  value={personQuery}
-                  onChange={(e) => setPersonQuery(e.target.value)}
-                  placeholder="Find a student by name"
+                  value={schoolQuery}
+                  onChange={(e) => setSchoolQuery(e.target.value)}
+                  placeholder="Find a school"
                   className="w-full rounded-md border py-2 pl-9 pr-3 text-sm"
                   style={{ borderColor: inkA(0.15), color: INK }}
                 />
               </div>
-            )}
 
-            <div className="mt-3 space-y-2">
-              {visibleNoSchool.length === 0 && (
-                <p
-                  className="py-6 text-center text-[13px]"
-                  style={{ color: inkA(0.5) }}
-                >
-                  No student matches &ldquo;{personQuery}&rdquo;.
-                </p>
-              )}
-              {visibleNoSchool.map((p) => {
-                const value =
-                  p.id in personOverride ? personOverride[p.id] : p.chapterId;
-                return (
-                  <div
-                    key={p.id}
-                    className="rounded-lg border p-3"
-                    style={{
-                      borderColor: value ? `${GREEN}33` : `${SAFFRON}40`,
-                      background: value ? `${GREEN}08` : `${SAFFRON}08`,
-                    }}
-                  >
-                    <p
-                      className="text-[13px] font-semibold leading-snug"
-                      style={{ color: INK }}
+              <div className="mt-3 space-y-2">
+                {visibleSchools.length === 0 && (
+                  <p className="py-6 text-center text-[13px]" style={{ color: inkA(0.5) }}>
+                    No school matches &ldquo;{schoolQuery}&rdquo;.
+                  </p>
+                )}
+                {visibleSchools.map((s) => {
+                  const value =
+                    s.schoolName in schoolOverride
+                      ? schoolOverride[s.schoolName]
+                      : s.chapterId;
+                  return (
+                    <div
+                      key={s.schoolName}
+                      className="rounded-lg border p-3"
+                      style={{
+                        borderColor: value ? `${GREEN}33` : inkA(0.1),
+                        background: value ? `${GREEN}08` : "#ffffff",
+                      }}
                     >
-                      {p.fullName}
-                    </p>
-                    <div className="mt-2">
-                      <ChapterSelect
-                        chapters={chapters}
-                        value={value}
-                        disabled={!canWrite || isPending}
-                        ariaLabel={`Chapter for ${p.fullName}`}
-                        onChange={(chapterId) => assignPerson(p.id, chapterId)}
-                      />
+                      <p
+                        className="text-[13px] font-semibold leading-snug"
+                        style={{ color: INK }}
+                      >
+                        {s.schoolName}
+                      </p>
+                      <p className="mt-0.5 text-[12px]" style={{ color: inkA(0.55) }}>
+                        {s.participantCount} student
+                        {s.participantCount === 1 ? "" : "s"}
+                        {s.mixed && !(s.schoolName in schoolOverride) && (
+                          <span style={{ color: SAFFRON }}>
+                            {" · currently split across chapters — choosing here sets all of them"}
+                          </span>
+                        )}
+                      </p>
+                      <div className="mt-2">
+                        <ChapterSelect
+                          chapters={chapters}
+                          value={value}
+                          disabled={!canWrite || isPending}
+                          ariaLabel={`Chapter for ${s.schoolName}`}
+                          onChange={(chapterId) => assignSchool(s.schoolName, chapterId)}
+                        />
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        </SectionShell>
+          </SectionShell>
+        </>
       )}
     </div>
   );

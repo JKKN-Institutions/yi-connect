@@ -29,6 +29,15 @@ import { getYipEventAccess } from "@/lib/yip/auth/event-access";
  * cast (same approach as `mover_participant_id` in actions/bills.ts) because it
  * is absent from the generated types.
  *
+ * CHAPTER IS THE AXIS, SCHOOL IS A HINT. Recognition at a regional round is
+ * computed per chapter; school decides nothing. It is also absent far more often
+ * than not — of the five live 2026 rounds, four (WR Ahmedabad, ER Durg, Durg
+ * Chapter, Ahmedabad Chapter — 531 students between them) carry NO school on a
+ * single row, and only SRTN has it populated. So the board below returns the
+ * roster FLAT and the screen groups it by chapter; the per-school rollup is kept
+ * only to back the paste/one-click shortcut, and comes back empty — hiding that
+ * shortcut — on a round imported without schools.
+ *
  * SCHOOL NAMES ARE SHOWN HERE ON PURPOSE. They are hidden from the participants
  * roster (school-blind party/committee allocation) and from jurors (school-blind
  * scoring), but organisers already see them on certificates, the formation
@@ -52,6 +61,19 @@ export type ChapterOptions = {
   chapters: ChapterOption[];
 };
 
+/** One student on the round — the row an organiser actually works with. */
+export type RosterParticipant = {
+  id: string;
+  fullName: string;
+  /**
+   * Free text off the import, blank on most rounds. A recognition aid printed
+   * under the name, never something the roster is grouped or counted by.
+   */
+  schoolName: string;
+  /** The Yi chapter that sent them, or null while still unfiled. */
+  chapterId: string | null;
+};
+
 /** One school on the event's roster, with the chapter its students are filed under. */
 export type SchoolChapterGroup = {
   schoolName: string;
@@ -66,18 +88,20 @@ export type SchoolChapterGroup = {
   mixed: boolean;
 };
 
-/** A participant with no school on the roster — reachable only one at a time. */
-export type UnschooledParticipant = {
-  id: string;
-  fullName: string;
-  chapterId: string | null;
-};
-
 export type ChapterAssignmentBoard = {
   migrationApplied: boolean;
+  /**
+   * Every student on the round, ordered by name. Returned FLAT so the screen can
+   * group by chapter and move a student the instant one is picked, instead of
+   * waiting on a server round-trip to re-fold them.
+   */
+  participants: RosterParticipant[];
+  /**
+   * Per-school rollup, backing the paste / one-click-per-school shortcut ONLY.
+   * Empty on a round imported without schools — the shortcut then hides itself
+   * rather than rendering a list that could never reach anybody.
+   */
   schools: SchoolChapterGroup[];
-  /** Students with a blank school_name; school-level assignment cannot reach them. */
-  noSchool: UnschooledParticipant[];
 };
 
 export type ChapterAssignmentProgress = {
@@ -85,10 +109,6 @@ export type ChapterAssignmentProgress = {
   assigned: number;
   unassigned: number;
   total: number;
-  /** Distinct school names that still have at least one unassigned student. */
-  unassignedSchools: string[];
-  /** Unassigned students carrying no school name at all. */
-  unassignedWithoutSchool: number;
 };
 
 /** One paste-in row: a school on the roster and the chapter it should map to. */
@@ -320,7 +340,7 @@ export async function getEventChapterOptions(
   };
 }
 
-/** Assigned vs unassigned, and which schools still need a chapter. */
+/** How many students are filed under a chapter, and how many still are not. */
 export async function getChapterAssignmentProgress(
   eventId: string
 ): Promise<ActionResult<ChapterAssignmentProgress>> {
@@ -334,19 +354,9 @@ export async function getChapterAssignmentProgress(
   if (!roster.ok) return { success: false, error: roster.error };
   const { rows, migrationApplied } = roster;
 
-  let assigned = 0;
-  let unassignedWithoutSchool = 0;
-  const unassignedSchools = new Set<string>();
-
-  for (const r of rows) {
-    if (r.yi_chapter_id) {
-      assigned += 1;
-      continue;
-    }
-    const school = (r.school_name ?? "").trim();
-    if (school) unassignedSchools.add(school);
-    else unassignedWithoutSchool += 1;
-  }
+  // Before the migration lands, yi_chapter_id is absent from every row, so this
+  // reads 0 assigned — the honest answer, and the state the screen leads with.
+  const assigned = rows.filter((r) => r.yi_chapter_id).length;
 
   return {
     success: true,
@@ -355,19 +365,18 @@ export async function getChapterAssignmentProgress(
       assigned,
       unassigned: rows.length - assigned,
       total: rows.length,
-      unassignedSchools: [...unassignedSchools].sort((a, b) =>
-        a.localeCompare(b)
-      ),
-      unassignedWithoutSchool,
     },
   };
 }
 
 /**
- * The roster folded into one row per school, plus the students who carry no
- * school at all. School-level assignment is ~1/5 the clicks of per-student
- * (196 students across 124 schools on the live SRTN round), but it structurally
- * cannot reach a blank school — hence the separate list.
+ * The whole roster, plus a per-school rollup for the shortcut.
+ *
+ * The roster is returned FLAT and unfiltered — the screen groups it by chapter,
+ * because that is the axis recognition is computed on and because school is
+ * blank for every student on four of the five live 2026 rounds. The rollup skips
+ * blank-school rows, so on those rounds it comes back empty and the shortcut
+ * that depends on it disappears instead of rendering nothing.
  */
 export async function getChapterAssignmentBoard(
   eventId: string
@@ -382,30 +391,29 @@ export async function getChapterAssignmentBoard(
   if (!roster.ok) return { success: false, error: roster.error };
   const { rows, migrationApplied } = roster;
 
+  // readRoster already orders by name, so the screen's groups come out sorted
+  // without a second pass.
+  const participants: RosterParticipant[] = rows.map((r) => ({
+    id: r.id,
+    fullName: r.full_name,
+    schoolName: (r.school_name ?? "").trim(),
+    chapterId: r.yi_chapter_id ?? null,
+  }));
+
   const bySchool = new Map<
     string,
     { count: number; chapterIds: Set<string | null> }
   >();
-  const noSchool: UnschooledParticipant[] = [];
 
-  for (const r of rows) {
-    const school = (r.school_name ?? "").trim();
-    const chapterId = r.yi_chapter_id ?? null;
-    if (!school) {
-      noSchool.push({
-        id: r.id,
-        fullName: r.full_name,
-        chapterId,
-      });
-      continue;
-    }
-    const entry = bySchool.get(school) ?? {
+  for (const p of participants) {
+    if (!p.schoolName) continue;
+    const entry = bySchool.get(p.schoolName) ?? {
       count: 0,
       chapterIds: new Set<string | null>(),
     };
     entry.count += 1;
-    entry.chapterIds.add(chapterId);
-    bySchool.set(school, entry);
+    entry.chapterIds.add(p.chapterId);
+    bySchool.set(p.schoolName, entry);
   }
 
   const schools: SchoolChapterGroup[] = [...bySchool.entries()]
@@ -420,7 +428,7 @@ export async function getChapterAssignmentBoard(
     })
     .sort((a, b) => a.schoolName.localeCompare(b.schoolName));
 
-  return { success: true, data: { migrationApplied, schools, noSchool } };
+  return { success: true, data: { migrationApplied, participants, schools } };
 }
 
 // ─── Writes ────────────────────────────────────────────────────────

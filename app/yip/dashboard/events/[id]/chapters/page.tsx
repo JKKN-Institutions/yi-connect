@@ -66,8 +66,8 @@ export default async function EventChaptersPage({
       zone={options.data.zone}
       chapters={options.data.chapters}
       migrationApplied={board.data.migrationApplied}
+      participants={board.data.participants}
       schools={board.data.schools}
-      noSchool={board.data.noSchool}
       progress={progress.data}
     />
   );

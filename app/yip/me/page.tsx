@@ -13,6 +13,7 @@ import {
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { fetchCommitteeTopicForEvent } from "@/lib/yip/committee-topics";
+import { countTurns, type TurnRow } from "@/lib/yip/turn-count";
 import {
   getEventSchoolNumbers,
   schoolNumberOf,
@@ -272,12 +273,53 @@ export default async function ParticipantPage() {
   }
 
   // Fetch agenda items (mode aligned with handbook page 19 — party vs committee)
+  // `id` rides along for the turn count below: agenda_speakers carries no
+  // event_id, so every reader reaches it through this event's agenda item ids.
   const { data: agendaItems } = await supabase
     .from("agenda")
-    .select("day, sequence_order, title, duration_minutes, agenda_type, mode")
+    .select("id, day, sequence_order, title, duration_minutes, agenda_type, mode")
     .eq("event_id", event.id)
     .order("day")
     .order("sequence_order");
+
+  // How many times this member took the floor — deliberately the SAME number
+  // the Chair's speaking board shows. The rule (one turn per occasion; a
+  // 'spoken' hand-raise counts only where no mirrored agenda_speakers row
+  // exists) lives in lib/yip/turn-count.ts precisely because two copies of it
+  // once drifted and a member read a smaller number on their phone than the
+  // Chair saw. Both reads are narrowed to this member: the dedupe key is
+  // (member, agenda item), so a one-member subset yields the same count as the
+  // House-wide read the profile page does.
+  const myAgendaItemIds = (agendaItems ?? []).map((a) => a.id as string);
+  let myFormalTurns: TurnRow[] = [];
+  if (myAgendaItemIds.length > 0) {
+    const { data } = await supabase
+      .from("agenda_speakers")
+      .select("participant_id, agenda_item_id")
+      .in("agenda_item_id", myAgendaItemIds)
+      .eq("participant_id", participant.id)
+      .eq("status", "completed");
+    myFormalTurns = (data ?? []) as TurnRow[];
+  }
+  const { data: mySpokenRequests } = await supabase
+    .from("speaking_requests")
+    .select("participant_id, agenda_item_id")
+    .eq("event_id", event.id)
+    .eq("participant_id", participant.id)
+    .eq("status", "spoken");
+  const myTurnCount =
+    countTurns(myFormalTurns, (mySpokenRequests ?? []) as TurnRow[]).get(
+      participant.id
+    ) ?? 0;
+  // Read it out in words rather than "0 times" / "1 times" — this card is the
+  // first thing a member sees about their own record, and a member who has not
+  // spoken yet should read an invitation, not a zero.
+  const myTurnPhrase =
+    myTurnCount === 0
+      ? "You have not taken the floor yet"
+      : myTurnCount === 1
+        ? "You have taken the floor once"
+        : `You have taken the floor ${myTurnCount} times`;
 
   // Fetch question count for this participant
   const { data: questionData } = await supabase
@@ -1394,7 +1436,7 @@ export default async function ParticipantPage() {
             }
           />
           <p className="mt-1.5 text-xs" style={{ color: inkA(0.55) }}>
-            Your record set against the House you sat in
+            {myTurnPhrase} · Your record set against the House you sat in
           </p>
         </div>
       </SectionShell>

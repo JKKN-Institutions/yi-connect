@@ -17,7 +17,7 @@ import {
   storedRoleSlugs,
   type RoleScopedCriterion,
 } from "@/lib/yip/scoring-roles";
-import { fetchEventRoundLevel } from "@/lib/yip/round-level";
+import { fetchEventRoundLevel, type RoundLevel } from "@/lib/yip/round-level";
 import { resolveAwardsForLevel } from "@/lib/yip/awards";
 import { listScoringBuckets } from "./scoring-buckets";
 import { getScoringFlagsConfig } from "./scoring-flags";
@@ -350,6 +350,38 @@ function removeAward(r: ResultRow, awardLabel: string): void {
 // prize and are EXEMPT. Blank/unknown school is exempt too (each blank is its own
 // unknown school — grouping distinct unknown-school students would be wrong).
 const SCHOOL_AWARD_CAP = 3;
+
+/**
+ * CHAPTER ROUNDS ONLY (Director ruling 2026-08-29).
+ *
+ * At a chapter round students arrive in school blocks and the cap does real
+ * work — 69 of 87 schools field 4+ students, and 11 of the 36 schools that have
+ * ever won something sit exactly at the ceiling.
+ *
+ * At a REGIONAL round it is both near-useless and unfair. Chapters send a few
+ * delegates each from many different schools, so only 4 of 124 schools could
+ * ever reach the cap. Worse, the blank-school exemption above makes it apply
+ * unevenly to rounds of the same competition: on the day this was scoped,
+ * Ahmedabad had 163 of 163 delegates with no school recorded and Durg 115 of
+ * 115 — the cap was entirely inert for both — while SRTN had only 9 of 196
+ * blank, so it bound on 95% of that field. Three regional rounds, three
+ * different rulebooks, decided by nothing but whether a school name was typed.
+ *
+ * School is not the unit of a regional round; the CHAPTER is (Director,
+ * 2026-08-29). A spread rule at that level belongs on chapter, not school.
+ *
+ * This changes NOTHING already computed: no regional round has ever assigned an
+ * individual award, and chapter rounds keep the cap exactly as before.
+ *
+ * A NULL level keeps the cap. The level can be unresolved (an event with none
+ * set, or a lookup that failed), and an unknown must never silently RELAX a
+ * fairness rule — before this change the cap applied everywhere, so an
+ * unresolved round keeps behaving exactly as it did. The cap is lifted only
+ * where we positively know the round is not a chapter one.
+ */
+function schoolCapApplies(roundLevel: RoundLevel | null): boolean {
+  return roundLevel !== "regional" && roundLevel !== "national";
+}
 
 export async function computeResults(
   eventId: string
@@ -1430,8 +1462,13 @@ export async function computeResults(
         if (awarded.has(r.participant_id)) continue;
         // Per-school cap: skip a candidate whose school already holds the max
         // individual awards (blank/unknown school is exempt → never capped).
+        // CHAPTER ROUNDS ONLY — see schoolCapApplies().
         const school = schoolOf(r.participant_id);
-        if (school && (schoolAwardCount.get(school) ?? 0) >= SCHOOL_AWARD_CAP) {
+        if (
+          schoolCapApplies(roundLevel) &&
+          school &&
+          (schoolAwardCount.get(school) ?? 0) >= SCHOOL_AWARD_CAP
+        ) {
           continue;
         }
         appendAward(r, aw.label);
@@ -1508,7 +1545,10 @@ export async function computeResults(
     // breach, leave the auto-winner intact (the override is ignored this
     // recompute; setAwardWinner surfaces the reason to the chair).
     const tSchool = schoolOf(target.participant_id);
-    if (isCappedAward(A) && tSchool) {
+    // CHAPTER ROUNDS ONLY — the override path must use the same rule as the
+    // assignment pass above, or a chair's pin would be refused by a cap that no
+    // longer governs the round. See schoolCapApplies().
+    if (schoolCapApplies(roundLevel) && isCappedAward(A) && tSchool) {
       let projected = schoolCount.get(tSchool) ?? 0;
       if (holdsCappedAward(target.award_category)) projected -= 1; // X swaps its award for A
       for (const r of resultRows) {

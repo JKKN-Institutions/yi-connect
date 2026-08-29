@@ -105,6 +105,34 @@ interface QuestionsClientProps {
   ministries: MinistryPortfolio[];
 }
 
+/**
+ * ISO (UTC) → a window time the organiser reads, formatted IDENTICALLY on the
+ * server and in the browser.
+ *
+ * These two strings used to be `new Date(iso).toLocaleString()` with no
+ * arguments, which resolves against whatever zone the runtime is in: UTC during
+ * SSR, the viewer's zone on hydration. The two renders disagreed and React threw
+ * hydration error #418 on this page for every event that has a submission window
+ * set — then discarded the server HTML and re-rendered the subtree.
+ *
+ * Pinning the locale and zone makes both sides produce the same text. IST is the
+ * right zone rather than the viewer's: a Yi round runs in India, and the window
+ * an organiser sets is the window students in the hall experience.
+ */
+const WINDOW_TIME = new Intl.DateTimeFormat("en-IN", {
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: true,
+  timeZone: "Asia/Kolkata",
+});
+
+function formatWindowTime(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : `${WINDOW_TIME.format(d)} IST`;
+}
+
 /** ISO (UTC) → value for <input type="datetime-local"> in the viewer's zone. */
 function toLocalInputValue(iso: string | null): string {
   if (!iso) return "";
@@ -447,7 +475,7 @@ export function QuestionsClient({
               </p>
               <p className="text-xs text-gray-500">
                 {openAt
-                  ? `Students can submit from ${new Date(openAt).toLocaleString()}`
+                  ? `Students can submit from ${formatWindowTime(openAt)}`
                   : "No open time set — submissions open from the start"}
               </p>
             </div>
@@ -500,7 +528,7 @@ export function QuestionsClient({
               </p>
               <p className="text-xs text-gray-500">
                 {closeAt
-                  ? `Students can submit until ${new Date(closeAt).toLocaleString()}`
+                  ? `Students can submit until ${formatWindowTime(closeAt)}`
                   : "No deadline set — students can submit any time"}
               </p>
             </div>

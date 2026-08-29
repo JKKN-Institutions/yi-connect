@@ -8,6 +8,7 @@ import {
   PRESIDING_ROLES as LEADERSHIP_PRESIDING_ROLES,
 } from "@/lib/yip/auth/leadership";
 import { OFFICIAL_DUTY_ROLES } from "@/lib/yip/constants";
+import { countTurns } from "@/lib/yip/turn-count";
 import {
   getSpeakingFloorScope,
   scopeToLiveSession,
@@ -102,13 +103,11 @@ export interface SpeakingFloorState {
   calledEntry: SpeakingFloorEntry | null;
   /** Distinct speaking-eligible members with ≥1 turn. */
   spokenCount: number;
-  /** M — the members counted: those checked in for today when check-in has
-   *  begun, otherwise the whole speaking-eligible House. */
+  /** M — the members counted: those on the day-1 arrival register, or the
+   *  whole speaking-eligible House when no check-in was recorded. */
   totalParticipants: number;
-  /** True when M counts only members checked in for today. */
+  /** True when M counts only members who checked in on day 1. */
   countsCheckedInOnly: boolean;
-  /** Which sitting day the count is based on. */
-  sittingDay: 1 | 2;
   waitingCount: number;
 }
 
@@ -272,19 +271,6 @@ function orderQueueFairly(
   return [...out, ...unaligned];
 }
 
-/**
- * Which sitting day is it, in the event's own timezone (Yi events run in IST)?
- * Computed from the calendar date rather than from check-in data, so the answer
- * does not change under the Chair as members trickle in through the morning.
- */
-function activeSittingDay(day2: string | null): 1 | 2 {
-  if (!day2) return 1;
-  const todayIst = new Date().toLocaleDateString("en-CA", {
-    timeZone: "Asia/Kolkata",
-  });
-  return todayIst >= day2 ? 2 : 1;
-}
-
 async function computeTurnData(
   supabase: ServiceClient,
   eventId: string
@@ -293,12 +279,11 @@ async function computeTurnData(
   totalEligible: number;
   spokenCount: number;
   /**
-   * Whether the denominator counts only members checked in for today, or the
-   * whole speaking-eligible House because check-in has not started. The page
-   * says which, so the number on screen is never unexplained.
+   * Whether the denominator counts only members on the day-1 arrival register,
+   * or the whole speaking-eligible House because no check-in was recorded. The
+   * page says which, so the number on screen is never unexplained.
    */
   countsCheckedInOnly: boolean;
-  sittingDay: 1 | 2;
 }> {
   const { data: items } = await supabase
     .from("agenda")
@@ -323,44 +308,15 @@ async function computeTurnData(
     .eq("event_id", eventId)
     .eq("status", "spoken");
 
-  // ONE TURN PER OCCASION. Since the floor's Call started mirroring onto
-  // agenda_speakers, a single floor turn leaves a trace in BOTH tables — a
-  // completed agenda_speakers row AND a 'spoken' speaking_request. Counting
-  // both rows credited that member twice and pushed them down the fairness
-  // order faster than someone who spoke just as often through the aide
-  // console, which writes only agenda_speakers.
-  //
-  // agenda_speakers is therefore the primary record, and a 'spoken' request is
-  // only counted when that member has NO completed row for the same agenda
-  // item — i.e. a turn taken before the mirror existed, or one whose broadcast
-  // failed (the mirror is non-fatal by design). A member who genuinely speaks
-  // twice in one debate still gets two agenda_speakers rows and two turns.
-  const turnCounts = new Map<string, number>();
-  const formalPairs = new Set<string>();
-  for (const r of formal) {
-    if (!r.participant_id) continue;
-    formalPairs.add(`${r.participant_id}|${r.agenda_item_id ?? ""}`);
-    turnCounts.set(r.participant_id, (turnCounts.get(r.participant_id) ?? 0) + 1);
-  }
-  for (const r of spoken ?? []) {
-    if (!r.participant_id) continue;
-    if (formalPairs.has(`${r.participant_id}|${r.agenda_item_id ?? ""}`)) continue;
-    turnCounts.set(r.participant_id, (turnCounts.get(r.participant_id) ?? 0) + 1);
-  }
-
-  const { data: ev } = await supabase
-    .from("events")
-    .select("day2_date")
-    .eq("id", eventId)
-    .maybeSingle();
-  const sittingDay = activeSittingDay(
-    (ev?.day2_date as string | null) ?? null
-  );
+  // ONE TURN PER OCCASION — the rule, and the reasoning behind it, now live in
+  // lib/yip/turn-count.ts so the Chair's board and the member's own profile
+  // cannot disagree about how many times someone spoke.
+  const turnCounts = countTurns(formal, spoken ?? []);
 
   const { data: parts } = await supabase
     .from("participants")
     .select(
-      "id, full_name, constituency_number, party_side, parliament_role, checked_in_day1, checked_in_day2"
+      "id, full_name, constituency_number, party_side, parliament_role, checked_in_day1"
     )
     .eq("event_id", eventId);
 
@@ -373,24 +329,29 @@ async function computeTurnData(
         !OFFICIAL_DUTY_ROLES.has(p.parliament_role))
   );
 
-  // Only members actually here TODAY (Director, 2026-08-29). Counting someone
-  // who did not come back for day 2 sends the Chair hunting a member who is not
-  // in the building, and inflates "not spoken yet" with people who cannot be
-  // called — the opposite of what this board is for.
+  // Who is counted: members who CHECKED IN ON DAY 1 (Director, 2026-08-29).
   //
-  // `checked_in` is NOT usable for this: participants.ts keeps it as a legacy
-  // "day1 OR day2" flag, so it stays true for someone who never returned.
+  // Day-1 check-in is the arrival register — it is the moment the event knows a
+  // member actually travelled and is taking part. Counting the full roster
+  // instead put members who never turned up into the denominator AND into the
+  // "not spoken yet" list, sending the Chair to look for people who were not in
+  // the building. On SRTN that was 16 of 185.
   //
-  // Fail SAFE, never to zero: check-in runs through the morning, so before the
-  // first member is scanned in the present-count is 0. Showing "0 of 0" would
-  // brick the board exactly when the Chair opens it, so an empty present-set
+  // Day 1 is the base rather than "today's" check-in because day-2 check-in is
+  // not always run — an event that only registers arrivals once would otherwise
+  // show an empty House on its second morning. Using the arrival register keeps
+  // one stable denominator for the whole event.
+  //
+  // `checked_in` is NOT usable here: participants.ts keeps it as a legacy
+  // "day 1 OR day 2" flag, so it is not the arrival register.
+  //
+  // Fail SAFE, never to zero: an event that never ran check-in at all has an
+  // empty register, and "0 of 0" would brick the board. An empty set therefore
   // falls back to the whole eligible House — the previous behaviour — and the
   // page states which basis it is using.
-  const presentToday = speakingEligible.filter((p) =>
-    sittingDay === 2 ? !!p.checked_in_day2 : !!p.checked_in_day1
-  );
-  const countsCheckedInOnly = presentToday.length > 0;
-  const counted = countsCheckedInOnly ? presentToday : speakingEligible;
+  const present = speakingEligible.filter((p) => !!p.checked_in_day1);
+  const countsCheckedInOnly = present.length > 0;
+  const counted = countsCheckedInOnly ? present : speakingEligible;
 
   const eligible: EligibleMember[] = counted.map((p) => ({
     id: p.id,
@@ -407,7 +368,6 @@ async function computeTurnData(
     totalEligible: eligible.length,
     spokenCount,
     countsCheckedInOnly,
-    sittingDay,
   };
 }
 
@@ -654,7 +614,6 @@ async function buildSpeakingFloorState(
     totalEligible,
     spokenCount,
     countsCheckedInOnly,
-    sittingDay,
   } = await computeTurnData(supabase, eventId);
   const turnsById = new Map(eligible.map((e) => [e.id, e.turns]));
   const memberById = new Map(eligible.map((e) => [e.id, e]));
@@ -721,7 +680,6 @@ async function buildSpeakingFloorState(
     queue,
     calledEntry,
     countsCheckedInOnly,
-    sittingDay,
     spokenCount,
     totalParticipants: totalEligible,
     waitingCount: queue.length,

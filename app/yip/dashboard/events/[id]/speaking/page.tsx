@@ -205,16 +205,15 @@ export default async function WhoHasSpokenPage({
         (administrators, journalists) are never counted.{" "}
         {res.data.countsCheckedInOnly ? (
           <>
-            These {eligible} are the members checked in for day{" "}
-            {res.data.sittingDay} — someone who did not come back today is not
-            counted and not shown as unheard, so the names here are all members
-            you can actually call.
+            These {eligible} are the members who checked in on day 1 — the
+            arrival register. Anyone on the roster who never turned up is
+            neither counted here nor listed as unheard, so every name is a
+            member you can actually call.
           </>
         ) : (
           <>
-            Day-{res.data.sittingDay} check-in has not started, so this counts
-            the whole speaking-eligible House. Once members begin checking in it
-            narrows to those actually in the room.
+            No day-1 check-in was recorded for this event, so this counts the
+            whole speaking-eligible House.
           </>
         )}
       </p>

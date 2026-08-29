@@ -4,6 +4,7 @@ import { ArrowLeft, Compass, BarChart3, Footprints, Sparkles } from "lucide-reac
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { getParliamentaryProfile } from "@/app/yip/actions/parliamentary-profile";
 import type { AxisStanding, FootprintLine } from "@/app/yip/actions/parliamentary-profile";
+import YourQuestions from "./your-questions";
 import {
   SectionShell,
   SectionHeading,
@@ -266,6 +267,11 @@ export default async function ParliamentaryProfilePage() {
           </div>
         </div>
       </SectionShell>
+
+      {/* ── Question Hour — the footprint count, opened up ───────────── */}
+      {/* Sits directly under the footprint because that section already says
+          how many questions were tabled; this says what became of each. */}
+      <YourQuestions />
 
       {/* ── Stands out for ───────────────────────────────────────────── */}
       {profile.standsOutFor.length > 0 && (

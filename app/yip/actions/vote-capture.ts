@@ -6,6 +6,10 @@ import { assertCheckedInForVote } from "@/lib/yip/vote-eligibility";
 import { validateVoteValue } from "@/lib/yip/vote-validate";
 import { matchesDesk, type DeskAssignment } from "@/lib/yip/yuva-desk";
 import { voteScopeKind, benchSideForType } from "@/lib/yip/vote-scope";
+import {
+  houseMotionText,
+  isHouseMotionVoteType,
+} from "@/lib/yip/house-motion";
 
 /**
  * Floor-voting kiosk capture actions.
@@ -247,6 +251,17 @@ export async function getKioskState(
       typeof cfg.motionSubject === "string" ? cfg.motionSubject : "No-Confidence Motion";
     // Same aye/nay/abstain strings the House self-cast uses, so kiosk-relayed
     // ballots are tallied identically.
+    options = [
+      { value: "aye", label: "AYE" },
+      { value: "nay", label: "NO" },
+      { value: "abstain", label: "ABSTAIN" },
+    ];
+  } else if (isHouseMotionVoteType(voteSession.vote_type)) {
+    // A free-text motion the Chair put to the House. The roving kiosk must
+    // carry the SAME question the student would read on their own phone —
+    // relaying a vote on an unnamed "Vote" is not a vote anyone consented to —
+    // and the same three values, or the relayed ballots tally separately.
+    title = houseMotionText(voteSession.config) ?? "Motion of the House";
     options = [
       { value: "aye", label: "AYE" },
       { value: "nay", label: "NO" },

@@ -49,6 +49,7 @@ import { useVoteSession } from "@/lib/yip/hooks/use-vote-session";
 import { useActiveVoteSessions } from "@/lib/yip/hooks/use-active-vote-sessions";
 import {
   openVote,
+  openHouseMotion,
   closeVote,
   revealResults,
   clearVoteResults,
@@ -60,6 +61,13 @@ import {
   type VoteCandidate,
   type PartyLite,
 } from "@/app/yip/actions/voting";
+import {
+  HOUSE_MOTION_TEXT_MAX,
+  houseMotionOutcome,
+  houseMotionText,
+  isHouseMotionVoteType,
+  normalizeMotionText,
+} from "@/lib/yip/house-motion";
 import {
   computeElectionOutcome,
   computeDeputyRunoffOutcome,
@@ -327,6 +335,10 @@ export function VoteManager({
   // "Run an election" menu so the panel isn't cluttered with every election at
   // once. Closed by default; the agenda-pinned Speaker/Bill votes stay inline.
   const [electionsMenuOpen, setElectionsMenuOpen] = useState(false);
+  // The Chair's free-text motion — "Shall the House sit late?" — typed into the
+  // "Motion of the House" launcher and put to the whole House as an Aye / Nay /
+  // Abstain vote. Cleared once the question is on the floor.
+  const [motionText, setMotionText] = useState("");
 
   // Get realtime vote session state with live counts
   const {
@@ -855,6 +867,33 @@ export function VoteManager({
           selectedIds: [],
           loading: false,
         });
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  // Put the Chair's typed question to the House. The same text rule the server
+  // enforces runs here first, so a blank or over-long motion is caught before a
+  // round trip — the server check is still the one that decides.
+  function handlePutMotion() {
+    if (!currentAgendaItem) return;
+    const question = normalizeMotionText(motionText);
+    if (!question.ok) {
+      toast.error(question.error);
+      return;
+    }
+    startTransition(async () => {
+      const result = await openHouseMotion(
+        eventId,
+        currentAgendaItem.id,
+        question.text,
+        { override_checkin: overrideCheckin }
+      );
+      if (result.success) {
+        toast.success("Motion put to the House — voting is open.");
+        warnIfNoCheckin(result);
+        setMotionText("");
       } else {
         toast.error(result.error);
       }
@@ -1603,12 +1642,53 @@ export function VoteManager({
       </div>
     ) : null;
 
+  // Motion of the House — the Chair types a question and puts it straight to
+  // the whole House (Aye / Nay / Abstain). No nominees, so it launches inline
+  // rather than through a nomination dialog. Available on any item the event
+  // uses for voting.
+  const motionLauncher =
+    showVoteControls && currentAgendaItem ? (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+          <ClipboardList className="size-4 text-[#FF9933]" />
+          Motion of the House
+        </div>
+        <p className="text-xs text-gray-500">
+          Type the question exactly as the House should hear it — “Shall the
+          House sit late?” Every checked-in Member votes Aye, Nay or Abstain.
+          Nobody is elected or removed by it.
+        </p>
+        <Input
+          value={motionText}
+          onChange={(e) => setMotionText(e.target.value)}
+          maxLength={HOUSE_MOTION_TEXT_MAX}
+          placeholder="Shall the House sit late?"
+          className="h-9 text-sm"
+        />
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400">
+            {motionText.trim().length}/{HOUSE_MOTION_TEXT_MAX}
+          </span>
+          <Button
+            size="sm"
+            className="ml-auto"
+            disabled={isPending || !normalizeMotionText(motionText).ok}
+            onClick={handlePutMotion}
+          >
+            <Vote className="size-3.5 mr-1" />
+            Put the question
+          </Button>
+        </div>
+      </div>
+    ) : null;
+
   // Every vote launcher (Speaker, Bill, and the run-anytime elections) behind one
   // menu so the panel isn't cluttered with all of them. The menu AUTO-OPENS (see
   // effect below) when the current agenda item has its OWN vote (Speaker / Bill),
   // so that primary action is visible without a tap; otherwise it's collapsed.
   const hasElectionLaunchers =
     !!speakerLauncher ||
+    !!motionLauncher ||
     !!partyLeaderList ||
     !!leadershipList ||
     !!cabinetSection ||
@@ -1624,7 +1704,8 @@ export function VoteManager({
           <Crown className="size-4 text-[#FF9933]" />
           Run a vote
           <span className="hidden text-xs font-normal text-muted-foreground sm:inline">
-            speaker · party leader · PM / Deputy / LoP · cabinet · shadow
+            speaker · motion · party leader · PM / Deputy / LoP · cabinet ·
+            shadow
           </span>
         </span>
         {electionsMenuOpen ? (
@@ -1636,6 +1717,7 @@ export function VoteManager({
       {electionsMenuOpen && (
         <div className="space-y-4 border-t p-3">
           {speakerLauncher}
+          {motionLauncher}
           {partyLeaderList}
           {leadershipList}
           {cabinetSection}
@@ -2090,6 +2172,8 @@ export function VoteManager({
                     }`
                   : isBenchVoteType
                   ? seatTitle(voteSession.vote_type)
+                  : isHouseMotionVoteType(voteSession.vote_type)
+                  ? houseMotionText(voteSession.config) ?? "Motion of the House"
                   : "Bill Vote"}
               </CardTitle>
               <Badge
@@ -2247,6 +2331,38 @@ export function VoteManager({
                           )}
                           {passed ? "BILL PASSED" : "BILL REJECTED"}
                         </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {/* House motion result. A motion decides a QUESTION — it seats
+                    nobody, so there is no winner to crown and never a runoff.
+                    Carried on a simple majority of Ayes over Nays; abstentions
+                    are recorded but do not count against it. */}
+                {isRevealed && isHouseMotionVoteType(voteSession.vote_type) && (
+                  <div className="mt-3 rounded-lg border p-3 text-center">
+                    {(() => {
+                      const m = houseMotionOutcome(tallies);
+                      return (
+                        <>
+                          <div
+                            className={cn(
+                              "flex items-center justify-center gap-2 text-lg font-bold",
+                              m.carried ? "text-green-700" : "text-red-700"
+                            )}
+                          >
+                            {m.carried ? (
+                              <CheckCircle2 className="size-5" />
+                            ) : (
+                              <XCircle className="size-5" />
+                            )}
+                            {m.carried ? "MOTION CARRIED" : "MOTION NOT CARRIED"}
+                          </div>
+                          <p className="mt-1.5 text-xs text-muted-foreground">
+                            {m.aye} Aye · {m.nay} Nay · {m.abstain} Abstain
+                          </p>
+                        </>
                       );
                     })()}
                   </div>

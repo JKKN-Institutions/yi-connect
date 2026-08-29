@@ -2,6 +2,11 @@
 // organizer) so a junk or non-candidate value can never enter the tally.
 // Pure module (no "use server") so it can be imported by server actions.
 
+import {
+  isHouseMotionValue,
+  isHouseMotionVoteType,
+} from "@/lib/yip/house-motion";
+
 // aye / nay / abstain ballots: bill votes, no-confidence AND impeach-speaker
 // motion votes (all three are a whole-House Aye/Nay/Abstain decision).
 const AYE_NAY_ABSTAIN = new Set(["aye", "nay", "abstain"]);
@@ -13,6 +18,7 @@ type VoteSessionLike = {
 
 /**
  * Validate a vote_value against the session.
+ * - house_motion                                → must be EXACTLY aye | nay | abstain
  * - bill_vote / no_confidence / impeach_speaker → must be aye | nay | abstain
  * - speaker_election / party_leader             → must be one of config.candidateIds
  * - any other type                              → allowed (unknown poll types are not constrained here)
@@ -23,6 +29,23 @@ export function validateVoteValue(
 ): { ok: true } | { ok: false; error: string } {
   const value = (voteValue ?? "").trim();
   if (!value) return { ok: false, error: "No vote value provided" };
+
+  // A free-text House motion is Aye / Nay / Abstain and NOTHING else — checked
+  // here so EVERY cast path is covered (self-cast, volunteer kiosk, and the
+  // organiser floor-capture paths in actions/vote-floor.ts), not just one of
+  // them. Without this the final `return { ok: true }` below would let any
+  // string into a live motion's tally, because this type is in none of the
+  // lists.
+  //
+  // Matched against the RAW value, not the trimmed one: the row is inserted
+  // with the value exactly as sent, so accepting " aye" would store a second
+  // spelling of the same answer and split the tally into bars that no longer
+  // add up.
+  if (isHouseMotionVoteType(session.vote_type)) {
+    return isHouseMotionValue(voteValue)
+      ? { ok: true }
+      : { ok: false, error: "Invalid vote — must be Aye, Nay, or Abstain" };
+  }
 
   if (
     session.vote_type === "bill_vote" ||

@@ -122,7 +122,12 @@ export default async function WhoHasSpokenPage({
 
       {/* Headline counts */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Eligible to speak" value={eligible} />
+        <Stat
+          label={
+            res.data.countsCheckedInOnly ? "Here today" : "Eligible to speak"
+          }
+          value={eligible}
+        />
         <Stat label="Have spoken" value={spoken} tone="text-emerald-700" />
         <Stat label="Not spoken yet" value={never.length} tone="text-red-700" />
         <Stat label="Turns taken" value={totalTurns} />
@@ -197,8 +202,21 @@ export default async function WhoHasSpokenPage({
       <p className="pb-6 text-xs text-muted-foreground">
         Counted from the Now Speaking desk and from hand-raises marked spoken —
         one turn per occasion. Presiding officers and duty officials
-        (administrators, journalists) are not counted, which is why the total is{" "}
-        {eligible} and not the full House.
+        (administrators, journalists) are never counted.{" "}
+        {res.data.countsCheckedInOnly ? (
+          <>
+            These {eligible} are the members checked in for day{" "}
+            {res.data.sittingDay} — someone who did not come back today is not
+            counted and not shown as unheard, so the names here are all members
+            you can actually call.
+          </>
+        ) : (
+          <>
+            Day-{res.data.sittingDay} check-in has not started, so this counts
+            the whole speaking-eligible House. Once members begin checking in it
+            narrows to those actually in the room.
+          </>
+        )}
       </p>
     </div>
   );

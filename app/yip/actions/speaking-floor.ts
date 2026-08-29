@@ -102,8 +102,13 @@ export interface SpeakingFloorState {
   calledEntry: SpeakingFloorEntry | null;
   /** Distinct speaking-eligible members with ≥1 turn. */
   spokenCount: number;
-  /** M — speaking-eligible members (the House minus presiding officers). */
+  /** M — the members counted: those checked in for today when check-in has
+   *  begun, otherwise the whole speaking-eligible House. */
   totalParticipants: number;
+  /** True when M counts only members checked in for today. */
+  countsCheckedInOnly: boolean;
+  /** Which sitting day the count is based on. */
+  sittingDay: 1 | 2;
   waitingCount: number;
 }
 
@@ -267,6 +272,19 @@ function orderQueueFairly(
   return [...out, ...unaligned];
 }
 
+/**
+ * Which sitting day is it, in the event's own timezone (Yi events run in IST)?
+ * Computed from the calendar date rather than from check-in data, so the answer
+ * does not change under the Chair as members trickle in through the morning.
+ */
+function activeSittingDay(day2: string | null): 1 | 2 {
+  if (!day2) return 1;
+  const todayIst = new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Kolkata",
+  });
+  return todayIst >= day2 ? 2 : 1;
+}
+
 async function computeTurnData(
   supabase: ServiceClient,
   eventId: string
@@ -274,6 +292,13 @@ async function computeTurnData(
   eligible: EligibleMember[];
   totalEligible: number;
   spokenCount: number;
+  /**
+   * Whether the denominator counts only members checked in for today, or the
+   * whole speaking-eligible House because check-in has not started. The page
+   * says which, so the number on screen is never unexplained.
+   */
+  countsCheckedInOnly: boolean;
+  sittingDay: 1 | 2;
 }> {
   const { data: items } = await supabase
     .from("agenda")
@@ -323,28 +348,67 @@ async function computeTurnData(
     turnCounts.set(r.participant_id, (turnCounts.get(r.participant_id) ?? 0) + 1);
   }
 
+  const { data: ev } = await supabase
+    .from("events")
+    .select("day2_date")
+    .eq("id", eventId)
+    .maybeSingle();
+  const sittingDay = activeSittingDay(
+    (ev?.day2_date as string | null) ?? null
+  );
+
   const { data: parts } = await supabase
     .from("participants")
-    .select("id, full_name, constituency_number, party_side, parliament_role")
-    .eq("event_id", eventId);
-  const eligible: EligibleMember[] = (parts ?? [])
-    .filter(
-      (p) =>
-        !p.parliament_role ||
-        (!PRESIDING_ROLES.has(p.parliament_role) &&
-          !OFFICIAL_DUTY_ROLES.has(p.parliament_role))
+    .select(
+      "id, full_name, constituency_number, party_side, parliament_role, checked_in_day1, checked_in_day2"
     )
-    .map((p) => ({
-      id: p.id,
-      full_name: p.full_name,
-      constituency_number: p.constituency_number,
-      party_side: p.party_side,
-      turns: turnCounts.get(p.id) ?? 0,
-    }));
+    .eq("event_id", eventId);
+
+  // The House minus presiding officers and duty officials — the people who
+  // could in principle be called from the floor.
+  const speakingEligible = (parts ?? []).filter(
+    (p) =>
+      !p.parliament_role ||
+      (!PRESIDING_ROLES.has(p.parliament_role) &&
+        !OFFICIAL_DUTY_ROLES.has(p.parliament_role))
+  );
+
+  // Only members actually here TODAY (Director, 2026-08-29). Counting someone
+  // who did not come back for day 2 sends the Chair hunting a member who is not
+  // in the building, and inflates "not spoken yet" with people who cannot be
+  // called — the opposite of what this board is for.
+  //
+  // `checked_in` is NOT usable for this: participants.ts keeps it as a legacy
+  // "day1 OR day2" flag, so it stays true for someone who never returned.
+  //
+  // Fail SAFE, never to zero: check-in runs through the morning, so before the
+  // first member is scanned in the present-count is 0. Showing "0 of 0" would
+  // brick the board exactly when the Chair opens it, so an empty present-set
+  // falls back to the whole eligible House — the previous behaviour — and the
+  // page states which basis it is using.
+  const presentToday = speakingEligible.filter((p) =>
+    sittingDay === 2 ? !!p.checked_in_day2 : !!p.checked_in_day1
+  );
+  const countsCheckedInOnly = presentToday.length > 0;
+  const counted = countsCheckedInOnly ? presentToday : speakingEligible;
+
+  const eligible: EligibleMember[] = counted.map((p) => ({
+    id: p.id,
+    full_name: p.full_name,
+    constituency_number: p.constituency_number,
+    party_side: p.party_side,
+    turns: turnCounts.get(p.id) ?? 0,
+  }));
 
   const spokenCount = eligible.filter((p) => p.turns >= 1).length;
 
-  return { eligible, totalEligible: eligible.length, spokenCount };
+  return {
+    eligible,
+    totalEligible: eligible.length,
+    spokenCount,
+    countsCheckedInOnly,
+    sittingDay,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -585,10 +649,13 @@ async function buildSpeakingFloorState(
   }
 
   // Fairness roster (phone-free) — every eligible member with their turn count.
-  const { eligible, totalEligible, spokenCount } = await computeTurnData(
-    supabase,
-    eventId
-  );
+  const {
+    eligible,
+    totalEligible,
+    spokenCount,
+    countsCheckedInOnly,
+    sittingDay,
+  } = await computeTurnData(supabase, eventId);
   const turnsById = new Map(eligible.map((e) => [e.id, e.turns]));
   const memberById = new Map(eligible.map((e) => [e.id, e]));
   const unspokenExists = spokenCount < totalEligible;
@@ -653,6 +720,8 @@ async function buildSpeakingFloorState(
     board,
     queue,
     calledEntry,
+    countsCheckedInOnly,
+    sittingDay,
     spokenCount,
     totalParticipants: totalEligible,
     waitingCount: queue.length,

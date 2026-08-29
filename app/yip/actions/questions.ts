@@ -3,8 +3,17 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { revalidatePath } from "next/cache";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
-import { requireParticipantSession } from "@/lib/yip/auth/yip-session";
+import {
+  getYipSession,
+  requireParticipantSession,
+} from "@/lib/yip/auth/yip-session";
 import { effectiveMinistries } from "@/lib/yip/cabinet";
+import {
+  MAX_QUESTIONS_PER_PARTICIPANT,
+  MIN_QUESTION_LENGTH,
+  resolveQuestionWindowState,
+  type QuestionWindowState,
+} from "@/lib/yip/question-window";
 import type { Tables } from "@/types/yip/database";
 
 type Question = Tables<{ schema: "yip" }, "questions">;
@@ -47,8 +56,11 @@ export async function submitQuestion(
   const supabase = await createServiceClient();
 
   // Validate text length
-  if (!questionText || questionText.trim().length < 20) {
-    return { success: false, error: "Question must be at least 20 characters" };
+  if (!questionText || questionText.trim().length < MIN_QUESTION_LENGTH) {
+    return {
+      success: false,
+      error: `Question must be at least ${MIN_QUESTION_LENGTH} characters`,
+    };
   }
 
   // Enforce the submission window server-side: open_at <= now() <= close_at.
@@ -75,26 +87,29 @@ export async function submitQuestion(
     };
   }
 
-  if (eventRow?.questions_open_at) {
-    const openAt = new Date(eventRow.questions_open_at);
-    if (Date.now() < openAt.getTime()) {
-      return {
-        success: false,
-        error:
-          "Question submissions are not open yet. They open at the start of the event window.",
-      };
-    }
+  // One rule, read from lib/yip/question-window — the same helper the member's
+  // Question Hour screen uses to decide what to show. Two copies of this
+  // comparison is how a member ends up typing a whole question into a form the
+  // server was always going to reject.
+  const windowState = resolveQuestionWindowState(
+    eventRow?.questions_open_at,
+    eventRow?.questions_close_at
+  );
+
+  if (windowState === "not_yet") {
+    return {
+      success: false,
+      error:
+        "Question submissions are not open yet. They open at the start of the event window.",
+    };
   }
 
-  if (eventRow?.questions_close_at) {
-    const closeAt = new Date(eventRow.questions_close_at);
-    if (Date.now() > closeAt.getTime()) {
-      return {
-        success: false,
-        error:
-          "Question submissions have closed. Handbook requires all Question Hour questions to be submitted at least 4 days before the session.",
-      };
-    }
+  if (windowState === "closed") {
+    return {
+      success: false,
+      error:
+        "Question submissions have closed. Handbook requires all Question Hour questions to be submitted at least 4 days before the session.",
+    };
   }
 
   // Check count
@@ -104,10 +119,10 @@ export async function submitQuestion(
     .eq("event_id", eventId)
     .eq("submitted_by", participantId);
 
-  if ((count ?? 0) >= 3) {
+  if ((count ?? 0) >= MAX_QUESTIONS_PER_PARTICIPANT) {
     return {
       success: false,
-      error: "You have already submitted the maximum of 3 questions",
+      error: `You have already submitted the maximum of ${MAX_QUESTIONS_PER_PARTICIPANT} questions`,
     };
   }
 
@@ -201,6 +216,176 @@ export async function setQuestionsOpen(
 
   revalidatePath(`/yip/dashboard/events/${eventId}/questions`);
   return { success: true, data: null };
+}
+
+// ─── Widen the window in one tap ───────────────────────────────────
+/**
+ * Push the submission deadline out by `hours` without picking a date.
+ *
+ * The SRTN regional round ran a single 5.5-hour weekday window: 196 members,
+ * 59 of whom ever tabled a question. Re-opening it took a database edit,
+ * because the only control was a datetime picker an organiser has to reason
+ * about mid-event. This is the same setting, one tap.
+ *
+ * Extends from whichever is later — the standing deadline or now — so
+ * re-opening a window that lapsed overnight gives the full extension from
+ * this moment rather than handing back hours nobody could use.
+ */
+export async function extendQuestionsDeadline(
+  eventId: string,
+  hours: number
+): Promise<ActionResult<{ closeAt: string }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
+  if (!Number.isFinite(hours) || hours <= 0 || hours > 24 * 30) {
+    return {
+      success: false,
+      error: "Extension must be between 1 hour and 30 days",
+    };
+  }
+
+  const supabase = await createServiceClient();
+  const { data: row, error: readError } = await supabase
+    .from("events")
+    .select("questions_close_at")
+    .eq("id", eventId)
+    .single();
+
+  if (readError) return { success: false, error: readError.message };
+
+  // No deadline means the window is ALREADY unbounded. Extending from "now"
+  // here would invent a cutoff that did not exist — a button that reads "give
+  // them more time" would silently take time away. Refuse instead.
+  if (!row?.questions_close_at) {
+    return {
+      success: false,
+      error:
+        "There is no deadline to extend — submissions are already open with no cutoff.",
+    };
+  }
+
+  const now = Date.now();
+  const standing = new Date(row.questions_close_at).getTime();
+  const base = Number.isNaN(standing) ? now : Math.max(standing, now);
+  const nextIso = new Date(base + hours * 3_600_000).toISOString();
+
+  const { error } = await supabase
+    .from("events")
+    .update({ questions_close_at: nextIso })
+    .eq("id", eventId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/questions`);
+  return { success: true, data: { closeAt: nextIso } };
+}
+
+// ─── Who has actually tabled a question ────────────────────────────
+/**
+ * How many of the event's members have tabled at least one question.
+ *
+ * The Question Hour page counts QUESTIONS — total, approved, starred. None of
+ * those numbers tells an organiser that 137 of 196 members never got one in,
+ * which is the fact that decides whether the window should be widened. This
+ * returns that fact. Counts real members only (mock rows excluded on both
+ * sides), and is read-only, so `canView` is the right bar.
+ */
+export type QuestionCoverage = {
+  totalParticipants: number;
+  withQuestion: number;
+  withoutQuestion: number;
+};
+
+export async function getQuestionCoverage(
+  eventId: string
+): Promise<QuestionCoverage | null> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) return null;
+
+  const supabase = await createServiceClient();
+
+  const { count: totalParticipants } = await supabase
+    .from("participants")
+    .select("*", { count: "exact", head: true })
+    .eq("event_id", eventId)
+    .eq("is_mock", false);
+
+  const { data: rows } = await supabase
+    .from("questions")
+    .select("submitted_by")
+    .eq("event_id", eventId)
+    .eq("is_mock", false);
+
+  const tabled = new Set(
+    (rows ?? []).map((r) => r.submitted_by).filter((v): v is string => !!v)
+  );
+
+  const total = totalParticipants ?? 0;
+  // A question can outlive its submitter's participant row, so clamp rather
+  // than letting "without" go negative.
+  const withQuestion = Math.min(tabled.size, total);
+
+  return {
+    totalParticipants: total,
+    withQuestion,
+    withoutQuestion: Math.max(0, total - withQuestion),
+  };
+}
+
+// ─── The member's own view of the window ───────────────────────────
+/**
+ * What THIS member needs to know before typing: is the window open, how long
+ * is left, and how many of their three they have used.
+ *
+ * Reads the signed participant cookie itself (no id passed from the client —
+ * same shape as getMySpeakingStatus), so it can be dropped onto any member
+ * screen. Returns null for anyone who is not a participant, which every caller
+ * renders as "nothing", never as "open".
+ */
+export type MyQuestionStatus = {
+  eventId: string;
+  openAt: string | null;
+  closeAt: string | null;
+  state: QuestionWindowState;
+  submittedCount: number;
+  maxPerParticipant: number;
+  remaining: number;
+};
+
+export async function getMyQuestionStatus(): Promise<MyQuestionStatus | null> {
+  const session = await getYipSession();
+  if (!session || session.type !== "participant") return null;
+
+  const supabase = await createServiceClient();
+
+  const { data: eventRow } = await supabase
+    .from("events")
+    .select("questions_open_at, questions_close_at")
+    .eq("id", session.eventId)
+    .maybeSingle();
+
+  const { count } = await supabase
+    .from("questions")
+    .select("*", { count: "exact", head: true })
+    .eq("event_id", session.eventId)
+    .eq("submitted_by", session.id);
+
+  const submittedCount = count ?? 0;
+  const openAt = eventRow?.questions_open_at ?? null;
+  const closeAt = eventRow?.questions_close_at ?? null;
+
+  return {
+    eventId: session.eventId,
+    openAt,
+    closeAt,
+    state: resolveQuestionWindowState(openAt, closeAt),
+    submittedCount,
+    maxPerParticipant: MAX_QUESTIONS_PER_PARTICIPANT,
+    remaining: Math.max(0, MAX_QUESTIONS_PER_PARTICIPANT - submittedCount),
+  };
 }
 
 export async function getQuestions(

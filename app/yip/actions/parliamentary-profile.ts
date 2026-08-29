@@ -8,6 +8,7 @@ import {
   readNumber,
   type SkillAxis,
 } from "@/lib/yip/skill-axes";
+import { countTurns, type TurnRow } from "@/lib/yip/turn-count";
 
 /**
  * The Parliamentary Profile — what a member did, set against the House.
@@ -261,17 +262,25 @@ export async function getParliamentaryProfile(): Promise<ParliamentaryProfile | 
     .eq("event_id", eventId);
   const itemIds = (agendaRows ?? []).map((a) => a.id as string);
 
-  let spokenList: Array<{ pid: string | null }> = [];
+  // Turns must be counted by the SAME rule the Chair's speaking board uses, or
+  // a member reads one number on their phone and the Chair sees another. This
+  // file used to count only agenda_speakers and so under-reported anyone whose
+  // turn was recorded as a 'spoken' hand-raise with no mirrored row.
+  let formalRows: TurnRow[] = [];
   if (itemIds.length > 0) {
     const { data } = await supabase
       .from("agenda_speakers")
-      .select("participant_id")
+      .select("participant_id, agenda_item_id")
       .in("agenda_item_id", itemIds)
       .eq("status", "completed");
-    spokenList = (data ?? []).map((r) => ({
-      pid: r.participant_id as string | null,
-    }));
+    formalRows = (data ?? []) as TurnRow[];
   }
+  const { data: spokenReqRows } = await supabase
+    .from("speaking_requests")
+    .select("participant_id, agenda_item_id")
+    .eq("event_id", eventId)
+    .eq("status", "spoken");
+  const turnsByMember = countTurns(formalRows, (spokenReqRows ?? []) as TurnRow[]);
   const { data: qRows } = await supabase
     .from("questions")
     .select("submitted_by")
@@ -302,7 +311,7 @@ export async function getParliamentaryProfile(): Promise<ParliamentaryProfile | 
     .select("mover_participant_id")
     .eq("event_id", eventId);
 
-  const turns = countBy(spokenList);
+  const turns = turnsByMember;
   const questions = countBy(
     (qRows ?? []).map((r) => ({ pid: r.submitted_by as string | null }))
   );

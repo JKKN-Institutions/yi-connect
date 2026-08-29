@@ -284,8 +284,9 @@ export function QuestionHourPanel({ eventId }: QuestionHourPanelProps) {
                 )}
                 {queuedQuestions.length === 0 && (
                   <p className="text-sm text-gray-400 mt-1">
-                    Approve questions and set queue order in the Questions tab
-                    first.
+                    No approved questions yet — approve them in the Questions
+                    tab. Setting a queue order there is optional; it only moves
+                    chosen questions to the front.
                   </p>
                 )}
               </CardContent>

@@ -413,14 +413,17 @@ export async function advanceQuestion(
       .eq("id", current.id);
   }
 
-  // Find the next approved question by queue_order
+  // The next approved question. A hand-typed queue_order still wins, but its
+  // ABSENCE no longer means "no question" — requiring it made this a silent
+  // no-op for the whole of the SRTN round (see getQueuedQuestions above), so a
+  // Chair pressing Next got nothing and the projector never showed a question.
   const { data: next } = await supabase
     .from("questions")
     .select("id")
     .eq("event_id", eventId)
     .eq("status", "approved")
-    .not("queue_order", "is", null)
-    .order("queue_order", { ascending: true })
+    .order("queue_order", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
 
@@ -528,8 +531,23 @@ export async function getCurrentQuestion(
 }
 
 // ─── Get Queued Questions ────────────────────────────────────────
-// Returns approved questions with queue_order set, ordered by queue_order
-
+/**
+ * The approved questions waiting to be put, in the order they will be put.
+ *
+ * This used to return ONLY questions with a hand-typed `queue_order`, and that
+ * number is entered one question at a time. On the SRTN round nobody typed 135
+ * of them, so this returned an EMPTY list, `advanceQuestion` found nothing to
+ * advance, no question ever reached status 'asked', and the projector's Question
+ * Hour panel — which renders the question with status 'asked' — stayed blank all
+ * session. Across every event in the database, no question has ever held the
+ * 'asked', 'answered' or 'queued' status: the live Question Hour has never once
+ * run. The research behind 135 approved questions left no trace of being put.
+ *
+ * An approved question is therefore queued by default. An explicit `queue_order`
+ * still wins and still orders the front of the list; everything else follows in
+ * submission order, so a Chair who orders nothing still has a working session
+ * and one who orders the first ten gets exactly those ten first.
+ */
 export async function getQueuedQuestions(
   eventId: string
 ): Promise<QuestionWithSubmitter[]> {
@@ -553,8 +571,8 @@ export async function getQueuedQuestions(
     )
     .eq("event_id", eventId)
     .eq("status", "approved")
-    .not("queue_order", "is", null)
-    .order("queue_order", { ascending: true });
+    .order("queue_order", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: true });
 
   if (error || !data) return [];
   return data as unknown as QuestionWithSubmitter[];

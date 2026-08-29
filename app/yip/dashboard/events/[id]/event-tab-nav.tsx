@@ -113,6 +113,12 @@ const GROUPS: TabGroup[] = [
       // chapter organiser sets it (Results itself stays national/super-admin).
       { label: "Awards", href: "/awards", icon: Medal },
       { label: "Results", href: "/results", icon: Trophy },
+      // Best Chapter Performer — the per-chapter recognition layer that sits
+      // ABOVE the 15 competitive awards (Director, 2026-08-29). It shipped in
+      // #1033 reachable by URL only, which in this codebase means dark: a page
+      // nothing links to is a page nobody opens. Organiser-only by design — the
+      // ranked five behind it are never shown to students.
+      { label: "Chapter Awards", href: "/results/chapter-recognition", icon: Medal },
       { label: "Certificates", href: "/certificates", icon: Award },
       { label: "Feedback", href: "/feedback", icon: MessageCircleHeart },
       // Chapter Round Report — auto-assembled 8-section official report, printable

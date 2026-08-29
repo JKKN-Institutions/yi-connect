@@ -83,6 +83,11 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
   );
   const [currentQuestionDisplay, setCurrentQuestionDisplay] =
     useState<QuestionDisplayInfo | null>(null);
+  /** How far through the tabled questions the House has reached. */
+  const [questionProgress, setQuestionProgress] = useState<{
+    position: number;
+    total: number;
+  } | null>(null);
   const [voteCandidates, setVoteCandidates] = useState<VoteCandidateInfo[]>([]);
   const [voteBillTitle, setVoteBillTitle] = useState<string | null>(null);
   // Subject of a motion floor vote (No-Confidence / Impeach) — carried in the
@@ -445,6 +450,35 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
 
   // Fetch current question for Question Hour
   const fetchCurrentQuestion = useCallback(async () => {
+    // How far through the tabled questions is the House? (Director, 2026-08-29.)
+    //
+    // A member who prepared a question and never heard it put has no way to know
+    // whether the House ran out of time or never had their question at all. This
+    // makes the whole body of work visible in the room: the position while a
+    // question is up, and the total tabled even before the first is called.
+    //
+    // 'answered' are the ones already put, 'asked' is the one on the floor, and
+    // 'approved' are still to come — so total is all three and the position is
+    // the answered count plus the one being put. Counts only; no member is
+    // named or ranked here.
+    const countBy = async (status: string) =>
+      (
+        await supabase
+          .from("questions")
+          .select("id", { count: "exact", head: true })
+          .eq("event_id", eventId)
+          .eq("status", status)
+      ).count ?? 0;
+    const [done, onFloor, toCome] = await Promise.all([
+      countBy("answered"),
+      countBy("asked"),
+      countBy("approved"),
+    ]);
+    const total = done + onFloor + toCome;
+    setQuestionProgress(
+      total > 0 ? { position: onFloor > 0 ? done + 1 : done, total } : null
+    );
+
     const { data } = await supabase
       .from("questions")
       .select(
@@ -1092,6 +1126,13 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
             {currentAgendaItem.agenda_type === "question_hour" &&
               currentQuestionDisplay && (
                 <div className="mx-auto max-w-3xl space-y-6">
+                  {/* Where the House has reached in the tabled questions. */}
+                  {questionProgress && questionProgress.total > 0 && (
+                    <p className="text-base font-medium tracking-wide text-gray-400">
+                      Question {questionProgress.position} of{" "}
+                      {questionProgress.total} tabled
+                    </p>
+                  )}
                   {/* Ministry label */}
                   <p className="text-lg text-cyan-400">
                     Directed to: Minister of{" "}
@@ -1160,9 +1201,24 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
             {/* Question Hour - no active question */}
             {currentAgendaItem.agenda_type === "question_hour" &&
               !currentQuestionDisplay && (
-                <p className="text-2xl text-gray-500">
-                  Awaiting next question...
-                </p>
+                <div className="space-y-3">
+                  <p className="text-2xl text-gray-500">
+                    Awaiting next question...
+                  </p>
+                  {/* Say how much work is waiting even before the first question
+                      is put. A member who never hears theirs called should at
+                      least see that the House holds it. */}
+                  {questionProgress && questionProgress.total > 0 && (
+                    <p className="text-3xl font-bold text-gray-300">
+                      {questionProgress.total} questions tabled by the House
+                      {questionProgress.position > 0 && (
+                        <span className="block text-xl font-normal text-gray-500">
+                          {questionProgress.position} put so far
+                        </span>
+                      )}
+                    </p>
+                  )}
+                </div>
               )}
 
             {/* Bill Presentation display */}

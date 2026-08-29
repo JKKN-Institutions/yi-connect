@@ -9,6 +9,12 @@ import {
   type SkillAxis,
 } from "@/lib/yip/skill-axes";
 import { countTurns, type TurnRow } from "@/lib/yip/turn-count";
+import { effectiveMinistries } from "@/lib/yip/cabinet";
+import {
+  coerceStoredMinistries,
+  coerceStoredRoles,
+  selfNominationRoleLabel,
+} from "@/lib/yip/self-nomination";
 
 /**
  * The Parliamentary Profile — what a member did, set against the House.
@@ -54,6 +60,39 @@ export interface FootprintLine {
   houseDidAny: number;
 }
 
+/** One post this member stood for, with how contested it was. */
+export interface NominationChoice {
+  role: string;
+  label: string;
+  /**
+   * Members of this House who stood for the same post, THIS MEMBER INCLUDED.
+   * A count of a group, never a position within it — see the note on
+   * NominationStanding.
+   */
+  houseWanted: number;
+}
+
+/**
+ * What this member PUT THEIR HAND UP FOR — intent, not outcome.
+ *
+ * Deliberately says nothing about whether they got the post or who did. This
+ * page is about one member's own record; naming winners would turn it into a
+ * result sheet about the House, which is the line PR #1009 drew.
+ *
+ * `houseWanted` is safe for the same reason `houseDidAny` is: it is the size
+ * of a group, so it cannot be read back as anybody's rank.
+ */
+export interface NominationStanding {
+  /** False when this member never filed a nomination. */
+  filed: boolean;
+  /** The posts they stood for, in catalogue order. */
+  roles: NominationChoice[];
+  /** Portfolio labels, when a Cabinet/Shadow role is on the nomination. */
+  ministries: string[];
+  /** Members of the House who filed a nomination at all. */
+  houseFiled: number;
+}
+
 export interface ParliamentaryProfile {
   /** False when no juror has submitted a score for this member yet. */
   scored: boolean;
@@ -69,6 +108,8 @@ export interface ParliamentaryProfile {
   footprint: FootprintLine[];
   /** Things this member did more of than most of the House. */
   standsOutFor: string[];
+  /** What this member stood for at this round. */
+  nominations: NominationStanding;
 }
 
 const AXIS_LABEL: Record<SkillAxis, string> = {
@@ -363,6 +404,89 @@ export async function getParliamentaryProfile(): Promise<ParliamentaryProfile | 
     }
   }
 
+  // ── What they PUT THEIR HAND UP FOR ────────────────────────────
+  // A self-nomination is the one part of a member's record that is intent
+  // rather than action, and this page showed none of it: at the SRTN
+  // regional round 168 of the 196 members declared an ambition and could
+  // not see it anywhere. Read for the WHOLE House in one query, so telling
+  // a member how many others stood for the same post costs no extra trip.
+  //
+  // self_nominations is absent from the generated types, so it is read
+  // through a loose client — the same pattern app/yip/actions/
+  // self-nomination.ts uses for this very table, and the one getBills uses
+  // for bills.mover_participant_id.
+  const looseNominations = supabase as unknown as {
+    from: (t: string) => {
+      select: (c: string) => {
+        eq: (
+          k: string,
+          v: unknown
+        ) => Promise<{
+          data: Array<{
+            participant_id: string | null;
+            roles: unknown;
+            ministries: unknown;
+          }> | null;
+        }>;
+      };
+    };
+  };
+  const { data: nomRows } = await looseNominations
+    .from("self_nominations")
+    .select("participant_id, roles, ministries")
+    .eq("event_id", eventId);
+
+  const houseWanted = new Map<string, number>();
+  let myRoles: string[] = [];
+  let myMinistriesRaw: unknown = null;
+  let filed = false;
+  for (const row of nomRows ?? []) {
+    // coerceStoredRoles drops anything outside the catalogue, so a stale or
+    // renamed role value cannot reach a student's screen as a raw key.
+    const roles = coerceStoredRoles(row.roles);
+    for (const role of roles) {
+      houseWanted.set(role, (houseWanted.get(role) ?? 0) + 1);
+    }
+    if (row.participant_id === participantId) {
+      filed = true;
+      myRoles = roles;
+      myMinistriesRaw = row.ministries;
+    }
+  }
+
+  // Portfolios come from the EVENT's own cabinet list, so a chapter running
+  // twelve ministries does not read its nominee's two back as raw values.
+  //
+  // The stored value is the LABEL, not the key. submitSelfNomination validates
+  // the picks against readEventMinistries(), which returns
+  // effectiveMinistries(...).map((m) => m.label), so that is what lands in the
+  // column. Filtering here against keys instead would match nothing and render
+  // an empty portfolio list while looking perfectly healthy — confirmed
+  // against the live SRTN round, where the stored values read
+  // "Ministry of Youth Affairs & Sports", not "ministry_of_youth_affairs_sports".
+  const { data: eventRow } = await supabase
+    .from("events")
+    .select("cabinet_ministries")
+    .eq("id", eventId)
+    .maybeSingle();
+  const portfolioLabels = effectiveMinistries(
+    (eventRow as { cabinet_ministries?: unknown } | null)?.cabinet_ministries
+  ).map((p) => p.label);
+
+  const nominations: NominationStanding = {
+    filed,
+    roles: myRoles.map((role) => ({
+      role,
+      label: selfNominationRoleLabel(role),
+      // Their own row is always counted, so this can never be 0 for a role
+      // they actually stood for.
+      houseWanted: houseWanted.get(role) ?? 1,
+    })),
+    // Already labels; returned in the event's own portfolio order.
+    ministries: coerceStoredMinistries(myMinistriesRaw, portfolioLabels),
+    houseFiled: (nomRows ?? []).length,
+  };
+
   return {
     scored,
     sampleSize: myRows,
@@ -372,5 +496,6 @@ export async function getParliamentaryProfile(): Promise<ParliamentaryProfile | 
     signature,
     footprint,
     standsOutFor,
+    nominations,
   };
 }

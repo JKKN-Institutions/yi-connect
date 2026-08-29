@@ -209,7 +209,16 @@ export function QuestionsClient({
     total: questions.length,
     approved: questions.filter((q) => q.status === "approved").length,
     starred: questions.filter((q) => q.question_type === "starred").length,
-    queued: questions.filter(
+    // What the Chair will actually be able to put, which is every approved
+    // question. This used to count only questions carrying a hand-typed
+    // queue_order and so read "Queued 0" on a round with 135 approved and
+    // waiting — the same stale assumption that made the live Question Hour
+    // console find nothing to advance (#1029). An approved question is queued
+    // by default now; an explicit order only decides what goes FIRST.
+    queued: questions.filter((q) => q.status === "approved").length,
+    // How many the organiser has explicitly ordered — shown as the sub-line so
+    // "no explicit order" never again reads as "no questions".
+    ordered: questions.filter(
       (q) => q.status === "approved" && q.queue_order != null
     ).length,
   };
@@ -590,10 +599,15 @@ export function QuestionsClient({
           color="text-amber-500"
         />
         <StatCard
-          label="Queued"
+          label="Ready to put"
           value={stats.queued}
           icon={Filter}
           color="text-purple-600"
+          note={
+            stats.ordered > 0
+              ? `${stats.ordered} ordered first`
+              : "in submission order"
+          }
         />
       </div>
 
@@ -1058,11 +1072,14 @@ function StatCard({
   value,
   icon: Icon,
   color,
+  note,
 }: {
   label: string;
   value: number;
   icon: typeof MessageSquare;
   color: string;
+  /** Optional clarifier under the number, for a count that needs one. */
+  note?: string;
 }) {
   return (
     <Card>
@@ -1072,6 +1089,7 @@ function StatCard({
           <span className="text-xs text-gray-500">{label}</span>
         </div>
         <p className="mt-1 text-2xl font-bold" style={{ ...SERIF, color: INK }}>{value}</p>
+        {note && <p className="mt-0.5 text-[11px] text-gray-500">{note}</p>}
       </CardContent>
     </Card>
   );

@@ -11,6 +11,10 @@ import {
 import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, PARTY_COLORS, MINISTRIES, OATH_TEXT } from "@/lib/yip/constants";
 import { computeMultiSeatOutcome } from "@/lib/yip/election-outcome";
+import {
+  isHouseMotionVoteType,
+  houseMotionText,
+} from "@/lib/yip/house-motion";
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
 import { useVoteSession } from "@/lib/yip/hooks/use-vote-session";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
@@ -361,6 +365,14 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
         setMotionVoteSubject(
           typeof cfg.motionSubject === "string" ? cfg.motionSubject : null
         );
+      }
+
+      // A House motion carries the Chair's own wording in config.motionText.
+      // It reuses motionVoteSubject because it is the same idea — the thing the
+      // House is deciding — and read through houseMotionText() so the projector
+      // can never disagree with the ballot about what the question was.
+      if (isHouseMotionVoteType(voteSession.vote_type)) {
+        setMotionVoteSubject(houseMotionText(voteSession.config));
       }
     }
 
@@ -722,9 +734,13 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                                     ? `: ${motionVoteSubject}`
                                     : ""
                                 }`
-                              : voteBillTitle
-                                ? `Bill Vote: ${voteBillTitle}`
-                                : "Bill Vote"}
+                              : isHouseMotionVoteType(voteSession.vote_type)
+                                ? motionVoteSubject
+                                  ? `Motion: ${motionVoteSubject}`
+                                  : "Motion Before the House"
+                                : voteBillTitle
+                                  ? `Bill Vote: ${voteBillTitle}`
+                                  : "Bill Vote"}
                 </p>
               </div>
             )}
@@ -759,7 +775,13 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                             ? "Cabinet Election Results"
                             : voteSession.vote_type === "shadow_minister"
                               ? "Shadow Cabinet Election Results"
-                              : "Bill Vote Results"}
+                              : isHouseMotionVoteType(voteSession.vote_type)
+                                ? "Motion Result"
+                                : voteSession.vote_type === "no_confidence"
+                                  ? "No-Confidence Motion Result"
+                                  : voteSession.vote_type === "impeach_speaker"
+                                    ? "Impeach the Speaker — Result"
+                                    : "Bill Vote Results"}
                 </h2>
 
                 {/* Result bars */}

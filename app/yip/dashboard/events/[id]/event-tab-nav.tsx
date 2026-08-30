@@ -159,7 +159,7 @@ export function EventTabNav({
 }: {
   eventId: string;
   eventStatus?: string;
-  /** events.level — Formation is a Regional-Round-only tab. */
+  /** events.level — Formation is Regional-only, Speeches is Chapter-only. */
   eventLevel?: string;
   canViewScores?: boolean;
   /** Map of { tabHref → done } for the Before-the-Event setup checklist. Tabs
@@ -197,6 +197,13 @@ export function EventTabNav({
     if (tab.label === "Certificates") return eventStatus === "results_published";
     // Online House Formation exists only for Regional Round events.
     if (tab.label === "Formation") return eventLevel === "regional";
+    // The 90-second delegate speech is a CHAPTER-ROUND format. Regional and
+    // National agendas do not carry it: across the whole database there are
+    // 134 speech agenda items over 68 chapter events, and zero at either
+    // higher level — so at a regional round the tab opened a roster checklist
+    // for a session that was never going to run. Same shape as Formation
+    // above, and fails closed on an unrecognised level.
+    if (tab.label === "Speeches") return eventLevel === "chapter";
     // Scoring / Committees / Results are score-bearing → super-admin only.
     if (SCORE_TABS.has(tab.label)) return canViewScores;
     return true;

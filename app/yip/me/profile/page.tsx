@@ -1,9 +1,13 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Compass, BarChart3, Footprints, Sparkles } from "lucide-react";
+import { ArrowLeft, Compass, BarChart3, Footprints, Sparkles, Hand } from "lucide-react";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { getParliamentaryProfile } from "@/app/yip/actions/parliamentary-profile";
-import type { AxisStanding, FootprintLine } from "@/app/yip/actions/parliamentary-profile";
+import type {
+  AxisStanding,
+  FootprintLine,
+  NominationStanding,
+} from "@/app/yip/actions/parliamentary-profile";
 import YourQuestions from "./your-questions";
 import {
   SectionShell,
@@ -116,6 +120,90 @@ function FootprintRow({ line }: { line: FootprintLine }) {
         {line.you}
       </p>
     </div>
+  );
+}
+
+/**
+ * What the member STOOD FOR — intent, not outcome.
+ *
+ * Renders no result and no winner: a member sees the posts they put their own
+ * name forward for, and how many others stood for the same. That second number
+ * is the size of a group, exactly like the footprint's `houseDidAny`, so it
+ * tells a sixteen-year-old that standing for Prime Minister was contested
+ * without handing anyone a position to argue about in the corridor.
+ *
+ * Do not "improve" this by adding who won, or by turning the count into an
+ * ordering ("you were the 3rd to apply") — that is a rank, and ranks are the
+ * one thing this page must never show.
+ */
+function NominationsSection({
+  nominations,
+}: {
+  nominations: NominationStanding;
+}) {
+  return (
+    <SectionShell accent={SAFFRON}>
+      <div className="px-5 py-5">
+        <SectionHeading
+          eyebrow="Your nomination"
+          title="What you put your hand up for"
+          icon={Hand}
+        />
+        {!nominations.filed ? (
+          // ~28 of 196 members at the SRTN round filed nothing. They get a
+          // plain statement of fact, not a nudge and not a rebuke.
+          <p
+            className="mt-3 text-[13px] leading-relaxed"
+            style={{ color: inkA(0.6) }}
+          >
+            You did not put your name forward for a post at this round. Taking
+            the floor, tabling questions and moving bills all count on their
+            own — standing for a post is one more way in, not the only one.
+          </p>
+        ) : (
+          <>
+            <div className="mt-2 divide-y" style={{ borderColor: inkA(0.07) }}>
+              {nominations.roles.map((r) => (
+                <div key={r.role} className="py-2">
+                  <p
+                    className="text-[13px] font-medium"
+                    style={{ color: INK }}
+                  >
+                    {r.label}
+                  </p>
+                  <p className="text-[11px]" style={{ color: inkA(0.5) }}>
+                    {r.houseWanted <= 1
+                      ? "You were the only one who stood for this"
+                      : `${r.houseWanted} members stood for this`}
+                  </p>
+                </div>
+              ))}
+            </div>
+            {nominations.ministries.length > 0 && (
+              <div className="mt-3">
+                <p
+                  className="text-[10px] font-bold uppercase tracking-[0.14em]"
+                  style={{ color: inkA(0.45) }}
+                >
+                  Portfolios you chose
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {nominations.ministries.map((m) => (
+                    <span
+                      key={m}
+                      className="rounded-full px-3 py-1 text-[12px] font-medium"
+                      style={{ background: `${SAFFRON}14`, color: SAFFRON }}
+                    >
+                      {m}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </SectionShell>
   );
 }
 
@@ -272,6 +360,13 @@ export default async function ParliamentaryProfilePage() {
       {/* Sits directly under the footprint because that section already says
           how many questions were tabled; this says what became of each. */}
       <YourQuestions />
+
+      {/* ── What they stood for ──────────────────────────────────────── */}
+      {/* Sits AFTER YourQuestions on purpose: that block is a drill-down of
+          the footprint's "Questions you tabled" line and has to stay next to
+          it. This is a separate part of the record — what the member asked
+          for rather than what they did — so it follows the pair. */}
+      <NominationsSection nominations={profile.nominations} />
 
       {/* ── Stands out for ───────────────────────────────────────────── */}
       {profile.standsOutFor.length > 0 && (

@@ -8,12 +8,14 @@ import {
   getResultsFreshness,
   getMarkingCoverage,
 } from "@/app/yip/actions/results";
+import { getUnmarkedStudents } from "@/app/yip/actions/unmarked-students";
 import { getAwardOverrides } from "@/app/yip/actions/award-overrides";
 import { getPositionBonusConfigAdmin } from "@/app/yip/actions/positions";
 import { getZoneAwardConfig } from "@/app/yip/actions/qualification";
 import { getEventAwardLabels } from "@/app/yip/actions/admin-awards";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { ResultsClient } from "./results-client";
+import { NotMarkedPanel } from "./not-marked-panel";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 
 export default async function ResultsPage({
@@ -66,8 +68,14 @@ export default async function ResultsPage({
   // students a single judge marked, and students whose marks span both benches
   // after a no-confidence motion. Read-only — changes no score.
   const markingCoverage = await getMarkingCoverage(id);
+  // Students the results snapshot has no row for, so they are LISTED as not
+  // marked instead of being silently omitted (Director ruling 08, 2026-08-29).
+  // Derived at read time — computeResults() still writes no row for them.
+  const unmarked = await getUnmarkedStudents(id);
 
   return (
+    <>
+      <NotMarkedPanel data={unmarked} />
     <ResultsClient
       eventId={id}
       eventName={event.name}
@@ -89,5 +97,6 @@ export default async function ResultsPage({
       singleJudgeStudents={markingCoverage?.singleJudgeStudents ?? []}
       sideChangeStudents={markingCoverage?.sideChangeStudents ?? []}
     />
+    </>
   );
 }

@@ -903,6 +903,17 @@ export function ResultsClient({
             const rankable = availability?.rankable ?? 0;
             const showEvidence =
               hasWinner && rankable > 0 && judged > 0 && judged < rankable;
+            // Ruling 06 (Director, 2026-08-29): "A missed session is stated on
+            // the award. Where a session did not run, the chair may still choose
+            // a winner, but the award is permanently labelled `session not held
+            // — chair's choice`." An award CAN still be handed out on a session
+            // nobody marked — the chair pins it by hand (the auto pass needs
+            // rankBy > 0, so it never fabricates one). SRTN is the live case: the
+            // debate was squeezed out of the day and the three debate-dependent
+            // awards were hand-picked at the ceremony. The card must carry that
+            // condition permanently, next to the name it hands out.
+            const chairPinned = availability?.chairPinnedParticipantId ?? null;
+            const sessionNotHeld = hasWinner && unscored.length > 0;
             return (
               <Card
                 key={label}
@@ -955,6 +966,25 @@ export function ResultsClient({
                                 top of {judged} of {rankable} students judged in
                                 this session
                               </p>
+                            )}
+                            {sessionNotHeld && (
+                              // Ruling 06. The label is the chair's, verbatim —
+                              // it says the award was decided in the room, not
+                              // by the marks, so nobody later reads this name as
+                              // a scored result. The session is named underneath
+                              // so the reason is legible without the ruling.
+                              <div className="mt-1">
+                                {chairPinned === w.participant_id && (
+                                  <p className="text-xs font-semibold text-amber-700">
+                                    session not held — chair&apos;s choice
+                                  </p>
+                                )}
+                                <p className="text-xs text-gray-500">
+                                  {unscored.join(" and ")}{" "}
+                                  {unscored.length === 1 ? "was" : "were"} not
+                                  scored at this round
+                                </p>
+                              </div>
                             )}
                           </div>
                         ))

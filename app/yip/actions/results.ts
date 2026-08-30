@@ -2870,6 +2870,22 @@ export async function getMarkingCoverage(
 // Also returns how many students were judged in those sessions, so a card can
 // show the evidence behind a winner: "top of 18 students judged" reads very
 // differently from "top of 163" when deciding whether to read a name out.
+// Finally, ruling 06 (Director, 2026-08-29) covers the other side of the same
+// coin — a session that did not run but whose award was handed out anyway:
+//
+//   "A missed session is stated on the award. Where a session did not run, the
+//    chair may still choose a winner, but the award is permanently labelled
+//    `session not held — chair's choice`."
+//
+// That is exactly what happened at SRTN: the debate was squeezed out of the day,
+// so the regional debate sheet (`rbd`) carries no marks at all, and the chair
+// hand-picked the three debate-dependent awards at the ceremony. The engine can
+// never produce those winners on its own — the auto pass requires rankBy > 0 and
+// refuses to fabricate a winner from an all-zero field — so a winner on an
+// unscored session is, by construction, a chair's pin. Return WHO was pinned so
+// the surface can say so; the label is derived at read time and nothing new is
+// written to yip.results.award_category (an overloaded column whose reason
+// strings several consumers already have to special-case).
 export type AwardAvailability = {
   label: string;
   /** Friendly session names this award ranks on that carry NO marks here. */
@@ -2878,6 +2894,14 @@ export type AwardAvailability = {
   judged: number;
   /** Students eligible to be ranked at all (present on every required day). */
   rankable: number;
+  /**
+   * The participant the chair PINNED for this award, if any (yip.award_overrides
+   * is unique per event × award). Combined with `unscoredSessions` this is what
+   * ruling 06 labels: a pinned winner on a session that never ran is a chair's
+   * choice, not a computed result, and the award must say so permanently.
+   * Null when no override exists for this award.
+   */
+  chairPinnedParticipantId: string | null;
 };
 
 export async function getAwardAvailability(
@@ -2891,7 +2915,7 @@ export async function getAwardAvailability(
   const supabase = await createServiceClient();
   const level = await fetchEventRoundLevel(supabase as never, eventId);
 
-  const [{ data: defs }, { data: sheets }, { data: resultRows }] =
+  const [{ data: defs }, { data: sheets }, { data: resultRows }, { data: pins }] =
     await Promise.all([
       supabase
         .from("award_definitions")
@@ -2902,6 +2926,12 @@ export async function getAwardAvailability(
       supabase
         .from("results")
         .select("participant_id, score_breakdown, rank")
+        .eq("event_id", eventId),
+      // Chair's pins for this event (ruling 06). Read-only — this never decides
+      // a winner, it only lets the surface name the pin as a chair's choice.
+      supabase
+        .from("award_overrides")
+        .select("award_label, participant_id")
         .eq("event_id", eventId),
     ]);
 
@@ -2922,6 +2952,15 @@ export async function getAwardAvailability(
     score_breakdown: Record<string, number> | null;
     rank: number | null;
   };
+  type PinRow = { award_label: string; participant_id: string };
+
+  // award label → the participant the chair pinned for it.
+  const pinByLabel = new Map<string, string>();
+  for (const p of ((pins ?? []) as unknown as PinRow[])) {
+    if (p.award_label && p.participant_id) {
+      pinByLabel.set(p.award_label, p.participant_id);
+    }
+  }
 
   // A row with no `levels` applies to every round; otherwise it must name this
   // one. Matches how the awards and the scoring sheets are resolved elsewhere.
@@ -2997,6 +3036,7 @@ export async function getAwardAvailability(
       unscoredSessions: unscored,
       judged: judged.size,
       rankable,
+      chairPinnedParticipantId: pinByLabel.get(d.label) ?? null,
     });
   }
   return out;

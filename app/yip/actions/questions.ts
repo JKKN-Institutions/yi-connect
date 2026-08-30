@@ -391,6 +391,17 @@ export async function getMyQuestionStatus(): Promise<MyQuestionStatus | null> {
 export async function getQuestions(
   eventId: string
 ): Promise<QuestionWithSubmitter[]> {
+  // GATE. Every one of these readers embeds the submitter's full_name,
+  // party, constituency and school — identifying detail about minors — and
+  // runs on the SERVICE client, which bypasses RLS. As a "use server" export
+  // it is a directly invocable endpoint, so being called only from gated
+  // pages is not a guarantee; the caller's page gate protects the page, not
+  // this function. yip.questions also carries an INSERT/UPDATE-to-public RLS
+  // policy (see requireQuestionManage above), so there is no database-side
+  // guard to fall back on. Fails CLOSED: an unknown scope returns nothing.
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) return [];
+
   const supabase = await createServiceClient();
 
   const { data, error } = await supabase
@@ -689,6 +700,17 @@ export type CurrentQuestionInfo = Question & {
 export async function getCurrentQuestion(
   eventId: string
 ): Promise<CurrentQuestionInfo | null> {
+  // GATE. Every one of these readers embeds the submitter's full_name,
+  // party, constituency and school — identifying detail about minors — and
+  // runs on the SERVICE client, which bypasses RLS. As a "use server" export
+  // it is a directly invocable endpoint, so being called only from gated
+  // pages is not a guarantee; the caller's page gate protects the page, not
+  // this function. yip.questions also carries an INSERT/UPDATE-to-public RLS
+  // policy (see requireQuestionManage above), so there is no database-side
+  // guard to fall back on. Fails CLOSED: an unknown scope returns nothing.
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) return null;
+
   const supabase = await createServiceClient();
 
   const { data, error } = await supabase
@@ -736,6 +758,17 @@ export async function getCurrentQuestion(
 export async function getQueuedQuestions(
   eventId: string
 ): Promise<QuestionWithSubmitter[]> {
+  // GATE. Every one of these readers embeds the submitter's full_name,
+  // party, constituency and school — identifying detail about minors — and
+  // runs on the SERVICE client, which bypasses RLS. As a "use server" export
+  // it is a directly invocable endpoint, so being called only from gated
+  // pages is not a guarantee; the caller's page gate protects the page, not
+  // this function. yip.questions also carries an INSERT/UPDATE-to-public RLS
+  // policy (see requireQuestionManage above), so there is no database-side
+  // guard to fall back on. Fails CLOSED: an unknown scope returns nothing.
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) return [];
+
   const supabase = await createServiceClient();
 
   const { data, error } = await supabase
@@ -768,6 +801,17 @@ export async function getQueuedQuestions(
 export async function getCompletedQuestions(
   eventId: string
 ): Promise<QuestionWithSubmitter[]> {
+  // GATE. Every one of these readers embeds the submitter's full_name,
+  // party, constituency and school — identifying detail about minors — and
+  // runs on the SERVICE client, which bypasses RLS. As a "use server" export
+  // it is a directly invocable endpoint, so being called only from gated
+  // pages is not a guarantee; the caller's page gate protects the page, not
+  // this function. yip.questions also carries an INSERT/UPDATE-to-public RLS
+  // policy (see requireQuestionManage above), so there is no database-side
+  // guard to fall back on. Fails CLOSED: an unknown scope returns nothing.
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) return [];
+
   const supabase = await createServiceClient();
 
   const { data, error } = await supabase

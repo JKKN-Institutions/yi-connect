@@ -32,6 +32,8 @@ import {
   CalendarClock,
   Download,
   Printer,
+  Users,
+  MonitorPlay,
 } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
 import { ministryLabel, type MinistryPortfolio } from "@/lib/yip/cabinet";
@@ -44,8 +46,12 @@ import {
   bulkReject,
   setQuestionsDeadline,
   setQuestionsOpen,
+  extendQuestionsDeadline,
 } from "@/app/yip/actions/questions";
-import type { QuestionWithSubmitter } from "@/app/yip/actions/questions";
+import type {
+  QuestionWithSubmitter,
+  QuestionCoverage,
+} from "@/app/yip/actions/questions";
 import { INK, SAFFRON, SERIF, SectionShell } from "@/app/yip/me/credential-ui";
 import { toast } from "sonner";
 
@@ -103,6 +109,8 @@ interface QuestionsClientProps {
   initialCloseAt: string | null;
   /** The event's effective cabinet portfolios — resolves ministry KEYs to labels. */
   ministries: MinistryPortfolio[];
+  /** How many MEMBERS tabled a question, vs how many are on the roll. */
+  coverage: QuestionCoverage | null;
 }
 
 /**
@@ -149,6 +157,7 @@ export function QuestionsClient({
   initialOpenAt,
   initialCloseAt,
   ministries,
+  coverage,
 }: QuestionsClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -174,6 +183,26 @@ export function QuestionsClient({
         nextIso
           ? "Submission open time saved"
           : "Open time removed — submissions open from the start"
+      );
+    } else {
+      toast.error(result.error);
+    }
+  }
+
+  /**
+   * One-tap widen. Same setting as the picker below it, without asking an
+   * organiser to reason about a datetime mid-event — which is why reopening
+   * the SRTN window took a database edit instead of a click.
+   */
+  async function extendDeadline(hours: number, label: string) {
+    setSavingDeadline(true);
+    const result = await extendQuestionsDeadline(eventId, hours);
+    setSavingDeadline(false);
+    if (result.success) {
+      setCloseAt(result.data.closeAt);
+      setCloseAtDraft(toLocalInputValue(result.data.closeAt));
+      toast.success(
+        `Questions open for another ${label} — until ${formatWindowTime(result.data.closeAt)}`
       );
     } else {
       toast.error(result.error);
@@ -470,6 +499,23 @@ export function QuestionsClient({
           <Printer className="mr-1.5 size-4" />
           Order paper (PDF)
         </Button>
+        {/* The same approved-but-not-yet-put list, sized for the hall. Most
+            questions a round approves are never heard; putting them on the
+            screen between items is what gives that work an audience. */}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            window.open(
+              `/yip/dashboard/events/${eventId}/questions/order-paper?view=projector`,
+              "_blank",
+              "noopener"
+            )
+          }
+        >
+          <MonitorPlay className="mr-1.5 size-4" />
+          Show on projector
+        </Button>
       </div>
 
       {/* Question-submission OPEN time (event-days only). Pairs with the
@@ -540,6 +586,32 @@ export function QuestionsClient({
                   ? `Students can submit until ${formatWindowTime(closeAt)}`
                   : "No deadline set — students can submit any time"}
               </p>
+              {/* One-tap widen. Extends from the standing deadline, or from now
+                  if it has already passed, so reopening a lapsed window gives
+                  the full extension rather than dead hours. Hidden with no
+                  deadline set — the window is already unbounded, and "+1 day"
+                  there would CREATE a cutoff instead of removing one. */}
+              {closeAt && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] text-gray-400">Give them</span>
+                  {[
+                    { hours: 6, label: "6 hours" },
+                    { hours: 24, label: "1 day" },
+                    { hours: 72, label: "3 days" },
+                  ].map((opt) => (
+                    <Button
+                      key={opt.hours}
+                      size="sm"
+                      variant="outline"
+                      className="h-6 px-2 text-[11px]"
+                      disabled={savingDeadline}
+                      onClick={() => extendDeadline(opt.hours, opt.label)}
+                    >
+                      +{opt.label}
+                    </Button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -577,6 +649,56 @@ export function QuestionsClient({
           </div>
         </CardContent>
       </Card>
+
+      {/* ─── Member coverage ───────────────────────────────────────────
+          Every other counter on this page counts QUESTIONS. None of them can
+          say that 137 of 196 members never tabled one, which is the fact that
+          decides whether the window should be widened. This one says it. */}
+      {coverage && coverage.totalParticipants > 0 && (
+        <Card>
+          <CardContent className="flex flex-col gap-2 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <Users
+                className={cn(
+                  "size-4",
+                  coverage.withoutQuestion > coverage.withQuestion
+                    ? "text-amber-500"
+                    : "text-blue-600"
+                )}
+              />
+              <div>
+                <p className="text-sm font-medium text-gray-800">
+                  {coverage.withQuestion} of {coverage.totalParticipants}{" "}
+                  members have asked a question
+                </p>
+                <p className="text-xs text-gray-500">
+                  {coverage.withoutQuestion === 0
+                    ? "Everyone on the roll has tabled at least one."
+                    : `${coverage.withoutQuestion} ${
+                        coverage.withoutQuestion === 1 ? "member has" : "members have"
+                      } not tabled one yet.${
+                        closeAt
+                          ? " Extend the deadline above to give them a chance."
+                          : ""
+                      }`}
+                </p>
+              </div>
+            </div>
+            <div className="min-w-32 sm:w-40">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                <div
+                  className="h-full rounded-full bg-[#FF9933]"
+                  style={{
+                    width: `${Math.round(
+                      (coverage.withQuestion / coverage.totalParticipants) * 100
+                    )}%`,
+                  }}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats Bar */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

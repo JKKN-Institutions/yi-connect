@@ -54,6 +54,7 @@ import { VoteClient } from "./vote/vote-client";
 import { GoIndependentButton } from "./go-independent-button";
 import { LiveNowCard } from "./live-now-card";
 import { SpeakCard } from "./speak-card";
+import { QuestionNudgeCard } from "./question-nudge-card";
 import { HeroCredential } from "./hero-credential";
 import { AnnouncementStrip } from "./announcement-strip";
 import { PushToggle } from "@/components/yip/push-toggle";
@@ -732,6 +733,13 @@ export default async function ParticipantPage() {
           NOTHING on empty/error, and is wrapped in an error boundary so it
           can never take down the live ballot below it. */}
       <AnnouncementStrip eventId={event.id} participantId={participant.id} />
+
+      {/* ─── QUESTION HOUR NUDGE (self-hides) ──────────────────────────
+          Renders ONLY while the submission window is genuinely open and this
+          member still has questions left to table. Nothing on My Desk used to
+          mention the window existed — on the SRTN round 137 of 196 members
+          never tabled a question inside a 5.5-hour weekday slot. In-app only. */}
+      <QuestionNudgeCard />
 
       {/* ─── LIVE NOW (realtime agenda + timer) ────────────────────── */}
       <LiveNowCard eventId={event.id} />

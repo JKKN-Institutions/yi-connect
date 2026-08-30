@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { MonitorPlay } from "lucide-react";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
 import { getQuestions } from "@/app/yip/actions/questions";
@@ -7,21 +8,35 @@ import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import { ministryLabel as resolveMinistryLabel } from "@/lib/yip/cabinet";
 import { getCabinetConfig } from "@/app/yip/actions/cabinet";
 import { PrintButton } from "./print-button";
+import { OrderPaperProjector, type ProjectorQuestion } from "./projector-view";
 
 /**
- * Printable "List of Business" for Question Hour — the approved questions in
- * call order, grouped by ministry. Organiser opens it from the Question Hour
- * admin page and prints / saves as PDF. Gated exactly like the questions page
- * (getEvent → Forbidden403 on no-access). Only APPROVED, non-mock questions
- * appear (the order paper is the House's running order, not the moderation
- * queue).
+ * The "List of Business" for Question Hour — the approved questions in call
+ * order, grouped by ministry, in two shapes from one page and one gate:
+ *
+ *   • default        — A4, printable, for the Chair's chapter report.
+ *   • ?view=projector — large type on a dark screen, for the hall.
+ *
+ * Only APPROVED, non-mock questions appear, and that is the whole point: a
+ * question that has been put moves to 'asked' / 'answered' / 'skipped', so
+ * everything listed here is a question a member researched and wrote that the
+ * House has not yet heard. On the SRTN regional round that was 135 of them.
+ *
+ * Questions only. The member who tabled it is named — it is their own authored
+ * work — and nothing else about them appears: no marks, no position, no rank.
+ *
+ * Gated exactly like the questions page (getEvent → getYipEventAccess.canView,
+ * Forbidden403 on no-access).
  */
 export default async function OrderPaperPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ view?: string }>;
 }) {
   const { id } = await params;
+  const { view } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -54,6 +69,28 @@ export default async function OrderPaperPage({
       if (ao !== bo) return ao - bo;
       return (a.created_at ?? "").localeCompare(b.created_at ?? "");
     });
+
+  // ─── Projector ──────────────────────────────────────────────────
+  // Same list, same gate, sized for the back of the hall. Flat rather than
+  // grouped: the ministry rides on each question so a screen never opens with
+  // an orphaned heading.
+  if (view === "projector") {
+    const projectorQuestions: ProjectorQuestion[] = approved.map((q) => ({
+      id: q.id,
+      ministry: ministryLabel(q.directed_to_ministry),
+      text: q.question_text,
+      memberName: q.submitter?.full_name ?? "—",
+      constituency: q.submitter?.constituency_name ?? null,
+    }));
+
+    return (
+      <OrderPaperProjector
+        eventName={event.name ?? ""}
+        questions={projectorQuestions}
+        backHref={`/yip/dashboard/events/${id}/questions/order-paper`}
+      />
+    );
+  }
 
   // Group by ministry, preserving the sorted order.
   const groups: { ministry: string; items: QuestionWithSubmitter[] }[] = [];
@@ -96,10 +133,19 @@ export default async function OrderPaperPage({
           </h1>
           <p className="mt-0.5 text-sm text-[#1a1a3e]/60">
             {event.name} · {approved.length} approved question
-            {approved.length === 1 ? "" : "s"}
+            {approved.length === 1 ? "" : "s"} not yet put to the House
           </p>
         </div>
-        <PrintButton />
+        <div className="no-print flex shrink-0 items-center gap-2">
+          <a
+            href={`/yip/dashboard/events/${id}/questions/order-paper?view=projector`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[#1a1a3e]/15 px-3 py-1.5 text-xs font-medium text-[#1a1a3e]/70 transition-colors hover:bg-[#1a1a3e]/5"
+          >
+            <MonitorPlay className="size-3.5" />
+            Projector
+          </a>
+          <PrintButton />
+        </div>
       </div>
 
       {groups.length === 0 ? (

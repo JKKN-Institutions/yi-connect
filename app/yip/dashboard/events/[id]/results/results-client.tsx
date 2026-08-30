@@ -335,6 +335,16 @@ export function ResultsClient({
       setMessage({ type: "error", text: "Pick both an award and a participant." });
       return;
     }
+    // A hand-picked award is the one result no score explains, so the reason is
+    // required (Director ruling 2026-08-29). The server refuses a blank reason
+    // too — this only saves the round-trip.
+    if (!overrideNote.trim()) {
+      setMessage({
+        type: "error",
+        text: "Write the reason for this pick — it's the only record of why this student won.",
+      });
+      return;
+    }
     setOverrideLoading(true);
     const res = await setAwardWinner(
       eventId,
@@ -1116,13 +1126,13 @@ export function ResultsClient({
             </div>
             <div>
               <label className="text-xs font-medium text-gray-500">
-                Note (optional)
+                Reason (required)
               </label>
               <input
                 type="text"
                 value={overrideNote}
                 onChange={(e) => setOverrideNote(e.target.value)}
-                placeholder="Reason for the override (recorded in the audit log)"
+                placeholder="Why this student won — recorded against the award"
                 className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
               />
             </div>

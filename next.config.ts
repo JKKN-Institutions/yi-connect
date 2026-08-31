@@ -30,6 +30,15 @@ const nextConfig: NextConfig = {
   // Serwist uses webpack, but we need this for Next.js 16 compatibility
   turbopack: {},
 
+  // Local development only. Two traps make a dev page render but never
+  // hydrate (HTML appears, clicks do nothing):
+  //   1. 127.0.0.1 - Next 16 blocks cross-origin dev chunks, so no JS loads.
+  //   2. localhost  - can return HTTP 431 once enough cookies accumulate
+  //                   across every local app sharing that host.
+  // Allowing these origins makes 127.0.0.1 a working, cookie-free fallback
+  // when localhost is wedged. Has no effect on a production build.
+  allowedDevOrigins: ["127.0.0.1", "192.168.0.107"],
+
   // Server-only packages that shouldn't be bundled
   // whatsapp-web.js uses Puppeteer and internal require() calls
   serverExternalPackages: [

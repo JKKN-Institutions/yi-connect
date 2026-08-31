@@ -12,6 +12,7 @@ import type {
   AwardCandidateGroup,
   SingleJudgeStudent,
   SideChangeStudent,
+  AwardAvailability,
 } from "@/app/yip/actions/results";
 import {
   setAwardWinner,
@@ -269,6 +270,7 @@ export function ResultsClient({
   scoresStale = false,
   singleJudgeStudents = [],
   sideChangeStudents = [],
+  awardAvailability = [],
 }: {
   eventId: string;
   eventName: string;
@@ -311,6 +313,9 @@ export function ResultsClient({
   // after a no-confidence motion. See getMarkingCoverage.
   singleJudgeStudents?: SingleJudgeStudent[];
   sideChangeStudents?: SideChangeStudent[];
+  /** Per-award: which ranking sessions carry no marks, and how many students
+      were judged in the ones that do. Lets an empty card say WHY. */
+  awardAvailability?: AwardAvailability[];
 }) {
   const router = useRouter();
 
@@ -545,6 +550,11 @@ export function ResultsClient({
     ...canonicalAwardLabels,
     ...awardLabels.filter((l) => !canonicalAwardLabels.includes(l)),
   ];
+
+  // Why an award is empty, and how much evidence sits behind a winner.
+  const availabilityByLabel = new Map(
+    awardAvailability.map((a) => [a.label, a])
+  );
   const awardsWithWinner = awardWinners.size;
 
   // Interim-recompute guardrail: two-day event with zero Day-2 check-ins ⇒
@@ -886,7 +896,7 @@ export function ResultsClient({
         <p className="text-xs text-gray-500">
           {awardsWithWinner} of {allAwardLabels.length} awards have a winner.
           {awardsWithWinner < allAwardLabels.length &&
-            " The rest need leadership roles, benches, or sessions to be set up first (shown on each card)."}
+            " Each empty card says why \u2014 a session nobody marked, or no eligible student."}
         </p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {allAwardLabels.map((label) => {
@@ -894,6 +904,26 @@ export function ResultsClient({
             const style = getAwardStyle(label);
             const Icon = style.icon;
             const hasWinner = winners.length > 0;
+            const availability = availabilityByLabel.get(label);
+            const unscored = availability?.unscoredSessions ?? [];
+            // How many students were actually judged in the sessions this award
+            // ranks on. Shown on a winner card so the reader can weigh it: "top
+            // of 18 judged" and "top of 163 judged" are not the same claim.
+            const judged = availability?.judged ?? 0;
+            const rankable = availability?.rankable ?? 0;
+            const showEvidence =
+              hasWinner && rankable > 0 && judged > 0 && judged < rankable;
+            // Ruling 06 (Director, 2026-08-29): "A missed session is stated on
+            // the award. Where a session did not run, the chair may still choose
+            // a winner, but the award is permanently labelled `session not held
+            // — chair's choice`." An award CAN still be handed out on a session
+            // nobody marked — the chair pins it by hand (the auto pass needs
+            // rankBy > 0, so it never fabricates one). SRTN is the live case: the
+            // debate was squeezed out of the day and the three debate-dependent
+            // awards were hand-picked at the ceremony. The card must carry that
+            // condition permanently, next to the name it hands out.
+            const chairPinned = availability?.chairPinnedParticipantId ?? null;
+            const sessionNotHeld = hasWinner && unscored.length > 0;
             return (
               <Card
                 key={label}
@@ -938,6 +968,34 @@ export function ResultsClient({
                                 pts
                               </span>
                             </p>
+                            {showEvidence && (
+                              // The evidence behind the win. An award decided
+                              // from 18 of 163 students is not wrong, but the
+                              // host should know that before reading it out.
+                              <p className="mt-0.5 text-xs text-gray-500">
+                                top of {judged} of {rankable} students judged in
+                                this session
+                              </p>
+                            )}
+                            {sessionNotHeld && (
+                              // Ruling 06. The label is the chair's, verbatim —
+                              // it says the award was decided in the room, not
+                              // by the marks, so nobody later reads this name as
+                              // a scored result. The session is named underneath
+                              // so the reason is legible without the ruling.
+                              <div className="mt-1">
+                                {chairPinned === w.participant_id && (
+                                  <p className="text-xs font-semibold text-amber-700">
+                                    session not held — chair&apos;s choice
+                                  </p>
+                                )}
+                                <p className="text-xs text-gray-500">
+                                  {unscored.join(" and ")}{" "}
+                                  {unscored.length === 1 ? "was" : "were"} not
+                                  scored at this round
+                                </p>
+                              </div>
+                            )}
                           </div>
                         ))
                       ) : (
@@ -945,9 +1003,21 @@ export function ResultsClient({
                           <p className="text-sm font-semibold text-gray-400">
                             Not awarded yet
                           </p>
-                          <p className="mt-0.5 text-xs text-gray-400">
-                            Needs {AWARD_REQUIREMENT[label] ?? "a qualifying winner"}
-                          </p>
+                          {unscored.length > 0 ? (
+                            // Nobody was marked in the session this award ranks
+                            // on. Say so plainly: it is a marking gap in the
+                            // room, NOT a missing role or a platform fault, and
+                            // the host is the only person who can act on it.
+                            <p className="mt-0.5 text-xs text-gray-400">
+                              {unscored.join(" and ")}{" "}
+                              {unscored.length === 1 ? "was" : "were"} not scored
+                              at this round
+                            </p>
+                          ) : (
+                            <p className="mt-0.5 text-xs text-gray-400">
+                              Needs {AWARD_REQUIREMENT[label] ?? "a qualifying winner"}
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>

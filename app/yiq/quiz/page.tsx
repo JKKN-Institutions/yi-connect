@@ -55,6 +55,7 @@ export default async function QuizPage({
       initialAnswers={res.answers}
       paperName={res.paperName}
       durationMinutes={res.durationMinutes}
+      secondsPerQuestion={res.secondsPerQuestion}
       isMock={kind === "mock"}
     />
   );

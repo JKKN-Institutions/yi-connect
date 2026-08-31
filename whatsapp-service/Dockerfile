@@ -32,8 +32,18 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Set Puppeteer to use installed Chromium
+# Set Puppeteer to use the Chromium installed above, and never download its own.
+# PUPPETEER_SKIP_CHROMIUM_DOWNLOAD is the LEGACY name — puppeteer dropped it in
+# v20 in favour of PUPPETEER_SKIP_DOWNLOAD. whatsapp-web.js@1.34.7 pulls
+# puppeteer 24 (PR #875 bumped it from 18), so since that bump only the legacy
+# name was set and the image has been downloading a second Chrome-for-Testing at
+# build time: slower builds, a much larger image, and it exercises
+# @puppeteer/browsers -> extract-zip@2.0.1, which carries two open HIGH advisories
+# with NO patched version available. Setting the modern name makes that download —
+# and therefore that code path — not happen. Both names are kept so the image
+# still behaves if the pinned puppeteer is ever rolled back.
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PUPPETEER_SKIP_DOWNLOAD=true
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
 WORKDIR /app

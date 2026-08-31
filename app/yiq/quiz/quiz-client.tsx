@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { displayLabelFor } from "@/lib/yiq/option-order";
 import { useRouter } from "next/navigation";
-import { saveAnswer, submitAttempt, type SubmitResult } from "../actions/attempt";
+import {
+  saveAnswer,
+  answerPracticeCard,
+  submitAttempt,
+  type SubmitResult,
+} from "../actions/attempt";
+import { QuestionCard } from "./question-card";
+import { nextStreak, type CardFeedback } from "@/lib/yiq/practice-feedback";
 import { formatClock, secondsRemaining, type OptionKey, type PresentedQuestion } from "@/lib/yiq/paper";
 
 const INK = "#0a1633";
@@ -41,6 +48,16 @@ export function QuizClient({
   const [submitting, setSubmitting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const submittedRef = useRef(false);
+
+  // ── The practice deck ─────────────────────────────────────────────────
+  //
+  // `feedback` is keyed by question, so turning a card and coming back to it
+  // shows the same verdict rather than re-asking the server. It is ONLY ever
+  // populated on a practice paper — the server refuses to reveal anything on
+  // a scored one (lib/yiq/practice-feedback.ts), so this stays empty there
+  // no matter what the client does.
+  const [feedback, setFeedback] = useState<Record<string, CardFeedback>>({});
+  const [streak, setStreak] = useState(0);
 
   const total = questions.length;
   const answeredCount = useMemo(
@@ -82,11 +99,29 @@ export function QuizClient({
 
   async function choose(questionId: string, option: OptionKey) {
     if (result || submitting) return;
+    // A card that has already turned is settled. Re-answering it would let a
+    // student who has just been shown the answer put the right one in.
+    if (feedback[questionId]) return;
+
     const previous = answers[questionId];
     setAnswers((a) => ({ ...a, [questionId]: option }));
     setSaving(questionId);
-    const res = await saveAnswer(attemptId, questionId, option);
+
+    // On a PRACTICE paper, ask for the verdict in the same round trip that
+    // saves the answer. On a scored paper this action saves exactly as
+    // saveAnswer does and returns feedback: null — the refusal is the
+    // server's, not a flag the client can flip.
+    const res = isMock
+      ? await answerPracticeCard(attemptId, questionId, option)
+      : await saveAnswer(attemptId, questionId, option);
     setSaving(null);
+
+    if (res.success && "feedback" in res && res.feedback) {
+      const fb = res.feedback;
+      setFeedback((f) => ({ ...f, [questionId]: fb }));
+      setStreak((n) => nextStreak(n, fb.correct));
+    }
+
     if (!res.success) {
       // Roll the optimistic choice back so the screen never claims an answer
       // the server refused.
@@ -96,7 +131,7 @@ export function QuizClient({
         else delete next[questionId];
         return next;
       });
-      if (res.expired) void doSubmit(true);
+      if ("expired" in res && res.expired) void doSubmit(true);
     }
   }
 
@@ -230,51 +265,19 @@ export function QuizClient({
       </header>
 
       <main id="yiq-main" className="mx-auto w-full max-w-2xl flex-1 px-4 py-6">
-        {q.topic ? (
-          <p className="yiq-eyebrow" style={{ color: DIM }}>
-            {q.topic}
-          </p>
-        ) : null}
-        <h1
-          className="mt-2 text-[1.25rem] font-semibold leading-snug sm:text-[1.375rem]"
-          style={{ color: INK }}
-        >
-          {q.text}
-        </h1>
-
-        {q.mediaUrl ? (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            src={q.mediaUrl}
-            alt=""
-            className="mt-4 w-full rounded-xl"
-            style={{ border: "1px solid rgba(10,22,51,0.12)" }}
-          />
-        ) : null}
-
-        <div className="mt-5 grid gap-2.5">
-          {q.options.map((o, oi) => (
-            <button
-              key={o.key}
-              type="button"
-              className="yiq-option"
-              data-selected={answers[q.id] === o.key ? "true" : "false"}
-              onClick={() => void choose(q.id, o.key)}
-              disabled={submitting}
-              aria-pressed={answers[q.id] === o.key}
-            >
-              {/* Labelled by POSITION, not by the canonical key. The server
-                  may hand these back in a per-student order, and printing the
-                  canonical key would read as "c, a, d, b" to the student. */}
-              <span className="yiq-option-key">{displayLabelFor(oi)}</span>
-              <span className="pt-0.5">{o.text}</span>
-            </button>
-          ))}
-        </div>
-
-        <p className="mt-3 h-4 text-[0.75rem]" style={{ color: DIM }}>
-          {saving === q.id ? "Saving…" : answers[q.id] ? "Answer saved" : ""}
-        </p>
+        <QuestionCard
+          question={q}
+          index={index}
+          total={total}
+          chosen={answers[q.id]}
+          onChoose={(o) => void choose(q.id, o)}
+          disabled={submitting || Boolean(feedback[q.id])}
+          feedback={feedback[q.id] ?? null}
+          streak={streak}
+          secondsLeft={null}
+          secondsPerQuestion={null}
+          saving={saving === q.id}
+        />
 
         {/* Question grid — jump anywhere, see what's left. */}
         <nav className="mt-6" aria-label="Questions">

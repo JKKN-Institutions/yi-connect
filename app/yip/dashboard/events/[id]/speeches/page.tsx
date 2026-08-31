@@ -6,6 +6,8 @@ import { getYuvaAssignments } from "@/app/yip/actions/yuva-assignments";
 import { getEventScoredCounts } from "@/app/yip/actions/scoring-overview";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { matchesDesk, type DeskAssignment } from "@/lib/yip/yuva-desk";
+import { ROUND_LEVEL_LABELS, toRoundLevel } from "@/lib/yip/round-level";
+import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 import { SpeechesClient } from "./speeches-client";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 
@@ -33,6 +35,48 @@ export default async function SpeechesPage({
   if (!access.canManage) {
     return (
       <Forbidden403 reason="Only event organisers can track speeches for this event." />
+    );
+  }
+
+  // Speech tracking is a CHAPTER-ROUND feature. #1043 hid the tab at other
+  // levels, but a bookmark, a shared link or browser history still lands here —
+  // so the page has to explain itself instead of opening a roster checklist for
+  // a session that was never going to run.
+  //
+  // NOT a 403, deliberately. The viewer is a legitimate organiser of their own
+  // event with full rights; nothing is being denied. A 403 here would misreport
+  // the reason and send them chasing an access bug that doesn't exist. Same
+  // shape as the Formation page's regional-only notice.
+  //
+  // Placed AFTER both access checks so someone with no right to this event
+  // still gets the access answer — a "wrong round type" reply would leak that
+  // the event exists.
+  //
+  // FAIL CLOSED: toRoundLevel() narrows a missing or unrecognised value to
+  // null, and null !== "chapter", so anything we cannot positively identify as
+  // a chapter round shows the notice. Never `level && level !== "chapter"` —
+  // that shape skips the block on a null level and renders the page.
+  const level = toRoundLevel(event.level);
+  if (level !== "chapter") {
+    return (
+      <div className="rounded-xl border border-[#1a1a3e]/10 bg-white p-6 shadow-sm">
+        <p
+          className="text-[10px] font-bold uppercase tracking-[0.16em]"
+          style={{ color: SAFFRON }}
+        >
+          Speeches
+        </p>
+        <h2 className="mt-1 text-lg font-bold" style={{ ...SERIF, color: INK }}>
+          Not part of this round
+        </h2>
+        <p className="mt-2 max-w-xl text-sm text-[#1a1a3e]/60">
+          Speech tracking is only used at <strong>Chapter Round</strong> events
+          {level ? ` (this event is a ${ROUND_LEVEL_LABELS[level]} round)` : ""}.
+          The 90-second delegate speech is a chapter-round format — regional and
+          national agendas don&apos;t carry it, so there is nothing to track
+          here.
+        </p>
+      </div>
     );
   }
 

@@ -7,6 +7,7 @@ import {
   getAwardCandidates,
   getResultsFreshness,
   getMarkingCoverage,
+  getAwardAvailability,
 } from "@/app/yip/actions/results";
 import { getUnmarkedStudents } from "@/app/yip/actions/unmarked-students";
 import { getAwardOverrides } from "@/app/yip/actions/award-overrides";
@@ -72,6 +73,10 @@ export default async function ResultsPage({
   // marked instead of being silently omitted (Director ruling 08, 2026-08-29).
   // Derived at read time — computeResults() still writes no row for them.
   const unmarked = await getUnmarkedStudents(id);
+  // Why each award has no winner — a session nobody marked reads very
+  // differently from a session marked with nobody eligible, and the card
+  // cannot tell them apart on its own.
+  const awardAvailability = await getAwardAvailability(id);
 
   return (
     <>
@@ -96,6 +101,7 @@ export default async function ResultsPage({
       scoresStale={freshness?.scoresStale ?? false}
       singleJudgeStudents={markingCoverage?.singleJudgeStudents ?? []}
       sideChangeStudents={markingCoverage?.sideChangeStudents ?? []}
+      awardAvailability={awardAvailability}
     />
     </>
   );

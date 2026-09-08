@@ -3,8 +3,21 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
+import {
+  requireLeadershipRole,
+  PRESIDING_ROLES as LEADERSHIP_PRESIDING_ROLES,
+} from "@/lib/yip/auth/leadership";
 import { OFFICIAL_DUTY_ROLES } from "@/lib/yip/constants";
+import { countTurns } from "@/lib/yip/turn-count";
+import {
+  getSpeakingFloorScope,
+  scopeToLiveSession,
+} from "@/lib/yip/speaking-floor-scope";
 import { revalidatePath } from "next/cache";
+import {
+  completeSpeakingRows,
+  setLiveSpeakerCore,
+} from "@/lib/yip/live-speaker";
 
 /**
  * SPEAKING FLOOR — the raise-to-speak queue (speaking equity).
@@ -15,17 +28,35 @@ import { revalidatePath } from "next/cache";
  * shows a public fairness meter ("N of M have spoken"). See migration
  * 20260704090000_yip_speaking_floor.sql.
  *
- * AUTH — two gates, never mixed (CLAUDE.md YIP model):
+ * AUTH — three gates, never mixed (CLAUDE.md YIP model):
  *   • Student self-service (requestToSpeak / withdraw / getMySpeakingStatus) trusts
  *     the signed `yip_session` participant cookie — the same layer castVote uses,
  *     because yip.* writes go through the service client (RLS-bypassing) so the
  *     server action IS the authorization boundary.
- *   • Chair actions (call / markSpoken / skip / getSpeakingFloor) gate on
+ *   • Organiser actions (call / markSpoken / skip / getSpeakingFloor) gate on
  *     getYipEventAccess(eventId).canManage (canView for the read). Fail CLOSED.
+ *   • Presiding-officer actions (speakerCallSpeaker / speakerMarkSpoken /
+ *     speakerSkipSpeakingRequest / getSpeakerSpeakingFloor) mirror the organiser
+ *     ones field-for-field (see buildSpeakingFloorState / gateRequestForSpeaker)
+ *     but gate on requireLeadershipRole(..., PRESIDING_ROLES) instead — the
+ *     Speaker/Deputy Speaker runs the floor from their own desk (Director
+ *     decision 2026-08-26). Both the presiding officer AND the organiser may
+ *     act; the organiser can overrule (last-write-wins, no locking — same
+ *     posture as speaker.ts's motion rulings). Fail CLOSED.
  *
  * The fairness signal (turns spoken per member) is DERIVED at read time —
  * completed agenda_speakers (the formal roster / Now-Speaking console) PLUS
- * spoken speaking_requests — never denormalised, so it cannot drift.
+ * spoken speaking_requests — never denormalised, so it cannot drift. This is
+ * EVENT-WIDE and cumulative by design (turns don't reset each session) — see
+ * computeTurnData below, which is deliberately NOT scoped to the live agenda
+ * item the way the ACTIVE queue is.
+ *
+ * SESSION SCOPE — every ACTIVE (waiting/called) request belongs to exactly
+ * one agenda item (see lib/yip/speaking-floor-scope.ts). All reads/writes of
+ * the active set go through that file's helpers rather than trusting that
+ * expireActiveSpeakingRequests already cleared the previous session — that
+ * best-effort cleanup can fail silently, and a raised hand must not follow
+ * the House into the next debate regardless.
  */
 
 type ActionResult<T = null> =
@@ -72,8 +103,11 @@ export interface SpeakingFloorState {
   calledEntry: SpeakingFloorEntry | null;
   /** Distinct speaking-eligible members with ≥1 turn. */
   spokenCount: number;
-  /** M — speaking-eligible members (the House minus presiding officers). */
+  /** M — the members counted: those on the day-1 arrival register, or the
+   *  whole speaking-eligible House when no check-in was recorded. */
   totalParticipants: number;
+  /** True when M counts only members who checked in on day 1. */
+  countsCheckedInOnly: boolean;
   waitingCount: number;
 }
 
@@ -95,11 +129,83 @@ export interface MySpeakingStatus {
 
 type ServiceClient = Awaited<ReturnType<typeof createServiceClient>>;
 
+// ─── Jury broadcast mirror ────────────────────────────────────────
+//
+// The Speaking Floor tracks WHOSE TURN IT IS (yip.speaking_requests). The jury
+// screens read WHO IS AT THE MIC from a different table — the sole
+// yip.agenda_speakers row with status='speaking' (getCurrentSpeaker, and the
+// jury client's postgres_changes subscription on that table). Before this, the
+// two never met: calling a member from the floor left every juror looking at
+// "Waiting for next speaker", and only the "Now Speaking (Speaker's aide)"
+// volunteer console could open a scoring form.
+//
+// These mirror one onto the other so a Call opens the jury's form and a
+// Spoken/Skip closes it. The mirror is DELIBERATELY non-fatal: the queue write
+// has already succeeded and is what the floor's fairness depends on, so a
+// broadcast failure must not fail the Speaker's tap. It is logged rather than
+// swallowed — never discard a write error in silence.
+
+async function broadcastLiveSpeaker(
+  supabase: ServiceClient,
+  agendaScope: string,
+  requestId: string
+): Promise<void> {
+  // Scoped to agendaScope on purpose: when no session is live that value is a
+  // sentinel uuid that matches nothing (see getSpeakingFloorScope), so this
+  // finds no row and we broadcast nothing — rather than trying to write an
+  // agenda_speakers row against an agenda item that does not exist.
+  const { data: req } = await supabase
+    .from("speaking_requests")
+    .select("participant_id")
+    .eq("id", requestId)
+    .eq("agenda_item_id", agendaScope)
+    .maybeSingle();
+  if (!req?.participant_id) return;
+  const res = await setLiveSpeakerCore(supabase, agendaScope, req.participant_id);
+  if (!res.ok) {
+    console.error(
+      `[speaking-floor] jury broadcast failed for request ${requestId}: ${res.error}`
+    );
+  }
+}
+
+// Close the jury's form when the member sits down — but ONLY if the member who
+// just sat is the one the jury currently has open. If the aide has since put
+// someone else up, clearing here would yank that juror's screen mid-score.
+async function clearLiveSpeakerIfMine(
+  supabase: ServiceClient,
+  agendaScope: string,
+  requestId: string
+): Promise<void> {
+  // Scoped to agendaScope on purpose: when no session is live that value is a
+  // sentinel uuid that matches nothing (see getSpeakingFloorScope), so this
+  // finds no row and we broadcast nothing — rather than trying to write an
+  // agenda_speakers row against an agenda item that does not exist.
+  const { data: req } = await supabase
+    .from("speaking_requests")
+    .select("participant_id")
+    .eq("id", requestId)
+    .eq("agenda_item_id", agendaScope)
+    .maybeSingle();
+  if (!req?.participant_id) return;
+  const { data: live } = await supabase
+    .from("agenda_speakers")
+    .select("id")
+    .eq("agenda_item_id", agendaScope)
+    .eq("status", "speaking")
+    .eq("participant_id", req.participant_id);
+  if (!live || live.length === 0) return;
+  await completeSpeakingRows(supabase, agendaScope);
+}
+
+
 // Presiding officers preside; they are not part of the "who got to speak from
 // the floor" denominator, so they're excluded from the fairness math. Duty
 // officials (OFFICIAL_DUTY_ROLES — Parliamentary Administrator / Journalist)
 // are officials of the House, not competing MPs, and are excluded the same way.
-const PRESIDING_ROLES = new Set(["speaker", "deputy_speaker"]);
+// Sourced from lib/yip/auth/leadership.ts so the fairness exclusion and the
+// presiding-officer auth gate never drift apart.
+const PRESIDING_ROLES: Set<string> = new Set(LEADERSHIP_PRESIDING_ROLES);
 
 interface EligibleMember {
   id: string;
@@ -116,6 +222,55 @@ interface EligibleMember {
 // from the Now-Speaking data already captured for jury scoring. Returns the
 // speaking-eligible roster (House minus presiding officers) with each member's
 // turn count, plus how many of them have spoken at least once.
+/**
+ * Fair call order for the hand-raise queue (Director, 2026-08-28).
+ *
+ * Two rules, in this order:
+ *   1. FEWEST TURNS FIRST, ties broken by who raised their hand first. A member
+ *      who has never spoken always outranks one who has, however fast the other
+ *      was with their thumbs.
+ *   2. THEN ALTERNATE THE BENCHES, so the ruling side cannot take consecutive
+ *      turns while the opposition waits, and vice versa.
+ *
+ * Alternation is applied ON TOP of rule 1 rather than instead of it: each bench
+ * is ordered by the fairness rule first, then the two are interleaved. The side
+ * whose leading member has the stronger claim (fewer turns, then longer wait)
+ * opens. When one bench runs out, the rest of the other follows unchanged — a
+ * lopsided queue is drained, never stalled. Members with no bench recorded keep
+ * their fairness order and follow at the end; with every participant assigned a
+ * side today that list is empty, but it must not silently drop anyone.
+ */
+function orderQueueFairly(
+  entries: SpeakingFloorEntry[]
+): SpeakingFloorEntry[] {
+  const byFairness = (a: SpeakingFloorEntry, b: SpeakingFloorEntry) =>
+    a.turns - b.turns || a.requestedAt.localeCompare(b.requestedAt);
+
+  const sorted = [...entries].sort(byFairness);
+  const ruling = sorted.filter((e) => e.partySide === "ruling");
+  const opposition = sorted.filter((e) => e.partySide === "opposition");
+  const unaligned = sorted.filter(
+    (e) => e.partySide !== "ruling" && e.partySide !== "opposition"
+  );
+
+  // Whichever bench's front-runner has the stronger claim speaks first.
+  let takeRuling =
+    ruling.length > 0 &&
+    (opposition.length === 0 || byFairness(ruling[0], opposition[0]) <= 0);
+
+  const out: SpeakingFloorEntry[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < ruling.length || j < opposition.length) {
+    if (takeRuling && i < ruling.length) out.push(ruling[i++]);
+    else if (!takeRuling && j < opposition.length) out.push(opposition[j++]);
+    else if (i < ruling.length) out.push(ruling[i++]);
+    else out.push(opposition[j++]);
+    takeRuling = !takeRuling;
+  }
+  return [...out, ...unaligned];
+}
+
 async function computeTurnData(
   supabase: ServiceClient,
   eventId: string
@@ -123,6 +278,12 @@ async function computeTurnData(
   eligible: EligibleMember[];
   totalEligible: number;
   spokenCount: number;
+  /**
+   * Whether the denominator counts only members on the day-1 arrival register,
+   * or the whole speaking-eligible House because no check-in was recorded. The
+   * page says which, so the number on screen is never unexplained.
+   */
+  countsCheckedInOnly: boolean;
 }> {
   const { data: items } = await supabase
     .from("agenda")
@@ -130,11 +291,12 @@ async function computeTurnData(
     .eq("event_id", eventId);
   const itemIds = (items ?? []).map((i) => i.id);
 
-  let formal: { participant_id: string | null }[] = [];
+  let formal: { participant_id: string | null; agenda_item_id: string | null }[] =
+    [];
   if (itemIds.length > 0) {
     const { data } = await supabase
       .from("agenda_speakers")
-      .select("participant_id")
+      .select("participant_id, agenda_item_id")
       .in("agenda_item_id", itemIds)
       .eq("status", "completed");
     formal = data ?? [];
@@ -142,38 +304,71 @@ async function computeTurnData(
 
   const { data: spoken } = await supabase
     .from("speaking_requests")
-    .select("participant_id")
+    .select("participant_id, agenda_item_id")
     .eq("event_id", eventId)
     .eq("status", "spoken");
 
-  const turnCounts = new Map<string, number>();
-  for (const r of [...formal, ...(spoken ?? [])]) {
-    const pid = r.participant_id;
-    if (pid) turnCounts.set(pid, (turnCounts.get(pid) ?? 0) + 1);
-  }
+  // ONE TURN PER OCCASION — the rule, and the reasoning behind it, now live in
+  // lib/yip/turn-count.ts so the Chair's board and the member's own profile
+  // cannot disagree about how many times someone spoke.
+  const turnCounts = countTurns(formal, spoken ?? []);
 
   const { data: parts } = await supabase
     .from("participants")
-    .select("id, full_name, constituency_number, party_side, parliament_role")
-    .eq("event_id", eventId);
-  const eligible: EligibleMember[] = (parts ?? [])
-    .filter(
-      (p) =>
-        !p.parliament_role ||
-        (!PRESIDING_ROLES.has(p.parliament_role) &&
-          !OFFICIAL_DUTY_ROLES.has(p.parliament_role))
+    .select(
+      "id, full_name, constituency_number, party_side, parliament_role, checked_in_day1"
     )
-    .map((p) => ({
-      id: p.id,
-      full_name: p.full_name,
-      constituency_number: p.constituency_number,
-      party_side: p.party_side,
-      turns: turnCounts.get(p.id) ?? 0,
-    }));
+    .eq("event_id", eventId);
+
+  // The House minus presiding officers and duty officials — the people who
+  // could in principle be called from the floor.
+  const speakingEligible = (parts ?? []).filter(
+    (p) =>
+      !p.parliament_role ||
+      (!PRESIDING_ROLES.has(p.parliament_role) &&
+        !OFFICIAL_DUTY_ROLES.has(p.parliament_role))
+  );
+
+  // Who is counted: members who CHECKED IN ON DAY 1 (Director, 2026-08-29).
+  //
+  // Day-1 check-in is the arrival register — it is the moment the event knows a
+  // member actually travelled and is taking part. Counting the full roster
+  // instead put members who never turned up into the denominator AND into the
+  // "not spoken yet" list, sending the Chair to look for people who were not in
+  // the building. On SRTN that was 16 of 185.
+  //
+  // Day 1 is the base rather than "today's" check-in because day-2 check-in is
+  // not always run — an event that only registers arrivals once would otherwise
+  // show an empty House on its second morning. Using the arrival register keeps
+  // one stable denominator for the whole event.
+  //
+  // `checked_in` is NOT usable here: participants.ts keeps it as a legacy
+  // "day 1 OR day 2" flag, so it is not the arrival register.
+  //
+  // Fail SAFE, never to zero: an event that never ran check-in at all has an
+  // empty register, and "0 of 0" would brick the board. An empty set therefore
+  // falls back to the whole eligible House — the previous behaviour — and the
+  // page states which basis it is using.
+  const present = speakingEligible.filter((p) => !!p.checked_in_day1);
+  const countsCheckedInOnly = present.length > 0;
+  const counted = countsCheckedInOnly ? present : speakingEligible;
+
+  const eligible: EligibleMember[] = counted.map((p) => ({
+    id: p.id,
+    full_name: p.full_name,
+    constituency_number: p.constituency_number,
+    party_side: p.party_side,
+    turns: turnCounts.get(p.id) ?? 0,
+  }));
 
   const spokenCount = eligible.filter((p) => p.turns >= 1).length;
 
-  return { eligible, totalEligible: eligible.length, spokenCount };
+  return {
+    eligible,
+    totalEligible: eligible.length,
+    spokenCount,
+    countsCheckedInOnly,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -216,19 +411,33 @@ export async function requestToSpeak(): Promise<
     };
   }
 
-  // Already have an active placard? Report it (idempotent), don't stack rows.
+  // Already have an active placard? Report it (idempotent), don't stack rows
+  // — but only if it's for THIS live session. The DB's one-active-row
+  // invariant (unique index) is event-wide, not session-wide, so a stale
+  // 'waiting'/'called' row can survive here if expireActiveSpeakingRequests
+  // failed on an earlier agenda transition (best-effort, see that file). A
+  // stale row like that no longer belongs to any queue anyone can see —
+  // retire it here before raising a fresh hand, otherwise the unique index
+  // would silently block the insert below with nothing left to show it in.
   const { data: existing } = await supabase
     .from("speaking_requests")
-    .select("id, status")
+    .select("id, status, agenda_item_id")
     .eq("event_id", sess.eventId)
     .eq("participant_id", sess.id)
     .in("status", ["waiting", "called"])
     .maybeSingle();
   if (existing) {
-    return {
-      success: true,
-      data: { status: existing.status === "called" ? "called" : "already_waiting" },
-    };
+    if (existing.agenda_item_id === event.current_agenda_item_id) {
+      return {
+        success: true,
+        data: { status: existing.status === "called" ? "called" : "already_waiting" },
+      };
+    }
+    await supabase
+      .from("speaking_requests")
+      .update({ status: "expired", resolved_at: new Date().toISOString() })
+      .eq("id", existing.id)
+      .in("status", ["waiting", "called"]);
   }
 
   const { error } = await supabase.from("speaking_requests").insert({
@@ -256,11 +465,16 @@ export async function withdrawSpeakingRequest(): Promise<ActionResult> {
     return { success: false, error: "Not signed in as a participant" };
   }
   const supabase = await createServiceClient();
+  const { activeAgendaItemFilter } = await getSpeakingFloorScope(
+    supabase,
+    sess.eventId
+  );
   const { error } = await supabase
     .from("speaking_requests")
     .update({ status: "withdrawn", resolved_at: new Date().toISOString() })
     .eq("event_id", sess.eventId)
     .eq("participant_id", sess.id)
+    .eq("agenda_item_id", activeAgendaItemFilter)
     .in("status", ["waiting", "called"]);
   if (error) return { success: false, error: error.message };
   return { success: true, data: null };
@@ -298,6 +512,7 @@ export async function getMySpeakingStatus(): Promise<
     .from("speaking_requests")
     .select("id, participant_id, status, requested_at")
     .eq("event_id", sess.eventId)
+    .eq("agenda_item_id", scopeToLiveSession(currentItemId))
     .in("status", ["waiting", "called"])
     .order("requested_at", { ascending: true });
   const rows = active ?? [];
@@ -349,6 +564,7 @@ export async function getSpeakingFloorStats(
     .from("speaking_requests")
     .select("id", { count: "exact", head: true })
     .eq("event_id", eventId)
+    .eq("agenda_item_id", scopeToLiveSession(event?.current_agenda_item_id ?? null))
     .eq("status", "waiting");
 
   return {
@@ -366,17 +582,14 @@ export async function getSpeakingFloorStats(
 // CHAIR (control panel — canView to read, canManage to act)
 // ═══════════════════════════════════════════════════════════════════
 
-/** The full live floor for the Chair: the fairness-sorted queue with names +
- *  per-member turn counts + the 3rd-turn flag, plus the House-wide stats. */
-export async function getSpeakingFloor(
+// Shared by getSpeakingFloor (organiser) and getSpeakerSpeakingFloor (presiding
+// officer) — same fairness computation and queue-sorting for both callers, no
+// gate here (callers check their own auth first). Keeps the two Speaking Floor
+// screens describing the exact same queue, never two independently-derived ones.
+async function buildSpeakingFloorState(
+  supabase: ServiceClient,
   eventId: string
-): Promise<ActionResult<SpeakingFloorState>> {
-  const access = await getYipEventAccess(eventId);
-  if (!access.canView) {
-    return { success: false, error: "Not authorized to view this event" };
-  }
-  const supabase = await createServiceClient();
-
+): Promise<SpeakingFloorState> {
   const { data: event } = await supabase
     .from("events")
     .select("current_agenda_item_id, speaking_placard_enabled")
@@ -396,10 +609,12 @@ export async function getSpeakingFloor(
   }
 
   // Fairness roster (phone-free) — every eligible member with their turn count.
-  const { eligible, totalEligible, spokenCount } = await computeTurnData(
-    supabase,
-    eventId
-  );
+  const {
+    eligible,
+    totalEligible,
+    spokenCount,
+    countsCheckedInOnly,
+  } = await computeTurnData(supabase, eventId);
   const turnsById = new Map(eligible.map((e) => [e.id, e.turns]));
   const memberById = new Map(eligible.map((e) => [e.id, e]));
   const unspokenExists = spokenCount < totalEligible;
@@ -422,10 +637,14 @@ export async function getSpeakingFloor(
 
   // Phone-placard queue (only meaningful when the placard is on, but always read
   // so a queue left over from a just-disabled placard still resolves cleanly).
+  // Scoped to the LIVE agenda item — see lib/yip/speaking-floor-scope.ts. A hand
+  // raised for a debate that has since ended must not surface here even if the
+  // best-effort expiry cleanup on the agenda transition silently failed.
   const { data: reqs } = await supabase
     .from("speaking_requests")
     .select("id, participant_id, status, requested_at")
     .eq("event_id", eventId)
+    .eq("agenda_item_id", scopeToLiveSession(currentItemId))
     .in("status", ["waiting", "called"])
     .order("requested_at", { ascending: true });
   const requests = reqs ?? [];
@@ -449,34 +668,48 @@ export async function getSpeakingFloor(
 
   const calledEntry =
     requests.filter((r) => r.status === "called").map(build)[0] ?? null;
-  const queue = requests
-    .filter((r) => r.status === "waiting")
-    .map(build)
-    .sort(
-      (a, b) => a.turns - b.turns || a.requestedAt.localeCompare(b.requestedAt)
-    );
+  const queue = orderQueueFairly(
+    requests.filter((r) => r.status === "waiting").map(build)
+  );
 
   return {
-    success: true,
-    data: {
-      hasLiveItem: !!currentItemId,
-      liveItemTitle,
-      placardEnabled,
-      board,
-      queue,
-      calledEntry,
-      spokenCount,
-      totalParticipants: totalEligible,
-      waitingCount: queue.length,
-    },
+    hasLiveItem: !!currentItemId,
+    liveItemTitle,
+    placardEnabled,
+    board,
+    queue,
+    calledEntry,
+    countsCheckedInOnly,
+    spokenCount,
+    totalParticipants: totalEligible,
+    waitingCount: queue.length,
   };
 }
 
-// Resolve the event for a request id and gate the caller on canManage.
+/** The full live floor for the Chair: the fairness-sorted queue with names +
+ *  per-member turn counts + the 3rd-turn flag, plus the House-wide stats. */
+export async function getSpeakingFloor(
+  eventId: string
+): Promise<ActionResult<SpeakingFloorState>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canView) {
+    return { success: false, error: "Not authorized to view this event" };
+  }
+  const supabase = await createServiceClient();
+  const data = await buildSpeakingFloorState(supabase, eventId);
+  return { success: true, data };
+}
+
+// Resolve the event for a request id and gate the caller on canManage. Also
+// resolves the live-session scope once here so every mutation below can
+// confirm it's still acting on the CURRENT session's request, not a stale one
+// left over from a session the House has since moved past (see
+// lib/yip/speaking-floor-scope.ts) — closes the race window between the
+// Chair's queue rendering and the Chair clicking an action on it.
 async function gateRequest(
   requestId: string
 ): Promise<
-  | { ok: true; supabase: ServiceClient; eventId: string }
+  | { ok: true; supabase: ServiceClient; eventId: string; agendaScope: string }
   | { ok: false; error: string }
 > {
   const supabase = await createServiceClient();
@@ -490,7 +723,16 @@ async function gateRequest(
   if (!access.canManage) {
     return { ok: false, error: "Not authorized to manage this event" };
   }
-  return { ok: true, supabase, eventId: req.event_id };
+  const { activeAgendaItemFilter } = await getSpeakingFloorScope(
+    supabase,
+    req.event_id
+  );
+  return {
+    ok: true,
+    supabase,
+    eventId: req.event_id,
+    agendaScope: activeAgendaItemFilter,
+  };
 }
 
 /** Call a member to the mic. Only one member is 'called' at a time — any other
@@ -499,12 +741,13 @@ async function gateRequest(
 export async function callSpeaker(requestId: string): Promise<ActionResult> {
   const g = await gateRequest(requestId);
   if (!g.ok) return { success: false, error: g.error };
-  const { supabase, eventId } = g;
+  const { supabase, eventId, agendaScope } = g;
 
   await supabase
     .from("speaking_requests")
     .update({ status: "waiting", called_at: null })
     .eq("event_id", eventId)
+    .eq("agenda_item_id", agendaScope)
     .eq("status", "called")
     .neq("id", requestId);
 
@@ -512,8 +755,11 @@ export async function callSpeaker(requestId: string): Promise<ActionResult> {
     .from("speaking_requests")
     .update({ status: "called", called_at: new Date().toISOString() })
     .eq("id", requestId)
+    .eq("agenda_item_id", agendaScope)
     .in("status", ["waiting", "called"]);
   if (error) return { success: false, error: error.message };
+
+  await broadcastLiveSpeaker(supabase, agendaScope, requestId);
 
   revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: null };
@@ -523,14 +769,17 @@ export async function callSpeaker(requestId: string): Promise<ActionResult> {
 export async function markSpoken(requestId: string): Promise<ActionResult> {
   const g = await gateRequest(requestId);
   if (!g.ok) return { success: false, error: g.error };
-  const { supabase, eventId } = g;
+  const { supabase, eventId, agendaScope } = g;
 
   const { error } = await supabase
     .from("speaking_requests")
     .update({ status: "spoken", resolved_at: new Date().toISOString() })
     .eq("id", requestId)
+    .eq("agenda_item_id", agendaScope)
     .in("status", ["waiting", "called"]);
   if (error) return { success: false, error: error.message };
+
+  await clearLiveSpeakerIfMine(supabase, agendaScope, requestId);
 
   revalidatePath(`/yip/dashboard/events/${eventId}/control`);
   return { success: true, data: null };
@@ -542,16 +791,169 @@ export async function skipSpeakingRequest(
 ): Promise<ActionResult> {
   const g = await gateRequest(requestId);
   if (!g.ok) return { success: false, error: g.error };
-  const { supabase, eventId } = g;
+  const { supabase, eventId, agendaScope } = g;
 
   const { error } = await supabase
     .from("speaking_requests")
     .update({ status: "skipped", resolved_at: new Date().toISOString() })
     .eq("id", requestId)
+    .eq("agenda_item_id", agendaScope)
     .in("status", ["waiting", "called"]);
   if (error) return { success: false, error: error.message };
 
+  await clearLiveSpeakerIfMine(supabase, agendaScope, requestId);
+
   revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: null };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PRESIDING OFFICER (Speaker's Desk — the student who is actually chairing)
+// ═══════════════════════════════════════════════════════════════════
+// Mirrors the CHAIR section above field-for-field. Both the presiding officer
+// AND the organiser may run the floor from their own screen; the organiser can
+// overrule (last-write-wins, no locking — same posture as speaker.ts's motion
+// rulings, per the Director's 2026-08-26 decision). Every action here re-checks
+// requireLeadershipRole server-side — the client-supplied participantId is
+// never trusted on its own (an ordinary MP cannot drive the floor by calling
+// these with someone else's id, and a non-presiding role is refused even with
+// their own id/session). No self-call guard is added beyond what callSpeaker
+// already does above (it has none) — this mirrors, not tightens, that rule.
+
+/** Same read as getSpeakingFloor, gated for the presiding officer instead of
+ *  the organiser. Participant + role checked server-side on every call. */
+export async function getSpeakerSpeakingFloor(
+  eventId: string,
+  participantId: string
+): Promise<ActionResult<SpeakingFloorState>> {
+  const gate = await requireLeadershipRole(
+    participantId,
+    eventId,
+    LEADERSHIP_PRESIDING_ROLES
+  );
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  const supabase = await createServiceClient();
+  const data = await buildSpeakingFloorState(supabase, eventId);
+  return { success: true, data };
+}
+
+// Gate + resolve a request for the presiding officer — mirrors gateRequest
+// above but authorizes via requireLeadershipRole, and scopes the request
+// lookup to eventId (closes a cross-event IDOR, same pattern as
+// loadMotionForSpeaker in speaker.ts). Also resolves the live-session scope,
+// same reasoning as gateRequest above.
+async function gateRequestForSpeaker(
+  eventId: string,
+  participantId: string,
+  requestId: string
+): Promise<
+  | { ok: true; supabase: ServiceClient; agendaScope: string }
+  | { ok: false; error: string }
+> {
+  const gate = await requireLeadershipRole(
+    participantId,
+    eventId,
+    LEADERSHIP_PRESIDING_ROLES
+  );
+  if (!gate.ok) return { ok: false, error: gate.error };
+
+  const supabase = await createServiceClient();
+  const { data: req } = await supabase
+    .from("speaking_requests")
+    .select("id")
+    .eq("id", requestId)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (!req) return { ok: false, error: "Request not found for this event" };
+
+  const { activeAgendaItemFilter } = await getSpeakingFloorScope(
+    supabase,
+    eventId
+  );
+  return { ok: true, supabase, agendaScope: activeAgendaItemFilter };
+}
+
+/** Presiding-officer counterpart to callSpeaker — identical field writes. */
+export async function speakerCallSpeaker(
+  eventId: string,
+  participantId: string,
+  requestId: string
+): Promise<ActionResult> {
+  const g = await gateRequestForSpeaker(eventId, participantId, requestId);
+  if (!g.ok) return { success: false, error: g.error };
+  const { supabase, agendaScope } = g;
+
+  await supabase
+    .from("speaking_requests")
+    .update({ status: "waiting", called_at: null })
+    .eq("event_id", eventId)
+    .eq("agenda_item_id", agendaScope)
+    .eq("status", "called")
+    .neq("id", requestId);
+
+  const { error } = await supabase
+    .from("speaking_requests")
+    .update({ status: "called", called_at: new Date().toISOString() })
+    .eq("id", requestId)
+    .eq("agenda_item_id", agendaScope)
+    .in("status", ["waiting", "called"]);
+  if (error) return { success: false, error: error.message };
+
+  await broadcastLiveSpeaker(supabase, agendaScope, requestId);
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/me/speaker`);
+  return { success: true, data: null };
+}
+
+/** Presiding-officer counterpart to markSpoken — identical field writes. */
+export async function speakerMarkSpoken(
+  eventId: string,
+  participantId: string,
+  requestId: string
+): Promise<ActionResult> {
+  const g = await gateRequestForSpeaker(eventId, participantId, requestId);
+  if (!g.ok) return { success: false, error: g.error };
+  const { supabase, agendaScope } = g;
+
+  const { error } = await supabase
+    .from("speaking_requests")
+    .update({ status: "spoken", resolved_at: new Date().toISOString() })
+    .eq("id", requestId)
+    .eq("agenda_item_id", agendaScope)
+    .in("status", ["waiting", "called"]);
+  if (error) return { success: false, error: error.message };
+
+  await clearLiveSpeakerIfMine(supabase, agendaScope, requestId);
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/me/speaker`);
+  return { success: true, data: null };
+}
+
+/** Presiding-officer counterpart to skipSpeakingRequest — identical field writes. */
+export async function speakerSkipSpeakingRequest(
+  eventId: string,
+  participantId: string,
+  requestId: string
+): Promise<ActionResult> {
+  const g = await gateRequestForSpeaker(eventId, participantId, requestId);
+  if (!g.ok) return { success: false, error: g.error };
+  const { supabase, agendaScope } = g;
+
+  const { error } = await supabase
+    .from("speaking_requests")
+    .update({ status: "skipped", resolved_at: new Date().toISOString() })
+    .eq("id", requestId)
+    .eq("agenda_item_id", agendaScope)
+    .in("status", ["waiting", "called"]);
+  if (error) return { success: false, error: error.message };
+
+  await clearLiveSpeakerIfMine(supabase, agendaScope, requestId);
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  revalidatePath(`/yip/me/speaker`);
   return { success: true, data: null };
 }
 

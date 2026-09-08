@@ -28,6 +28,7 @@ import {
   describeRoundLevels,
   type RoundLevel,
 } from "@/lib/yip/round-level";
+import { PARTY_LEADER_LABEL_ONLY_ROLE_SET } from "@/lib/yip/constants";
 import type { Database } from "@/types/yip/database";
 
 type ParliamentRole = Database["public"]["Enums"]["parliament_role"];
@@ -516,6 +517,13 @@ export type PartyLeaderRow = {
   partyNumber: number;
   side: string | null;
   leader: PartyLeaderMember | null;
+  // False when `leader` is shown here NAME ONLY — they hold a senior post
+  // (prime_minister / deputy_prime_minister / leader_of_opposition, see
+  // PARTY_LEADER_LABEL_ONLY_ROLE_SET in lib/yip/constants.ts, Director ruling
+  // 2026-08-26) rather than literally holding party_leader, so the jury bonus
+  // must NOT be shown/attributed to them — they're already scored via their
+  // senior post. True for an actual party_leader role holder, who does earn it.
+  leaderEarnsBonus: boolean;
   // Party members eligible to be made leader: excludes anyone already holding a
   // points-bearing senior post (and the current leader is handled in the UI).
   eligibleMembers: PartyLeaderMember[];
@@ -576,18 +584,29 @@ export async function getPartyLeaders(
     const leaderP = party.party_leader_id
       ? byId.get(party.party_leader_id)
       : null;
-    // Only surface a leader whose role is ACTUALLY party_leader. If
-    // party_leader_id still points to someone who has since moved to a senior
-    // post (PM / minister / …), the party-leader seat is effectively vacant —
-    // show it as assignable rather than mislabel a PM as "Party Leader (+6)".
+    const leaderRole = leaderP?.parliament_role ?? null;
+    // Surface a leader whose role is ACTUALLY party_leader, OR one of the
+    // three senior posts the Director's 2026-08-26 ruling lets keep the
+    // party-leader LABEL alongside their post (PARTY_LEADER_LABEL_ONLY_ROLE_SET).
+    // Anyone else whose role has drifted away from party_leader (cabinet
+    // minister, speaker, …) is NOT surfaced — the reveal reconciliation in
+    // voting.ts already cleared party_leader_id for them; this is the same
+    // fail-closed check getPartyLeaders has always made, widened by exactly
+    // that exempt set and no further.
+    const isRealPartyLeader = leaderRole === "party_leader";
+    const isLabelOnlyLeader =
+      !!leaderRole && PARTY_LEADER_LABEL_ONLY_ROLE_SET.has(leaderRole);
     const activeLeader =
-      leaderP && leaderP.parliament_role === "party_leader" ? leaderP : null;
+      leaderP && (isRealPartyLeader || isLabelOnlyLeader) ? leaderP : null;
     return {
       partyId: party.id,
       partyName: party.name,
       partyNumber: party.party_number,
       side: party.side,
       leader: activeLeader ? toMember(activeLeader) : null,
+      // Name-only leaders (PM/DPM/LoP) must never be shown collecting the
+      // party_leader bonus on top of their senior-post points.
+      leaderEarnsBonus: isRealPartyLeader,
       eligibleMembers: members
         .filter((m) => !SENIOR_POSITION_ROLES.has(m.parliament_role ?? ""))
         .map(toMember),

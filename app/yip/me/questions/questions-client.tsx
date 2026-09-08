@@ -24,8 +24,16 @@ import {
   Clock,
   HelpCircle,
   AlertTriangle,
+  CalendarClock,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  MAX_QUESTIONS_PER_PARTICIPANT,
+  MIN_QUESTION_LENGTH,
+  resolveQuestionWindowState,
+  timeLeftLabel,
+} from "@/lib/yip/question-window";
 import type { Tables } from "@/types/yip/database";
 
 type Question = Tables<{ schema: "yip" }, "questions">;
@@ -90,13 +98,35 @@ const STATUS_ACCENT: Record<string, string> = {
 
 // ─── Page Component ─────────────────────────────────────────────
 
+/** "25 Aug, 5:15 pm" — the window bounds in the member's own words. */
+const WINDOW_TIME = new Intl.DateTimeFormat("en-IN", {
+  day: "numeric",
+  month: "short",
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+  timeZone: "Asia/Kolkata",
+});
+
+function formatWindowTime(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : `${WINDOW_TIME.format(d)} IST`;
+}
+
 export function QuestionsClient({
   initialSession,
   ministries,
+  openAt = null,
+  closeAt = null,
 }: {
   initialSession: ParticipantSession;
   /** The event's effective cabinet portfolios (per-event override or default). */
   ministries: MinistryPortfolio[];
+  /** events.questions_open_at — null means "open from the start". */
+  openAt?: string | null;
+  /** events.questions_close_at — null means "no deadline". */
+  closeAt?: string | null;
 }) {
   const session: ParticipantSession | null = initialSession;
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -104,11 +134,19 @@ export function QuestionsClient({
   const [questionText, setQuestionText] = useState("");
   const [isPending, startTransition] = useTransition();
   const [loading, setLoading] = useState(true);
+  // Ticking clock so "4 hours left" counts down and the form shuts itself the
+  // moment the deadline passes, rather than at the next hard refresh.
+  const [now, setNow] = useState<number>(() => Date.now());
 
   // Load data for the server-provided session on mount
   useEffect(() => {
     loadQuestions(initialSession.eventId, initialSession.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
   }, []);
 
   async function loadQuestions(eventId: string, participantId: string) {
@@ -123,8 +161,10 @@ export function QuestionsClient({
       toast.error("Please select a ministry");
       return;
     }
-    if (questionText.trim().length < 20) {
-      toast.error("Question must be at least 20 characters");
+    if (questionText.trim().length < MIN_QUESTION_LENGTH) {
+      toast.error(
+        `Question must be at least ${MIN_QUESTION_LENGTH} characters`
+      );
       return;
     }
 
@@ -156,7 +196,13 @@ export function QuestionsClient({
   }
 
   const submittedCount = questions.length;
-  const canSubmit = submittedCount < 3;
+  const underLimit = submittedCount < MAX_QUESTIONS_PER_PARTICIPANT;
+  // Derived from the ticking clock, so a screen left open past the deadline
+  // closes its own form instead of letting the member type into a rejection.
+  const windowState = resolveQuestionWindowState(openAt, closeAt, now);
+  const isOpen = windowState === "open";
+  const canSubmit = underLimit && isOpen;
+  const left = timeLeftLabel(closeAt, now);
 
   return (
     <div className="space-y-5">
@@ -189,16 +235,57 @@ export function QuestionsClient({
               : "bg-amber-100 text-amber-700"
           }
         >
-          {submittedCount} of 3 questions submitted
+          {submittedCount} of {MAX_QUESTIONS_PER_PARTICIPANT} questions
+          submitted
         </Badge>
       </div>
+
+      {/* ─── The window ────────────────────────────────────────────────
+          Question Hour opens and closes on the event row and this screen used
+          to say nothing about it: a member typed a whole question and only
+          then got a server rejection. Now the window is stated up front, and
+          when it is shut the form does not pretend otherwise. */}
+      <SectionShell accent={isOpen ? GREEN : GOLD}>
+        <div className="flex items-start gap-3 px-5 py-4">
+          {isOpen ? (
+            <CalendarClock
+              className="mt-0.5 size-4 shrink-0"
+              style={{ color: GREEN }}
+            />
+          ) : (
+            <Lock className="mt-0.5 size-4 shrink-0" style={{ color: GOLD }} />
+          )}
+          <div className="min-w-0">
+            <p className="text-sm font-semibold" style={{ color: INK }}>
+              {windowState === "open" && "Questions are open"}
+              {windowState === "not_yet" && "Questions are not open yet"}
+              {windowState === "closed" && "Questions have closed"}
+            </p>
+            <p className="mt-0.5 text-xs" style={{ color: inkA(0.6) }}>
+              {windowState === "open" &&
+                (closeAt
+                  ? `Closes ${formatWindowTime(closeAt)}${left ? ` · ${left}` : ""}`
+                  : "No deadline set — you can submit any time before the session.")}
+              {windowState === "not_yet" &&
+                (openAt
+                  ? `Submissions open ${formatWindowTime(openAt)}. Come back then.`
+                  : "Submissions open shortly.")}
+              {windowState === "closed" &&
+                (closeAt
+                  ? `The deadline was ${formatWindowTime(closeAt)}. Ask an organiser if you still need to table a question — they can reopen it.`
+                  : "Ask an organiser if you still need to table a question.")}
+            </p>
+          </div>
+        </div>
+      </SectionShell>
 
       {/* Instruction */}
       <SectionShell accent={SAFFRON}>
         <div className="px-5 py-4">
           <p className="text-sm" style={{ color: inkA(0.75) }}>
             Your questions will be directed to the relevant Cabinet Minister
-            during Question Hour. Each participant can submit up to 3 questions.
+            during Question Hour. Each participant can submit up to{" "}
+            {MAX_QUESTIONS_PER_PARTICIPANT} questions.
             Questions are reviewed by the organizers before being presented in
             the House.
           </p>
@@ -236,12 +323,13 @@ export function QuestionsClient({
                 id="question"
                 value={questionText}
                 onChange={(e) => setQuestionText(e.target.value)}
-                placeholder="Type your question here (minimum 20 characters)..."
+                placeholder={`Type your question here (minimum ${MIN_QUESTION_LENGTH} characters)...`}
                 className="mt-1.5"
                 rows={4}
               />
               <p className="mt-1 text-xs text-gray-400">
-                {questionText.trim().length}/20 characters minimum
+                {questionText.trim().length}/{MIN_QUESTION_LENGTH} characters
+                minimum
               </p>
             </div>
 
@@ -250,7 +338,7 @@ export function QuestionsClient({
               disabled={
                 isPending ||
                 !ministry ||
-                questionText.trim().length < 20
+                questionText.trim().length < MIN_QUESTION_LENGTH
               }
               className="w-full bg-[#FF9933] hover:bg-[#E68A2E]"
             >
@@ -265,7 +353,7 @@ export function QuestionsClient({
             </Button>
           </div>
         </SectionShell>
-      ) : (
+      ) : !underLimit ? (
         <SectionShell accent={GOLD}>
           <div className="px-5 py-6 text-center">
             <HelpCircle className="mx-auto size-8 text-amber-400 mb-2" />
@@ -273,11 +361,12 @@ export function QuestionsClient({
               Maximum questions reached
             </p>
             <p className="text-xs text-gray-500 mt-1">
-              You have submitted all 3 allowed questions.
+              You have submitted all {MAX_QUESTIONS_PER_PARTICIPANT} allowed
+              questions.
             </p>
           </div>
         </SectionShell>
-      )}
+      ) : null /* Window shut — the banner above already says why. */}
 
       {/* Submitted Questions List */}
       {loading ? (
@@ -343,8 +432,9 @@ export function QuestionsClient({
       ) : (
         !loading && (
           <div className="text-center py-8 text-sm text-gray-400">
-            No questions submitted yet. Use the form above to ask your first
-            question.
+            {canSubmit
+              ? "No questions submitted yet. Use the form above to ask your first question."
+              : "You didn't table a question for this session."}
           </div>
         )
       )}

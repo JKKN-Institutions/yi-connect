@@ -1,10 +1,13 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
 import { Badge } from "@/components/yip/ui/badge";
 import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
 import { committeeLabel } from "@/lib/yip/committee-label";
+import { formatFileSize } from "@/lib/yip/questionnaire";
 import {
   ArrowLeft,
   GraduationCap,
@@ -18,8 +21,21 @@ import {
   KeyRound,
   CircleUserRound,
   ClipboardList,
+  FileText,
+  Paperclip,
+  Scroll,
+  Loader2,
+  AlertTriangle,
+  ExternalLink,
 } from "lucide-react";
 import type { ParticipantProfile } from "@/app/yip/actions/participant-profile";
+import {
+  getParticipantSubmissions,
+  type ParticipantSubmissions,
+} from "@/app/yip/actions/participant-submissions";
+// Reused, not modified — the same signed-URL action the organiser's full
+// questionnaire marking screen already uses to open a handed-in file.
+import { getQuestionnaireFileUrl } from "@/app/yip/actions/questionnaire";
 
 const LEVEL_LABEL: Record<string, string> = {
   chapter: "Chapter",
@@ -67,6 +83,74 @@ export function ParticipantProfileClient({
       : p.party_number != null
         ? "bg-[#FF9933]/15 text-[#9a5212]"
         : "";
+
+  // What this participant has actually handed in — questionnaire paper(s) +
+  // files, and their Private Member's Bill if they have one. Fetched
+  // separately from `profile` (rather than added to getParticipantProfile)
+  // so the popup variant, which loads `profile` once on open, doesn't need
+  // touching: this section owns its own load, same pattern the popup itself
+  // already uses for `profile`.
+  const [subs, setSubs] = useState<ParticipantSubmissions | null>(null);
+  const [subsLoading, setSubsLoading] = useState(true);
+  const [subsError, setSubsError] = useState<string | null>(null);
+
+  const loadSubmissions = useCallback(async () => {
+    if (!p.id) return;
+    setSubsLoading(true);
+    setSubsError(null);
+    setSubs(null);
+    try {
+      const res = await getParticipantSubmissions(eventId, p.id);
+      if (res.success) setSubs(res.data);
+      else setSubsError(res.error);
+    } catch {
+      setSubsError("Could not load submissions. Reload the page and try again.");
+    } finally {
+      setSubsLoading(false);
+    }
+  }, [eventId, p.id]);
+
+  useEffect(() => {
+    if (p.id) void loadSubmissions();
+  }, [p.id, loadSubmissions]);
+
+  function openHandedInFile(attemptId: string, path: string) {
+    // Same fix as #999 (commit 93d26d66), copied exactly — do not "simplify"
+    // this. NO noopener/noreferrer: window.open() returns NULL whenever
+    // either is passed, which silently defeats opening the tab early — the
+    // handle is null, so the blank tab never gets a URL, `tab?.close()` on
+    // failure is a no-op that orphans it, and success falls through to
+    // navigating THIS page away to the file instead.
+    //
+    // The tab must be opened synchronously on the click, before the await:
+    // Safari treats a window.open after an async gap as a popup and swallows
+    // it.
+    const tab = window.open("", "_blank");
+    // Sever the opener by hand instead, which is what "noopener" was for.
+    if (tab) {
+      try {
+        tab.opener = null;
+      } catch {
+        // Some browsers make `opener` read-only. Not fatal.
+      }
+    }
+    void (async () => {
+      const res = await getQuestionnaireFileUrl(eventId, attemptId, path);
+      if (!res.success) {
+        tab?.close();
+        toast.error(res.error);
+        return;
+      }
+      if (tab) {
+        tab.location.href = res.data.url;
+      } else {
+        toast.error(
+          "Your browser blocked the new tab. Allow pop-ups for this site, then tap the file again.",
+          { duration: 12000 }
+        );
+      }
+    })();
+  }
 
   return (
     <div
@@ -270,6 +354,137 @@ export function ParticipantProfileClient({
           </CardContent>
         </Card>
       </div>
+
+      {/* Submissions — what this person actually handed in for this event. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm text-[#1a1a3e]/70 flex items-center gap-2">
+            <FileText className="size-4 text-[#FF9933]" /> Submissions
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {subsLoading ? (
+            <p className="flex items-center gap-2 text-sm text-[#1a1a3e]/50 py-2">
+              <Loader2 className="size-4 animate-spin" /> Loading…
+            </p>
+          ) : subsError ? (
+            <p className="flex items-start gap-2 text-sm text-red-700">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" /> {subsError}
+            </p>
+          ) : !subs ||
+            (subs.papers.length === 0 && !subs.bill) ? (
+            <p className="text-sm text-[#1a1a3e]/50 flex items-center gap-2">
+              <CircleUserRound className="size-4 text-[#1a1a3e]/30" />
+              Nothing handed in yet for this event.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {subs.papers.length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-[11px] uppercase tracking-wider text-[#1a1a3e]/45">
+                    Selection Questionnaire
+                  </p>
+                  {subs.papers.map((paper) => (
+                    <div
+                      key={paper.attemptId}
+                      className="rounded-xl border border-[#1a1a3e]/10 p-3 space-y-2"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-medium text-[#1a1a3e]">
+                          {paper.contestLabel}
+                        </span>
+                        <span className="text-xs font-semibold">
+                          {paper.scored ? (
+                            paper.pct != null ? (
+                              <span className="text-[#138808]">
+                                {paper.pct}%
+                                {paper.totalScore != null && paper.maxScore != null
+                                  ? ` (${paper.totalScore}/${paper.maxScore})`
+                                  : ""}
+                              </span>
+                            ) : (
+                              <span
+                                className="text-[#1a1a3e]/50"
+                                title="Scores are visible to the chapter chair and national admins only."
+                              >
+                                Marked · score hidden
+                              </span>
+                            )
+                          ) : (
+                            <span
+                              className={
+                                paper.statusLabel === "Waiting for a person to read it"
+                                  ? "text-[#b45309]"
+                                  : "text-[#1a1a3e]/50"
+                              }
+                            >
+                              {paper.statusLabel}
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#1a1a3e]/55">
+                        {paper.submittedAt
+                          ? `Handed in ${new Date(paper.submittedAt).toLocaleString()}`
+                          : "Not handed in yet"}
+                        {paper.drawn > 0 &&
+                          ` · ${paper.answered} of ${paper.drawn} answered`}
+                      </p>
+                      {paper.answered > 0 && !paper.hasTypedText && (
+                        <p className="text-xs text-[#1a1a3e]/55 italic">
+                          Handed in as a file — nothing typed.
+                        </p>
+                      )}
+                      {paper.files.length > 0 && (
+                        <ul className="flex flex-wrap gap-2 pt-1">
+                          {paper.files.map((f) => (
+                            <li key={f.path}>
+                              <button
+                                type="button"
+                                onClick={() => openHandedInFile(f.attemptId, f.path)}
+                                className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-[#1a1a3e]/10 px-2 py-1 text-xs text-[#FF9933] underline-offset-4 hover:underline"
+                              >
+                                <Paperclip className="size-3 shrink-0" />
+                                <span className="truncate">{f.name}</span>
+                                <span className="shrink-0 text-[11px] text-[#1a1a3e]/45">
+                                  {formatFileSize(f.size)}
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {subs.bill && (
+                <div className="space-y-2">
+                  <p className="text-[11px] uppercase tracking-wider text-[#1a1a3e]/45">
+                    Private Member&apos;s Bill
+                  </p>
+                  <Link
+                    href={`/yip/dashboard/events/${eventId}/bills`}
+                    className="flex items-center gap-3 rounded-xl border border-[#1a1a3e]/10 p-3 hover:bg-[#1a1a3e]/[0.015] transition-colors"
+                  >
+                    <Scroll className="size-4 shrink-0 text-[#FF9933]" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-[#1a1a3e] truncate">
+                        {subs.bill.title}
+                      </p>
+                      <p className="text-xs text-[#1a1a3e]/55">
+                        {subs.bill.statusLabel}
+                      </p>
+                    </div>
+                    <ExternalLink className="size-3.5 shrink-0 text-[#1a1a3e]/40" />
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Across levels */}
       <Card>

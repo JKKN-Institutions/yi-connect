@@ -11,6 +11,14 @@ import {
   isPartyScoped,
   isBenchScoped,
 } from "@/lib/yip/vote-scope";
+import {
+  HOUSE_MOTION_VOTE_TYPE,
+  houseMotionOutcome,
+  houseMotionText,
+  isHouseMotionVoteType,
+  normalizeMotionText,
+  type HouseMotionConfig,
+} from "@/lib/yip/house-motion";
 import { assertCheckedInForVote } from "@/lib/yip/vote-eligibility";
 import { validateVoteValue } from "@/lib/yip/vote-validate";
 import { isBillFloorAgendaType } from "@/lib/yip/bill-sources";
@@ -30,6 +38,7 @@ import {
 import type { Tables, Json } from "@/types/yip/database";
 import { revalidatePath } from "next/cache";
 import type { RollupEntry, RollupOption } from "@/lib/yip/election-rollup";
+import { PARTY_LEADER_LABEL_ONLY_ROLES } from "@/lib/yip/constants";
 
 type VoteSession = Tables<{ schema: "yip" }, "vote_sessions">;
 type Vote = Tables<{ schema: "yip" }, "votes">;
@@ -130,6 +139,28 @@ export interface VoteResults {
   // Present when an exact tie at a seat boundary needs a runoff. When set, no
   // roles/party-leader are written — the organiser opens a runoff first.
   tie?: ElectionTie | null;
+  // Cabinet/Shadow only: how many of this round's seats are unfilled, and why
+  // — "under_subscribed" (fewer candidates than seats; a runoff can't fill an
+  // empty seat) or "tie_pending" (see `tie` — the existing runoff resolves
+  // it). Undefined for every other vote type; 0 / null once the quota is
+  // fully seated.
+  unfilledSeats?: number;
+  shortfall?: "under_subscribed" | "tie_pending" | null;
+  // Whether the seats this reveal was supposed to write are ACTUALLY on the
+  // participant rows afterwards. `seated < expected` means an election was
+  // revealed, shows a winner, and yet somebody who won is not holding their
+  // role. Null when the vote seats nobody by nature (a bill or a motion).
+  seating?: SeatingCheck | null;
+}
+
+/** Read back after a reveal — see the block that builds it in revealResults. */
+export interface SeatingCheck {
+  /** Seats this reveal should have written. */
+  expected: number;
+  /** Of those, how many the participant rows actually confirm. */
+  seated: number;
+  /** Who is missing, by name where we have one, so the message can say it. */
+  unseatedNames: string[];
 }
 
 // ─── Tally helper ───────────────────────────────────────────────
@@ -240,6 +271,23 @@ async function resolveOutcome(
   session: VoteSession,
   tallies: VoteTally[]
 ): Promise<ElectionOutcome> {
+  // A free-text House motion ("Shall the House sit late?") is an Aye / Nay /
+  // Abstain QUESTION — it elects nobody. Short-circuit here, FIRST, before any
+  // election reading: computeElectionOutcome expects a tally of candidate ids,
+  // and every seat-designation block downstream keys off the ids in this
+  // outcome. Returning the empty outcome is what makes a motion structurally
+  // incapable of moving anyone into — or out of — a seat.
+  if (isHouseMotionVoteType(session.vote_type)) {
+    return {
+      speakerId: null,
+      deputyIds: [],
+      partyLeaderId: null,
+      winnerId: null,
+      winnerIds: [],
+      tie: null,
+    };
+  }
+
   const cfg = (session.config ?? {}) as RunoffConfig;
 
   // Cabinet / Shadow elections are multi-seat (top-k of the party's members).
@@ -259,6 +307,8 @@ async function resolveOutcome(
       winnerId: null,
       winnerIds: ms.winnerIds,
       tie: ms.tie,
+      unfilledSeats: ms.unfilledSeats,
+      shortfall: ms.shortfall,
     };
   }
 
@@ -546,6 +596,26 @@ export async function openVote(
       };
     }
     // Other parties' leader elections may coexist → allow.
+  } else if (
+    isBenchScoped(voteType) &&
+    actives.length > 0 &&
+    actives.every((s) => {
+      const cfg = (s.config ?? {}) as { side?: string };
+      return isBenchScoped(s.vote_type) && cfg.side && cfg.side !== config?.side;
+    })
+  ) {
+    // OPPOSITE BENCHES MAY RUN TOGETHER (Director, 2026-08-23).
+    //
+    // The exclusivity rule below exists because concurrent votes would share
+    // voters. Two bench elections on OPPOSITE sides do not: `party_side` holds
+    // one value per person, so nobody sits on both benches. The ruling bench
+    // elects the Prime Minister while the opposition elects its Leader, and
+    // neither group can see or vote in the other's ballot — the same reasoning
+    // that already lets every party's leader election run at once.
+    //
+    // Deliberately narrow: EVERY active session must be bench-scoped AND on a
+    // different side. A House-wide vote, a party vote, or another election on
+    // the SAME bench still blocks, because those really do share voters.
   } else if (actives.length > 0) {
     // Everything else (House-wide, bench, cabinet/shadow) stays exclusive.
     return {
@@ -625,14 +695,164 @@ export async function openVote(
   return { success: true, data: { sessionId: data.id, checkinWarning } };
 }
 
-// ─── Clear Result (dismiss a revealed vote from the projector) ────
-// A revealed vote stays pinned to the projector — and hides the bill/session
+// ─── Put a free-text motion to the House ────────────────────────
+//
+// The Chair types a question — "Shall the House sit late?" — and the whole
+// House answers Aye / Nay / Abstain on their phones. The result is revealed
+// like any other floor vote.
+//
+// This has its OWN vote_type (`house_motion`) and its OWN action, deliberately.
+// Reusing `no_confidence` would have been fewer lines and catastrophic: that
+// reveal path demotes every sitting Prime Minister to ex_prime_minister. A
+// question about sitting hours must not be able to remove the Government, so a
+// motion never enters the election machinery at all (see resolveOutcome and the
+// early return in revealResults).
+export async function openHouseMotion(
+  eventId: string,
+  agendaItemId: string,
+  motionText: string,
+  options?: {
+    // Live-event escape hatch, identical in meaning to openVote's: lets
+    // students who are not checked in for the day still cast.
+    override_checkin?: boolean;
+  }
+): Promise<
+  ActionResult<{
+    sessionId: string;
+    // Advisory only, never blocks the open — same shape openVote returns so the
+    // control panel's existing "nobody is checked in" warning covers this too.
+    checkinWarning?: { day: number; checkedIn: number; total: number };
+  }>
+> {
+  // Event-scoped authorisation. Fails CLOSED (canManage is false for an unknown
+  // or out-of-scope event) and denies EXPLICITLY — never a silent redirect.
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage)
+    return { success: false, error: "Not authorized to manage this event" };
+
+  // The question is free text typed on the floor: trim it, collapse pasted
+  // newlines, and refuse an empty or over-long motion before anything is
+  // written. Same rule the panel uses to enable its button.
+  const question = normalizeMotionText(motionText);
+  if (!question.ok) return { success: false, error: question.error };
+
+  const supabase = await createServiceClient();
+
+  // Same freeze as openVote: a finalised event takes no new ballots.
+  const { data: lockState, error: lockErr } = await supabase
+    .from("events")
+    .select("scores_locked, results_published_at")
+    .eq("id", eventId)
+    .single();
+  if (lockErr || !lockState) return { success: false, error: "Event not found" };
+  if (lockState.results_published_at) {
+    return {
+      success: false,
+      error: "Results are published — opening a vote is disabled.",
+    };
+  }
+  if (lockState.scores_locked) {
+    return {
+      success: false,
+      error: "Scores are locked — unlock scores before opening a vote.",
+    };
+  }
+
+  // The agenda item must belong to THIS event — the caller supplies the id, and
+  // canManage was checked against eventId, not against the item.
+  const { data: item } = await supabase
+    .from("agenda")
+    .select("id, day")
+    .eq("id", agendaItemId)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (!item) {
+    return {
+      success: false,
+      error: "That agenda item is not part of this event.",
+    };
+  }
+
+  // A motion is put to the WHOLE House, so it shares its voters with every
+  // other live ballot: stay exclusive, exactly like a bill vote.
+  const { data: actives } = await supabase
+    .from("vote_sessions")
+    .select("id")
+    .eq("event_id", eventId)
+    .in("status", ["open", "closed"])
+    .limit(1);
+  if (actives && actives.length > 0) {
+    return {
+      success: false,
+      error: "There is already an active vote session. Close or reveal it first.",
+    };
+  }
+
+  const config: HouseMotionConfig = { motionText: question.text };
+  if (options?.override_checkin === true) config.override_checkin = true;
+
+  const { data, error } = await supabase
+    .from("vote_sessions")
+    .insert({
+      event_id: eventId,
+      agenda_item_id: agendaItemId,
+      vote_type: HOUSE_MOTION_VOTE_TYPE,
+      status: "open",
+      opened_at: new Date().toISOString(),
+      config: config as unknown as Json,
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    return {
+      success: false,
+      error: error?.message ?? "Failed to put the motion to the House",
+    };
+  }
+
+  // Advisory: a day-1/2 motion opened with nobody checked in and no override
+  // would silently refuse every cast. Wrapped so it can never turn a successful
+  // open into a failure — the session row already exists.
+  let checkinWarning:
+    | { day: number; checkedIn: number; total: number }
+    | undefined;
+  try {
+    if (options?.override_checkin !== true && (item.day === 1 || item.day === 2)) {
+      const { checkedIn, total } = await countDayCheckin(
+        supabase,
+        eventId,
+        item.day
+      );
+      if (checkedIn === 0 && total > 0) {
+        checkinWarning = { day: item.day, checkedIn, total };
+      }
+    }
+  } catch {
+    // ignore — never block a successful open on the advisory count
+  }
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/control`);
+  return { success: true, data: { sessionId: data.id, checkinWarning } };
+}
+
+// ─── Clear Result (dismiss a finished vote from the projector) ────
+// A finished vote stays pinned to the projector — and hides the bill/session
 // view — until it leaves the display set (the projector + getActiveVoteSession
 // only show open/closed/revealed). 'archived' is a terminal, non-displayed
-// status: clearing archives every REVEALED session for the event so the big
+// status: clearing archives every finished session for the event so the big
 // screen falls back to the live session (the Erode 2026 sticky-results gap).
-// Open/closed (mid-vote) sessions are left untouched. Stored standings live on
-// the bill / participant rows, so this only changes what the screen shows.
+//
+// CLOSED counts as finished, not just REVEALED (Director, 2026-08-28, from the
+// SRTN floor: "many times after a bill it stuck with old vote closed screen").
+// The lifecycle is open → closed → revealed → archived, and a Chair who closes
+// a ballot without revealing it left the session at 'closed' — which this
+// action skipped and which showed no clear button at all, so the screen could
+// never be recovered for the rest of the sitting.
+//
+// OPEN sessions are still left untouched: archiving a ballot mid-vote would
+// silently disenfranchise everyone still voting. Stored standings live on the
+// bill / participant rows, so this only changes what the screen shows.
 export async function clearVoteResults(
   eventId: string
 ): Promise<ActionResult<{ cleared: number }>> {
@@ -645,7 +865,7 @@ export async function clearVoteResults(
     .from("vote_sessions")
     .update({ status: "archived" })
     .eq("event_id", eventId)
-    .eq("status", "revealed")
+    .in("status", ["closed", "revealed"])
     .select("id");
 
   if (error) return { success: false, error: error.message };
@@ -731,6 +951,29 @@ export async function revealResults(
     .eq("checked_in", true);
 
   const winner = tallies.length > 0 ? tallies[0].vote_value : null;
+
+  // ─── Free-text House motion: report the answer, and write NOTHING else ────
+  //
+  // A motion the Chair typed is the House deciding its own business. It elects
+  // nobody, deposes nobody, and hangs off no bill and no motions row. Returning
+  // HERE — before the bill write, before the no-confidence demotion, and before
+  // every seat-designation block below — is the hard guarantee that no future
+  // edit to any of those blocks can ever reach a house_motion. The session is
+  // already marked revealed above, which is the whole of what a motion reveal
+  // has to do.
+  if (isHouseMotionVoteType(session.vote_type)) {
+    return {
+      success: true,
+      data: {
+        session: { ...session, status: "revealed" },
+        tallies,
+        totalVotes,
+        totalParticipants: totalParticipants ?? 0,
+        winner,
+        seating: null,
+      },
+    };
+  }
 
   // If bill vote, update bill record with vote counts
   if (session.vote_type === "bill_vote" && session.bill_id) {
@@ -938,11 +1181,19 @@ export async function revealResults(
   }
 
   // Keep parties.party_leader_id consistent with parliament_role: if a sitting
-  // party leader was just elected to a bench seat (PM / Speaker / minister, …),
+  // party leader was just elected to a bench seat (Speaker / minister / …),
   // their role is no longer party_leader — so clear the now-stale "leader" label
   // on any party they were leading. Cheap reconciliation over this event's
   // parties; a party_leader election itself leaves the winner flagged
   // party_leader, so it is never wrongly cleared.
+  //
+  // EXEMPT: prime_minister / deputy_prime_minister / leader_of_opposition
+  // (Director ruling 2026-08-26, PARTY_LEADER_LABEL_ONLY_ROLES) keep their
+  // party's leader pointer even though their role isn't literally
+  // party_leader — they show as the party's leader NAME ONLY, no bonus,
+  // because positionBonuses is keyed on parliament_role and theirs is never
+  // rewritten away from their senior post. Every other role is unaffected and
+  // still gets cleared exactly as before.
   {
     const { data: leaderParties } = await supabase
       .from("parties")
@@ -955,7 +1206,7 @@ export async function revealResults(
         .from("participants")
         .select("id")
         .in("id", leaderIds)
-        .eq("parliament_role", "party_leader");
+        .in("parliament_role", ["party_leader", ...PARTY_LEADER_LABEL_ONLY_ROLES]);
       const stillSet = new Set((stillLeaders ?? []).map((p) => p.id));
       for (const lp of leaderParties) {
         if (!stillSet.has(lp.party_leader_id as string)) {
@@ -968,6 +1219,68 @@ export async function revealResults(
     }
   }
 
+  // ─── Did the seats actually get written? ──────────────────────────────────
+  //
+  // Every seating block above is CONDITIONAL — on outcome.winnerId, on a
+  // cfg.partyId being present, on the tally not being a tie. But the session was
+  // already flipped to "revealed" at the top of this function, before any of
+  // that ran. So when a condition is not met, the reveal still reports success
+  // and still returns a tally with a winner in it, while nobody holds the role.
+  //
+  // That has happened twice on this platform, and both times it was found by
+  // hand, days later, by querying parliament_role. It is about to be asked to
+  // seat 24 ministers at once.
+  //
+  // So read the rows back and say what is actually there. This changes nothing
+  // and seats nobody — it reports whether the write that was just attempted
+  // landed. A reveal that seated nobody is still a successful reveal; it is the
+  // silence about it that was the defect.
+  const expectedSeats: { id: string; role: string }[] = [];
+  if (session.vote_type === "speaker_election") {
+    if (outcome.speakerId) expectedSeats.push({ id: outcome.speakerId, role: "speaker" });
+    for (const d of outcome.deputyIds) {
+      expectedSeats.push({ id: d, role: "deputy_speaker" });
+    }
+  }
+  if (outcome.partyLeaderId) {
+    expectedSeats.push({ id: outcome.partyLeaderId, role: "party_leader" });
+  }
+  // PM / Deputy PM / Leader of Opposition, and the multi-seat minister rounds,
+  // all write the vote_type itself as the role.
+  if (outcome.winnerId) {
+    expectedSeats.push({ id: outcome.winnerId, role: session.vote_type });
+  }
+  for (const w of outcome.winnerIds) {
+    expectedSeats.push({ id: w, role: session.vote_type });
+  }
+
+  let seating: SeatingCheck | null = null;
+  if (expectedSeats.length > 0) {
+    const { data: seatedRows } = await supabase
+      .from("participants")
+      .select("id, full_name, parliament_role")
+      .in(
+        "id",
+        expectedSeats.map((e) => e.id)
+      );
+    const byId = new Map(
+      (seatedRows ?? []).map((r) => [
+        r.id as string,
+        r as { id: string; full_name: string | null; parliament_role: string | null },
+      ])
+    );
+    // A row that is missing entirely counts as unseated too — never treat "we
+    // could not read it back" as "it is fine".
+    const missing = expectedSeats.filter(
+      (e) => byId.get(e.id)?.parliament_role !== e.role
+    );
+    seating = {
+      expected: expectedSeats.length,
+      seated: expectedSeats.length - missing.length,
+      unseatedNames: missing.map((m) => byId.get(m.id)?.full_name ?? m.id),
+    };
+  }
+
   const results: VoteResults = {
     session: { ...session, status: "revealed" },
     tallies,
@@ -978,6 +1291,9 @@ export async function revealResults(
     deputySpeakerIds: outcome.deputyIds,
     partyLeaderId: outcome.partyLeaderId,
     tie: outcome.tie,
+    unfilledSeats: outcome.unfilledSeats,
+    shortfall: outcome.shortfall,
+    seating,
   };
 
   return { success: true, data: results };
@@ -1097,6 +1413,12 @@ export async function getElectionResults(
         slot = `impeach_speaker:${s.id}`;
         title = "Motion to Impeach Speaker";
         break;
+      case HOUSE_MOTION_VOTE_TYPE:
+        // Each motion is its own slot (the Chair may put several in a sitting)
+        // and is named by the question that was actually asked.
+        slot = `house_motion:${s.id}`;
+        title = houseMotionText(s.config) ?? "Motion of the House";
+        break;
       default:
         slot = `${s.vote_type}:${s.id}`;
         title = s.vote_type
@@ -1135,6 +1457,10 @@ export async function getElectionResults(
       const nay =
         tallies.find((t) => t.vote_value.toLowerCase() === "nay")?.count ?? 0;
       subtitle = aye > nay ? "Passed" : "Rejected";
+    }
+
+    if (isHouseMotionVoteType(s.vote_type)) {
+      subtitle = houseMotionOutcome(tallies).carried ? "Carried" : "Not carried";
     }
 
     bySlot.set(slot, {
@@ -1274,7 +1600,11 @@ export async function castVote(
     if (!elig.ok) return { success: false, error: elig.error };
   }
 
-  // Reject junk / non-candidate values before they pollute the tally.
+  // Reject junk / non-candidate values before they pollute the tally. A House
+  // motion is constrained there too (aye / nay / abstain, exact match) — the
+  // rule lives in validateVoteValue so it holds on EVERY cast path, not just
+  // this one: the volunteer kiosk and the organiser floor-capture paths call
+  // the same function.
   const valid = validateVoteValue(session, voteValue);
   if (!valid.ok) return { success: false, error: valid.error };
 

@@ -75,6 +75,38 @@ export type ParliamentRole =
   | (typeof PARLIAMENT_ROLES)[number]
   | (typeof EX_PARLIAMENT_ROLES)[number];
 
+// Director ruling, 2026-08-26: a Prime Minister, Deputy Prime Minister or
+// Leader of Opposition MAY remain shown as their party's leader after winning
+// that senior post — those three already lead in practice, and the
+// party_leader job carries little separate work once held alongside a senior
+// post. "Name only, no extra points": they keep the points for their SENIOR
+// post and must NOT additionally collect the party_leader position bonus.
+// This is enforced structurally, not by a special-case in the scoring code —
+// participants.parliament_role is single-valued and results.ts keys the
+// per-role bonus off it (`positionBonuses[participant.parliament_role]`), so
+// as long as their role is never rewritten to "party_leader" (only their
+// party's party_leader_id points at them) they physically cannot be paid
+// twice for one job.
+//
+// Every OTHER role (speaker, cabinet_minister, shadow_minister, committee
+// roles, the ex_* roles, duty officials, plain party_leader, …) keeps the
+// pre-existing behaviour unchanged: voting.ts's reveal reconciliation still
+// clears parties.party_leader_id when the holder's role drifts to anything
+// outside this set, and positions.ts still hides them as "Party Leader"
+// rather than surface a stale/mislabelled pointer.
+//
+// Defined ONCE here and imported by both app/yip/actions/voting.ts (the
+// reveal reconciliation) and app/yip/actions/positions.ts (getPartyLeaders)
+// so the two can never drift apart.
+export const PARTY_LEADER_LABEL_ONLY_ROLES = [
+  "prime_minister",
+  "deputy_prime_minister",
+  "leader_of_opposition",
+] as const;
+export const PARTY_LEADER_LABEL_ONLY_ROLE_SET = new Set<string>(
+  PARTY_LEADER_LABEL_ONLY_ROLES
+);
+
 export const MINISTRIES = [
   { key: "home", label: "Home Affairs" },
   { key: "finance", label: "Finance & Planning" },

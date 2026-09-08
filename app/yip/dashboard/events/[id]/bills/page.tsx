@@ -2,7 +2,10 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
 import { getBills } from "@/app/yip/actions/bills";
-import { listBillDocuments } from "@/app/yip/actions/bill-documents";
+import {
+  listBillDocuments,
+  listPrivateBillDocuments,
+} from "@/app/yip/actions/bill-documents";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { BillsClient } from "./bills-client";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
@@ -36,6 +39,11 @@ export default async function BillsPage({
   // participants/page.tsx.
   const docsResult = await listBillDocuments(id);
   const documents = docsResult.success ? docsResult.data : [];
+
+  // Private Member's Bills' own handed-in files — one per bill, at most.
+  const billDocsResult = await listPrivateBillDocuments(id);
+  const billDocuments = billDocsResult.success ? billDocsResult.data : [];
+
   const access = await getYipEventAccess(id);
 
   // Committee list for the manual Add-Bill picker (distinct, sorted).
@@ -83,6 +91,7 @@ export default async function BillsPage({
       eventId={id}
       initialBills={bills}
       initialDocuments={documents}
+      initialBillDocuments={billDocuments}
       canDelete={access.canDelete}
       canManage={access.canManage}
       committees={committees}

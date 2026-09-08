@@ -49,6 +49,7 @@ import { useVoteSession } from "@/lib/yip/hooks/use-vote-session";
 import { useActiveVoteSessions } from "@/lib/yip/hooks/use-active-vote-sessions";
 import {
   openVote,
+  openHouseMotion,
   closeVote,
   revealResults,
   clearVoteResults,
@@ -60,6 +61,13 @@ import {
   type VoteCandidate,
   type PartyLite,
 } from "@/app/yip/actions/voting";
+import {
+  HOUSE_MOTION_TEXT_MAX,
+  houseMotionOutcome,
+  houseMotionText,
+  isHouseMotionVoteType,
+  normalizeMotionText,
+} from "@/lib/yip/house-motion";
 import {
   computeElectionOutcome,
   computeDeputyRunoffOutcome,
@@ -97,6 +105,59 @@ function warnIfNoCheckin(result: Awaited<ReturnType<typeof openVote>>) {
   toast.warning(
     `Nobody is checked in for Day ${w.day} yet — no one can vote. Check students in (Participants → “Check In All · Day ${w.day}”) or re-open with the not-checked-in override.`,
     { duration: 12000 }
+  );
+}
+
+/**
+ * Say what the reveal actually did — including when it seated nobody.
+ *
+ * A reveal used to report "Results revealed!" whether or not the winner ended
+ * up holding the role, because marking the session revealed and writing the
+ * seat are two separate steps and only the first is unconditional. Twice, the
+ * second step did not happen and the screen said the cheerful thing anyway; it
+ * was caught days later by querying the database by hand.
+ *
+ * The result now carries a read-back of the participant rows, so this can tell
+ * the truth. The vote still succeeded and the tally still stands — what changes
+ * is that an unseated winner is said out loud, at the moment it happens, with
+ * the name of the person it concerns. Left on screen long enough to act on.
+ */
+function reportReveal(
+  seating:
+    | { expected: number; seated: number; unseatedNames: string[] }
+    | null
+    | undefined,
+  successMessage: string,
+  // Cabinet/Shadow only (see computeMultiSeatOutcome): seats this round's
+  // quota left unfilled, and why. Undefined for every other vote type, so
+  // this branch never fires for Speaker / PM / party-leader reveals.
+  unfilledSeats?: number,
+  shortfall?: "under_subscribed" | "tie_pending" | null
+) {
+  if (!seating || seating.seated === seating.expected) {
+    if (shortfall && unfilledSeats && unfilledSeats > 0) {
+      const seatWord = unfilledSeats === 1 ? "seat" : "seats";
+      toast.warning(
+        shortfall === "under_subscribed"
+          ? `${successMessage} ${unfilledSeats} ${seatWord} had no candidate to fill ${
+              unfilledSeats === 1 ? "it" : "them"
+            } — a runoff can't fill an empty seat. Open more nominations, or lower the quota for this round.`
+          : `${successMessage} ${unfilledSeats} ${seatWord} still open, held up by the tie above — open the 60-second runoff to fill ${
+              unfilledSeats === 1 ? "it" : "them"
+            }.`,
+        { duration: 15000 }
+      );
+      return;
+    }
+    toast.success(successMessage);
+    return;
+  }
+  const who = seating.unseatedNames.join(", ");
+  toast.error(
+    `Revealed, but ${seating.expected - seating.seated} of ${seating.expected} winner${
+      seating.expected === 1 ? "" : "s"
+    } did not get their role: ${who}. The result stands — but nobody is holding the seat yet, so do NOT clear or archive this election. Re-reveal it, or seat them from Participants.`,
+    { duration: 30000 }
   );
 }
 
@@ -274,6 +335,10 @@ export function VoteManager({
   // "Run an election" menu so the panel isn't cluttered with every election at
   // once. Closed by default; the agenda-pinned Speaker/Bill votes stay inline.
   const [electionsMenuOpen, setElectionsMenuOpen] = useState(false);
+  // The Chair's free-text motion — "Shall the House sit late?" — typed into the
+  // "Motion of the House" launcher and put to the whole House as an Aye / Nay /
+  // Abstain vote. Cleared once the question is on the floor.
+  const [motionText, setMotionText] = useState("");
 
   // Get realtime vote session state with live counts
   const {
@@ -808,6 +873,33 @@ export function VoteManager({
     });
   }
 
+  // Put the Chair's typed question to the House. The same text rule the server
+  // enforces runs here first, so a blank or over-long motion is caught before a
+  // round trip — the server check is still the one that decides.
+  function handlePutMotion() {
+    if (!currentAgendaItem) return;
+    const question = normalizeMotionText(motionText);
+    if (!question.ok) {
+      toast.error(question.error);
+      return;
+    }
+    startTransition(async () => {
+      const result = await openHouseMotion(
+        eventId,
+        currentAgendaItem.id,
+        question.text,
+        { override_checkin: overrideCheckin }
+      );
+      if (result.success) {
+        toast.success("Motion put to the House — voting is open.");
+        warnIfNoCheckin(result);
+        setMotionText("");
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
   function handleCloseVoting() {
     if (!voteSession) return;
 
@@ -842,7 +934,12 @@ export function VoteManager({
         startTransition(async () => {
           const result = await revealResults(voteSession.id);
           if (result.success) {
-            toast.success("Results revealed!");
+            reportReveal(
+              result.data.seating,
+              "Results revealed!",
+              result.data.unfilledSeats,
+              result.data.shortfall
+            );
           } else {
             toast.error(result.error);
           }
@@ -879,9 +976,9 @@ export function VoteManager({
   function handleClearResult() {
     setConfirmDialog({
       open: true,
-      title: "Clear result & show the session",
+      title: "Clear the screen & show the session",
       description:
-        "Take this result off the big screen and return to the live session view? The result stays fully on record — this only changes what the projector shows.",
+        "Take this vote off the big screen and return to the live session view? Every vote cast stays fully on record — this only changes what the projector shows. A vote that is still open is never affected.",
       action: () => {
         startTransition(async () => {
           const result = await clearVoteResults(eventId);
@@ -931,7 +1028,13 @@ export function VoteManager({
   function handleParallelReveal(sessionId: string) {
     startTransition(async () => {
       const res = await revealResults(sessionId);
-      if (res.success) toast.success("Leader revealed.");
+      if (res.success)
+        reportReveal(
+          res.data.seating,
+          "Leader revealed.",
+          res.data.unfilledSeats,
+          res.data.shortfall
+        );
       else toast.error(res.error);
     });
   }
@@ -1283,7 +1386,7 @@ export function VoteManager({
               : "Leadership Election"}
           </DialogTitle>
           <DialogDescription>
-            Choose 2–5 nominees from the{" "}
+            Choose at least 2 nominees from the{" "}
             {leadershipDialog.side === "ruling" ? "ruling" : "opposition"} bench.
             Only that bench&apos;s members will be able to vote.
           </DialogDescription>
@@ -1378,11 +1481,9 @@ export function VoteManager({
             Cancel
           </Button>
           <Button
-            disabled={
-              isPending ||
-              leadershipDialog.selectedIds.length < 2 ||
-              leadershipDialog.selectedIds.length > 5
-            }
+            // No upper limit on nominees (Director, 2026-08-23). The floor of 2
+            // stays: one nominee is an appointment, not an election.
+            disabled={isPending || leadershipDialog.selectedIds.length < 2}
             onClick={handleOpenLeadershipElection}
           >
             {isPending ? "Opening..." : "Open Election"}
@@ -1541,12 +1642,53 @@ export function VoteManager({
       </div>
     ) : null;
 
+  // Motion of the House — the Chair types a question and puts it straight to
+  // the whole House (Aye / Nay / Abstain). No nominees, so it launches inline
+  // rather than through a nomination dialog. Available on any item the event
+  // uses for voting.
+  const motionLauncher =
+    showVoteControls && currentAgendaItem ? (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+          <ClipboardList className="size-4 text-[#FF9933]" />
+          Motion of the House
+        </div>
+        <p className="text-xs text-gray-500">
+          Type the question exactly as the House should hear it — “Shall the
+          House sit late?” Every checked-in Member votes Aye, Nay or Abstain.
+          Nobody is elected or removed by it.
+        </p>
+        <Input
+          value={motionText}
+          onChange={(e) => setMotionText(e.target.value)}
+          maxLength={HOUSE_MOTION_TEXT_MAX}
+          placeholder="Shall the House sit late?"
+          className="h-9 text-sm"
+        />
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400">
+            {motionText.trim().length}/{HOUSE_MOTION_TEXT_MAX}
+          </span>
+          <Button
+            size="sm"
+            className="ml-auto"
+            disabled={isPending || !normalizeMotionText(motionText).ok}
+            onClick={handlePutMotion}
+          >
+            <Vote className="size-3.5 mr-1" />
+            Put the question
+          </Button>
+        </div>
+      </div>
+    ) : null;
+
   // Every vote launcher (Speaker, Bill, and the run-anytime elections) behind one
   // menu so the panel isn't cluttered with all of them. The menu AUTO-OPENS (see
   // effect below) when the current agenda item has its OWN vote (Speaker / Bill),
   // so that primary action is visible without a tap; otherwise it's collapsed.
   const hasElectionLaunchers =
     !!speakerLauncher ||
+    !!motionLauncher ||
     !!partyLeaderList ||
     !!leadershipList ||
     !!cabinetSection ||
@@ -1562,7 +1704,8 @@ export function VoteManager({
           <Crown className="size-4 text-[#FF9933]" />
           Run a vote
           <span className="hidden text-xs font-normal text-muted-foreground sm:inline">
-            speaker · party leader · PM / Deputy / LoP · cabinet · shadow
+            speaker · motion · party leader · PM / Deputy / LoP · cabinet ·
+            shadow
           </span>
         </span>
         {electionsMenuOpen ? (
@@ -1574,6 +1717,7 @@ export function VoteManager({
       {electionsMenuOpen && (
         <div className="space-y-4 border-t p-3">
           {speakerLauncher}
+          {motionLauncher}
           {partyLeaderList}
           {leadershipList}
           {cabinetSection}
@@ -2028,6 +2172,8 @@ export function VoteManager({
                     }`
                   : isBenchVoteType
                   ? seatTitle(voteSession.vote_type)
+                  : isHouseMotionVoteType(voteSession.vote_type)
+                  ? houseMotionText(voteSession.config) ?? "Motion of the House"
                   : "Bill Vote"}
               </CardTitle>
               <Badge
@@ -2185,6 +2331,38 @@ export function VoteManager({
                           )}
                           {passed ? "BILL PASSED" : "BILL REJECTED"}
                         </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {/* House motion result. A motion decides a QUESTION — it seats
+                    nobody, so there is no winner to crown and never a runoff.
+                    Carried on a simple majority of Ayes over Nays; abstentions
+                    are recorded but do not count against it. */}
+                {isRevealed && isHouseMotionVoteType(voteSession.vote_type) && (
+                  <div className="mt-3 rounded-lg border p-3 text-center">
+                    {(() => {
+                      const m = houseMotionOutcome(tallies);
+                      return (
+                        <>
+                          <div
+                            className={cn(
+                              "flex items-center justify-center gap-2 text-lg font-bold",
+                              m.carried ? "text-green-700" : "text-red-700"
+                            )}
+                          >
+                            {m.carried ? (
+                              <CheckCircle2 className="size-5" />
+                            ) : (
+                              <XCircle className="size-5" />
+                            )}
+                            {m.carried ? "MOTION CARRIED" : "MOTION NOT CARRIED"}
+                          </div>
+                          <p className="mt-1.5 text-xs text-muted-foreground">
+                            {m.aye} Aye · {m.nay} Nay · {m.abstain} Abstain
+                          </p>
+                        </>
                       );
                     })()}
                   </div>
@@ -2398,6 +2576,12 @@ export function VoteManager({
                               {ms.tie.tiedCount} votes each):{" "}
                               {ms.tie.tiedCandidateIds.map(nameOf).join(", ")}
                             </div>
+                            <div className="text-xs text-amber-700">
+                              {ms.unfilledSeats} {roleWord.toLowerCase()}
+                              {ms.unfilledSeats === 1 ? " seat stays" : " seats stay"}{" "}
+                              open until this is settled — the runoff below
+                              fills {ms.unfilledSeats === 1 ? "it" : "them"}.
+                            </div>
                             <Button
                               size="sm"
                               disabled={isPending}
@@ -2406,6 +2590,26 @@ export function VoteManager({
                             >
                               Open 60-second runoff
                             </Button>
+                          </div>
+                        )}
+                        {/* Fewer candidates stood than there were seats — a
+                            runoff has nobody left to run, so this is NOT the
+                            same as a tie (no button offered here; see
+                            computeMultiSeatOutcome's `shortfall`). */}
+                        {ms.shortfall === "under_subscribed" && (
+                          <div className="space-y-1 rounded-md border border-red-300 bg-red-50 p-2">
+                            <div className="font-medium text-red-800">
+                              {ms.unfilledSeats} {roleWord.toLowerCase()}
+                              {ms.unfilledSeats === 1
+                                ? " seat has"
+                                : " seats have"}{" "}
+                              no candidate.
+                            </div>
+                            <div className="text-xs text-red-700">
+                              A runoff can&apos;t fill an empty seat — open
+                              more nominations for {partyName}, or lower the{" "}
+                              {roleWord.toLowerCase()} quota for this round.
+                            </div>
                           </div>
                         )}
                       </div>
@@ -2459,10 +2663,16 @@ export function VoteManager({
                     Start new vote
                   </Button>
                 )}
-              {/* Take the finished result off the projector and return to the
-                  live session/bill view. Shown for every revealed vote type —
-                  a lingering result of any kind hides the session screen. */}
-              {isRevealed && (
+              {/* Take the finished vote off the projector and return to the
+                  live session/bill view. Shown for every finished vote —
+                  a lingering one of any kind hides the session screen.
+
+                  CLOSED counts, not just REVEALED (Director, 2026-08-28, from
+                  the SRTN floor). A Chair who closed a ballot without revealing
+                  it had no button here at all, so the "vote closed" screen
+                  stayed up with no way back. Never shown while a vote is OPEN —
+                  clearing mid-ballot would cut off everyone still voting. */}
+              {(isRevealed || isClosed) && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -2471,7 +2681,7 @@ export function VoteManager({
                   className="flex-1 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
                 >
                   <EyeOff className="size-3.5 mr-1" />
-                  Clear result &amp; show session
+                  {isRevealed ? "Clear result & show session" : "Dismiss & show session"}
                 </Button>
               )}
             </div>
@@ -2601,7 +2811,7 @@ export function VoteManager({
       {/* Party-Leader nomination dialog: pick 3–5 nominees, then open the vote */}
       {partyLeaderDialog}
 
-      {/* Leadership nomination dialog: pick 2–5 bench nominees, then open the vote */}
+      {/* Leadership nomination dialog: pick 2+ bench nominees, then open the vote */}
       {leadershipNominationDialog}
 
       {/* Cabinet/Shadow nomination dialog: pick the party's nominees, then open */}

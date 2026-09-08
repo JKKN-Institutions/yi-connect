@@ -2,6 +2,7 @@ import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { getEvent } from "@/app/yip/actions/events";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import {
+  getQuestionnaireMarkingProgress,
   getQuestionnaireOverview,
   getQuestionnaireQuestionReview,
   getQuestionnaireResults,
@@ -31,11 +32,12 @@ export default async function QuestionnairePage({
     );
   }
 
-  const [overview, results, event, review] = await Promise.all([
+  const [overview, results, event, review, progress] = await Promise.all([
     getQuestionnaireOverview(id),
     getQuestionnaireResults(id),
     getEvent(id),
     getQuestionnaireQuestionReview(id),
+    getQuestionnaireMarkingProgress(id),
   ]);
 
   return (
@@ -43,6 +45,7 @@ export default async function QuestionnairePage({
       eventId={id}
       eventName={event?.name ?? ""}
       canManage={access.canManage}
+      canViewScores={access.canViewScores}
       initialPosts={overview.success ? overview.data.posts : []}
       minutes={overview.success ? overview.data.minutes : 30}
       initialRows={results.success ? results.data.rows : []}
@@ -53,6 +56,7 @@ export default async function QuestionnairePage({
           ? review.data
           : { status: null, text: null, generatedAt: null, modelNote: null }
       }
+      initialProgress={progress.success ? progress.data : null}
       initialError={
         overview.success ? (results.success ? null : results.error) : overview.error
       }

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
-import { getQuestions } from "@/app/yip/actions/questions";
+import { getQuestions, getQuestionCoverage } from "@/app/yip/actions/questions";
 import { getCabinetConfig } from "@/app/yip/actions/cabinet";
 import { QuestionsClient } from "./questions-client";
 
@@ -30,9 +30,14 @@ export default async function QuestionsPage({
   // Fetch all questions with submitter info + the event's effective cabinet
   // portfolios (per-event custom ministries, not the static 8) so ministry
   // KEYs resolve to the right labels in the table, dialog and CSV export.
-  const [questions, { ministries }] = await Promise.all([
+  // Coverage answers the question the other counters cannot: how many MEMBERS
+  // tabled anything at all. On the SRTN round the page read "144 questions"
+  // while 137 of 196 members had never submitted one — the fact that decides
+  // whether the window needs widening.
+  const [questions, { ministries }, coverage] = await Promise.all([
     getQuestions(id),
     getCabinetConfig(id),
+    getQuestionCoverage(id),
   ]);
 
   return (
@@ -43,6 +48,7 @@ export default async function QuestionsPage({
       initialOpenAt={event.questions_open_at ?? null}
       initialCloseAt={event.questions_close_at ?? null}
       ministries={ministries}
+      coverage={coverage}
     />
   );
 }

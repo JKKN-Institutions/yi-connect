@@ -43,6 +43,33 @@ type RawAiDraft = {
   updated_at: string;
 };
 
+/**
+ * Strip any sentence in which the text announces how it was written.
+ *
+ * The out-of-band routine appends a self-disclosure to participant prose —
+ * "(This is an AI-drafted recap based on your event record, not a human
+ * observer's account.)" — which sits on 1,779 stored rows. The Director's
+ * ruling (2026-08-29) is that no participant-facing surface says this.
+ *
+ * Stripped HERE, in the one reader every consumer goes through, rather than in
+ * a card: the same prose also prints on the Day-2 participant cards and appears
+ * in the chair's report, so a fix in one screen would leave the others wrong.
+ * Doing it on read also covers rows already stored AND anything the routine
+ * emits in future, neither of which a one-off data edit would.
+ *
+ * Deliberately narrow: it removes only a parenthetical or sentence that names
+ * how the text was produced. Ordinary prose that happens to contain the letters
+ * "ai" is untouched.
+ */
+const SELF_DISCLOSURE =
+  /\s*[([][^)\]]*\b(?:AI|A\.I\.)[- ]?(?:drafted|generated|written|assisted)\b[^)\]]*[)\]]\s*|\s*\bThis (?:is|was) an? (?:AI|A\.I\.)[- ]?(?:drafted|generated|written)\b[^.!?]*[.!?]\s*/gi;
+
+export function stripSelfDisclosure(text: string | null): string | null {
+  if (!text) return text;
+  const cleaned = text.replace(SELF_DISCLOSURE, " ").replace(/[ \t]{2,}/g, " ").trim();
+  return cleaned.length > 0 ? cleaned : null;
+}
+
 function normalize(r: RawAiDraft): AiDraftRow {
   return {
     id: r.id,
@@ -51,14 +78,14 @@ function normalize(r: RawAiDraft): AiDraftRow {
     subject_id: r.subject_id,
     agenda_item_id: r.agenda_item_id ?? null,
     status: r.status as AiDraftStatus,
-    draft_text: r.draft_text,
+    draft_text: stripSelfDisclosure(r.draft_text),
     source_refs: Array.isArray(r.source_refs)
       ? (r.source_refs as AiSourceRef[])
       : [],
     model_note: r.model_note,
     generated_at: r.generated_at,
     reviewed_by: r.reviewed_by,
-    approved_text: r.approved_text,
+    approved_text: stripSelfDisclosure(r.approved_text),
     reviewed_at: r.reviewed_at,
     is_mock: r.is_mock ?? false,
     created_at: r.created_at,

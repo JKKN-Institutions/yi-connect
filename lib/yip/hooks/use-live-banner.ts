@@ -6,11 +6,15 @@ import { createClient } from "@/lib/yip/supabase/client";
 interface LiveBannerState {
   active: boolean;
   text: string | null;
+  /** Whether the projector banner flashes. True is the behaviour the banner
+   *  always had, so a payload from an older build looks unchanged. */
+  pulse: boolean;
 }
 
 interface LiveBannerBroadcast {
   active: boolean;
   text: string | null;
+  pulse?: boolean;
 }
 
 /**
@@ -24,11 +28,21 @@ interface LiveBannerBroadcast {
 export function useLiveBanner(
   eventId: string,
   initialActive: boolean,
-  initialText: string | null
+  initialText: string | null,
+  /**
+   * Seeded from the event row (`live_banner_pulse`), so a projector that
+   * reloads mid-banner paints it the way the Chair set it instead of coming
+   * back flashing. Defaults to true — the banner's long-standing behaviour —
+   * for a caller that has no stored value to hand.
+   */
+  initialPulse: boolean = true
 ): LiveBannerState {
   const supabase = createClient();
   const [active, setActive] = useState<boolean>(initialActive);
   const [text, setText] = useState<string | null>(initialText);
+  // pushLiveBanner writes the column and sends the broadcast from the same
+  // argument, so the seed below and any incoming payload always agree.
+  const [pulse, setPulse] = useState<boolean>(initialPulse);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // Re-sync if initial props change (e.g. parent refetches event).
@@ -39,6 +53,10 @@ export function useLiveBanner(
   useEffect(() => {
     setText(initialText);
   }, [initialText]);
+
+  useEffect(() => {
+    setPulse(initialPulse);
+  }, [initialPulse]);
 
   useEffect(() => {
     if (channelRef.current) {
@@ -52,6 +70,9 @@ export function useLiveBanner(
         if (!payload) return;
         setActive(Boolean(payload.active));
         setText(payload.active ? (payload.text ?? null) : null);
+        // Absent on a payload from an older build — treat as flashing, which is
+        // exactly what those builds did.
+        setPulse(payload.pulse !== false);
       })
       .subscribe();
 
@@ -64,5 +85,5 @@ export function useLiveBanner(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
-  return { active, text };
+  return { active, text, pulse };
 }

@@ -52,6 +52,13 @@ const MODULES: ModuleCard[] = [
     accent: "hover:border-[#229434]/50",
   },
   {
+    title: "YIQ Admin",
+    desc: "School quiz championship — rounds, question bank, and results.",
+    href: "/yiq/dashboard",
+    icon: "🧠",
+    accent: "hover:border-[#000066]/40",
+  },
+  {
     title: "Directory",
     desc: "People, roles, and cross-app identity across every Yi module.",
     href: "/admin/directory",

@@ -17,7 +17,7 @@ import {
   storedRoleSlugs,
   type RoleScopedCriterion,
 } from "@/lib/yip/scoring-roles";
-import { fetchEventRoundLevel } from "@/lib/yip/round-level";
+import { fetchEventRoundLevel, type RoundLevel } from "@/lib/yip/round-level";
 import { resolveAwardsForLevel } from "@/lib/yip/awards";
 import { listScoringBuckets } from "./scoring-buckets";
 import { getScoringFlagsConfig } from "./scoring-flags";
@@ -350,6 +350,38 @@ function removeAward(r: ResultRow, awardLabel: string): void {
 // prize and are EXEMPT. Blank/unknown school is exempt too (each blank is its own
 // unknown school — grouping distinct unknown-school students would be wrong).
 const SCHOOL_AWARD_CAP = 3;
+
+/**
+ * CHAPTER ROUNDS ONLY (Director ruling 2026-08-29).
+ *
+ * At a chapter round students arrive in school blocks and the cap does real
+ * work — 69 of 87 schools field 4+ students, and 11 of the 36 schools that have
+ * ever won something sit exactly at the ceiling.
+ *
+ * At a REGIONAL round it is both near-useless and unfair. Chapters send a few
+ * delegates each from many different schools, so only 4 of 124 schools could
+ * ever reach the cap. Worse, the blank-school exemption above makes it apply
+ * unevenly to rounds of the same competition: on the day this was scoped,
+ * Ahmedabad had 163 of 163 delegates with no school recorded and Durg 115 of
+ * 115 — the cap was entirely inert for both — while SRTN had only 9 of 196
+ * blank, so it bound on 95% of that field. Three regional rounds, three
+ * different rulebooks, decided by nothing but whether a school name was typed.
+ *
+ * School is not the unit of a regional round; the CHAPTER is (Director,
+ * 2026-08-29). A spread rule at that level belongs on chapter, not school.
+ *
+ * This changes NOTHING already computed: no regional round has ever assigned an
+ * individual award, and chapter rounds keep the cap exactly as before.
+ *
+ * A NULL level keeps the cap. The level can be unresolved (an event with none
+ * set, or a lookup that failed), and an unknown must never silently RELAX a
+ * fairness rule — before this change the cap applied everywhere, so an
+ * unresolved round keeps behaving exactly as it did. The cap is lifted only
+ * where we positively know the round is not a chapter one.
+ */
+function schoolCapApplies(roundLevel: RoundLevel | null): boolean {
+  return roundLevel !== "regional" && roundLevel !== "national";
+}
 
 export async function computeResults(
   eventId: string
@@ -1430,8 +1462,13 @@ export async function computeResults(
         if (awarded.has(r.participant_id)) continue;
         // Per-school cap: skip a candidate whose school already holds the max
         // individual awards (blank/unknown school is exempt → never capped).
+        // CHAPTER ROUNDS ONLY — see schoolCapApplies().
         const school = schoolOf(r.participant_id);
-        if (school && (schoolAwardCount.get(school) ?? 0) >= SCHOOL_AWARD_CAP) {
+        if (
+          schoolCapApplies(roundLevel) &&
+          school &&
+          (schoolAwardCount.get(school) ?? 0) >= SCHOOL_AWARD_CAP
+        ) {
           continue;
         }
         appendAward(r, aw.label);
@@ -1508,7 +1545,10 @@ export async function computeResults(
     // breach, leave the auto-winner intact (the override is ignored this
     // recompute; setAwardWinner surfaces the reason to the chair).
     const tSchool = schoolOf(target.participant_id);
-    if (isCappedAward(A) && tSchool) {
+    // CHAPTER ROUNDS ONLY — the override path must use the same rule as the
+    // assignment pass above, or a chair's pin would be refused by a cap that no
+    // longer governs the round. See schoolCapApplies().
+    if (schoolCapApplies(roundLevel) && isCappedAward(A) && tSchool) {
       let projected = schoolCount.get(tSchool) ?? 0;
       if (holdsCappedAward(target.award_category)) projected -= 1; // X swaps its award for A
       for (const r of resultRows) {
@@ -2809,4 +2849,195 @@ export async function getMarkingCoverage(
   );
 
   return { singleJudgeStudents, sideChangeStudents, couldNotCheck: null };
+}
+
+// ─── Why an award has no winner ──────────────────────────────────────
+//
+// An award card that says only "Needs a qualifying winner" cannot distinguish
+// the two very different reasons it is empty:
+//
+//   1. Nobody was MARKED in the session it ranks on. That is a marking gap in
+//      the room — the host can still send a judge, or at minimum knows the
+//      award was never winnable. Ahmedabad 2026 finished with Zero Hour, the
+//      Debate and Private Members' Bills carrying zero marks between them.
+//   2. The session WAS marked but nobody qualified (no Speaker assigned, no
+//      Independent member, and so on). Nothing to fix in the marking.
+//
+// Reading (1) as (2) sends a host hunting for a platform fault that is not
+// there. So compute which of an award's ranking sessions actually carry marks
+// at THIS event, and hand the card enough to say which case it is.
+//
+// Also returns how many students were judged in those sessions, so a card can
+// show the evidence behind a winner: "top of 18 students judged" reads very
+// differently from "top of 163" when deciding whether to read a name out.
+// Finally, ruling 06 (Director, 2026-08-29) covers the other side of the same
+// coin — a session that did not run but whose award was handed out anyway:
+//
+//   "A missed session is stated on the award. Where a session did not run, the
+//    chair may still choose a winner, but the award is permanently labelled
+//    `session not held — chair's choice`."
+//
+// That is exactly what happened at SRTN: the debate was squeezed out of the day,
+// so the regional debate sheet (`rbd`) carries no marks at all, and the chair
+// hand-picked the three debate-dependent awards at the ceremony. The engine can
+// never produce those winners on its own — the auto pass requires rankBy > 0 and
+// refuses to fabricate a winner from an all-zero field — so a winner on an
+// unscored session is, by construction, a chair's pin. Return WHO was pinned so
+// the surface can say so; the label is derived at read time and nothing new is
+// written to yip.results.award_category (an overloaded column whose reason
+// strings several consumers already have to special-case).
+export type AwardAvailability = {
+  label: string;
+  /** Friendly session names this award ranks on that carry NO marks here. */
+  unscoredSessions: string[];
+  /** Distinct students holding at least one mark in those sessions. */
+  judged: number;
+  /** Students eligible to be ranked at all (present on every required day). */
+  rankable: number;
+  /**
+   * The participant the chair PINNED for this award, if any (yip.award_overrides
+   * is unique per event × award). Combined with `unscoredSessions` this is what
+   * ruling 06 labels: a pinned winner on a session that never ran is a chair's
+   * choice, not a computed result, and the award must say so permanently.
+   * Null when no override exists for this award.
+   */
+  chairPinnedParticipantId: string | null;
+};
+
+export async function getAwardAvailability(
+  eventId: string
+): Promise<AwardAvailability[]> {
+  // Same gate as the results page itself — this describes the marking picture
+  // for named students' awards and must not widen who can see it.
+  const access = await getYipEventAccess(eventId);
+  if (!access.canViewScores) return [];
+
+  const supabase = await createServiceClient();
+  const level = await fetchEventRoundLevel(supabase as never, eventId);
+
+  const [{ data: defs }, { data: sheets }, { data: resultRows }, { data: pins }] =
+    await Promise.all([
+      supabase
+        .from("award_definitions")
+        .select("label, rank_keys, is_active, levels"),
+      supabase
+        .from("session_parameters")
+        .select("session_key, label, parameters, levels"),
+      supabase
+        .from("results")
+        .select("participant_id, score_breakdown, rank")
+        .eq("event_id", eventId),
+      // Chair's pins for this event (ruling 06). Read-only — this never decides
+      // a winner, it only lets the surface name the pin as a chair's choice.
+      supabase
+        .from("award_overrides")
+        .select("award_label, participant_id")
+        .eq("event_id", eventId),
+    ]);
+
+  type DefRow = {
+    label: string;
+    rank_keys: string[] | null;
+    is_active: boolean | null;
+    levels: string[] | null;
+  };
+  type SheetRow = {
+    session_key: string;
+    label: string | null;
+    parameters: unknown;
+    levels: string[] | null;
+  };
+  type ResRow = {
+    participant_id: string;
+    score_breakdown: Record<string, number> | null;
+    rank: number | null;
+  };
+  type PinRow = { award_label: string; participant_id: string };
+
+  // award label → the participant the chair pinned for it.
+  const pinByLabel = new Map<string, string>();
+  for (const p of ((pins ?? []) as unknown as PinRow[])) {
+    if (p.award_label && p.participant_id) {
+      pinByLabel.set(p.award_label, p.participant_id);
+    }
+  }
+
+  // A row with no `levels` applies to every round; otherwise it must name this
+  // one. Matches how the awards and the scoring sheets are resolved elsewhere.
+  const appliesHere = (levels: string[] | null | undefined) =>
+    !levels || levels.length === 0 || (!!level && levels.includes(level));
+
+  // family ("rqh") → the session's human name ("Question Hour"), taken from the
+  // sheet whose criteria carry that prefix. Built from the level-scoped sheets
+  // so a regional round names its own sessions.
+  const sessionNameByFamily = new Map<string, string>();
+  for (const s of ((sheets ?? []) as unknown as SheetRow[])) {
+    if (!appliesHere(s.levels)) continue;
+    const raw = s.parameters;
+    const items = Array.isArray(raw)
+      ? raw
+      : ((raw as { criteria?: unknown[] } | null)?.criteria ?? []);
+    for (const c of items as Array<Record<string, unknown>>) {
+      const key = typeof c?.key === "string" ? c.key : null;
+      if (!key) continue;
+      const family = key.split(".")[0];
+      if (family && !sessionNameByFamily.has(family)) {
+        // Sheet labels carry a level suffix ("Zero Hour (Regional)") to keep
+        // them distinct in the admin list. On an event's own page the level is
+        // already implied, and the name reads better in a sentence without it.
+        const clean = (s.label ?? s.session_key).replace(/\s*\((chapter|regional|national)\)\s*$/i, "");
+        sessionNameByFamily.set(family, clean);
+      }
+    }
+  }
+
+  // Which families actually carry marks here, and who holds them. Read from
+  // score_breakdown because that is literally what the award formulas sum —
+  // anything else could disagree with the engine.
+  const holdersByFamily = new Map<string, Set<string>>();
+  let rankable = 0;
+  for (const r of ((resultRows ?? []) as unknown as ResRow[])) {
+    // Count only students who can actually be RANKED. A student with marks but
+    // no rank (absent a required day) is excluded from the award race, so
+    // counting them would produce "top of 109 of 108 students" — a number that
+    // cannot be true and instantly discredits the line it sits in.
+    if (r.rank == null) continue;
+    rankable++;
+    for (const k of Object.keys(r.score_breakdown ?? {})) {
+      const family = k.split(".")[0];
+      if (!family) continue;
+      let set = holdersByFamily.get(family);
+      if (!set) holdersByFamily.set(family, (set = new Set()));
+      set.add(r.participant_id);
+    }
+  }
+
+  const out: AwardAvailability[] = [];
+  for (const d of ((defs ?? []) as unknown as DefRow[])) {
+    if (d.is_active === false || !appliesHere(d.levels)) continue;
+    // No rank_keys = ranked on overall score or leadership points, so it does
+    // not depend on any one session and can never be "session unscored".
+    const families = Array.from(
+      new Set((d.rank_keys ?? []).map((k) => String(k).split(".")[0]).filter(Boolean))
+    );
+    const judged = new Set<string>();
+    const unscored: string[] = [];
+    for (const f of families) {
+      const holders = holdersByFamily.get(f);
+      if (!holders || holders.size === 0) {
+        const name = sessionNameByFamily.get(f);
+        if (name && !unscored.includes(name)) unscored.push(name);
+        continue;
+      }
+      for (const id of holders) judged.add(id);
+    }
+    out.push({
+      label: d.label,
+      unscoredSessions: unscored,
+      judged: judged.size,
+      rankable,
+      chairPinnedParticipantId: pinByLabel.get(d.label) ?? null,
+    });
+  }
+  return out;
 }

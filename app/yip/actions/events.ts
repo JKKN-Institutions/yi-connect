@@ -1384,7 +1384,22 @@ const LIVE_BANNER_MAX_LEN = 280;
 
 export async function pushLiveBanner(
   eventId: string,
-  text: string
+  text: string,
+  /**
+   * Whether the projector banner flashes (Director, 2026-08-28). Defaults to
+   * true — how the banner always behaved — so a caller that omits it sees no
+   * change. A flashing banner earns attention but wears the room down over a
+   * long stretch, so the Chair now chooses per broadcast.
+   *
+   * STORED on the event (`live_banner_pulse`) as well as carried on the
+   * broadcast, in the same update as the text and the active flag. The broadcast
+   * is what moves connected projectors immediately; the column is what a
+   * projector reads when it paints fresh, so one RELOADED mid-banner comes back
+   * exactly as the Chair set it instead of flashing on its own. Both sides are
+   * written from this one argument, so they cannot disagree. The column defaults
+   * to true, which is the old behaviour, so nothing already on screen changes.
+   */
+  pulse: boolean = true
 ): Promise<ActionResult<null>> {
   const access = await getYipEventAccess(eventId);
   if (!access.canManage) {
@@ -1403,11 +1418,14 @@ export async function pushLiveBanner(
     };
   }
 
-  // live_banner_* columns exist in DB (migration adding live_banner_text
-  // + live_banner_active) but may not be in generated types yet.
+  // live_banner_* columns exist in DB (live_banner_text + live_banner_active,
+  // and live_banner_pulse) but may not be in generated types yet. All three go
+  // in ONE update so a projector can never read a banner whose flash setting
+  // belongs to the previous push.
   const patch = {
     live_banner_text: trimmed,
     live_banner_active: true,
+    live_banner_pulse: pulse,
   } ;
 
   const { error } = await supabase
@@ -1432,7 +1450,7 @@ export async function pushLiveBanner(
   await channel.send({
     type: "broadcast",
     event: "update",
-    payload: { active: true, text: trimmed },
+    payload: { active: true, text: trimmed, pulse },
   });
   await supabase.removeChannel(channel);
 

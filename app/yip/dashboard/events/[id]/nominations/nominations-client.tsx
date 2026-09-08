@@ -59,7 +59,7 @@ import {
 import {
   exportSelfNominationsCsv,
   getSelfNominationResults,
-  setSelfNominationOpen,
+  setSelfNominationRoleOpen,
 } from "@/app/yip/actions/self-nomination";
 
 type RoleFilter = "all" | SelfNominationRole;
@@ -77,6 +77,13 @@ const ROLE_BADGE: Record<SelfNominationRole, string> = {
     "border-[#1a1a3e]/15 bg-[#1a1a3e]/[0.06] text-[#1a1a3e]",
   speaker: "border-[#FF9933]/30 bg-[#FF9933]/10 text-[#C2691A]",
   party_leader: "border-[#138808]/25 bg-[#138808]/10 text-[#0f7006]",
+  parliamentary_journalist:
+    "border-[#6a4a9c]/25 bg-[#6a4a9c]/10 text-[#5a3d87]",
+  prime_minister: "border-[#138808]/35 bg-[#138808]/15 text-[#0b5a04]",
+  leader_of_opposition:
+    "border-[#8a2b27]/25 bg-[#8a2b27]/10 text-[#8a2b27]",
+  cabinet_minister: "border-[#138808]/25 bg-[#138808]/[0.08] text-[#0f7006]",
+  shadow_minister: "border-[#6a4a9c]/25 bg-[#6a4a9c]/[0.08] text-[#5a3d87]",
 };
 
 export function NominationsClient({
@@ -84,6 +91,7 @@ export function NominationsClient({
   eventName,
   canManage,
   initialOpen,
+  initialWindows,
   initialRows,
   initialStats,
   initialError,
@@ -92,11 +100,33 @@ export function NominationsClient({
   eventName: string;
   canManage: boolean;
   initialOpen: boolean;
+  /** Per-role window state — one switch each since 2026-08-21. */
+  initialWindows: { role: string; open: boolean }[];
   initialRows: SelfNominationResultRow[];
   initialStats: SelfNominationStats;
   initialError: string | null;
 }) {
   const [open, setOpen] = useState(initialOpen);
+  const [windows, setWindows] = useState(initialWindows);
+  const openRoles = new Set(windows.filter((w) => w.open).map((w) => w.role));
+
+  /** Flip ONE role's window. */
+  function toggleRoleWindow(role: string, next: boolean) {
+    startTransition(async () => {
+      const res = await setSelfNominationRoleOpen(eventId, role, next);
+      if (!res.success) {
+        toast.error(res.error);
+        return;
+      }
+      setWindows((cur) =>
+        cur.map((w) => (w.role === role ? { ...w, open: next } : w))
+      );
+      setOpen((cur) => (next ? true : cur));
+      toast.success(
+        `${selfNominationRoleLabel(role)} nominations ${next ? "opened" : "closed"}`
+      );
+    });
+  }
   const [rows, setRows] = useState(initialRows);
   const [stats, setStats] = useState(initialStats);
   const [error, setError] = useState(initialError);
@@ -144,18 +174,25 @@ export function NominationsClient({
     setError(null);
   }
 
+  /**
+   * The master button now applies to EVERY role at once. Each role also has its
+   * own switch below — opening Student Journalist must not reopen Speaker.
+   */
   function applyToggle() {
     const next = !open;
     startTransition(async () => {
-      const res = await setSelfNominationOpen(eventId, next);
-      if (!res.success) {
-        toast.error(res.error);
-        return;
+      for (const w of windows) {
+        const res = await setSelfNominationRoleOpen(eventId, w.role, next);
+        if (!res.success) {
+          toast.error(res.error);
+          return;
+        }
       }
-      setOpen(res.data.open);
+      setWindows((cur) => cur.map((w) => ({ ...w, open: next })));
+      setOpen(next);
       setConfirmOpen(false);
       toast.success(
-        res.data.open ? "Nominations are now open" : "Nominations are now closed"
+        next ? "All nominations are now open" : "All nominations are now closed"
       );
     });
   }
@@ -258,6 +295,36 @@ export function NominationsClient({
                   ? "Students can submit and edit their nomination right now."
                   : "Students cannot submit or edit. Anything already submitted is kept and stays visible to them."}
               </p>
+
+              {/* Per-role windows. The stages run at different times, so
+                  opening Student Journalist must not reopen Speaker. */}
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {SELF_NOMINATION_ROLES.map((r) => {
+                  const on = openRoles.has(r.key);
+                  return (
+                    <button
+                      key={r.key}
+                      type="button"
+                      disabled={!canManage || isPending}
+                      onClick={() => toggleRoleWindow(r.key, !on)}
+                      title={
+                        canManage
+                          ? `${on ? "Close" : "Open"} ${r.label} nominations`
+                          : r.label
+                      }
+                      className={cn(
+                        "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+                        on
+                          ? "border-[#138808]/30 bg-[#138808]/10 text-[#0f7006]"
+                          : "border-[#1a1a3e]/15 bg-[#1a1a3e]/[0.04] text-[#1a1a3e]/55"
+                      )}
+                    >
+                      {on ? "● " : "○ "}
+                      {r.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
           {canManage ? (

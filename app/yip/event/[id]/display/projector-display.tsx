@@ -11,6 +11,10 @@ import {
 import { cn } from "@/lib/yip/utils";
 import { ROLE_LABELS, PARTY_COLORS, MINISTRIES, OATH_TEXT } from "@/lib/yip/constants";
 import { computeMultiSeatOutcome } from "@/lib/yip/election-outcome";
+import {
+  isHouseMotionVoteType,
+  houseMotionText,
+} from "@/lib/yip/house-motion";
 import { useRealtimeEvent } from "@/lib/yip/hooks/use-realtime-event";
 import { useVoteSession } from "@/lib/yip/hooks/use-vote-session";
 import { useTimer } from "@/lib/yip/hooks/use-timer";
@@ -28,6 +32,9 @@ interface SpeakerInfo {
   parliament_role: string | null;
   party_side: string | null;
   party_number: number | null;
+  /** The member's parliamentary identity in this project (101..296 at Erode),
+   *  so the projector shows it wherever it names who holds the floor. */
+  constituency_number: number | null;
   constituency_name: string | null;
   constituency_state: string | null;
   school_name: string;
@@ -76,6 +83,11 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
   );
   const [currentQuestionDisplay, setCurrentQuestionDisplay] =
     useState<QuestionDisplayInfo | null>(null);
+  /** How far through the tabled questions the House has reached. */
+  const [questionProgress, setQuestionProgress] = useState<{
+    position: number;
+    total: number;
+  } | null>(null);
   const [voteCandidates, setVoteCandidates] = useState<VoteCandidateInfo[]>([]);
   const [voteBillTitle, setVoteBillTitle] = useState<string | null>(null);
   // Subject of a motion floor vote (No-Confidence / Impeach) — carried in the
@@ -113,11 +125,19 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
     voteSession.agenda_item_id === currentAgendaItem?.id &&
     (isOpen || isClosed || (isRevealed && tallies.length > 0));
 
-  // F5 — live banner (breaking-news strip)
+  // F5 — live banner (breaking-news strip). The flash setting is read from the
+  // event row so a projector RELOADED mid-banner paints it the way the Chair
+  // set it; live changes still arrive on the broadcast. Both come from the one
+  // argument pushLiveBanner was called with, so they cannot disagree.
+  // live_banner_pulse exists in the DB but is not in the generated types yet;
+  // anything other than an explicit false means flash, which is the behaviour
+  // the banner has always had.
   const liveBanner = useLiveBanner(
     eventId,
     (event?.live_banner_active ?? false) === true,
-    event?.live_banner_text ?? null
+    event?.live_banner_text ?? null,
+    (event as unknown as { live_banner_pulse?: boolean | null } | null)
+      ?.live_banner_pulse !== false
   );
 
   // AI Moment — director-curated scene (yip.projector_moments). A live vote
@@ -351,6 +371,14 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
           typeof cfg.motionSubject === "string" ? cfg.motionSubject : null
         );
       }
+
+      // A House motion carries the Chair's own wording in config.motionText.
+      // It reuses motionVoteSubject because it is the same idea — the thing the
+      // House is deciding — and read through houseMotionText() so the projector
+      // can never disagree with the ballot about what the question was.
+      if (isHouseMotionVoteType(voteSession.vote_type)) {
+        setMotionVoteSubject(houseMotionText(voteSession.config));
+      }
     }
 
     loadVoteData();
@@ -372,6 +400,7 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
           parliament_role,
           party_side,
           party_number,
+          constituency_number,
           constituency_name,
           constituency_state,
           school_name
@@ -421,6 +450,35 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
 
   // Fetch current question for Question Hour
   const fetchCurrentQuestion = useCallback(async () => {
+    // How far through the tabled questions is the House? (Director, 2026-08-29.)
+    //
+    // A member who prepared a question and never heard it put has no way to know
+    // whether the House ran out of time or never had their question at all. This
+    // makes the whole body of work visible in the room: the position while a
+    // question is up, and the total tabled even before the first is called.
+    //
+    // 'answered' are the ones already put, 'asked' is the one on the floor, and
+    // 'approved' are still to come — so total is all three and the position is
+    // the answered count plus the one being put. Counts only; no member is
+    // named or ranked here.
+    const countBy = async (status: string) =>
+      (
+        await supabase
+          .from("questions")
+          .select("id", { count: "exact", head: true })
+          .eq("event_id", eventId)
+          .eq("status", status)
+      ).count ?? 0;
+    const [done, onFloor, toCome] = await Promise.all([
+      countBy("answered"),
+      countBy("asked"),
+      countBy("approved"),
+    ]);
+    const total = done + onFloor + toCome;
+    setQuestionProgress(
+      total > 0 ? { position: onFloor > 0 ? done + 1 : done, total } : null
+    );
+
     const { data } = await supabase
       .from("questions")
       .select(
@@ -588,7 +646,12 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
       {/* F5 — Live banner (fixed at top, above everything) */}
       {liveBanner.active && liveBanner.text && (
         <div
-          className="fixed inset-x-0 top-0 z-50 flex w-full items-center justify-center gap-4 bg-[#dc2626] px-8 py-4 text-3xl font-bold text-white shadow-lg animate-pulse"
+          // The flash is the Chair's choice per broadcast (Director,
+          // 2026-08-28). A steady banner is the one to leave up for a long
+          // stretch; a flashing one earns attention but wears the room down.
+          className={`fixed inset-x-0 top-0 z-50 flex w-full items-center justify-center gap-4 bg-[#dc2626] px-8 py-4 text-3xl font-bold text-white shadow-lg${
+            liveBanner.pulse ? " animate-pulse" : ""
+          }`}
           role="status"
           aria-live="polite"
         >
@@ -705,9 +768,13 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                                     ? `: ${motionVoteSubject}`
                                     : ""
                                 }`
-                              : voteBillTitle
-                                ? `Bill Vote: ${voteBillTitle}`
-                                : "Bill Vote"}
+                              : isHouseMotionVoteType(voteSession.vote_type)
+                                ? motionVoteSubject
+                                  ? `Motion: ${motionVoteSubject}`
+                                  : "Motion Before the House"
+                                : voteBillTitle
+                                  ? `Bill Vote: ${voteBillTitle}`
+                                  : "Bill Vote"}
                 </p>
               </div>
             )}
@@ -742,7 +809,13 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                             ? "Cabinet Election Results"
                             : voteSession.vote_type === "shadow_minister"
                               ? "Shadow Cabinet Election Results"
-                              : "Bill Vote Results"}
+                              : isHouseMotionVoteType(voteSession.vote_type)
+                                ? "Motion Result"
+                                : voteSession.vote_type === "no_confidence"
+                                  ? "No-Confidence Motion Result"
+                                  : voteSession.vote_type === "impeach_speaker"
+                                    ? "Impeach the Speaker — Result"
+                                    : "Bill Vote Results"}
                 </h2>
 
                 {/* Result bars */}
@@ -918,27 +991,49 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                         seats,
                         seatType
                       );
-                      if (ms.winnerIds.length === 0) return null;
+                      // A shortfall is still worth a line on the big screen
+                      // even when NOTHING was won this round (a full tie, or
+                      // no candidates at all) — otherwise the screen shows
+                      // nothing and the room is left guessing why.
+                      if (ms.winnerIds.length === 0 && !ms.shortfall) return null;
                       const nameOf = (id: string) =>
                         voteCandidates.find((c) => c.id === id)?.full_name ??
                         "Unknown";
+                      const roleWord =
+                        seatType === "cabinet_minister"
+                          ? "Cabinet Minister"
+                          : "Shadow Minister";
                       return (
                         <div className="space-y-3">
-                          <p className="text-lg text-gray-500 uppercase tracking-widest">
-                            {seatType === "cabinet_minister"
-                              ? "Elected Cabinet Ministers"
-                              : "Elected Shadow Ministers"}
-                          </p>
-                          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
-                            {ms.winnerIds.map((id) => (
-                              <span
-                                key={id}
-                                className="text-4xl font-black text-amber-400 yip-winner-pop"
-                              >
-                                {nameOf(id)}
-                              </span>
-                            ))}
-                          </div>
+                          {ms.winnerIds.length > 0 && (
+                            <>
+                              <p className="text-lg text-gray-500 uppercase tracking-widest">
+                                {seatType === "cabinet_minister"
+                                  ? "Elected Cabinet Ministers"
+                                  : "Elected Shadow Ministers"}
+                              </p>
+                              <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+                                {ms.winnerIds.map((id) => (
+                                  <span
+                                    key={id}
+                                    className="text-4xl font-black text-amber-400 yip-winner-pop"
+                                  >
+                                    {nameOf(id)}
+                                  </span>
+                                ))}
+                              </div>
+                            </>
+                          )}
+                          {ms.shortfall && (
+                            <p className="text-xl font-semibold text-red-400">
+                              {ms.unfilledSeats} {roleWord}
+                              {ms.unfilledSeats === 1 ? " seat" : " seats"}{" "}
+                              still open —{" "}
+                              {ms.shortfall === "under_subscribed"
+                                ? "no candidate"
+                                : "tied, runoff pending"}
+                            </p>
+                          )}
                         </div>
                       );
                     })()}
@@ -1031,6 +1126,13 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
             {currentAgendaItem.agenda_type === "question_hour" &&
               currentQuestionDisplay && (
                 <div className="mx-auto max-w-3xl space-y-6">
+                  {/* Where the House has reached in the tabled questions. */}
+                  {questionProgress && questionProgress.total > 0 && (
+                    <p className="text-base font-medium tracking-wide text-gray-400">
+                      Question {questionProgress.position} of{" "}
+                      {questionProgress.total} tabled
+                    </p>
+                  )}
                   {/* Ministry label */}
                   <p className="text-lg text-cyan-400">
                     Directed to: Minister of{" "}
@@ -1099,9 +1201,24 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
             {/* Question Hour - no active question */}
             {currentAgendaItem.agenda_type === "question_hour" &&
               !currentQuestionDisplay && (
-                <p className="text-2xl text-gray-500">
-                  Awaiting next question...
-                </p>
+                <div className="space-y-3">
+                  <p className="text-2xl text-gray-500">
+                    Awaiting next question...
+                  </p>
+                  {/* Say how much work is waiting even before the first question
+                      is put. A member who never hears theirs called should at
+                      least see that the House holds it. */}
+                  {questionProgress && questionProgress.total > 0 && (
+                    <p className="text-3xl font-bold text-gray-300">
+                      {questionProgress.total} questions tabled by the House
+                      {questionProgress.position > 0 && (
+                        <span className="block text-xl font-normal text-gray-500">
+                          {questionProgress.position} put so far
+                        </span>
+                      )}
+                    </p>
+                  )}
+                </div>
               )}
 
             {/* Bill Presentation display */}
@@ -1236,15 +1353,51 @@ export function ProjectorDisplay({ eventId }: { eventId: string }) {
                 </div>
               )}
 
-            {/* Current speaker (only for non-question-hour items) */}
-            {currentAgendaItem.agenda_type !== "question_hour" && currentSpeaker && (
-              <div className="mx-auto max-w-2xl rounded-2xl border border-gray-800 bg-gray-900 p-6">
+            {/* Current speaker — who holds the floor right now. Shown on EVERY
+                session including Question Hour (Director, live event 2026-08-28).
+                It does not duplicate the question's submitter above: that is who
+                WROTE the question, this is who is on their feet, and they are
+                usually different people. During Question Hour the question is
+                the hero of the screen, so the card renders compact and reads as
+                an attribution strip beneath it rather than competing with it. */}
+            {currentSpeaker && (
+              <div
+                className={cn(
+                  "mx-auto max-w-2xl rounded-2xl border border-gray-800 bg-gray-900",
+                  currentAgendaItem.agenda_type === "question_hour"
+                    ? "p-4"
+                    : "p-6"
+                )}
+              >
                 <p className="mb-1 text-xs uppercase tracking-widest text-gray-500">
                   Now Speaking
                 </p>
-                <p className="text-3xl font-bold text-white lg:text-4xl">
+                <p
+                  className={cn(
+                    "font-bold text-white",
+                    currentAgendaItem.agenda_type === "question_hour"
+                      ? "text-2xl lg:text-3xl"
+                      : "text-3xl lg:text-4xl"
+                  )}
+                >
                   {currentSpeaker.full_name}
                 </p>
+                {/* Constituency number sits WITH the name, not in the small
+                    print: it is the member's identity in the House. Guarded for
+                    null even though the live roster is fully populated — a
+                    projector must never paint "Const. No. null" at 4xl. */}
+                {currentSpeaker.constituency_number != null && (
+                  <p
+                    className={cn(
+                      "mt-1 font-semibold tracking-wide text-[#FF9933]",
+                      currentAgendaItem.agenda_type === "question_hour"
+                        ? "text-lg lg:text-xl"
+                        : "text-2xl lg:text-3xl"
+                    )}
+                  >
+                    Const. No. {currentSpeaker.constituency_number}
+                  </p>
+                )}
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
                   {currentSpeaker.parliament_role && (
                     <span className="rounded-full bg-gray-800 px-4 py-1 text-sm text-gray-200">

@@ -240,7 +240,7 @@ function StatusBadge({ status }: { status: string }) {
 
 function fmtDate(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleDateString(undefined, {
+  return d.toLocaleDateString(undefined, { timeZone: "Asia/Kolkata",
     day: "numeric",
     month: "short",
     year: "numeric",

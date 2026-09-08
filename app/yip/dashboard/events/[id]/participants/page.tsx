@@ -50,6 +50,7 @@ export default async function ParticipantsPage({
   return (
     <ParticipantsClient
       eventId={id}
+      eventName={event.name ?? ""}
       participants={safeParticipants}
       allocationLocked={event.allocation_locked ?? false}
       canDelete={access.canDelete}

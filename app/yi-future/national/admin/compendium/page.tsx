@@ -148,7 +148,7 @@ export default async function CompendiumPage() {
                     {w.published_at && (
                       <div className="mt-2 text-[10px] text-navy/40">
                         Published{" "}
-                        {new Date(w.published_at).toLocaleDateString("en-IN")}
+                        {new Date(w.published_at).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })}
                       </div>
                     )}
                   </article>

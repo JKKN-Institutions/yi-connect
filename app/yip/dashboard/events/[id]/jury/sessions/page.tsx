@@ -10,6 +10,8 @@ import { ScoredSessionsPanel } from "./scored-sessions-panel";
 import { CommitteeRosterClient } from "./committee-roster-client";
 import { getCommitteeAssignmentRoster } from "@/app/yip/actions/committee-scores";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
+import { getMarkingCoverage } from "@/app/yip/actions/results";
+import { MarkingCoveragePanel } from "./marking-coverage-panel";
 
 export default async function JurySessionsPage({
   params,
@@ -38,12 +40,17 @@ export default async function JurySessionsPage({
 
   const toggleSessions = await getScoringToggleSessions(id);
   const committeeRoster = await getCommitteeAssignmentRoster(id);
+  // Coverage only — names and judge counts, never a score. This is the chair's
+  // one view of who still needs another judge; the results screen that also
+  // shows it is super-admin only, by design.
+  const coverage = await getMarkingCoverage(id);
   // Key the roster on the scoreable set so it remounts (re-seeds its state)
   // when a session is switched on/off above.
   const rosterKey = roster.data.sessions.map((s) => s.id).join("|");
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-4 p-4">
+      {coverage && <MarkingCoveragePanel coverage={coverage} />}
       {toggleSessions.success && (
         <ScoredSessionsPanel eventId={id} sessions={toggleSessions.data} />
       )}

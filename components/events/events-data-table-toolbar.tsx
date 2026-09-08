@@ -20,7 +20,7 @@ import {
 import { exportToCSV, exportToExcel, exportToJSON, formatDateTimeForExport } from '@/lib/utils/export';
 import { EVENT_CATEGORIES, EVENT_STATUSES } from '@/types/event';
 import type { EventListItem } from '@/types/event';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;

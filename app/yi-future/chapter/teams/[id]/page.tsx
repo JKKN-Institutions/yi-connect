@@ -15,6 +15,7 @@ import { inviteMember, removeMember } from "@/app/yi-future/actions/members";
 import { TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
 import { TrackIcon, trackIconText } from "@/components/yi-future/TrackIcon";
 import { unfreezeTeam } from "@/app/yi-future/actions/team-invites";
+import { placeDelegateDirectly } from "@/app/yi-future/actions/placement-override";
 import { ActionResultForm } from "@/components/yi-future/admin/ActionResultForm";
 
 type TeamDetail = {
@@ -168,7 +169,7 @@ export default async function TeamDetailPage({
 
   async function renameAction(formData: FormData) {
     "use server";
-    await updateTeamName(team!.id, team!.edition_id, formData);
+    return await updateTeamName(team!.id, team!.edition_id, formData);
   }
 
   async function inviteMemberAction(formData: FormData) {
@@ -182,35 +183,75 @@ export default async function TeamDetailPage({
   async function removeMemberAction(formData: FormData) {
     "use server";
     const did = String(formData.get("delegate_id") ?? "");
-    await removeMember(team!.id, did);
+    return await removeMember(team!.id, did);
   }
 
   async function setCaptainAction(formData: FormData) {
     "use server";
     const did = String(formData.get("delegate_id") ?? "");
-    await setTeamCaptain(team!.id, did);
+    return await setTeamCaptain(team!.id, did);
   }
 
   async function pickProblemAction(formData: FormData) {
     "use server";
     const pid = String(formData.get("problem_id") ?? "");
-    await pickProblemStatement(team!.id, pid);
+    return await pickProblemStatement(team!.id, pid);
   }
 
   async function clearProblemAction() {
     "use server";
-    await clearProblem(team!.id);
+    return await clearProblem(team!.id);
+  }
+
+  /**
+   * Add a delegate to this team WITHOUT waiting for them to accept.
+   *
+   * The Invite control above is consent-based: it creates a pending invitation
+   * and the student joins only when they accept. That is right for normal
+   * onboarding and wrong on event day, when the student is standing in the room
+   * and an organiser needs them scoreable now. It also deadlocks an empty team:
+   * inviting needs a captain, and a captain must already be a member, so a team
+   * created with nobody on it can never be filled from this page.
+   *
+   * Reuses placeDelegateDirectly rather than inserting team_members here, so
+   * every direct add lands in future.team_placement_overrides with who did it
+   * and why. The audit is the reason this power is allowed to exist.
+   */
+  async function directAddAction(formData: FormData) {
+    "use server";
+    const did = String(formData.get("delegate_id") ?? "");
+    if (!did) return { ok: false as const, error: "Pick a delegate first." };
+    const res = await placeDelegateDirectly({
+      chapterId: team!.chapter_id,
+      delegateId: did,
+      teamId: team!.id,
+      reason: String(formData.get("reason") ?? "").trim() || undefined,
+      acknowledged: true,
+    });
+    if (!res.ok) return { ok: false as const, error: res.error };
+    // caveat = placed, but a follow-up write (e.g. the audit row) did not land.
+    // Surface it rather than reporting a clean success.
+    return {
+      ok: true as const,
+      message: `${res.delegateName} added to ${res.teamName}.${
+        res.caveat ? ` ${res.caveat}` : ""
+      }`,
+    };
   }
 
   async function deleteTeamAction() {
     "use server";
-    await deleteTeam(team!.id);
+    // Only leave the page once the delete actually succeeded. Redirecting
+    // unconditionally sent the admin back to the team list on failure, so a
+    // refused delete was indistinguishable from a successful one.
+    const res = await deleteTeam(team!.id);
+    if (!res.ok) return res;
     redirect("/yi-future/chapter/teams");
   }
 
   async function unfreezeTeamAction() {
     "use server";
-    await unfreezeTeam(team!.id);
+    return await unfreezeTeam(team!.id);
   }
 
   return (
@@ -266,7 +307,7 @@ export default async function TeamDetailPage({
                   (
                   {new Date(unlockRequest.created_at).toLocaleDateString(
                     undefined,
-                    { day: "numeric", month: "short" }
+                    { timeZone: "Asia/Kolkata", day: "numeric", month: "short" }
                   )}
                   )
                 </span>
@@ -274,21 +315,21 @@ export default async function TeamDetailPage({
               </div>
             )}
           </div>
-          <form action={unfreezeTeamAction}>
+          <ActionResultForm action={unfreezeTeamAction}>
             <button
               type="submit"
               className="px-4 py-2 rounded-md bg-navy text-ivory text-sm font-semibold hover:bg-navy-dark whitespace-nowrap"
             >
               Unfreeze team
             </button>
-          </form>
+          </ActionResultForm>
         </div>
       )}
 
       {/* Name edit */}
       <section className="bg-white border border-navy/10 rounded-lg p-5">
         <h3 className="text-sm font-bold text-navy mb-3">Team name</h3>
-        <form action={renameAction} className="flex gap-2">
+        <ActionResultForm action={renameAction} className="flex flex-wrap gap-2">
           <input
             name="team_name"
             required
@@ -301,7 +342,7 @@ export default async function TeamDetailPage({
           >
             Save
           </button>
-        </form>
+        </ActionResultForm>
       </section>
 
       {/* Members */}
@@ -335,7 +376,7 @@ export default async function TeamDetailPage({
                 </div>
                 <div className="flex items-center gap-3">
                   {team.captain_id !== m.delegate_id && (
-                    <form action={setCaptainAction}>
+                    <ActionResultForm action={setCaptainAction}>
                       <input
                         type="hidden"
                         name="delegate_id"
@@ -347,9 +388,9 @@ export default async function TeamDetailPage({
                       >
                         Make captain
                       </button>
-                    </form>
+                    </ActionResultForm>
                   )}
-                  <form action={removeMemberAction}>
+                  <ActionResultForm action={removeMemberAction}>
                     <input
                       type="hidden"
                       name="delegate_id"
@@ -361,7 +402,7 @@ export default async function TeamDetailPage({
                     >
                       Remove
                     </button>
-                  </form>
+                  </ActionResultForm>
                 </div>
               </li>
             ))}
@@ -401,6 +442,60 @@ export default async function TeamDetailPage({
             </button>
           </ActionResultForm>
         )}
+
+        {/* Add without waiting for acceptance. Invite above needs the student to
+            accept, which is right for onboarding and wrong on event day — and it
+            deadlocks an empty team, because inviting needs a captain and a
+            captain must already be a member. Recorded via placeDelegateDirectly. */}
+        {team.team_members.length < TEAM_SIZE_MAX && !team.is_frozen && (
+          <ActionResultForm
+            action={directAddAction}
+            className="mt-3 pt-3 border-t border-navy/10 space-y-2"
+          >
+            <div className="text-xs font-semibold text-navy">
+              Add straight away, without an invitation
+            </div>
+            <p className="text-xs text-navy/60">
+              Puts the delegate on this team immediately — they do not have to
+              accept anything. Use this when the student is here and needs to be
+              scoreable now. Your name and the reason are recorded.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <select
+                name="delegate_id"
+                required
+                defaultValue=""
+                className="flex-1 min-w-[220px] px-3 py-2 border border-navy/20 rounded-md text-sm bg-white"
+              >
+                <option value="" disabled>
+                  — pick a delegate —
+                </option>
+                {delegates
+                  .filter(
+                    (d) => !memberIds.has(d.id) && d.team_members.length === 0
+                  )
+                  .map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.full_name} {d.email && `(${d.email})`}
+                    </option>
+                  ))}
+              </select>
+              <input
+                type="text"
+                name="reason"
+                maxLength={200}
+                placeholder="Why (optional) — e.g. present at the final"
+                className="flex-1 min-w-[200px] px-3 py-2 border border-navy/20 rounded-md text-sm bg-white"
+              />
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-md border-2 border-navy text-navy text-sm font-semibold hover:bg-navy hover:text-ivory"
+              >
+                Add now
+              </button>
+            </div>
+          </ActionResultForm>
+        )}
       </section>
 
       {/* Problem */}
@@ -408,14 +503,14 @@ export default async function TeamDetailPage({
         <div className="flex items-start justify-between mb-3">
           <h3 className="text-sm font-bold text-navy">Problem statement</h3>
           {team.problem_statement_id && (
-            <form action={clearProblemAction}>
+            <ActionResultForm action={clearProblemAction}>
               <button
                 type="submit"
                 className="text-xs text-red-600/70 hover:text-red-600"
               >
                 Clear pick
               </button>
-            </form>
+            </ActionResultForm>
           )}
         </div>
 
@@ -429,7 +524,7 @@ export default async function TeamDetailPage({
             </p>
           </div>
         ) : (
-          <form action={pickProblemAction} className="space-y-3">
+          <ActionResultForm action={pickProblemAction} className="space-y-3">
             {/* Track legend — all 4 tracks the chapter can allocate from */}
             {problemsByTrack.length > 0 && (
               <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-navy/60">
@@ -482,21 +577,21 @@ export default async function TeamDetailPage({
                 some.
               </p>
             )}
-          </form>
+          </ActionResultForm>
         )}
       </section>
 
       {/* Danger zone */}
       <section className="bg-white border border-red-200 rounded-lg p-5">
         <h3 className="text-sm font-bold text-red-600 mb-2">Danger zone</h3>
-        <form action={deleteTeamAction}>
+        <ActionResultForm action={deleteTeamAction}>
           <button
             type="submit"
             className="text-xs font-semibold text-red-600 hover:text-red-700"
           >
             Delete team
           </button>
-        </form>
+        </ActionResultForm>
         <p className="mt-1 text-xs text-navy/50">
           All members will be freed up to join another team. Submissions
           cannot be recovered.

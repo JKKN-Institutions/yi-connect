@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { ActionResult } from "./editions";
 import { requireFutureAdmin } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 // ═══════════════════════════════════════════════════════════════════════
 // Chapter scoping.
@@ -87,7 +88,7 @@ export async function createCollege(
       primary_contact_phone,
       is_yuva,
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "colleges.createCollege") };
 
   revalidatePath("/yi-future/chapter/colleges");
   redirect("/yi-future/chapter/colleges");
@@ -134,7 +135,7 @@ export async function updateCollege(
       is_approved: true,
     })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "colleges.updateCollege") };
 
   revalidatePath("/yi-future/chapter/colleges");
   redirect("/yi-future/chapter/colleges");
@@ -164,7 +165,7 @@ export async function deleteCollege(id: string): Promise<ActionResult> {
     .from("colleges")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "colleges.deleteCollege") };
 
   revalidatePath("/yi-future/chapter/colleges");
   return { ok: true, message: "College deleted." };
@@ -180,7 +181,7 @@ export async function approvePendingCollege(id: string): Promise<ActionResult> {
     .from("colleges")
     .update({ is_approved: true } as never)
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "colleges.approvePendingCollege") };
   revalidatePath("/yi-future/chapter/colleges");
   return { ok: true, message: "College approved." };
 }
@@ -226,7 +227,7 @@ export async function mergePendingCollege(
     .from("delegates")
     .update({ college_id: targetId } as never)
     .eq("college_id", sourceId);
-  if (relinkErr) return { ok: false, error: relinkErr.message };
+  if (relinkErr) return { ok: false, error: safeError(relinkErr.message, "colleges.mergePendingCollege") };
 
   // Soft-delete source
   const { error: mergeErr } = await svc
@@ -234,7 +235,7 @@ export async function mergePendingCollege(
     .from("colleges")
     .update({ merged_into: targetId, is_approved: false } as never)
     .eq("id", sourceId);
-  if (mergeErr) return { ok: false, error: mergeErr.message };
+  if (mergeErr) return { ok: false, error: safeError(mergeErr.message, "colleges.mergePendingCollege") };
 
   revalidatePath("/yi-future/chapter/colleges");
   return { ok: true, message: "Merged successfully." };
@@ -260,7 +261,7 @@ export async function editAndApprovePendingCollege(
       is_approved: true,
     } as never)
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "colleges.editAndApprovePendingCollege") };
   revalidatePath("/yi-future/chapter/colleges");
   return { ok: true, message: "Approved." };
 }

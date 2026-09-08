@@ -34,6 +34,13 @@ import {
   ROLE_COLORS,
   type ParliamentRole,
 } from "@/lib/yip/constants";
+import { roleSlugOptions, roleSlugLabel } from "@/lib/yip/scoring-roles";
+import {
+  ROUND_LEVELS,
+  ROUND_LEVEL_LABELS,
+  describeRoundLevels,
+  type RoundLevel,
+} from "@/lib/yip/round-level";
 import {
   createRubric,
   updateRubric,
@@ -70,8 +77,17 @@ type DraftState = {
   name: string;
   target_role: ParliamentRole;
   is_default: boolean;
+  // Round levels this rubric applies to. EMPTY = every round, which is how all
+  // three existing rubrics behave. Selecting all three means the same thing and
+  // is stored as "every round" by normaliseRoundLevels() on the server.
+  levels: RoundLevel[];
   criteria: DraftCriterion[];
 };
+
+/** A rubric limited to some levels is chosen by its scope, never by the flag. */
+function isScoped(levels: readonly RoundLevel[]): boolean {
+  return levels.length > 0 && levels.length < ROUND_LEVELS.length;
+}
 
 const KEY_PATTERN = /^[a-z][a-z0-9_]*$/;
 
@@ -106,6 +122,7 @@ function emptyDraft(): DraftState {
     name: "",
     target_role: "mp",
     is_default: false,
+    levels: [],
     criteria: [
       {
         key: "",
@@ -125,6 +142,7 @@ function draftFromRubric(r: Rubric): DraftState {
     name: r.name,
     target_role: r.target_role,
     is_default: r.is_default,
+    levels: r.levels ? [...r.levels] : [],
     criteria: r.criteria.map(criterionToDraft),
   };
 }
@@ -207,8 +225,11 @@ function draftToInput(draft: DraftState) {
   return {
     name: draft.name.trim(),
     target_role: draft.target_role,
-    is_default: draft.is_default,
+    // A scoped rubric can never be the role default (the server rejects it and
+    // the tick is hidden below) — send false rather than a stale checkbox value.
+    is_default: isScoped(draft.levels) ? false : draft.is_default,
     is_active: true,
+    levels: draft.levels.length > 0 ? draft.levels : null,
     criteria: draft.criteria.map((row) => {
       const key = row.key.trim();
       const hasSubs = row.sub_criteria.length > 0;
@@ -262,8 +283,10 @@ export function RubricsClient({
 
   const defaultSummary = useMemo(() => {
     return PARLIAMENT_ROLES.map((role) => {
+      // `!r.levels` — the headline default for a role is the SHARED rubric.
+      // A regional-only rubric is not "the default"; it is an override.
       const def = rubrics.find(
-        (r) => r.target_role === role && r.is_default && r.is_active
+        (r) => r.target_role === role && r.is_default && r.is_active && !r.levels
       );
       return { role, def };
     });
@@ -407,9 +430,12 @@ export function RubricsClient({
 
       setRubrics((prev) => {
         // If this rubric is now default, strip default from the other rubrics in the same role.
+        // Mirrors clearDefaultForRole() on the server, INCLUDING its
+        // `.is("levels", null)` filter — a scoped rubric never holds the flag,
+        // so clearing it here would desync the screen from the database.
         const next = saved.is_default
           ? prev.map((r) =>
-              r.target_role === saved.target_role && r.id !== saved.id
+              r.target_role === saved.target_role && r.id !== saved.id && !r.levels
                 ? { ...r, is_default: false }
                 : r
             )
@@ -519,6 +545,7 @@ export function RubricsClient({
           r.target_role === draft.target_role &&
           r.is_default &&
           r.is_active &&
+          !r.levels &&
           r.id !== draft.id
       )
     : null;
@@ -672,6 +699,64 @@ export function RubricsClient({
                   ))}
                 </select>
               </div>
+            </div>
+
+            {/* Round-level scope */}
+            <div>
+              <label className="text-xs font-medium text-[#1a1a3e]/70">
+                Applies to which rounds?
+              </label>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {ROUND_LEVELS.map((lvl) => {
+                  const selected = draft.levels.includes(lvl);
+                  return (
+                    <button
+                      key={lvl}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() =>
+                        setDraft({
+                          ...draft,
+                          levels: selected
+                            ? draft.levels.filter((l) => l !== lvl)
+                            : [...draft.levels, lvl],
+                        })
+                      }
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                        selected
+                          ? "bg-[#1a1a3e] text-white border-[#1a1a3e]"
+                          : "bg-white text-[#1a1a3e]/70 border-[#1a1a3e]/10 hover:border-[#1a1a3e]/30"
+                      }`}
+                    >
+                      {ROUND_LEVEL_LABELS[lvl]}
+                    </button>
+                  );
+                })}
+                {draft.levels.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setDraft({ ...draft, levels: [] })}
+                    className="text-[11px] text-[#1a1a3e]/60 hover:text-[#1a1a3e] underline ml-1"
+                  >
+                    Clear (every round)
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-[#1a1a3e]/60 italic mt-1.5">
+                {isScoped(draft.levels) ? (
+                  <>
+                    Used only for <strong>{describeRoundLevels(draft.levels)}</strong>{" "}
+                    rounds. Other rounds keep the shared rubric for this role, so
+                    editing this one cannot change marks already given elsewhere.
+                  </>
+                ) : (
+                  <>
+                    Leave every chip off to use this rubric for all rounds — that
+                    is how every rubric works today. Pick chapter or regional to
+                    score those rounds differently without touching the others.
+                  </>
+                )}
+              </p>
             </div>
 
             {/* Criteria editor */}
@@ -836,31 +921,47 @@ export function RubricsClient({
               </div>
             </div>
 
-            {/* Default flag */}
-            <div className="flex items-start gap-3 rounded-md border border-[#1a1a3e]/10 bg-[#FFF9EF] px-3 py-2.5">
-              <input
-                id="is_default"
-                type="checkbox"
-                checked={draft.is_default}
-                onChange={(e) =>
-                  setDraft({ ...draft, is_default: e.target.checked })
-                }
-                className="mt-0.5 size-4 accent-[#FF9933]"
-              />
-              <div className="flex-1">
-                <label htmlFor="is_default" className="text-sm font-medium text-[#1a1a3e]">
-                  Use as default for {ROLE_LABELS[draft.target_role]}
-                </label>
-                {draft.is_default && existingDefaultForDraftRole && (
-                  <p className="text-[11px] text-[#c65400] mt-1 flex items-center gap-1">
-                    <AlertTriangle className="size-3" />
-                    This will replace the current default &quot;
-                    {existingDefaultForDraftRole.name}&quot; for{" "}
-                    {ROLE_LABELS[draft.target_role]}.
-                  </p>
-                )}
+            {/* Default flag — only meaningful for a rubric that serves every
+                round. A scoped rubric is already picked by its scope, so the
+                tick is replaced by a line explaining that. The server refuses
+                the combination too (validateInput / setAsDefault). */}
+            {isScoped(draft.levels) ? (
+              <div className="flex items-start gap-3 rounded-md border border-[#1a1a3e]/10 bg-[#FFF9EF] px-3 py-2.5">
+                <Star className="size-4 mt-0.5 text-[#FF9933]" />
+                <p className="text-sm text-[#1a1a3e]/80">
+                  This rubric is used automatically for{" "}
+                  <strong>{describeRoundLevels(draft.levels)}</strong> rounds, so
+                  it does not need to be set as the default for{" "}
+                  {ROLE_LABELS[draft.target_role]}. The shared rubric stays the
+                  default everywhere else.
+                </p>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-start gap-3 rounded-md border border-[#1a1a3e]/10 bg-[#FFF9EF] px-3 py-2.5">
+                <input
+                  id="is_default"
+                  type="checkbox"
+                  checked={draft.is_default}
+                  onChange={(e) =>
+                    setDraft({ ...draft, is_default: e.target.checked })
+                  }
+                  className="mt-0.5 size-4 accent-[#FF9933]"
+                />
+                <div className="flex-1">
+                  <label htmlFor="is_default" className="text-sm font-medium text-[#1a1a3e]">
+                    Use as default for {ROLE_LABELS[draft.target_role]}
+                  </label>
+                  {draft.is_default && existingDefaultForDraftRole && (
+                    <p className="text-[11px] text-[#c65400] mt-1 flex items-center gap-1">
+                      <AlertTriangle className="size-3" />
+                      This will replace the current default &quot;
+                      {existingDefaultForDraftRole.name}&quot; for{" "}
+                      {ROLE_LABELS[draft.target_role]}.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Validation / server error */}
             {(draftError || error) && (
@@ -971,6 +1072,11 @@ function RubricCard({
                   Default
                 </Badge>
               )}
+              {rubric.levels && rubric.levels.length > 0 && (
+                <Badge className="bg-[#1a1a3e]/[0.07] text-[#1a1a3e] border-[#1a1a3e]/20 border">
+                  {describeRoundLevels(rubric.levels)} only
+                </Badge>
+              )}
               {!rubric.is_active && (
                 <Badge className="bg-[#1a1a3e]/10 text-[#1a1a3e]/70 border-[#1a1a3e]/15 border">
                   Inactive
@@ -1024,7 +1130,9 @@ function RubricCard({
             >
               <Copy className="size-3.5 mr-1" /> Clone
             </Button>
-            {!rubric.is_default && rubric.is_active && (
+            {/* A level-scoped rubric is chosen by its scope, so it is never a
+                "default" — offering the button would only produce a refusal. */}
+            {!rubric.is_default && rubric.is_active && !rubric.levels && (
               <Button
                 variant="outline"
                 size="sm"
@@ -1084,9 +1192,10 @@ function RubricCard({
                         {Array.isArray(c.roles) && c.roles.length > 0 && (
                           <span className="block text-[10px] font-normal text-[#b0561a] mt-0.5">
                             Only:{" "}
-                            {c.roles
-                              .map((r) => ROLE_LABELS[r] ?? r)
-                              .join(", ")}
+                            {/* roleSlugLabel, not ROLE_LABELS — bench slugs
+                                ("side:ruling") are not parliament roles and
+                                would otherwise print as raw slugs. */}
+                            {c.roles.map((r) => roleSlugLabel(r)).join(", ")}
                           </span>
                         )}
                       </TableCell>
@@ -1133,8 +1242,16 @@ function RubricCard({
 }
 
 // ─── CriterionRolesEditor ─────────────────────────────────────────
-// "Applies to roles" multi-select (S2-5). Toggle chips over the assignable
-// parliament roles; empty selection = the criterion applies to everyone.
+// "Applies to roles" multi-select (S2-5). Toggle chips; empty = everyone.
+//
+// The chips come from roleSlugOptions() — the SAME list app/yip/actions/
+// admin-rubrics.ts validates against, so the screen cannot offer a tag the
+// server would reject. It leads with the two BENCH slugs, and those are the
+// point: the national admin's rule splits a session's marks between the
+// treasury bench and the opposition (Government Bills 16 = 6 ruling + 4 both +
+// 6 opposition, so every student is still marked out of 10). A ruling MP and an
+// opposition MP both have parliament_role = 'mp', so with parliament roles
+// alone that split simply cannot be written down.
 
 function CriterionRolesEditor({
   roles,
@@ -1164,21 +1281,24 @@ function CriterionRolesEditor({
         )}
       </div>
       <div className="flex flex-wrap gap-1.5">
-        {PARLIAMENT_ROLES.map((role) => {
-          const selected = roles.includes(role);
+        {roleSlugOptions().map(({ slug, label }) => {
+          const selected = roles.includes(slug);
+          const bench = slug.startsWith("side:");
           return (
             <button
-              key={role}
+              key={slug}
               type="button"
-              onClick={() => onToggle(role)}
+              onClick={() => onToggle(slug)}
               aria-pressed={selected}
               className={`text-[11px] px-2.5 py-1 rounded-full border transition-all ${
                 selected
                   ? "bg-[#1a1a3e] text-white border-[#1a1a3e]"
-                  : "bg-white text-[#1a1a3e]/70 border-[#1a1a3e]/10 hover:border-[#1a1a3e]/30"
+                  : bench
+                    ? "bg-[#FFF9EF] text-[#b0561a] border-[#FF9933]/30 hover:border-[#FF9933]/60"
+                    : "bg-white text-[#1a1a3e]/70 border-[#1a1a3e]/10 hover:border-[#1a1a3e]/30"
               }`}
             >
-              {ROLE_LABELS[role]}
+              {label}
             </button>
           );
         })}
@@ -1187,6 +1307,12 @@ function CriterionRolesEditor({
         <p className="text-[10px] text-[#1a1a3e]/50 italic mt-1">
           Only jurors scoring these roles will see this criterion. Leave empty
           to apply it to every role.
+        </p>
+      )}
+      {!restricted && (
+        <p className="text-[10px] text-[#1a1a3e]/50 italic mt-1">
+          Tag the two highlighted bench chips to split a criterion between the
+          ruling and opposition sides. Untagged criteria count for both.
         </p>
       )}
     </div>

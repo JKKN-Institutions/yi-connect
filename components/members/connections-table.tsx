@@ -39,7 +39,7 @@ import {
 } from 'lucide-react';
 import { exportToCSV, exportToExcel } from '@/lib/utils/export';
 import type { ConnectionWithMember } from '@/types/connection';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface Props {
   connections: ConnectionWithMember[];

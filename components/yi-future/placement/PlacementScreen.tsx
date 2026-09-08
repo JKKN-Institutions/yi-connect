@@ -22,8 +22,16 @@ import {
   buildPlacementPlan,
   buildStrategyOptions,
 } from "@/lib/yi-future/placement";
+import {
+  buildOverrideTargets,
+  OVERRIDE_LOG_UNAVAILABLE_REASON,
+} from "@/lib/yi-future/placement-override";
+import { listPlacementOverrides } from "@/lib/yi-future/placement-override-data";
 import { TEAM_SIZE_MAX } from "@/lib/yi-future/constants";
 import { PlacementBoard } from "@/components/yi-future/placement/PlacementBoard";
+import { DirectPlacementPanel } from "@/components/yi-future/placement/DirectPlacementPanel";
+import { OverrideLog } from "@/components/yi-future/placement/OverrideLog";
+import type { PlacementOverrideLog } from "@/lib/yi-future/placement-override";
 
 export async function PlacementScreen({
   chapterId,
@@ -66,6 +74,28 @@ export async function PlacementScreen({
   // cards and the suggestion list can never disagree about this chapter.
   const plan = buildPlacementPlan({ unteamed, teams });
   const strategies = buildStrategyOptions({ unteamed, teams });
+  // Same roster read again, so the override picker can never offer a student or
+  // a team the rest of this screen does not know about.
+  const overrideTargets = buildOverrideTargets({ unteamed, teams });
+
+  // The override log is a SEPARATE table whose migration ships unapplied, so
+  // this read is expected to fail on databases where it has not been run. It is
+  // caught here because a missing audit table must not take down the placement
+  // screen that shipped before it — the consent flow above keeps working, and
+  // the override simply reports itself as switched off.
+  let overrideLog: PlacementOverrideLog;
+  try {
+    overrideLog = await listPlacementOverrides(chapterId, edition.id);
+  } catch (e) {
+    overrideLog = {
+      available: false,
+      reason: OVERRIDE_LOG_UNAVAILABLE_REASON,
+      detail: e instanceof Error ? e.message : null,
+    };
+  }
+  const overridesApplied = overrideLog.available
+    ? overrideLog.rows.filter((r) => r.outcome === "applied").length
+    : 0;
 
   return (
     <div className="space-y-6">
@@ -93,6 +123,18 @@ export async function PlacementScreen({
         plan={plan}
         strategies={strategies}
       />
+
+      {/* The override lives BELOW the whole consent flow on purpose: an admin
+          meets the invitation path first, and has to scroll past it and open a
+          collapsed panel to place anybody directly. */}
+      <DirectPlacementPanel
+        chapterId={chapterId}
+        targets={overrideTargets}
+        disabledReason={overrideLog.available ? null : overrideLog.reason}
+        recordedCount={overridesApplied}
+      />
+
+      <OverrideLog log={overrideLog} />
     </div>
   );
 }

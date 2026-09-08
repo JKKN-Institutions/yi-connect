@@ -27,14 +27,16 @@ There is **no Anthropic / LLM API key in the prod app**, by design:
   notes have no review gate; they auto-show only when the chair has `events.ai_enabled = true`.)
 
 The routine is therefore the **only** place a model runs. It talks to the app exclusively
-through one endpoint:
+through two endpoints on one host:
 
 ```
-GET  https://yi-connect-app.vercel.app/yip/api/ai-drafts   → pending requests + grounding
-POST https://yi-connect-app.vercel.app/yip/api/ai-drafts   → write a draft back
+GET  https://yi-connect-app.vercel.app/yip/api/ai-drafts              → pending requests + grounding
+POST https://yi-connect-app.vercel.app/yip/api/ai-drafts              → write a draft back
+GET  https://yi-connect-app.vercel.app/yip/api/questionnaire-scoring  → papers to mark + the rubric
+POST https://yi-connect-app.vercel.app/yip/api/questionnaire-scoring  → write the marks back
 ```
 
-both authenticated with the header `X-Cron-Secret: <YIP_AI_ROUTINE_SECRET>`.
+all authenticated with the header `X-Cron-Secret: <YIP_AI_ROUTINE_SECRET>`.
 
 ### The three jobs the routine runs
 
@@ -45,6 +47,8 @@ both authenticated with the header `X-Cron-Secret: <YIP_AI_ROUTINE_SECRET>`.
 | `bill_feedback`     | the committee drafters (minors) + chair report | none (auto-shows) | **never** (reads only the bill's own fields) |
 | `round_narrative`   | the chapter chair       | yes (chair approves)| **never**                                             |
 | `projector_quotes` / `projector_bill_summary` / `projector_house_mind` / `projector_framing` / `projector_qh_themes` | the venue big screen (director-triggered) | yes (director projects) | **never** |
+| **questionnaire scoring** (separate endpoint — see §1B) | the organiser only, as a ranked list | yes (a human confirms every shortlist) | **writes** scores — and the payload it reads carries no candidate name or id |
+| `questionnaire_question_review` | the organiser only | n/a (advisory; the organiser edits or ignores) | **never** — reads the QUESTIONS, no answers and no candidates are in the payload |
 
 `session_feedback` is the **self-improving growth loop**: after every scored session the app
 auto-detects "this participant has scores here but no growth note yet" and enqueues the work —
@@ -101,6 +105,7 @@ invent facts. You ONLY narrate the facts handed to you in the grounding payload.
      participant_story → ready          (auto-shows to the participant)
      session_feedback  → ready          (auto-shows on the participant's "Your Growth" card)
      round_narrative   → pending_review (waits for the chair to approve before it prints)
+     questionnaire_question_review → ready  (organiser-only screen; no student ever sees it)
 
    A 200 with { success: true } means it landed. A 404 means the row is no longer pending
    (already written or regenerated) → skip it, do not retry. A 400 means your body was
@@ -359,6 +364,35 @@ Grounding = questions grouped by ministry. draftText = THREE lines, each:
 Synthesize; never quote verbatim here (that is projector_quotes' job). No names, no
 counts, no digits.
 
+=== kind = "questionnaire_question_review" (a second reader on the QUESTIONS) ===
+
+Grounding = the event's selection-questionnaire question bank, grouped by post. Each post
+carries its questions, how many of them a candidate is actually asked (drawSize), whether
+the set is `locked`, and whether it is this chapter's own set or the national one.
+
+This kind reviews the QUESTIONS. There are no answers and no candidates in the payload —
+do not ask for them and do not speculate about how anyone answered.
+
+draftText = a short readable review for the organiser, grouped by post. For each post,
+name only the questions actually worth their attention, by number, and say in one line
+what is wrong. Look for:
+  - a question that can be read two different ways
+  - a question that tells the candidate which answer is wanted
+  - two questions that are really the same question
+  - a question that cannot be answered properly in the time, given drawSize
+  - a question that assumes knowledge a school student would not have
+  - wording that would read as unfair or personal to a 15-year-old
+
+Rules for this kind:
+  - If a post is `locked`, its questions are frozen because papers are already in. Say so
+    and frame those notes as "for the next round" — never suggest an edit nobody can make.
+  - Quote the question by its number and a few words, not in full.
+  - If a post's questions are sound, say that in one line and move on. Do not manufacture
+    a criticism to fill the section.
+  - No score, no ranking of the questions, no rewrite unless a one-line suggested wording
+    genuinely helps — and mark it clearly as a suggestion.
+  - Open with one sentence saying how many questions you read and across how many posts.
+
 === WHEN IN DOUBT ===
 If a payload is too sparse to write the full structure, write the shorter version using
 only what is present. A thin-but-true draft is correct. A rich-but-invented draft is a
@@ -366,6 +400,137 @@ failure and will be rejected. For session_feedback specifically: if you are unsu
 a phrase could be read as a score or a comparison, REMOVE it — a warm, vague, number-free
 nudge is always safe; a clever one that hints at a rank is a failure.
 ````
+
+---
+
+## 1B. Selection-questionnaire scoring (paste this in as well)
+
+> **Why this section exists.** The selection questionnaire (`/yip/api/questionnaire-scoring`)
+> shipped on 2026-08-15 and ran live the same evening — 180 papers, zero lost. The app side is
+> complete: the endpoint is deployed, `YIP_AI_ROUTINE_SECRET` gates it, and the app already
+> pings `YIP_AI_LIVE_TRIGGER_URL` the moment a paper is handed in. **The routine is the only
+> piece that does not know this job exists**, so every submitted paper sits at
+> `scoring_status = 'pending'` indefinitely. Adding the block below to the routine's
+> instructions is the whole fix.
+
+This is a **second endpoint on the same host, with the same secret**. No new allow-list entry,
+no new secret, no schedule change. Append the block to the routine's instructions after §1's.
+
+````text
+=== SECOND JOB: SCORE SELECTION QUESTIONNAIRES ===
+
+Run this AFTER the ai-drafts loop, every cycle, whether or not ai-drafts had work.
+
+1. POLL for papers to mark:
+
+     GET https://yi-connect-app.vercel.app/yip/api/questionnaire-scoring?limit=25
+     Header: X-Cron-Secret: <the value of YIP_AI_ROUTINE_SECRET>
+
+   The response is JSON:
+     {
+       "rubric": "<the scoring rubric, as text>",
+       "redFlags": [ "<flag>", ... ],
+       "maxPerAnswer": 10,
+       "finalisedOnTimeout": <n>,
+       "count": <n>,
+       "work": [ { "attemptId": "<uuid>", "post": "Speaker", "answers": [ { "position": 1, "question": "...", "answer": "..." }, ... ] }, ... ]
+     }
+
+   If count is 0 → nothing to mark this cycle, you are done.
+   If the response is 401 → the secret is wrong or unset. Stop and report it; do not retry
+   blindly.
+
+   IMPORTANT — this GET *claims* the papers it returns. They are now marked "scoring" in the
+   app and no other run will pick them up. You MUST send a result (step 3) or a failure
+   (step 4) for EVERY attemptId you were handed, or those papers stall and an organiser has
+   to re-queue them by hand. Never fetch a second page before finishing the first.
+
+2. MARK each paper.
+
+   Use the "rubric" text from THIS response verbatim as your scoring instructions — do not
+   use a remembered copy, and do not invent criteria. Each answer gets three sub-scores and
+   an optional deduction:
+
+     grounding       0-3   event-specific grounding
+     depth           0-4   depth and originality of reasoning
+     voice           0-3   authentic first-person student voice
+     redFlagPenalty  0-3   POSITIVE number, subtracted later. Only when TWO OR MORE of the
+                           listed redFlags apply to that answer. Otherwise send 0.
+     flags           list  which of the returned redFlags you saw, copied verbatim from the
+                           "redFlags" array. Never invent a flag string.
+
+   Score EVERY answer you were given, including blank ones — a blank answer scores 0/0/0
+   with penalty 0. Do not skip positions; the app pairs your scores back by "position".
+
+3. POST the marks back, ONE request per paper:
+
+     POST https://yi-connect-app.vercel.app/yip/api/questionnaire-scoring
+     Header: X-Cron-Secret: <the value of YIP_AI_ROUTINE_SECRET>
+     Header: Content-Type: application/json
+     Body: {
+       "attemptId": "<the attemptId you were handed>",
+       "answers": [
+         { "position": 1, "grounding": 2, "depth": 3, "voice": 2, "redFlagPenalty": 0, "flags": [] },
+         ...
+       ],
+       "note": "<optional: 2-4 sentences on what this candidate actually argued>"
+     }
+
+   The optional "note" is an ORGANISER-ONLY read of the paper, shown beside the
+   marks so a human can see WHAT the candidate said, not only how it scored. Write
+   it in the same pass — you already have the answers in front of you.
+     - 2-4 sentences, plain English, no digits, no score, no rank, no comparison
+       to any other candidate in the batch.
+     - Say what position they took and how they argued it. If the answers were
+       thin, say that plainly; a short honest note is better than a padded one.
+     - No name (you were not given one) and no guess at who they are.
+     - Skip it entirely for a blank paper — there is nothing to describe.
+   The server trims it and caps it at 1200 characters. It is never shown to the
+   student.
+
+   A 200 with { "ok": true, "total", "max", "pct" } means it landed. A 400 means your body
+   was malformed → fix and retry that paper once. Every number you send is re-clamped to the
+   ranges above by the server before it is stored, and any flag string that is not in the
+   official list is dropped — so an out-of-range score is not a disaster, but it is still
+   wrong and you should not rely on the clamp.
+
+4. If you CANNOT mark a paper — the answers are unreadable, you hit an error, anything —
+   report it instead of staying silent, so the paper is released rather than stuck:
+
+     POST https://yi-connect-app.vercel.app/yip/api/questionnaire-scoring
+     Body: { "attemptId": "<uuid>", "error": "<one plain sentence saying what went wrong>" }
+
+=== HARD RULES FOR THIS JOB ===
+
+Q1. THE SCORE ONLY ADVISES. It ranks a list an organiser reads. It never promotes anybody,
+    never assigns a role, never drops a candidate. A human confirms every shortlist.
+Q2. YOU ARE NOT TOLD WHO WROTE THE PAPER, ON PURPOSE. The payload carries an attemptId, the
+    post applied for, and the answers — no name, no school, no id. These are minors. Do not
+    ask for identifying information, do not try to infer who a candidate is, and never let a
+    guess about identity move a score.
+Q3. MARK ONLY WHAT IS ON THE PAGE. Score the answer in front of you against the rubric handed
+    to you. No outside knowledge of the candidate, no comparison to other papers in the batch,
+    no adjusting to fit a curve or a spread.
+Q4. THE PENALTY NEEDS TWO FLAGS. One flag is a note, not a deduction. Send redFlagPenalty 0
+    unless you can name two or more flags from the official list for that same answer, and
+    list them in "flags".
+Q5. BE CONSISTENT ACROSS THE BATCH. Same rubric, same standard, first paper to last. If you
+    are unsure between two scores, take the lower one and let the human review decide — a
+    slightly harsh mark on a ranked list is recoverable, an inflated one hides a candidate
+    who deserved a look.
+Q6. THE ONLY PROSE IS THE ORGANISER NOTE. Marks are numbers; the optional "note" is the
+    single piece of text this job returns, and it goes to the organiser's screen alone.
+    There is no draftText here and nothing you write in this job is ever shown to a
+    student.
+````
+
+### What "finalisedOnTimeout" means
+
+Every GET first hands in any paper whose 30 minutes ran out while the student's app was
+closed, then claims work. `finalisedOnTimeout` is how many it rescued this cycle. It is
+informational — the routine does nothing with it — but a non-zero value on a quiet day is
+worth mentioning in the run's report, because it means a student wrote answers and never got
+a submit through.
 
 ---
 

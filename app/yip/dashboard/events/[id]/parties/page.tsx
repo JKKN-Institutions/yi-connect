@@ -5,6 +5,7 @@ import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { listParties } from "@/app/yip/actions/parties";
 import { PartiesClient } from "./parties-client";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
+import { benchWhatsappFor } from "@/lib/yip/whatsapp-links";
 
 export default async function PartiesPage({
   params,
@@ -35,6 +36,31 @@ export default async function PartiesPage({
 
   const parties = await listParties(eventId);
 
+  // The two bench WhatsApp groups. events.bench_whatsapp is newer than
+  // types/yip/database.ts (never regenerated - the CLI corrupts it), so it is
+  // read through a narrow cast, the same pattern committee_whatsapp uses on the
+  // Committees tab. A missing column simply yields no links rather than an error.
+  const { data: benchRow } = await (
+    supabase as unknown as {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (
+            k: string,
+            v: string
+          ) => {
+            maybeSingle: () => Promise<{
+              data: { bench_whatsapp: unknown } | null;
+            }>;
+          };
+        };
+      };
+    }
+  )
+    .from("events")
+    .select("bench_whatsapp")
+    .eq("id", eventId)
+    .maybeSingle();
+
   const access = await getYipEventAccess(eventId);
 
   return (
@@ -46,6 +72,10 @@ export default async function PartiesPage({
       canDelete={access.canDelete}
       canManage={access.canManage}
       allocationLocked={event.allocation_locked ?? false}
+      benchWhatsapp={{
+        ruling: benchWhatsappFor(benchRow?.bench_whatsapp, "ruling"),
+        opposition: benchWhatsappFor(benchRow?.bench_whatsapp, "opposition"),
+      }}
     />
   );
 }

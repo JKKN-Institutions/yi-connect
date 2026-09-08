@@ -10,6 +10,7 @@ import {
   type Phase,
 } from "@/lib/yi-future/constants";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 type PhaseEventType = Database["future"]["Enums"]["phase_event_type"];
 
@@ -99,7 +100,7 @@ export async function createPhaseEvent(
     })
     .select("id")
     .maybeSingle();
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "phase-events.createPhaseEvent") };
 
   revalidatePath("/yi-future/chapter/journey");
   const newId = (inserted as { id: string } | null)?.id;
@@ -143,7 +144,7 @@ export async function updatePhaseEvent(
       capacity,
     })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "phase-events.updatePhaseEvent") };
 
   revalidatePath(`/yi-future/chapter/journey/${id}`);
   revalidatePath("/yi-future/chapter/journey");
@@ -166,7 +167,7 @@ export async function setEventComplete(
       completed_by: complete ? userId : null,
     })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "phase-events.setEventComplete") };
 
   revalidatePath(`/yi-future/chapter/journey/${id}`);
   revalidatePath("/yi-future/chapter/journey");
@@ -192,7 +193,7 @@ export async function deletePhaseEvent(id: string): Promise<ActionResult> {
     .from("phase_events")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "phase-events.deletePhaseEvent") };
 
   revalidatePath("/yi-future/chapter/journey");
   return { ok: true, message: "Event deleted." };

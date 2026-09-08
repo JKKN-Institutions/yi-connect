@@ -126,7 +126,7 @@ function buildQuery(
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "2-digit" });
+  return d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "2-digit" });
 }
 
 export default async function NationalTeamsPage({

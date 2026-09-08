@@ -10,6 +10,7 @@ import {
   MENTOR_RUBRIC,
   type MentorScores,
 } from "@/lib/yi-future/rubric-mentor";
+import { safeError } from "@/lib/yi-future/db-error";
 
 /**
  * Mentor incubation evaluation save/submit.
@@ -143,14 +144,14 @@ export async function saveMentorEvaluation(input: {
       .from("mentor_evaluations")
       .update(payload)
       .eq("id", ex.id);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: safeError(error.message, "mentor-evaluations.saveMentorEvaluation") };
   } else {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (svc as any)
       .schema("future")
       .from("mentor_evaluations")
       .insert(payload);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: safeError(error.message, "mentor-evaluations.saveMentorEvaluation") };
   }
 
   revalidatePath("/yi-future/mentor");

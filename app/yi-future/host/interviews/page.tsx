@@ -105,7 +105,7 @@ export default async function InterviewsPage() {
               {interviews.map((iv) => (
                 <tr key={iv.id} className="border-t border-navy/5">
                   <td className="px-4 py-3 font-mono text-xs whitespace-nowrap">
-                    {new Date(iv.scheduled_at).toLocaleString("en-IN", {
+                    {new Date(iv.scheduled_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",
                       month: "short",
                       day: "numeric",
                       hour: "2-digit",

@@ -55,7 +55,7 @@ type PendingInvite = {
 const DISPLAY_CAP = 6;
 
 function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
+  return new Date(iso).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata",
     day: "numeric",
     month: "short",
   });

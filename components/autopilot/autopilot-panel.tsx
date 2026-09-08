@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { Zap, CheckCircle2, AlertTriangle, Loader2, PlayCircle } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';

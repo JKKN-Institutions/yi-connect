@@ -9,7 +9,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ImageUp, Loader2 } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { uploadAcademyLogo } from "@/app/youth-academy/actions/academies";
 import { AcademyLogo } from "./academy-card";

@@ -60,7 +60,7 @@ import {
 import { Slider } from '@/components/ui/slider'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 interface PerformanceReviewFormProps {
   verticalId: string

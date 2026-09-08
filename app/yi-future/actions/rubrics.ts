@@ -6,6 +6,7 @@ import { createClient, createServiceClient } from "@/lib/yi-future/supabase/serv
 import { requirePlatformAdmin } from "./national-admins";
 import type { ActionResult } from "./editions";
 import { requireFutureNationalAdmin } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 // NATIONAL scope: rubrics are the scoring config every chapter is judged by.
 async function requireAuth(): Promise<void> {
@@ -90,7 +91,7 @@ export async function createRubric(
       threshold_for_national,
       is_default: false,
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "rubrics.createRubric") };
 
   revalidatePath("/national/admin/rubrics");
   redirect("/yi-future/national/admin/rubrics");
@@ -128,7 +129,7 @@ export async function updateRubric(
       threshold_for_national,
     })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "rubrics.updateRubric") };
 
   revalidatePath("/national/admin/rubrics");
   redirect("/yi-future/national/admin/rubrics");
@@ -155,7 +156,7 @@ export async function setDefaultRubric(
     .from("rubrics")
     .update({ is_default: true })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "rubrics.setDefaultRubric") };
   revalidatePath("/national/admin/rubrics");
   return { ok: true, message: "Default updated." };
 }
@@ -181,7 +182,7 @@ export async function deleteRubric(id: string): Promise<ActionResult> {
     .from("rubrics")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "rubrics.deleteRubric") };
   revalidatePath("/national/admin/rubrics");
   return { ok: true, message: "Rubric removed." };
 }

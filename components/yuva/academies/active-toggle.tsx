@@ -8,7 +8,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { setAcademyActive } from "@/app/youth-academy/actions/academies";
 

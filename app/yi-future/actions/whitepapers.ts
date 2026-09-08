@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { ActionResult } from "./editions";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 /**
  * Chapter-scoped gate. `whitepapers.host_chapter_id` is the owning host chapter
@@ -78,7 +79,7 @@ export async function createWhitepaper(
       pdf_url,
       status: "draft",
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "whitepapers.createWhitepaper") };
 
   revalidatePath("/yi-future/host/whitepaper");
   revalidatePath("/national/admin/whitepapers");
@@ -114,7 +115,7 @@ export async function updateWhitepaper(
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "whitepapers.updateWhitepaper") };
 
   revalidatePath("/yi-future/host/whitepaper");
   revalidatePath("/national/admin/whitepapers");
@@ -133,7 +134,7 @@ export async function publishWhitepaper(id: string): Promise<ActionResult> {
       published_at: new Date().toISOString(),
     })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "whitepapers.publishWhitepaper") };
   revalidatePath("/yi-future/host/whitepaper");
   revalidatePath("/national/admin/whitepapers");
   return { ok: true, message: "Published." };
@@ -147,7 +148,7 @@ export async function unpublishWhitepaper(id: string): Promise<ActionResult> {
     .from("whitepapers")
     .update({ status: "draft", published_at: null })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "whitepapers.unpublishWhitepaper") };
   revalidatePath("/yi-future/host/whitepaper");
   revalidatePath("/national/admin/whitepapers");
   return { ok: true };
@@ -161,7 +162,7 @@ export async function deleteWhitepaper(id: string): Promise<ActionResult> {
     .from("whitepapers")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "whitepapers.deleteWhitepaper") };
   revalidatePath("/yi-future/host/whitepaper");
   revalidatePath("/national/admin/whitepapers");
   return { ok: true, message: "Deleted." };

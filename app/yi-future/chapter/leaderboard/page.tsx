@@ -117,7 +117,9 @@ export default async function ChapterLeaderboardPage({
   const ctx = await getChapterContext();
   if (!ctx) redirect("/yi-future/chapter");
 
-  const tab = (await searchParams).tab === "cross" ? "cross" : "tracks";
+  const rawTab = (await searchParams).tab;
+  const tab: "tracks" | "cross" | "problems" =
+    rawTab === "cross" ? "cross" : rawTab === "problems" ? "problems" : "tracks";
 
   const [teams, evaluations, chapterRows, allTracks] = await Promise.all([
     getTeams(ctx.chapterId, ctx.editionId),
@@ -142,6 +144,7 @@ export default async function ChapterLeaderboardPage({
         team_id: t.id,
         team_name: t.team_name,
         problem_title: t.problem_statements?.title ?? "—",
+        problem_id: t.problem_statement_id ?? null,
         track_name: t.problem_statements?.tracks?.name ?? "—",
         track_id: t.problem_statements?.track_id ?? null,
         total: agg.averageTotal,
@@ -176,6 +179,48 @@ export default async function ChapterLeaderboardPage({
       rows: rankTeams(g.rows).slice(0, 5),
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
+
+  // Per-PROBLEM ranking. A track holds three problems, so two teams in the same
+  // track can be solving different briefs — ranking them against each other is
+  // not like-for-like. Each problem gets its own rank 1, exactly as each track
+  // does above.
+  //
+  // Unlike tracks this does NOT seed every problem in the edition: a problem no
+  // team chose has nothing to rank, and an empty card per unchosen brief would
+  // bury the ones that matter. Problems with no SCORED team simply do not
+  // appear, and the count below says how many are shown.
+  type ProblemGroup = {
+    id: string | null;
+    title: string;
+    trackName: string;
+    rows: RankedRow[];
+  };
+  const problemMap = new Map<
+    string,
+    { title: string; trackName: string; rows: typeof scoredTeamRows }
+  >();
+  for (const r of scoredTeamRows) {
+    const key = r.problem_id ?? "_none";
+    const cur = problemMap.get(key) ?? {
+      title: r.problem_title,
+      trackName: r.track_name,
+      rows: [],
+    };
+    cur.rows.push(r);
+    problemMap.set(key, cur);
+  }
+  const problemGroups: ProblemGroup[] = Array.from(problemMap.entries())
+    .map(([id, g]) => ({
+      id: id === "_none" ? null : id,
+      title: g.title,
+      trackName: g.trackName,
+      rows: rankTeams(g.rows),
+    }))
+    .sort(
+      (a, b) =>
+        a.trackName.localeCompare(b.trackName) ||
+        a.title.localeCompare(b.title)
+    );
 
   return (
     <div className="space-y-6">
@@ -215,6 +260,16 @@ export default async function ChapterLeaderboardPage({
           By Track
         </Link>
         <Link
+          href="/yi-future/chapter/leaderboard?tab=problems"
+          className={`min-h-[44px] inline-flex items-center px-4 text-sm font-semibold border-b-2 -mb-px ${
+            tab === "problems"
+              ? "border-navy text-navy"
+              : "border-transparent text-navy/50 hover:text-navy"
+          }`}
+        >
+          By Problem
+        </Link>
+        <Link
           href="/yi-future/chapter/leaderboard?tab=cross"
           className={`min-h-[44px] inline-flex items-center px-4 text-sm font-semibold border-b-2 -mb-px ${
             tab === "cross"
@@ -226,7 +281,62 @@ export default async function ChapterLeaderboardPage({
         </Link>
       </div>
 
-      {tab === "tracks" ? (
+      {tab === "problems" && (
+        <>
+          <p className="text-xs text-navy/50 -mt-2">
+            Each track holds three problem statements, so teams in the same
+            track may be solving different briefs. Here each problem is ranked
+            on its own. Only problems a scored team chose are shown
+            {problemGroups.length > 0 && ` — ${problemGroups.length} so far`}.
+          </p>
+          {problemGroups.length === 0 ? (
+            <div className="bg-white border border-navy/10 rounded-lg p-6 text-center text-sm text-navy/50">
+              No team has a submitted score yet, so there is nothing to rank by
+              problem statement.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {problemGroups.map((g, i) => (
+                <div
+                  key={g.id ?? `_none-${i}`}
+                  className="bg-white border border-navy/10 rounded-lg p-4"
+                >
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-navy/40">
+                    {g.trackName}
+                  </div>
+                  <h3 className="mt-0.5 text-sm font-bold text-navy">
+                    {g.title}
+                  </h3>
+                  <p className="mt-0.5 text-xs text-navy/50">
+                    {g.rows.length} scored{" "}
+                    {g.rows.length === 1 ? "team" : "teams"}
+                  </p>
+                  <ol className="mt-2 space-y-1">
+                    {g.rows.map((r) => (
+                      <li
+                        key={r.team_id}
+                        className="flex items-baseline justify-between gap-2 text-sm"
+                      >
+                        <span className="text-navy">
+                          <span className="font-semibold text-navy/50 mr-1.5">
+                            #{r.rank}
+                          </span>
+                          {r.team_name}
+                        </span>
+                        <span className="font-mono text-navy/70">
+                          {r.total.toFixed(1)}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {tab === "problems" ? null : tab === "tracks" ? (
         <>
           <p className="text-xs text-navy/50 -mt-2">
             Each chapter runs all 4 tracks. Teams are ranked within their own

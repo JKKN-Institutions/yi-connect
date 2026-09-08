@@ -56,7 +56,7 @@ import {
 } from '@/components/ui/collapsible'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 interface MaterialReviewCardProps {
   material: EventMaterialWithUploader

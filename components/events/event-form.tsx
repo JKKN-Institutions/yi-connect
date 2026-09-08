@@ -71,7 +71,7 @@ import {
 } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { LocationPicker } from '@/components/ui/location-picker';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { CustomFieldsEditor } from './custom-fields-editor';
 import type { CustomFormField } from '@/types/event';
 

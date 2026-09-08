@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/yip/ui/card";
 import { Button } from "@/components/yip/ui/button";
 import { Textarea } from "@/components/yip/ui/textarea";
 import { Label } from "@/components/yip/ui/label";
-import { Star, Send, MessageCircleHeart, PartyPopper, Loader2 } from "lucide-react";
+import { Star, Send, MessageCircleHeart, PartyPopper, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { submitParticipantFeedback } from "@/app/yip/actions/feedback";
 import { PARTICIPANT_QUESTIONS, type FeedbackPayload } from "@/lib/yip/feedback";
@@ -46,6 +46,9 @@ export function FeedbackFormClient({
   const [state, setState] = useState<FormState>(INITIAL);
   const [isPending, startTransition] = useTransition();
   const [submitted, setSubmitted] = useState(false);
+  // Persistent failure surface. A toast alone is transient and easy to miss on
+  // a phone mid-event; this keeps the reason on screen next to the button.
+  const [error, setError] = useState<string | null>(null);
 
   // Resolve required fields from shared metadata
   const requiredKeys = PARTICIPANT_QUESTIONS.filter((q) => q.required).map(
@@ -65,6 +68,7 @@ export function FeedbackFormClient({
     for (const key of requiredKeys) {
       const v = state[key as keyof FormState];
       if (v === null || v === "" || v === undefined) {
+        setError("Please complete all required fields.");
         toast.error("Please complete all required fields");
         return;
       }
@@ -82,16 +86,29 @@ export function FeedbackFormClient({
         state.nps_score !== null ? state.nps_score >= 7 : null,
     };
 
+    setError(null);
     startTransition(async () => {
-      const res = await submitParticipantFeedback(
-        eventId,
-        participantId,
-        payload
-      );
-      if (res.success) {
-        setSubmitted(true);
-      } else {
-        toast.error(res.error);
+      // Without this try/catch a thrown Server Action (venue wifi drop, 500,
+      // deserialization failure) rejects the promise, `res` is never assigned,
+      // and NOTHING is surfaced — the spinner stops and the answers just sit
+      // there. Every failure must name itself.
+      try {
+        const res = await submitParticipantFeedback(
+          eventId,
+          participantId,
+          payload
+        );
+        if (res.success) {
+          setSubmitted(true);
+        } else {
+          setError(res.error);
+          toast.error(res.error);
+        }
+      } catch {
+        const msg =
+          "Couldn't reach the server. Your answers are still on this page — check your connection and tap Submit again.";
+        setError(msg);
+        toast.error(msg);
       }
     });
   }
@@ -203,6 +220,25 @@ export function FeedbackFormClient({
           />
         </CardContent>
       </Card>
+
+      {/* ── Failure surface (only ever rendered on error) ── */}
+      {error && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3"
+        >
+          <AlertCircle className="mt-0.5 size-4 shrink-0 text-red-600" />
+          <div>
+            <p className="text-sm font-semibold text-red-800">
+              Your feedback wasn&apos;t submitted
+            </p>
+            <p className="mt-0.5 text-xs leading-relaxed text-red-700">
+              {error}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Submit ─────────────────────────────────────── */}
       <Button

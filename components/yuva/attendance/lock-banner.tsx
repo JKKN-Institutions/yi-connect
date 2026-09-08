@@ -10,7 +10,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, LockKeyhole, LockKeyholeOpen } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { reopenAttendance } from "@/app/youth-academy/actions/attendance";
 import { ATTENDANCE_REOPEN_MINUTES } from "@/lib/yuva/attendance-lock";
 import { Button } from "@/components/ui/button";

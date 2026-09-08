@@ -7,7 +7,7 @@ import {
   getScoringFlagsConfig,
   type FlagDeltas,
 } from "@/app/yip/actions/scoring-flags";
-import { listScoringBuckets } from "@/app/yip/actions/scoring-buckets";
+import { listAllScoringBuckets } from "@/app/yip/actions/scoring-buckets";
 import { listAwardDefinitions } from "@/app/yip/actions/admin-awards";
 import { getCommitteeDimensionsConfigAdmin } from "@/app/yip/actions/committee-dimensions";
 import { ScoringConfigClient } from "./scoring-config-client";
@@ -36,7 +36,9 @@ export default async function AdminScoringConfigPage() {
       listSessionParameters(),
       getPositionBonusConfigAdmin(),
       getScoringFlagsConfig(),
-      listScoringBuckets(),
+      // The EDITOR needs every component, including level-scoped ones;
+      // listScoringBuckets() resolves down to the set that scores one round.
+      listAllScoringBuckets(),
       listAwardDefinitions(),
       getCommitteeDimensionsConfigAdmin(),
     ]);

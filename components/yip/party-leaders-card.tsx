@@ -119,17 +119,32 @@ export function PartyLeadersCard({ data }: Props) {
                       </span>{" "}
                       {row.partyName}
                     </div>
-                    <Badge
-                      variant="secondary"
-                      className={cn(
-                        "shrink-0 text-xs",
-                        data.bonus > 0
-                          ? "bg-[#138808]/10 text-[#138808]"
-                          : "bg-gray-100 text-gray-600"
-                      )}
-                    >
-                      {data.bonus > 0 ? `+${data.bonus}` : data.bonus} bonus
-                    </Badge>
+                    {/* A name-only leader (PM/DPM/LoP kept as the party's leader
+                        per the 2026-08-26 Director ruling) is already scored
+                        via their senior post — never show them next to the
+                        party_leader bonus figure, or a viewer would read it as
+                        double-counted. Vacant parties keep the old policy
+                        badge unchanged. */}
+                    {!row.leader || row.leaderEarnsBonus ? (
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          "shrink-0 text-xs",
+                          data.bonus > 0
+                            ? "bg-[#138808]/10 text-[#138808]"
+                            : "bg-gray-100 text-gray-600"
+                        )}
+                      >
+                        {data.bonus > 0 ? `+${data.bonus}` : data.bonus} bonus
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="secondary"
+                        className="shrink-0 bg-gray-100 text-xs text-gray-600"
+                      >
+                        no bonus
+                      </Badge>
+                    )}
                   </div>
 
                   {!row.leader ? (
@@ -147,6 +162,14 @@ export function PartyLeadersCard({ data }: Props) {
                             )}
                           />
                           <span className="truncate">{row.leader.full_name}</span>
+                          {!row.leaderEarnsBonus && (
+                            <span
+                              className="shrink-0 rounded bg-gray-100 px-1 text-[9px] font-medium uppercase tracking-wide text-gray-500"
+                              title="Already leads this party in practice, and their points come from their senior post — not the party-leader bonus."
+                            >
+                              name only
+                            </span>
+                          )}
                           {constLabel(row.leader) && (
                             <span className="shrink-0 text-[10px] text-muted-foreground">
                               {constLabel(row.leader)}

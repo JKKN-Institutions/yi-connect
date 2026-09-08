@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/yip/utils";
 import { GuideLauncher } from "@/components/yip/guide";
 import { GUIDES } from "@/lib/yip/guide/content";
+import { SearchTrigger } from "@/components/yip/search/search-trigger";
 
 const navItems = [
   { label: "My Events", href: "/yip/dashboard", icon: CalendarDays },
@@ -278,6 +279,21 @@ export function DashboardShell({
             <span className="font-[family-name:var(--font-heading)] text-[15px] font-semibold text-[#1a1a3e]">
               YIP Platform
             </span>
+          </div>
+
+          {/* Global search — mounted in the shell rather than on a page so it is
+              reachable from every dashboard screen, and so ⌘K works anywhere.
+              The trigger owns its own dialog state.
+
+              Organisers run events from a phone, so this must never be desktop
+              only. It was previously `hidden sm:block`, which meant the search
+              simply did not exist on a phone — reported from the field within
+              an hour of shipping. The trigger now collapses to a 44×44 icon
+              below sm and expands to the full field above it, as ONE instance:
+              rendering an icon and a box side by side would mount two palettes
+              and two ⌘K listeners. */}
+          <div className="ml-2 shrink-0 sm:ml-4 sm:min-w-0 sm:flex-1 md:max-w-xs">
+            <SearchTrigger />
           </div>
 
           {/* Right side */}

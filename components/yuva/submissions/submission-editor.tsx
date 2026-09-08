@@ -11,7 +11,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Pencil, Send } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import {
   saveSubmissionDraft,
   submitSubmission,

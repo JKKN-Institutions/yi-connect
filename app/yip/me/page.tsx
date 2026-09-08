@@ -1,12 +1,19 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { clauseTexts } from "@/lib/yip/bill-provisions";
+import { canMovePrivateMemberBill } from "@/lib/yip/bill-sources";
+import {
+  committeeWhatsappFor,
+  benchWhatsappFor,
+} from "@/lib/yip/whatsapp-links";
 import {
   isGoIndependentClosed,
   BILL_DRAFTING_SESSION_KEY,
 } from "@/lib/yip/go-independent";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import { createServiceClient } from "@/lib/yip/supabase/server";
+import { fetchCommitteeTopicForEvent } from "@/lib/yip/committee-topics";
+import { countTurns, type TurnRow } from "@/lib/yip/turn-count";
 import {
   getEventSchoolNumbers,
   schoolNumberOf,
@@ -47,6 +54,7 @@ import { VoteClient } from "./vote/vote-client";
 import { GoIndependentButton } from "./go-independent-button";
 import { LiveNowCard } from "./live-now-card";
 import { SpeakCard } from "./speak-card";
+import { QuestionNudgeCard } from "./question-nudge-card";
 import { HeroCredential } from "./hero-credential";
 import { AnnouncementStrip } from "./announcement-strip";
 import { PushToggle } from "@/components/yip/push-toggle";
@@ -65,6 +73,10 @@ import { YourDayInTheHouseCard } from "./your-day-card";
 import { YourGrowthCard } from "./your-growth-card";
 import { SectionShell, SectionHeading, INK, SAFFRON, GREEN, GOLD, SERIF, inkA } from "./credential-ui";
 import { CommitteeBillsList, type DashboardCommitteeBill } from "./committee-bills-list";
+import { getMySelfNomination } from "@/app/yip/actions/self-nomination";
+import { selfNominationRoleLabels } from "@/lib/yip/self-nomination";
+import { getMyQuestionnaire } from "@/app/yip/actions/questionnaire";
+import { getMyPrivateMemberBill } from "@/app/yip/actions/bills";
 
 // ─── Session parsing ─────────────────────────────────────────────
 
@@ -106,6 +118,45 @@ function formatDate(dateStr: string): string {
     month: "long",
     year: "numeric",
   });
+}
+
+// Plain-English status for a Member's own Private Member's Bill card. Never
+// shows the raw database word (drafting/submitted/…) — a student reading
+// their own profile should not have to decode a status code. A rejected bill
+// is FINAL (Director decision, 2026-08) — the wording here must never suggest
+// trying again, unlike the private-bill page's own "waiting for an organiser"
+// copy (shown for every non-drafting status there, rejected included), which
+// the Director has separately declined to change. Do not copy that mistake.
+function privateBillStatusMeta(status: string): { label: string; color: string } {
+  switch (status) {
+    case "drafting":
+      return { label: "Still writing", color: inkA(0.55) };
+    case "submitted":
+      return { label: "Handed in — waiting for an organiser", color: "#2563eb" };
+    case "rejected":
+      return { label: "Not accepted — this decision is final", color: "#9A3324" };
+    case "approved":
+      return { label: "Approved — ready for the House", color: GREEN };
+    case "presented":
+      return { label: "On the floor now", color: SAFFRON };
+    case "passed":
+      return { label: "Passed by the House", color: GREEN };
+    default:
+      return { label: "Handed in", color: inkA(0.55) };
+  }
+}
+
+// A short, recognisable taste of what the Member actually wrote — the
+// objective if they gave one, else the problem statement — trimmed so the
+// card never grows taller than the invitation it replaces. No attachments or
+// full clause list here; this is a "yes, this is mine" glance, not a reader.
+function privateBillSnippet(bill: {
+  objective: string | null;
+  problemStatement: string | null;
+}): string | null {
+  const text = (bill.objective || bill.problemStatement || "").trim();
+  if (!text) return null;
+  return text.length > 110 ? `${text.slice(0, 110).trimEnd()}…` : text;
 }
 
 // ─── Page Component ──────────────────────────────────────────────
@@ -223,12 +274,53 @@ export default async function ParticipantPage() {
   }
 
   // Fetch agenda items (mode aligned with handbook page 19 — party vs committee)
+  // `id` rides along for the turn count below: agenda_speakers carries no
+  // event_id, so every reader reaches it through this event's agenda item ids.
   const { data: agendaItems } = await supabase
     .from("agenda")
-    .select("day, sequence_order, title, duration_minutes, agenda_type, mode")
+    .select("id, day, sequence_order, title, duration_minutes, agenda_type, mode")
     .eq("event_id", event.id)
     .order("day")
     .order("sequence_order");
+
+  // How many times this member took the floor — deliberately the SAME number
+  // the Chair's speaking board shows. The rule (one turn per occasion; a
+  // 'spoken' hand-raise counts only where no mirrored agenda_speakers row
+  // exists) lives in lib/yip/turn-count.ts precisely because two copies of it
+  // once drifted and a member read a smaller number on their phone than the
+  // Chair saw. Both reads are narrowed to this member: the dedupe key is
+  // (member, agenda item), so a one-member subset yields the same count as the
+  // House-wide read the profile page does.
+  const myAgendaItemIds = (agendaItems ?? []).map((a) => a.id as string);
+  let myFormalTurns: TurnRow[] = [];
+  if (myAgendaItemIds.length > 0) {
+    const { data } = await supabase
+      .from("agenda_speakers")
+      .select("participant_id, agenda_item_id")
+      .in("agenda_item_id", myAgendaItemIds)
+      .eq("participant_id", participant.id)
+      .eq("status", "completed");
+    myFormalTurns = (data ?? []) as TurnRow[];
+  }
+  const { data: mySpokenRequests } = await supabase
+    .from("speaking_requests")
+    .select("participant_id, agenda_item_id")
+    .eq("event_id", event.id)
+    .eq("participant_id", participant.id)
+    .eq("status", "spoken");
+  const myTurnCount =
+    countTurns(myFormalTurns, (mySpokenRequests ?? []) as TurnRow[]).get(
+      participant.id
+    ) ?? 0;
+  // Read it out in words rather than "0 times" / "1 times" — this card is the
+  // first thing a member sees about their own record, and a member who has not
+  // spoken yet should read an invitation, not a zero.
+  const myTurnPhrase =
+    myTurnCount === 0
+      ? "You have not taken the floor yet"
+      : myTurnCount === 1
+        ? "You have taken the floor once"
+        : `You have taken the floor ${myTurnCount} times`;
 
   // Fetch question count for this participant
   const { data: questionData } = await supabase
@@ -258,18 +350,65 @@ export default async function ParticipantPage() {
     myBill = billData;
   }
 
+  // The student's OWN two WhatsApp groups — their party's and their
+  // committee's. Shown here as well as in the access-code email so a student
+  // who loses the email can still find their groups (Director, 2026-08-14).
+  // Only ever this student's own groups; nothing about anyone else's.
+  let partyWhatsapp: string | null = null;
+  let committeeWhatsappLink: string | null = null;
+  // The bench group, resolved from THIS student's side. A student with no bench
+  // recorded sees no bench group — never a guessed one.
+  let benchWhatsappLink: string | null = null;
+  {
+    const untyped = supabase as unknown as {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (
+            col: string,
+            v: unknown
+          ) => {
+            maybeSingle: () => Promise<{ data: Record<string, unknown> | null }>;
+          };
+        };
+      };
+    };
+    if (participant.party_id) {
+      const { data } = await untyped
+        .from("parties")
+        .select("whatsapp_invite_url")
+        .eq("id", participant.party_id)
+        .maybeSingle();
+      const v = data?.whatsapp_invite_url;
+      partyWhatsapp = typeof v === "string" && v.trim() !== "" ? v : null;
+    }
+    const { data: ev } = await untyped
+      .from("events")
+      .select("committee_whatsapp, bench_whatsapp")
+      .eq("id", event.id)
+      .maybeSingle();
+    committeeWhatsappLink = committeeWhatsappFor(
+      ev?.committee_whatsapp,
+      participant.committee_number
+    );
+    benchWhatsappLink = benchWhatsappFor(
+      ev?.bench_whatsapp,
+      participant.party_side
+    );
+  }
+
   // Committee topic + linked scheme (yip.topics catalog, same lookup as the bill
   // page) so the dashboard can show "Committee N — topic" + the scheme.
   let committeeTopic: string | null = null;
   let committeeScheme: string | null = null;
   if (participant.committee_name) {
-    const { data: ct } = await supabase
-      .from("topics")
-      .select("description, linked_scheme")
-      .eq("category", "committee")
-      .eq("title", participant.committee_name)
-      .eq("is_active", true)
-      .maybeSingle();
+    // Resolved for this event's round level: a ministry name can now be held
+    // by both a shared row and a regional-round row, and .maybeSingle() would
+    // error (and silently blank the topic) the moment two rows matched.
+    const ct = await fetchCommitteeTopicForEvent(
+      supabase as never,
+      participant.event_id,
+      participant.committee_name
+    );
     committeeTopic = ct?.description ?? null;
     committeeScheme = ct?.linked_scheme ?? null;
   }
@@ -407,12 +546,72 @@ export default async function ParticipantPage() {
   const isPMDesk = role === "prime_minister" || role === "deputy_prime_minister";
   const isShadowDesk = role === "shadow_minister";
   const isOpposition = role === "leader_of_opposition";
+  // A Private Member's Bill is moved by an ordinary Member — never a minister,
+  // a presiding officer, or anyone on official duty. Same helper the organiser's
+  // own form filters its mover list with, and the same one the action re-checks.
+  const canBringPrivateBill = canMovePrivateMemberBill(role);
+
+  // The Member's OWN Private Member's Bill, if they have started one. Reuses
+  // the exact same read the full /yip/me/private-bill page uses — the action
+  // re-keys off this participant's own session id, never an id from the
+  // client — so this card and that page can never disagree about what was
+  // written or where it stands. Only fetched for a Member eligible to bring
+  // one at all; an ineligible Member sees no card either way (unchanged).
+  let myPrivateBill: {
+    title: string;
+    objective: string | null;
+    problemStatement: string | null;
+    status: string;
+  } | null = null;
+  if (canBringPrivateBill) {
+    const privateBillRes = await getMyPrivateMemberBill(event.id, participant.id);
+    if (privateBillRes.success) {
+      myPrivateBill = privateBillRes.data.bill;
+    }
+  }
+  const myPrivateBillView = myPrivateBill
+    ? {
+        title: myPrivateBill.title,
+        snippet: privateBillSnippet(myPrivateBill),
+        ...privateBillStatusMeta(myPrivateBill.status),
+      }
+    : null;
+
   // Masthead stamp for the credential hero — e.g. "ERODE · 2026".
   const stampChapter = (event.name?.split(/\s+/)[0] ?? "").toUpperCase();
   const stampYear = event.day1_date
     ? new Date(event.day1_date).getFullYear()
     : "";
   const sessionStamp = [stampChapter, stampYear].filter(Boolean).join(" · ");
+
+  // Self-nomination window + whether this student has already put themselves
+  // forward. The action re-reads the httpOnly session cookie itself, so nothing
+  // is trusted from here. Fails CLOSED — a read error reads as "closed".
+  const selfNom = await getMySelfNomination(session.eventId);
+  const selfNomOpen = selfNom.success && selfNom.data.open;
+  const selfNomRoles =
+    selfNom.success && selfNom.data.nomination
+      ? selfNom.data.nomination.roles
+      : [];
+
+  // Selection questionnaire. Only the posts this student actually nominated for
+  // matter here, so a student who never put themselves forward sees nothing.
+  // Carries NO score — the action does not return one.
+  const qn = await getMyQuestionnaire(session.eventId);
+  const qnMine = qn.success ? qn.data.posts.filter((p) => p.nominated) : [];
+  const qnOpen = qnMine.filter((p) => p.windowOpen && !p.attempt?.submittedAt);
+  const qnInProgress = qnMine.find((p) => p.attempt && !p.attempt.submittedAt);
+  const qnSubmitted = qnMine.filter((p) => p.attempt?.submittedAt);
+  const qnLine =
+    qnInProgress && qnInProgress.attempt
+      ? `In progress — ${qnInProgress.attempt.answered} of ${qnInProgress.attempt.total} answered`
+      : qnOpen.length > 0
+        ? `${qnOpen.map((p) => p.label).join(", ")} — open now`
+        : qnSubmitted.length === qnMine.length && qnMine.length > 0
+          ? "All submitted"
+          : qnSubmitted.length > 0
+            ? `${qnSubmitted.map((p) => p.label).join(", ")} submitted`
+            : "Not open yet — watch your WhatsApp group";
 
   return (
     <div className="space-y-5">
@@ -446,6 +645,10 @@ export default async function ParticipantPage() {
         committeeNumber={participant.committee_number}
         committeeTopic={committeeTopic}
         committeeScheme={committeeScheme}
+        partyWhatsapp={partyWhatsapp}
+        committeeWhatsapp={committeeWhatsappLink}
+        benchWhatsapp={benchWhatsappLink}
+        benchSide={participant.party_side as "ruling" | "opposition" | null}
         sessionStamp={sessionStamp}
       />
 
@@ -531,6 +734,13 @@ export default async function ParticipantPage() {
           can never take down the live ballot below it. */}
       <AnnouncementStrip eventId={event.id} participantId={participant.id} />
 
+      {/* ─── QUESTION HOUR NUDGE (self-hides) ──────────────────────────
+          Renders ONLY while the submission window is genuinely open and this
+          member still has questions left to table. Nothing on My Desk used to
+          mention the window existed — on the SRTN round 137 of 196 members
+          never tabled a question inside a 5.5-hour weekday slot. In-app only. */}
+      <QuestionNudgeCard />
+
       {/* ─── LIVE NOW (realtime agenda + timer) ────────────────────── */}
       <LiveNowCard eventId={event.id} />
 
@@ -543,20 +753,25 @@ export default async function ParticipantPage() {
       {/* ─── VOTE NOW (live ballot, inline — no navigation to /me/vote) ─ */}
       <VoteClient initialSession={session} embedded />
 
-      {/* ─── PRESIDING OFFICER — MOTION QUEUE (Speaker / Deputy Speaker) ─ */}
+      {/* ─── PRESIDING OFFICER — SPEAKER'S DESK (Speaker / Deputy Speaker) ─
+          Titled for the WHOLE screen, not one section of it. This card was
+          called "Motion Queue" and described only motions, so a Speaker had no
+          way to know the speaking floor and the Question Hour list live behind
+          it too — and nothing else on My Desk links there. Verified on the SRTN
+          round: the floor console was live and unfindable. */}
       {isPresiding && (
         <Link href="/yip/me/speaker" className="block">
           <SectionShell accent={GOLD} className="transition-shadow hover:shadow-md">
             <div className="px-5 py-4">
               <SectionHeading
                 eyebrow="Preside"
-                title="Motion Queue"
+                title="Speaker's Desk"
                 icon={Gavel}
                 accent={GOLD}
                 trailing={<ChevronRight className="size-5" style={{ color: inkA(0.35) }} />}
               />
               <p className="mt-1.5 text-xs" style={{ color: inkA(0.55) }}>
-                Admit, reject and put motions to the House
+                Call members to speak, see Question Hour, rule on motions
               </p>
             </div>
           </SectionShell>
@@ -618,6 +833,53 @@ export default async function ParticipantPage() {
               <p className="mt-1.5 text-xs" style={{ color: inkA(0.55) }}>
                 Track your ministry · file a counter
               </p>
+            </div>
+          </SectionShell>
+        </Link>
+      )}
+
+      {/* ─── PRIVATE MEMBER'S BILL (any ordinary Member) ──────────────
+          Once a Member has started one, this card shows THEIRS — title,
+          status in plain words, and enough of what they wrote to recognise
+          it — instead of a bare invitation that looks identical before and
+          after they hand a bill in. No bill yet → the original invitation,
+          unchanged. */}
+      {canBringPrivateBill && (
+        <Link href="/yip/me/private-bill" className="block">
+          <SectionShell accent="#6D28D9" className="transition-shadow hover:shadow-md">
+            <div className="px-5 py-4">
+              <SectionHeading
+                eyebrow="Your bill"
+                title="Private Member's Bill"
+                icon={FileText}
+                accent="#6D28D9"
+                trailing={<ChevronRight className="size-5" style={{ color: inkA(0.35) }} />}
+              />
+              {myPrivateBillView ? (
+                <div className="mt-1.5">
+                  <p
+                    className="truncate text-sm font-semibold"
+                    style={{ color: INK }}
+                  >
+                    {myPrivateBillView.title}
+                  </p>
+                  <p
+                    className="mt-0.5 text-xs font-medium"
+                    style={{ color: myPrivateBillView.color }}
+                  >
+                    {myPrivateBillView.label}
+                  </p>
+                  {myPrivateBillView.snippet && (
+                    <p className="mt-1 text-xs" style={{ color: inkA(0.55) }}>
+                      {myPrivateBillView.snippet}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-1.5 text-xs" style={{ color: inkA(0.55) }}>
+                  Bring your own bill to the House · write it and hand it in
+                </p>
+              )}
             </div>
           </SectionShell>
         </Link>
@@ -844,6 +1106,90 @@ export default async function ParticipantPage() {
             </div>
           </SectionShell>
         )}
+
+      {/* ─── SELF-NOMINATION (pre-event; admin-toggled window) ───────
+          Only shown when the organiser has OPENED the window, or when this
+          student already nominated. The column defaults to false on every
+          existing event, so a live chapter round mid-flight gains nothing on
+          this dashboard until an organiser deliberately switches it on. */}
+      {(selfNomOpen || selfNomRoles.length > 0) && (
+      <SectionShell accent={SAFFRON}>
+        <div className="px-5 py-4">
+          <SectionHeading
+            eyebrow="Leadership"
+            title="Self-Nomination"
+            icon={Gavel}
+            accent={SAFFRON}
+            trailing={
+              <Link
+                href="/yip/me/nominate"
+                className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
+                style={{ background: `${SAFFRON}14`, color: SAFFRON }}
+              >
+                {/* "Open" is the house CTA verb, but next to a "closed"
+                    status line it reads as the window state — so only use it
+                    when the window really is open and nothing is submitted. */}
+                {selfNomOpen && selfNomRoles.length === 0 ? "Open" : "View"}
+                <ChevronRight className="size-4" />
+              </Link>
+            }
+          />
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <span
+              className="size-1.5 shrink-0 rounded-full"
+              style={{ background: selfNomOpen ? GREEN : inkA(0.35) }}
+            />
+            <p className="text-xs" style={{ color: inkA(0.55) }}>
+              {selfNomRoles.length > 0
+                ? `You nominated for ${selfNominationRoleLabels(selfNomRoles)}`
+                : selfNomOpen
+                  ? "Nominate yourself for Administrator, Speaker and/or Party Leader"
+                  : "Nominations are closed"}
+            </p>
+          </div>
+        </div>
+      </SectionShell>
+      )}
+
+      {/* ─── SELECTION QUESTIONNAIRE (pre-event; per-post windows) ───
+          Sits directly under Self-Nomination because it is the next step of the
+          same thing. Shown ONLY to a student who actually nominated — everyone
+          else, and every event where no window was ever opened, sees nothing.
+          Carries no score: getMyQuestionnaire does not return one. */}
+      {qnMine.length > 0 && (
+      <SectionShell accent={SAFFRON}>
+        <div className="px-5 py-4">
+          <SectionHeading
+            eyebrow="Selection"
+            title="Selection Questions"
+            icon={FileText}
+            accent={SAFFRON}
+            trailing={
+              <Link
+                href="/yip/me/questionnaire"
+                className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
+                style={{ background: `${SAFFRON}14`, color: SAFFRON }}
+              >
+                {qnInProgress ? "Continue" : qnOpen.length > 0 ? "Start" : "View"}
+                <ChevronRight className="size-4" />
+              </Link>
+            }
+          />
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <span
+              className="size-1.5 shrink-0 rounded-full"
+              style={{
+                background:
+                  qnOpen.length > 0 || qnInProgress ? GREEN : inkA(0.35),
+              }}
+            />
+            <p className="text-xs" style={{ color: inkA(0.55) }}>
+              {qnLine}
+            </p>
+          </div>
+        </div>
+      </SectionShell>
+      )}
 
       {/* ─── QUESTION HOUR ────────────────────────────────────────── */}
       <SectionShell accent={SAFFRON}>
@@ -1077,6 +1423,31 @@ export default async function ParticipantPage() {
 
       {/* ─── SKILL PROFILE (Phase 19/F) ──────────────────────────── */}
       <SkillProfileCard profile={skillProfile} />
+
+      {/* ─── WHERE YOU STAND (the comparison half of the profile) ── */}
+      <SectionShell accent={SAFFRON}>
+        <div className="px-5 py-4">
+          <SectionHeading
+            eyebrow="The Comparison"
+            title="Where You Stand"
+            icon={Landmark}
+            accent={SAFFRON}
+            trailing={
+              <Link
+                href="/yip/me/profile"
+                className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
+                style={{ background: `${SAFFRON}14`, color: SAFFRON }}
+              >
+                Open
+                <ChevronRight className="size-4" />
+              </Link>
+            }
+          />
+          <p className="mt-1.5 text-xs" style={{ color: inkA(0.55) }}>
+            {myTurnPhrase} · Your record set against the House you sat in
+          </p>
+        </div>
+      </SectionShell>
 
       {/* ─── RESULTS (if published) ─────────────────────────────── */}
       {event.results_published_at ? (

@@ -1,5 +1,6 @@
 import "server-only";
 import { clauseTexts, hasClauses } from "@/lib/yip/bill-provisions";
+import { fetchCommitteeTopicForEvent } from "@/lib/yip/committee-topics";
 
 /**
  * Assemble the grounding payloads handed to the out-of-band routine.
@@ -27,10 +28,15 @@ import {
   parentScoreByKey,
   type RubricCriterionShape,
 } from "@/lib/yip/rubric";
+import {
+  QUESTIONNAIRE_POSTS,
+  questionsPerAttempt,
+} from "@/lib/yip/questionnaire";
 import type {
   AiSourceRef,
   BillFeedbackGrounding,
   ParticipantStoryGrounding,
+  QuestionnaireQuestionReviewGrounding,
   RoundNarrativeGrounding,
   SessionCriterionPattern,
   SessionFeedbackGrounding,
@@ -135,13 +141,7 @@ export async function buildParticipantStoryGrounding(
   // AND title = participant.committee_name AND is_active.
   let ministry: ParticipantStoryGrounding["ministry"] = null;
   if (p.committee_name) {
-    const { data: ct } = await svc
-      .from("topics")
-      .select("id, description, linked_scheme")
-      .eq("category", "committee")
-      .eq("title", p.committee_name)
-      .eq("is_active", true)
-      .maybeSingle();
+    const ct = await fetchCommitteeTopicForEvent(svc as never, eventId, p.committee_name);
     ministry = {
       topic: ct?.description ?? null,
       scheme: ct?.linked_scheme ?? null,
@@ -258,13 +258,7 @@ export async function buildRoundNarrativeGrounding(
   );
   const committees: RoundNarrativeGrounding["committees"] = [];
   for (const name of committeeNames) {
-    const { data: ct } = await svc
-      .from("topics")
-      .select("id, description, linked_scheme")
-      .eq("category", "committee")
-      .eq("title", name)
-      .eq("is_active", true)
-      .maybeSingle();
+    const ct = await fetchCommitteeTopicForEvent(svc as never, eventId, name);
     committees.push({
       name,
       topic: ct?.description ?? null,
@@ -893,13 +887,7 @@ export async function buildBillFeedbackGrounding(
   // the catalogue simply stay null.
   let ministry: BillFeedbackGrounding["ministry"] = null;
   if (bill.committee_name) {
-    const { data: ct } = await svc
-      .from("topics")
-      .select("description, linked_scheme")
-      .eq("category", "committee")
-      .eq("title", bill.committee_name)
-      .eq("is_active", true)
-      .maybeSingle();
+    const ct = await fetchCommitteeTopicForEvent(svc as never, eventId, bill.committee_name);
     if (ct) {
       ministry = {
         topic: ct.description ?? null,
@@ -1002,4 +990,115 @@ export async function getBillFeedbackWork(
   return candidates
     .filter((b) => !have.has(b.id))
     .map((b) => ({ billId: b.id }));
+}
+
+// ─── Questionnaire question-bank review (organiser-only) ───────────────────
+
+/**
+ * Grounding for kind='questionnaire_question_review'.
+ *
+ * Reviews the QUESTIONS, never the answers. Some of the bank was AI-drafted in
+ * the style of the originals and 180 candidates answered it before a human read
+ * it back (Director, 2026-08-16), so this gives the organiser a second reader on
+ * the wording itself.
+ *
+ * CONTENT-SAFE BY CONSTRUCTION: this function reads yip.questionnaire_questions
+ * and yip.events and nothing else. No attempt, no answer, no participant and no
+ * score is in scope here, so none can leak into the payload.
+ *
+ * `locked` is derived the same way the organiser screen derives it — the first
+ * SUBMITTED paper for a post freezes that post's set — so the reader can say
+ * "fix this next round" instead of suggesting an edit nobody can make.
+ *
+ * Returns null when the event is gone, or when no post has any questions at all
+ * (nothing to review; the route then skips the row rather than queueing work).
+ */
+export async function buildQuestionnaireQuestionReviewGrounding(
+  eventId: string
+): Promise<QuestionnaireQuestionReviewGrounding | null> {
+  const svc = await createServiceClient();
+  const loose = svc as unknown as {
+    from: (t: string) => {
+      select: (cols: string, opts?: { count?: "exact"; head?: boolean }) => any;
+    };
+  };
+
+  const { data: event } = await svc
+    .from("events")
+    .select("id, name, chapter_name")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (!event) return null;
+
+  const posts: QuestionnaireQuestionReviewGrounding["posts"] = [];
+  const sourceRefs: AiSourceRef[] = [
+    { type: "event", id: event.id, label: event.name },
+  ];
+
+  for (const def of QUESTIONNAIRE_POSTS) {
+    // This event's own set first, the shared national bank as the fallback —
+    // the same precedence the organiser's editor and the student's draw use.
+    const { data: own } = await loose
+      .from("questionnaire_questions")
+      .select("id, body, display_order")
+      .eq("event_id", eventId)
+      .eq("post_key", def.key)
+      .eq("is_active", true)
+      .order("display_order", { ascending: true })
+      .limit(200);
+
+    let rows = (own ?? []) as { id: string; body: string; display_order: number }[];
+    let source: "chapter" | "national" = "chapter";
+    if (rows.length === 0) {
+      const { data: national } = await loose
+        .from("questionnaire_questions")
+        .select("id, body, display_order")
+        .is("event_id", null)
+        .eq("post_key", def.key)
+        .eq("is_active", true)
+        .order("display_order", { ascending: true })
+        .limit(200);
+      rows = (national ?? []) as { id: string; body: string; display_order: number }[];
+      source = "national";
+    }
+    if (rows.length === 0) continue;
+
+    const { count: submitted } = await loose
+      .from("questionnaire_attempts")
+      .select("id", { count: "exact", head: true })
+      .eq("event_id", eventId)
+      .eq("post_key", def.key)
+      .not("submitted_at", "is", null);
+
+    posts.push({
+      postKey: def.key,
+      label: def.label,
+      drawSize: questionsPerAttempt(def.key),
+      locked: (submitted ?? 0) > 0,
+      source,
+      questions: rows.map((r) => ({
+        id: r.id,
+        order: r.display_order,
+        body: r.body,
+      })),
+    });
+    sourceRefs.push({
+      type: "questionnaire_post",
+      id: null,
+      label: `${def.label} — ${rows.length} questions`,
+    });
+  }
+
+  if (posts.length === 0) return null;
+
+  return {
+    kind: "questionnaire_question_review",
+    event: {
+      id: event.id,
+      name: event.name,
+      chapterName: event.chapter_name ?? null,
+    },
+    posts,
+    sourceRefs,
+  };
 }

@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { readSession } from "@/app/yi-future/actions/auth";
 import { resolveFutureAccessOrNull } from "@/lib/yi-future/auth/require-access";
 import type { ActionResult } from "./editions";
+import { safeError } from "@/lib/yi-future/db-error";
 
 // ─── TYPES ──────────────────────────────────────────────────────────
 export type PreferenceRow = {
@@ -110,7 +111,7 @@ export async function setPreferences(
     .from("problem_preferences" as any)
     .delete()
     .eq("team_id", teamId);
-  if (delErr) return { ok: false, error: delErr.message };
+  if (delErr) return { ok: false, error: safeError(delErr.message, "preferences.setPreferences") };
 
   // Insert the 3 ranked rows
   const rows = trimmed.map((pid, idx) => ({
@@ -124,7 +125,7 @@ export async function setPreferences(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .from("problem_preferences" as any)
     .insert(rows as never);
-  if (insErr) return { ok: false, error: insErr.message };
+  if (insErr) return { ok: false, error: safeError(insErr.message, "preferences.setPreferences") };
 
   revalidatePath("/yi-future/me/team/preferences");
   revalidatePath("/yi-future/me/team");

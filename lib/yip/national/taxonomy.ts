@@ -25,6 +25,7 @@ import "server-only";
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
+import { preferGlobalPerTitle } from "@/lib/yip/committee-topics";
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -169,13 +170,25 @@ export async function getCommitteeMinistryMap(): Promise<CommitteeMinistryMappin
   const svc = await createServiceClient();
 
   const topicsTable = svc.from("topics") as unknown as CommitteeTopicSelect;
-  const { data: topicRows, error } = await topicsTable
-    .select("id, title, linked_scheme, description")
+  const { data: rawTopicRows, error } = await topicsTable
+    .select("id, title, linked_scheme, description, levels")
     .eq("category", "committee")
     .eq("is_active", true)
     .order("title");
 
-  if (error || !topicRows) return [];
+  if (error || !rawTopicRows) return [];
+
+  // One entry per ministry: a name held by both a shared row and a
+  // level-scoped one is ONE committee for taxonomy-gap purposes, not two.
+  const topicRows = preferGlobalPerTitle(
+    rawTopicRows as unknown as Array<{
+      id: string;
+      title: string;
+      linked_scheme: string | null;
+      description: string | null;
+      levels?: string[] | null;
+    }>
+  );
 
   // Set of ministries that have a parent (scheme IS NULL) gov_taxonomy row, so
   // the gap list can flag committees not yet represented in the taxonomy.

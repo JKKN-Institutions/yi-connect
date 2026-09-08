@@ -36,6 +36,12 @@ import {
   type VoteCandidate,
 } from "@/app/yip/actions/voting";
 import { createClient } from "@/lib/yip/supabase/client";
+import {
+  HOUSE_MOTION_VALUES,
+  houseMotionText,
+  isHouseMotionVoteType,
+  type HouseMotionValue,
+} from "@/lib/yip/house-motion";
 
 // ─── Session (server-provided) ──────────────────────────────────
 // The yip_session cookie is httpOnly, so it CANNOT be read from
@@ -668,6 +674,131 @@ export function VoteClient({
         </div>
 
         {/* Cast Vote Button */}
+        {castGuardNote}
+
+        <Button
+          onClick={handleCastVote}
+          disabled={isPending || !selectedValue}
+          className="w-full bg-[#FF9933] hover:bg-[#E68A2E] text-base py-6"
+          size="lg"
+        >
+          {isPending ? (
+            "Casting Vote..."
+          ) : (
+            <>
+              <Vote className="size-5 mr-2" />
+              Cast Vote
+            </>
+          )}
+        </Button>
+      </div>
+    );
+  }
+
+  // ─── Motion of the House (a free-text question put by the Chair) ───────
+  //
+  // "Shall the House sit late?" — a question the Chair typed on the floor, put
+  // to every checked-in Member. It elects nobody and removes nobody, which is
+  // exactly why it is not one of the removal motions below.
+  //
+  // The question travels in the session config, so this needs no extra read:
+  // it is on screen the moment the ballot opens.
+
+  if (isHouseMotionVoteType(voteSession.vote_type)) {
+    const question =
+      houseMotionText(voteSession.config) ?? "Motion of the House";
+    // Keyed by HouseMotionValue and rendered by mapping HOUSE_MOTION_VALUES —
+    // the same three spellings the server accepts and the only ones it accepts.
+    // A missing or misspelt key is a BUILD error, so a student can never be
+    // shown a ballot that omits one of their three lawful answers, and no
+    // button can send a value the Chamber will refuse.
+    const choiceOf: Record<
+      HouseMotionValue,
+      { label: string; hint: string; on: string; off: string; labelCls: string; hintCls: string }
+    > = {
+      aye: {
+        label: "AYE",
+        hint: "In favour of the question",
+        on: "border-green-500 bg-green-50 ring-2 ring-green-300 shadow-md",
+        off: "border-gray-200 bg-white hover:border-green-200 hover:bg-green-50/50",
+        labelCls: "text-green-600",
+        hintCls: "text-green-600/70",
+      },
+      nay: {
+        label: "NAY",
+        hint: "Against the question",
+        on: "border-red-500 bg-red-50 ring-2 ring-red-300 shadow-md",
+        off: "border-gray-200 bg-white hover:border-red-200 hover:bg-red-50/50",
+        labelCls: "text-red-600",
+        hintCls: "text-red-600/70",
+      },
+      abstain: {
+        label: "ABSTAIN",
+        hint: "Neither for nor against",
+        on: "border-gray-500 bg-gray-50 ring-2 ring-gray-300 shadow-md",
+        off: "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50",
+        labelCls: "text-gray-500",
+        hintCls: "text-gray-400",
+      },
+    };
+
+    return (
+      <div className="space-y-5">
+        <div>
+          <p
+            className="text-[10px] font-bold uppercase tracking-[0.16em]"
+            style={{ color: SAFFRON }}
+          >
+            Cast Your Vote
+          </p>
+          <h1
+            className="mt-0.5 text-[28px] font-bold leading-[1.1] tracking-tight"
+            style={{ ...SERIF, color: INK }}
+          >
+            Motion of the House
+          </h1>
+          <p className="text-sm mt-1.5" style={{ color: inkA(0.6) }}>
+            A question put to the whole House by the Chair
+          </p>
+        </div>
+
+        <SectionShell accent={SAFFRON}>
+          <div className="px-5 py-4">
+            <SectionHeading
+              eyebrow="The Question"
+              title={question}
+              icon={Landmark}
+              accent={SAFFRON}
+            />
+            <p className="mt-3 text-sm" style={{ color: inkA(0.7) }}>
+              Vote <strong>Aye</strong> if you agree, <strong>Nay</strong> if
+              you do not, or <strong>Abstain</strong>. Your vote cannot be
+              changed once cast.
+            </p>
+          </div>
+        </SectionShell>
+
+        <div className="space-y-3">
+          {HOUSE_MOTION_VALUES.map((value) => {
+            const c = choiceOf[value];
+            return (
+              <button
+                key={value}
+                onClick={() => choose(value)}
+                className={cn(
+                  "w-full rounded-xl border-2 p-5 text-center transition-all",
+                  selectedValue === value ? c.on : c.off
+                )}
+              >
+                <p className={cn("text-2xl font-black", c.labelCls)}>
+                  {c.label}
+                </p>
+                <p className={cn("text-sm mt-1", c.hintCls)}>{c.hint}</p>
+              </button>
+            );
+          })}
+        </div>
+
         {castGuardNote}
 
         <Button

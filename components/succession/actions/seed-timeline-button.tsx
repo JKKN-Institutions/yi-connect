@@ -14,7 +14,7 @@ import {
 import { PlayCircle, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
 import { seedTimelineSteps } from '@/app/actions/succession'
 import { useRouter } from 'next/navigation'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 interface SeedTimelineButtonProps {
   cycleId: string

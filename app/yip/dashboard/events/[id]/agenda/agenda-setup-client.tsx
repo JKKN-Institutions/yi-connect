@@ -59,10 +59,16 @@ function formatDate(d: string | null): string {
 
 // Small, safe set of types for custom items so `mode` resolves correctly on the
 // server (modeForAgendaType): general→party, break/inaugural→mixed.
+// 2026 Regional Round scored sessions: committee_reports→committee,
+// private_members_bills→party. Their jury rubrics come from the
+// session_parameters registry (matched by agenda_type) once seeded — until
+// then "Score with jury" is correctly blocked with a clear message.
 const ADD_TYPE_OPTIONS = [
   { value: "general", label: "General" },
   { value: "break", label: "Break" },
   { value: "inaugural", label: "Ceremony" },
+  { value: "committee_reports", label: "Committee Reports" },
+  { value: "private_members_bills", label: "Private Members' Bills" },
 ] as const;
 
 function prettyType(t: string | null): string {

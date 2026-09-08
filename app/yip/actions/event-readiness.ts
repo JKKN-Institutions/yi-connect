@@ -54,6 +54,7 @@ export async function getEventReadiness(
     pMissingFields,
     partiesTotal,
     partiesNoSide,
+    pNoBench,
     agendaDay1,
     agendaDay2,
     juryCount,
@@ -71,7 +72,7 @@ export async function getEventReadiness(
     supabase
       .from("events")
       .select(
-        "allocation_locked, scores_locked, cabinet_ministry_count, cabinet_ministries"
+        "level, allocation_locked, scores_locked, cabinet_ministry_count, cabinet_ministries"
       )
       .eq("id", eventId)
       .single(),
@@ -98,6 +99,14 @@ export async function getEventReadiness(
       .select("id", { count: "exact", head: true })
       .eq("event_id", eventId)
       .is("side", null),
+    // Students with no bench recorded. At a regional round the bench decides
+    // which two criteria a juror is shown, so an empty one makes the juror pick
+    // in the hall — today that is invisible until it blocks someone mid-session.
+    supabase
+      .from("participants")
+      .select("id", { count: "exact", head: true })
+      .eq("event_id", eventId)
+      .is("party_side", null),
     supabase
       .from("agenda")
       .select("id", { count: "exact", head: true })
@@ -164,6 +173,7 @@ export async function getEventReadiness(
   const missingFields = pMissingFields.count ?? 0;
   const parties = partiesTotal.count ?? 0;
   const noSide = partiesNoSide.count ?? 0;
+  const noBench = pNoBench.count ?? 0;
   const d1 = agendaDay1.count ?? 0;
   const d2 = agendaDay2.count ?? 0;
   const jurors = juryCount.count ?? 0;
@@ -186,6 +196,31 @@ export async function getEventReadiness(
   const posBonuses = (posConfig as { bonuses?: Record<string, number> }).bonuses ?? {};
   const positionConfigOk =
     Object.keys(posBonuses).length > 0 && (posBonuses.prime_minister ?? 0) > 0;
+
+  // Bench is a REGIONAL / NATIONAL scoring input: at those levels a juror is
+  // shown only the two criteria that match the student's bench, so a student
+  // with no bench stops the juror. Chapter rounds are deliberately left alone —
+  // several run a flat house with no ruling/opposition split at all, and a
+  // permanent warning there would be noise. (Same level-scoping idea as
+  // lib/yip/round-level.ts.)
+  const eventLevel = ev.data?.level ?? null;
+  const benchMatters = eventLevel === "regional" || eventLevel === "national";
+  const benchItems: ReadinessItem[] = benchMatters
+    ? [
+        {
+          key: "benches_recorded",
+          label: "Everyone has a bench (ruling / opposition)",
+          ok: total > 0 && noBench === 0,
+          detail:
+            total === 0
+              ? "add students first"
+              : noBench === 0
+                ? "all students have a bench"
+                : `${noBench} of ${total} have no bench — jurors will be asked to pick one mid-session`,
+          href: `${base}/participants`,
+        },
+      ]
+    : [];
 
   const phases: ReadinessPhase[] = [
     {
@@ -210,6 +245,7 @@ export async function getEventReadiness(
                 : `${missingFields} missing constituency or committee`,
           href: `${base}/allocation`,
         },
+        ...benchItems,
         {
           key: "allocation_locked",
           label: "Allocation locked",

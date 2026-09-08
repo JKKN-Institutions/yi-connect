@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { toggleBestPracticeUpvote } from '@/app/actions/knowledge';
 import { ThumbsUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface BestPracticeUpvoteButtonProps {
   practiceId: string;

@@ -10,6 +10,9 @@ import {
 import type {
   ResultWithParticipant,
   AwardCandidateGroup,
+  SingleJudgeStudent,
+  SideChangeStudent,
+  AwardAvailability,
 } from "@/app/yip/actions/results";
 import {
   setAwardWinner,
@@ -58,9 +61,12 @@ import {
   Calculator,
   RefreshCw,
   Info,
+  ArrowLeftRight,
+  UserCheck,
 } from "lucide-react";
 import { INK, SAFFRON, SERIF, SectionShell } from "@/app/yip/me/credential-ui";
 
+import { ParticipantNameButton } from "@/components/yip/participant-profile-dialog";
 // Renders "Last computed: <local time>" (or "Not computed yet.") from the max
 // computed_at across the result rows. Hydration-safe: the first render outputs a
 // stable placeholder and the client effect swaps in the locale/timezone-formatted
@@ -256,11 +262,15 @@ export function ResultsClient({
   day2CheckinWarning = false,
   awardCandidates = [],
   zoneAwardConfig = {},
+  eventAwardLabels = [],
   canQualify = false,
   participantCount = 0,
   totalJudges = 0,
   judgesScored = 0,
   scoresStale = false,
+  singleJudgeStudents = [],
+  sideChangeStudents = [],
+  awardAvailability = [],
 }: {
   eventId: string;
   eventName: string;
@@ -278,6 +288,10 @@ export function ResultsClient({
   // awards confer advancement (award_key -> qualifies; absence = true), plus
   // whether the current viewer may lock qualifiers (super-admin only).
   zoneAwardConfig?: Record<string, boolean>;
+  // The awards THIS round hands out, in display order, resolved from the event's
+  // round level (yip.award_definitions.levels). Empty = fall back to the
+  // workbook 15, which is what every round showed before awards were scopeable.
+  eventAwardLabels?: string[];
   canQualify?: boolean;
   // Two-day event with ZERO Day-2 check-ins: computing now marks everyone
   // "Not ranked — absent Day 2". Surface a warning so the chair doesn't publish
@@ -293,6 +307,15 @@ export function ResultsClient({
   totalJudges?: number;
   judgesScored?: number;
   scoresStale?: boolean;
+  // Two host-only honesty flags (Director 2026-08-19). Neither changes a score:
+  // students with a session only one judge marked (send a second judge to watch
+  // them), and students whose saved marks were taken on more than one bench
+  // after a no-confidence motion. See getMarkingCoverage.
+  singleJudgeStudents?: SingleJudgeStudent[];
+  sideChangeStudents?: SideChangeStudent[];
+  /** Per-award: which ranking sessions carry no marks, and how many students
+      were judged in the ones that do. Lets an empty card say WHY. */
+  awardAvailability?: AwardAvailability[];
 }) {
   const router = useRouter();
 
@@ -300,6 +323,11 @@ export function ResultsClient({
   const [resultsView, setResultsView] = useState<
     "leaderboard" | "scoresheet" | "leadership"
   >("leaderboard");
+
+  // Name lists behind the two marking notes stay collapsed until asked for —
+  // on a full round either list can run to dozens of students.
+  const [showSingleJudge, setShowSingleJudge] = useState(false);
+  const [showSideChanges, setShowSideChanges] = useState(false);
 
   // Manual award override (chair's final say)
   const [overrideAward, setOverrideAward] = useState<string>("");
@@ -310,6 +338,16 @@ export function ResultsClient({
   async function handleSetOverride() {
     if (!overrideAward || !overrideParticipant) {
       setMessage({ type: "error", text: "Pick both an award and a participant." });
+      return;
+    }
+    // A hand-picked award is the one result no score explains, so the reason is
+    // required (Director ruling 2026-08-29). The server refuses a blank reason
+    // too — this only saves the round-trip.
+    if (!overrideNote.trim()) {
+      setMessage({
+        type: "error",
+        text: "Write the reason for this pick — it's the only record of why this student won.",
+      });
       return;
     }
     setOverrideLoading(true);
@@ -415,11 +453,26 @@ export function ResultsClient({
       );
       router.refresh();
     } else {
-      // computeResults can time out on heavy events; give a clear, retryable message
-      // rather than surfacing a raw server error string.
+      // Surface the ACTUAL failure. computeResults returns distinguishable,
+      // already-human-readable errors ("Not authorized to manage this event",
+      // "No submitted scores found for this event"). Until now every one of
+      // them was replaced by the timeout copy below, so a host blocked by a
+      // permission problem was told to keep clicking a button that could never
+      // work. The original intent (#764) was only to avoid dumping a RAW server
+      // string, so keep the friendly retry wording for the case it was written
+      // for — a genuine timeout / dropped request with nothing meaningful to
+      // show — and show the real reason otherwise.
+      const raw = (result.error || "").trim();
+      const looksLikeTimeout =
+        raw === "" ||
+        /timeout|timed out|abort|fetch failed|network|econnreset|gateway/i.test(
+          raw
+        );
       setMessage({
         type: "error",
-        text: "Compute took too long or didn't finish — please click Show Results to try again.",
+        text: looksLikeTimeout
+          ? "Compute took too long or didn't finish — please click Show Results to try again."
+          : raw,
       });
     }
     setComputeLoading(false);
@@ -485,16 +538,23 @@ export function ResultsClient({
     return a.localeCompare(b);
   });
 
-  // Show ALL 15 workbook awards in canonical order — the ones without a winner
-  // render as "Not awarded yet" with what they need (see AWARD_REQUIREMENT), so
-  // an empty award never silently disappears. Any non-canonical label the engine
-  // emitted (shouldn't happen) is appended after the 15.
+  // Show ALL of THIS ROUND's awards in canonical order — the ones without a
+  // winner render as "Not awarded yet" with what they need (see
+  // AWARD_REQUIREMENT), so an empty award never silently disappears. The list
+  // comes from the database, level-resolved for this event; it falls back to the
+  // workbook 15 when the round has no awards of its own (or the column is not
+  // deployed yet). Any other label the engine emitted is appended after it.
+  const canonicalAwardLabels: readonly string[] =
+    eventAwardLabels.length > 0 ? eventAwardLabels : AWARD_LABELS;
   const allAwardLabels: string[] = [
-    ...AWARD_LABELS,
-    ...awardLabels.filter(
-      (l) => !(AWARD_LABELS as readonly string[]).includes(l)
-    ),
+    ...canonicalAwardLabels,
+    ...awardLabels.filter((l) => !canonicalAwardLabels.includes(l)),
   ];
+
+  // Why an award is empty, and how much evidence sits behind a winner.
+  const availabilityByLabel = new Map(
+    awardAvailability.map((a) => [a.label, a])
+  );
   const awardsWithWinner = awardWinners.size;
 
   // Interim-recompute guardrail: two-day event with zero Day-2 check-ins ⇒
@@ -514,6 +574,117 @@ export function ResultsClient({
       </div>
     </div>
   ) : null;
+
+  // Two host-only notes about how the marks were taken (Director 2026-08-19).
+  // Both are read-only: no score is changed, withheld or re-weighted by either.
+  // Shown above the leaderboard AND in the empty state, because they are facts
+  // about the marks themselves and are useful before results are computed —
+  // while there is still time to send a second judge into the chamber.
+  const markingNotes =
+    singleJudgeStudents.length > 0 || sideChangeStudents.length > 0 ? (
+      <div className="space-y-3">
+        {singleJudgeStudents.length > 0 && (
+          <div className="rounded-lg border border-sky-300 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+            <div className="flex items-start gap-2">
+              <UserCheck className="mt-0.5 size-4 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold">
+                  {singleJudgeStudents.length}{" "}
+                  {singleJudgeStudents.length === 1 ? "student was" : "students were"}{" "}
+                  marked by fewer judges than were assigned, in at least one
+                  session
+                </p>
+                <p className="mt-0.5">
+                  More judges were assigned to those sessions than actually put
+                  marks on record for these students. Those marks still count
+                  exactly as they are — nothing here changes a score. If the round
+                  is still running, you may want to send another judge to watch
+                  them.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowSingleJudge((v) => !v)}
+                  className="mt-1.5 text-xs font-medium underline underline-offset-4"
+                >
+                  {showSingleJudge ? "Hide the list" : "See who"}
+                </button>
+                {showSingleJudge && (
+                  <ul className="mt-2 space-y-1.5 border-t border-sky-200 pt-2">
+                    {singleJudgeStudents.map((s) => (
+                      <li key={s.participantId} className="text-xs">
+                        <span className="font-medium">{s.participantName}</span>
+                        {s.constituencyName ? (
+                          <span className="text-sky-800/70">
+                            {" "}
+                            — {s.constituencyName}
+                          </span>
+                        ) : null}
+                        <span className="block text-sky-800/70">
+                          {s.sessions
+                            .map(
+                              (x) =>
+                                `${x.label} (${x.marked} of ${x.assigned} judges)`
+                            )
+                            .join(", ")}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        {sideChangeStudents.length > 0 && (
+          <div className="rounded-lg border border-violet-300 bg-violet-50 px-4 py-3 text-sm text-violet-900">
+            <div className="flex items-start gap-2">
+              <ArrowLeftRight className="mt-0.5 size-4 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold">
+                  Sides changed part-way through this round
+                </p>
+                <p className="mt-0.5">
+                  {sideChangeStudents.length}{" "}
+                  {sideChangeStudents.length === 1 ? "student was" : "students were"}{" "}
+                  marked on the government side in some sessions and on the
+                  opposition side in others — this is what happens after a
+                  no-confidence motion. Every mark was kept exactly as the judge
+                  gave it, against the criteria for the side that student was on
+                  at that time. So two students who sit on the same side today
+                  may have been marked on different criteria, and that is
+                  correct, not a mistake.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowSideChanges((v) => !v)}
+                  className="mt-1.5 text-xs font-medium underline underline-offset-4"
+                >
+                  {showSideChanges ? "Hide the list" : "See who"}
+                </button>
+                {showSideChanges && (
+                  <ul className="mt-2 space-y-1.5 border-t border-violet-200 pt-2">
+                    {sideChangeStudents.map((s) => (
+                      <li key={s.participantId} className="text-xs">
+                        <span className="font-medium">{s.participantName}</span>
+                        {s.constituencyName ? (
+                          <span className="text-violet-800/70">
+                            {" "}
+                            — {s.constituencyName}
+                          </span>
+                        ) : null}
+                        <span className="block text-violet-800/70">
+                          Marked on: {s.sideLabels.join(" and ")}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    ) : null;
 
   // Shared message banner (success/error) — rendered in both the empty and the
   // populated views so a recompute error is visible even before any results exist.
@@ -595,6 +766,7 @@ export function ResultsClient({
     return (
       <div className="space-y-6">
         {day2Banner}
+        {markingNotes}
         {messageBanner}
         {recomputeBlock}
         <SectionShell accent={SAFFRON} className="flex flex-col items-center justify-center py-16 text-center">
@@ -617,6 +789,8 @@ export function ResultsClient({
   return (
     <div className="space-y-6">
       {day2Banner}
+      {/* How the marks were taken (shared with the empty state) */}
+      {markingNotes}
       {/* Message banner (shared with the empty state) */}
       {messageBanner}
 
@@ -722,7 +896,7 @@ export function ResultsClient({
         <p className="text-xs text-gray-500">
           {awardsWithWinner} of {allAwardLabels.length} awards have a winner.
           {awardsWithWinner < allAwardLabels.length &&
-            " The rest need leadership roles, benches, or sessions to be set up first (shown on each card)."}
+            " Each empty card says why \u2014 a session nobody marked, or no eligible student."}
         </p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {allAwardLabels.map((label) => {
@@ -730,6 +904,26 @@ export function ResultsClient({
             const style = getAwardStyle(label);
             const Icon = style.icon;
             const hasWinner = winners.length > 0;
+            const availability = availabilityByLabel.get(label);
+            const unscored = availability?.unscoredSessions ?? [];
+            // How many students were actually judged in the sessions this award
+            // ranks on. Shown on a winner card so the reader can weigh it: "top
+            // of 18 judged" and "top of 163 judged" are not the same claim.
+            const judged = availability?.judged ?? 0;
+            const rankable = availability?.rankable ?? 0;
+            const showEvidence =
+              hasWinner && rankable > 0 && judged > 0 && judged < rankable;
+            // Ruling 06 (Director, 2026-08-29): "A missed session is stated on
+            // the award. Where a session did not run, the chair may still choose
+            // a winner, but the award is permanently labelled `session not held
+            // — chair's choice`." An award CAN still be handed out on a session
+            // nobody marked — the chair pins it by hand (the auto pass needs
+            // rankBy > 0, so it never fabricates one). SRTN is the live case: the
+            // debate was squeezed out of the day and the three debate-dependent
+            // awards were hand-picked at the ceremony. The card must carry that
+            // condition permanently, next to the name it hands out.
+            const chairPinned = availability?.chairPinnedParticipantId ?? null;
+            const sessionNotHeld = hasWinner && unscored.length > 0;
             return (
               <Card
                 key={label}
@@ -754,7 +948,13 @@ export function ResultsClient({
                         winners.map((w) => (
                           <div key={w.participant_id} className="mt-1">
                             <p className="text-base font-bold text-gray-900 truncate">
-                              {w.participant.full_name}
+                              <ParticipantNameButton
+                                eventId={eventId}
+                                eventName={eventName}
+                                participantId={w.participant_id}
+                                name={w.participant.full_name}
+                                className="text-left underline-offset-4 hover:underline"
+                              />
                             </p>
                             {w.participant.constituency_number != null && (
                               <p className="text-xs tabular-nums text-gray-500">
@@ -768,6 +968,34 @@ export function ResultsClient({
                                 pts
                               </span>
                             </p>
+                            {showEvidence && (
+                              // The evidence behind the win. An award decided
+                              // from 18 of 163 students is not wrong, but the
+                              // host should know that before reading it out.
+                              <p className="mt-0.5 text-xs text-gray-500">
+                                top of {judged} of {rankable} students judged in
+                                this session
+                              </p>
+                            )}
+                            {sessionNotHeld && (
+                              // Ruling 06. The label is the chair's, verbatim —
+                              // it says the award was decided in the room, not
+                              // by the marks, so nobody later reads this name as
+                              // a scored result. The session is named underneath
+                              // so the reason is legible without the ruling.
+                              <div className="mt-1">
+                                {chairPinned === w.participant_id && (
+                                  <p className="text-xs font-semibold text-amber-700">
+                                    session not held — chair&apos;s choice
+                                  </p>
+                                )}
+                                <p className="text-xs text-gray-500">
+                                  {unscored.join(" and ")}{" "}
+                                  {unscored.length === 1 ? "was" : "were"} not
+                                  scored at this round
+                                </p>
+                              </div>
+                            )}
                           </div>
                         ))
                       ) : (
@@ -775,9 +1003,21 @@ export function ResultsClient({
                           <p className="text-sm font-semibold text-gray-400">
                             Not awarded yet
                           </p>
-                          <p className="mt-0.5 text-xs text-gray-400">
-                            Needs {AWARD_REQUIREMENT[label] ?? "a qualifying winner"}
-                          </p>
+                          {unscored.length > 0 ? (
+                            // Nobody was marked in the session this award ranks
+                            // on. Say so plainly: it is a marking gap in the
+                            // room, NOT a missing role or a platform fault, and
+                            // the host is the only person who can act on it.
+                            <p className="mt-0.5 text-xs text-gray-400">
+                              {unscored.join(" and ")}{" "}
+                              {unscored.length === 1 ? "was" : "were"} not scored
+                              at this round
+                            </p>
+                          ) : (
+                            <p className="mt-0.5 text-xs text-gray-400">
+                              Needs {AWARD_REQUIREMENT[label] ?? "a qualifying winner"}
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>
@@ -915,7 +1155,7 @@ export function ResultsClient({
                   className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
                 >
                   <option value="">Select an award…</option>
-                  {AWARD_LABELS.map((label) => (
+                  {canonicalAwardLabels.map((label) => (
                     <option key={label} value={label}>
                       {label}
                     </option>
@@ -956,13 +1196,13 @@ export function ResultsClient({
             </div>
             <div>
               <label className="text-xs font-medium text-gray-500">
-                Note (optional)
+                Reason (required)
               </label>
               <input
                 type="text"
                 value={overrideNote}
                 onChange={(e) => setOverrideNote(e.target.value)}
-                placeholder="Reason for the override (recorded in the audit log)"
+                placeholder="Why this student won — recorded against the award"
                 className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
               />
             </div>
@@ -1009,12 +1249,16 @@ export function ResultsClient({
         <CardContent>
           {resultsView === "scoresheet" ? (
             <StudentScoreSheet
+              eventId={eventId}
               results={results}
               positionBonuses={positionBonuses}
               eventName={eventName}
+              singleJudgeStudents={singleJudgeStudents}
+              sideChangeStudents={sideChangeStudents}
             />
           ) : resultsView === "leadership" ? (
             <LeadershipTracker
+              eventId={eventId}
               results={results}
               positionBonuses={positionBonuses}
               eventName={eventName}
@@ -1059,7 +1303,13 @@ export function ResultsClient({
                       <TableCell>
                         <div className="flex items-center gap-1.5">
                           <p className="font-medium text-sm">
-                            {r.participant.full_name}
+                            <ParticipantNameButton
+                              eventId={eventId}
+                              eventName={eventName}
+                              participantId={r.participant_id}
+                              name={r.participant.full_name}
+                              className="text-left underline-offset-4 hover:underline"
+                            />
                           </p>
                           {qualifiedIds.has(r.participant_id) && (
                             <Badge

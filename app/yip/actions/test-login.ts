@@ -246,7 +246,7 @@ export async function loginAsStudent(
     eventId: p.event_id,
   });
 
-  return { success: true, data: { redirect: "/me" } };
+  return { success: true, data: { redirect: "/yip/me" } };
 }
 
 export async function loginAsVolunteer(
@@ -272,7 +272,7 @@ export async function loginAsVolunteer(
     eventId: v.event_id,
   });
 
-  return { success: true, data: { redirect: "/volunteer" } };
+  return { success: true, data: { redirect: "/yip/volunteer" } };
 }
 
 export async function loginAsJury(
@@ -299,7 +299,7 @@ export async function loginAsJury(
     eventId: j.event_id,
   });
 
-  return { success: true, data: { redirect: "/jury" } };
+  return { success: true, data: { redirect: "/yip/jury" } };
 }
 
 export async function loginAsOrganizer(): Promise<
@@ -348,7 +348,7 @@ export async function loginAsOrganizer(): Promise<
     };
   }
 
-  return { success: true, data: { redirect: "/dashboard" } };
+  return { success: true, data: { redirect: "/yip/dashboard" } };
 }
 
 // Allow the existing logout action to clear the yip_session cookie too.

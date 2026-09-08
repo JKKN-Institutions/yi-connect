@@ -10,8 +10,13 @@ import {
   setDayCheckIn,
   bulkCheckIn,
   updateParticipant,
+  setParticipantBenches,
 } from "@/app/yip/actions/participants";
 import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
+import {
+  describePartySide,
+  PARTY_SIDE_LABELS,
+} from "@/lib/yip/party-side";
 import type { MinistryPortfolio } from "@/lib/yip/cabinet";
 import { CONSTITUENCIES } from "@/lib/yip/data/constituencies";
 import { Button } from "@/components/yip/ui/button";
@@ -52,6 +57,7 @@ import {
 } from "lucide-react";
 import { CsvImport } from "@/components/yip/csv-import";
 import { EmailSendCodes } from "@/components/yip/email-send-codes";
+import { ParticipantProfileDialog } from "@/components/yip/participant-profile-dialog";
 import { exportAllocationRoster } from "@/app/yip/actions/school-export";
 import { toast } from "sonner";
 
@@ -143,6 +149,7 @@ const SELECT_CLASS =
 
 export function ParticipantsClient({
   eventId,
+  eventName,
   participants: initialParticipants,
   allocationLocked,
   canDelete = true,
@@ -151,6 +158,7 @@ export function ParticipantsClient({
   ministries,
 }: {
   eventId: string;
+  eventName: string;
   participants: Participant[];
   allocationLocked: boolean;
   /** Chair/national/regional only. Organisers cannot delete records. */
@@ -170,6 +178,8 @@ export function ParticipantsClient({
   const [sortKey, setSortKey] = useState<SortKey>("full_name");
   const [sortAsc, setSortAsc] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  // Which participant's profile popup is open, if any.
+  const [profileId, setProfileId] = useState<string | null>(null);
   const [checkingIn, setCheckingIn] = useState<Set<string>>(new Set());
   const [checkInFilter, setCheckInFilter] = useState<CheckInFilter>("all");
   // Day the in/out chips are scoped to. Default Day 1 so the counts line up
@@ -182,6 +192,14 @@ export function ParticipantsClient({
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [committeeFilter, setCommitteeFilter] = useState<string>("all");
   const [stateFilter, setStateFilter] = useState<string>("all");
+  // Bench filter: "all" | "none" (no bench recorded) | "ruling" | "opposition".
+  const [benchFilter, setBenchFilter] = useState<string>("all");
+  // Bulk bench assignment (organiser+) — acts on the rows currently shown.
+  const [benchDialogOpen, setBenchDialogOpen] = useState(false);
+  const [benchChoice, setBenchChoice] = useState<"ruling" | "opposition" | "clear">(
+    "ruling"
+  );
+  const [benchSaving, setBenchSaving] = useState(false);
   const [rosterLoading, setRosterLoading] = useState(false);
   // Full-roster reset (chair only) — two-step type-to-confirm.
   const [deleteAllOpen, setDeleteAllOpen] = useState(false);
@@ -418,12 +436,20 @@ export function ParticipantsClient({
     setEditLoading(false);
   }
 
+  // How many students have NO bench recorded. Until this is zero, a juror
+  // scoring one of them is asked to pick the bench in the hall — which the
+  // national admin ruled out (18 Aug 2026), because the bench decides which two
+  // criteria the student is marked on. Today this gap is invisible until it
+  // blocks someone mid-session, so it is stated on the screen instead.
+  const missingBenchCount = participants.filter((p) => !p.party_side).length;
+
   const filtersActive =
     checkInFilter !== "all" ||
     partyFilter !== "all" ||
     roleFilter !== "all" ||
     committeeFilter !== "all" ||
     stateFilter !== "all" ||
+    benchFilter !== "all" ||
     search.trim() !== "";
 
   function clearFilters() {
@@ -432,6 +458,7 @@ export function ParticipantsClient({
     setRoleFilter("all");
     setCommitteeFilter("all");
     setStateFilter("all");
+    setBenchFilter("all");
     setSearch("");
   }
 
@@ -467,6 +494,13 @@ export function ParticipantsClient({
       filtered = filtered.filter(
         (p) => (p.constituency_state ?? "") === stateFilter
       );
+    // Bench filter. "none" isolates exactly the students a juror would be asked
+    // to guess for, which is the set an organiser wants to bulk-assign.
+    // (missingBenchCount below counts the same thing across the whole roster.)
+    if (benchFilter === "none")
+      filtered = filtered.filter((p) => !p.party_side);
+    else if (benchFilter !== "all")
+      filtered = filtered.filter((p) => p.party_side === benchFilter);
 
     // Search filter (by name only — school is not shown or searchable)
     if (search.trim()) {
@@ -526,6 +560,7 @@ export function ParticipantsClient({
     roleFilter,
     committeeFilter,
     stateFilter,
+    benchFilter,
     search,
     sortKey,
     sortAsc,
@@ -731,6 +766,47 @@ export function ParticipantsClient({
     setLoading(false);
   }
 
+  // Bulk bench assignment. Acts on exactly the rows currently shown, which is
+  // why the confirm dialog states that number back before anything is written —
+  // "Bench: not set" + "Ruling" is the intended two-click workflow.
+  async function handleSetBenches() {
+    const ids = displayedParticipants.map((p) => p.id);
+    if (ids.length === 0) return;
+
+    setBenchSaving(true);
+    const res = await setParticipantBenches(
+      eventId,
+      ids,
+      benchChoice === "clear" ? null : benchChoice
+    );
+    setBenchSaving(false);
+
+    if (!res.success) {
+      toast.error(res.error);
+      return;
+    }
+
+    // Report REAL ROWS, not just a count — a count in this project has been
+    // confidently wrong before, and a wrong bench silently marks a student
+    // against the wrong two criteria.
+    const { updated, requested, remainingWithoutBench, sample } = res.data;
+    const names = sample.map((s) => `${s.full_name} → ${describePartySide(s.party_side)}`);
+    if (updated !== requested) {
+      toast.warning(
+        `Asked to update ${requested} but ${updated} came back. ${names.join("; ")}`,
+        { duration: 12000 }
+      );
+    } else {
+      toast.success(
+        `${updated} student${updated !== 1 ? "s" : ""} updated — e.g. ${names.join("; ")}. ${remainingWithoutBench} still without a bench.`,
+        { duration: 10000 }
+      );
+    }
+
+    setBenchDialogOpen(false);
+    router.refresh();
+  }
+
   // Download the current allocation roster (name + party + side + constituency
   // + committee + role). Re-runnable: re-download after adding late registrants
   // and re-running allocation. Non-destructive.
@@ -832,7 +908,11 @@ export function ParticipantsClient({
               WhatsApp Codes button was removed 2026-06-13 while the Railway
               bridge is down (headless-Chrome crash after scan); the
               WhatsAppSendCodes component is kept for when the bridge is fixed. */}
-          <EmailSendCodes eventId={eventId} />
+          <EmailSendCodes
+            eventId={eventId}
+            /* Only what the organiser can actually see gets emailed. */
+            participantIds={displayedParticipants.map((p) => p.id)}
+          />
 
           {/* Quick Add Walk-in — create a single late arrival and auto-assign
               party + constituency + committee in one click. Works even after
@@ -1229,6 +1309,18 @@ export function ParticipantsClient({
             </option>
           ))}
         </select>
+        {/* Bench filter — "No bench recorded" is the set a juror would other-
+            wise be asked to guess for, so it is the set to bulk-assign. */}
+        <select
+          value={benchFilter}
+          onChange={(e) => setBenchFilter(e.target.value)}
+          className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-[#1a1a3e]/80 focus:border-[#1a1a3e]/40 focus:outline-none"
+        >
+          <option value="all">All benches</option>
+          <option value="none">No bench recorded ({missingBenchCount})</option>
+          <option value="ruling">{PARTY_SIDE_LABELS.ruling}</option>
+          <option value="opposition">{PARTY_SIDE_LABELS.opposition}</option>
+        </select>
         <span className="text-xs text-[#1a1a3e]/50">
           {displayedParticipants.length} shown
         </span>
@@ -1242,6 +1334,90 @@ export function ParticipantsClient({
         )}
       </div>
 
+      {/* Bench master data — the gap, stated plainly, and the way to close it.
+          Shown to organisers+ only because only they can write it. */}
+      {canManage && participants.length > 0 && (
+        <div
+          className={`flex flex-wrap items-center gap-3 rounded-lg border p-3 text-sm ${
+            missingBenchCount > 0
+              ? "border-amber-200 bg-amber-50 text-amber-900"
+              : "border-green-200 bg-green-50 text-green-800"
+          }`}
+        >
+          <span className="font-medium">
+            {missingBenchCount > 0
+              ? `${missingBenchCount} of ${participants.length} students have no bench recorded`
+              : `All ${participants.length} students have a bench recorded`}
+          </span>
+          <span className="text-xs opacity-80">
+            {missingBenchCount > 0
+              ? "A juror scoring these students is asked to pick a side in the hall. Set it here before the round."
+              : "Jurors will see only the criteria for each student's own bench."}
+          </span>
+
+          <Dialog open={benchDialogOpen} onOpenChange={setBenchDialogOpen}>
+            <DialogTrigger
+              render={<Button variant="outline" size="sm" className="ml-auto" />}
+            >
+              Set bench for shown rows
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Set bench</DialogTitle>
+                <DialogDescription>
+                  This applies to the {displayedParticipants.length} student
+                  {displayedParticipants.length !== 1 ? "s" : ""} currently shown
+                  in the table. Narrow the list with the filters above first —
+                  for example set Bench to &ldquo;No bench recorded&rdquo; and
+                  Party to one party.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-2">
+                <Label htmlFor="bench-choice">Bench</Label>
+                <select
+                  id="bench-choice"
+                  value={benchChoice}
+                  onChange={(e) =>
+                    setBenchChoice(
+                      e.target.value as "ruling" | "opposition" | "clear"
+                    )
+                  }
+                  className={SELECT_CLASS}
+                >
+                  <option value="ruling">{PARTY_SIDE_LABELS.ruling}</option>
+                  <option value="opposition">
+                    {PARTY_SIDE_LABELS.opposition}
+                  </option>
+                  <option value="clear">Clear the bench (leave unset)</option>
+                </select>
+                <p className="text-xs text-[#1a1a3e]/60">
+                  Changing a bench changes which two criteria the student is
+                  marked on. Rows already scored keep their marks — only the
+                  bench recorded against the student changes.
+                </p>
+              </div>
+
+              <DialogFooter>
+                <DialogClose render={<Button variant="outline" size="sm" />}>
+                  Cancel
+                </DialogClose>
+                <Button
+                  size="sm"
+                  onClick={handleSetBenches}
+                  disabled={benchSaving || displayedParticipants.length === 0}
+                >
+                  {benchSaving && <Loader2 className="size-4 animate-spin" />}
+                  {benchSaving
+                    ? "Saving..."
+                    : `Apply to ${displayedParticipants.length}`}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      )}
+
       {/* Table */}
       {displayedParticipants.length > 0 ? (
         <div className="rounded-lg border bg-white">
@@ -1252,6 +1428,7 @@ export function ParticipantsClient({
                 {sortHead("S.No", "serial_no", "w-14")}
                 {sortHead("Name", "full_name")}
                 {sortHead("Party", "party_number", "w-16")}
+                <TableHead className="w-24">Bench</TableHead>
                 {sortHead("Role", "parliament_role")}
                 {sortHead("Const. No.", "constituency_number", "w-20")}
                 {sortHead("Constituency", "constituency_name")}
@@ -1265,11 +1442,11 @@ export function ParticipantsClient({
               {displayedParticipants.map((p) => (
                 <TableRow
                   key={p.id}
-                  onClick={() =>
-                    router.push(
-                      `/yip/dashboard/events/${eventId}/participants/${p.id}`
-                    )
-                  }
+                  /* Opens the profile in a popup rather than navigating to
+                     the profile page — a full navigation threw away whatever
+                     filter, search and sort the organiser was working through,
+                     and they had to rebuild it after every back. */
+                  onClick={() => setProfileId(p.id)}
                   className="cursor-pointer hover:bg-[#1a1a3e]/[0.025]"
                 >
                   <TableCell>
@@ -1320,6 +1497,17 @@ export function ParticipantsClient({
                       </span>
                     ) : (
                       <span className="text-gray-400">—</span>
+                    )}
+                  </TableCell>
+                  {/* Bench — an empty one is called out rather than shown as a
+                      dash, because it is the thing that stops a juror. */}
+                  <TableCell>
+                    {p.party_side ? (
+                      <span className="text-xs font-medium">
+                        {describePartySide(p.party_side)}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-amber-600">Not set</span>
                     )}
                   </TableCell>
                   <TableCell>
@@ -1749,6 +1937,18 @@ export function ParticipantsClient({
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Profile popup — opened by clicking any row. Mounted once, outside the
+          table, so the open profile survives re-sorts and re-filters. */}
+      <ParticipantProfileDialog
+        eventId={eventId}
+        eventName={eventName}
+        participantId={profileId}
+        open={profileId !== null}
+        onOpenChange={(next) => {
+          if (!next) setProfileId(null);
+        }}
+      />
     </div>
   );
 }

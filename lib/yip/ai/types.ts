@@ -15,6 +15,7 @@ export type AiDraftKind =
   | "session_feedback" // subject_id = participants.id; agenda_item_id = agenda.id — per-session growth note, NO numbers
   | "bill_feedback" // subject_id = bills.id; agenda_item_id NULL — team-level note on a BILL's craft, NO scores/people
   | "ministry_verdict" // future
+  | "questionnaire_question_review" // subject_id = null — ORGANISER-ONLY review of the question BANK, not of any answer
   // ── Projector moments (director-triggered, ALWAYS pending_review) ──
   | "projector_quotes" // subject_id = null — SELECTION-ONLY: routine picks question ids; server copies verbatim text
   | "projector_bill_summary" // subject_id = bills.id — 3-bullet big-screen distillation of ONE bill
@@ -429,8 +430,45 @@ export type ProjectorMomentRow = {
   updated_at: string;
 };
 
+/**
+ * Grounding for kind='questionnaire_question_review' — a review of the QUESTION
+ * BANK, before or after it is used. Not a review of anybody's answers.
+ *
+ * Why this exists: some of the questions were AI-drafted in the style of the
+ * originals and 180 candidates answered them before any human read them back
+ * (Director, 2026-08-16). This kind gives the organiser a second reader on the
+ * wording itself — ambiguity, leading phrasing, questions that cannot be
+ * answered in the time, two questions that ask the same thing.
+ *
+ * CONTENT-SAFE BY CONSTRUCTION: carries the questions and nothing else. No
+ * candidate, no answer, no score, no rank. It cannot leak a student's work
+ * because a student's work is never put in it.
+ *
+ * `locked` matters to the reader's advice: once a post's first paper is in, its
+ * question set is frozen so every candidate is compared on the same questions.
+ * A locked post can only be fixed for the NEXT round, and the routine is told
+ * to say so rather than suggest an edit nobody can make.
+ */
+export type QuestionnaireQuestionReviewGrounding = {
+  kind: "questionnaire_question_review";
+  event: { id: string; name: string; chapterName: string | null };
+  posts: {
+    postKey: string;
+    label: string;
+    /** How many of this post's questions each candidate is actually asked. */
+    drawSize: number;
+    /** Frozen because a paper has already been submitted for this post. */
+    locked: boolean;
+    /** "chapter" = this event wrote its own; "national" = the shared bank. */
+    source: string;
+    questions: { id: string; order: number; body: string }[];
+  }[];
+  sourceRefs: AiSourceRef[];
+};
+
 export type AiGrounding =
   | ParticipantStoryGrounding
+  | QuestionnaireQuestionReviewGrounding
   | RoundNarrativeGrounding
   | SessionFeedbackGrounding
   | BillFeedbackGrounding

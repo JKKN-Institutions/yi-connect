@@ -9,7 +9,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Rocket } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { createRun } from "@/app/youth-academy/actions/runs";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";

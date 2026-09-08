@@ -48,7 +48,7 @@ import {
   type CalendarDay,
 } from '@/types/availability'
 import { setAvailability, bulkSetAvailability, clearAvailability } from '@/app/actions/availability'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 
 interface AvailabilityCalendarProps {
   memberId: string

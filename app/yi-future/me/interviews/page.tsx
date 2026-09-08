@@ -137,7 +137,7 @@ function InterviewCard({ iv }: { iv: Interview }): React.JSX.Element {
           <div className="mt-2 flex flex-wrap gap-2 text-xs text-navy/60">
             <span>
               📅{" "}
-              {new Date(iv.scheduled_at).toLocaleString("en-IN", {
+              {new Date(iv.scheduled_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",
                 dateStyle: "medium",
                 timeStyle: "short",
               })}

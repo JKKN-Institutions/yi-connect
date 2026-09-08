@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { FileText, Download, Loader2, Send, Check } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

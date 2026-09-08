@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import { requirePlatformAdmin } from "./national-admins";
 import type { Database } from "@/types/yi-future/database";
+import { safeError } from "@/lib/yi-future/db-error";
 
 type EditionStage = Database["future"]["Enums"]["edition_stage"];
 
@@ -47,7 +48,7 @@ export async function createEdition(formData: FormData): Promise<ActionResult> {
       current_stage: "announcement" as EditionStage,
       is_active: false,
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "editions.createEdition") };
 
   revalidatePath("/national/admin/editions");
   redirect("/yi-future/national/admin/editions");
@@ -98,7 +99,7 @@ export async function updateEdition(
       updated_at: new Date().toISOString(),
     } as never)
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "editions.updateEdition") };
 
   revalidatePath("/national/admin/editions");
   redirect("/yi-future/national/admin/editions");
@@ -116,14 +117,14 @@ export async function setActiveEdition(id: string): Promise<ActionResult> {
     .from("editions")
     .update({ is_active: false })
     .neq("id", "00000000-0000-0000-0000-000000000000");
-  if (e1) return { ok: false, error: e1.message };
+  if (e1) return { ok: false, error: safeError(e1.message, "editions.setActiveEdition") };
 
   const { error: e2 } = await svc
     .schema("future")
     .from("editions")
     .update({ is_active: true })
     .eq("id", id);
-  if (e2) return { ok: false, error: e2.message };
+  if (e2) return { ok: false, error: safeError(e2.message, "editions.setActiveEdition") };
 
   revalidatePath("/national/admin/editions");
   return { ok: true, message: "Edition activated." };
@@ -142,7 +143,7 @@ export async function setEditionStage(
     .from("editions")
     .update({ current_stage: stage, updated_at: new Date().toISOString() })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "editions.setEditionStage") };
 
   // Write audit log row
   await svc

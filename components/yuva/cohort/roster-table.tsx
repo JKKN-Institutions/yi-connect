@@ -11,7 +11,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, UserX, Users } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { markEnrollmentDropped } from "@/app/youth-academy/actions/attendance";
 import type { CohortRosterRow } from "@/components/yuva/cohort/data";
 import { Badge } from "@/components/ui/badge";

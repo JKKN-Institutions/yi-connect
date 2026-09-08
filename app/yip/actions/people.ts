@@ -3,6 +3,19 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { revalidatePath } from "next/cache";
+import {
+  sanitizePersonInput as sanitize,
+  type PersonInput,
+} from "@/lib/yip/people/find-or-create";
+
+// PersonInput and findOrCreatePerson now live in lib/yip/people/find-or-create.
+// Every other export in this file is gated with requireSuperAdmin();
+// findOrCreatePerson never was, and in a "use server" file an ungated export is
+// a callable endpoint — which, once it became the identity spine, would let a
+// caller pre-create a contestant matching a student's name+school and capture
+// that student's career on the next import. It is reachable from server code
+// only now. Re-exported here as a TYPE (erased at runtime) for existing callers.
+export type { PersonInput };
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -28,22 +41,6 @@ export type Person = {
   updated_at: string | null;
 };
 
-export type PersonInput = {
-  full_name: string;
-  phone?: string | null;
-  email?: string | null;
-  parent_phone?: string | null;
-  class?: number | null;
-  section?: string | null;
-  school_id?: string | null;
-  school_name?: string | null;
-  home_state?: string | null;
-  city?: string | null;
-  photo_url?: string | null;
-  bio?: string | null;
-  notes?: string | null;
-};
-
 /** Journey: every participation in every event for a given person. */
 export type JourneyStep = {
   participant_id: string;
@@ -67,32 +64,8 @@ export type JourneyStep = {
   qualified_for_next: boolean;
 };
 
-// ─── Normalization ──────────────────────────────────────────────
-
-function normPhone(p: string | null | undefined): string | null {
-  if (!p) return null;
-  const digits = p.replace(/\D/g, "");
-  if (digits.length < 6) return null;
-  return digits;
-}
-
-function sanitize(input: PersonInput): PersonInput {
-  return {
-    full_name: input.full_name?.trim() ?? "",
-    phone: normPhone(input.phone ?? null),
-    email: input.email?.trim().toLowerCase() || null,
-    parent_phone: normPhone(input.parent_phone ?? null),
-    class: input.class ?? null,
-    section: input.section?.trim() || null,
-    school_id: input.school_id ?? null,
-    school_name: input.school_name?.trim() || null,
-    home_state: input.home_state?.trim() || null,
-    city: input.city?.trim() || null,
-    photo_url: input.photo_url?.trim() || null,
-    bio: input.bio?.trim() || null,
-    notes: input.notes?.trim() || null,
-  };
-}
+// Normalization (normPhone / sanitizePersonInput) lives alongside the matcher
+// in lib/yip/people/find-or-create so both use exactly one definition.
 
 // ─── CRUD ───────────────────────────────────────────────────────
 
@@ -209,76 +182,25 @@ export async function restorePerson(id: string): Promise<ActionResult> {
   return { success: true, data: null };
 }
 
-// ─── Find or create (used by registration approval + promotion) ──
-
-/**
- * Idempotent upsert by phone (preferred) or (school_id, normalized name).
- * Never creates a duplicate: if a match exists, returns that row's id.
- */
-export async function findOrCreatePerson(
-  input: PersonInput
-): Promise<ActionResult<{ id: string; matched: boolean }>> {
-  const clean = sanitize(input);
-  if (!clean.full_name || clean.full_name.length < 2) {
-    return { success: false, error: "Name required" };
-  }
-
-  const supabase = await createServiceClient();
-
-  // Try phone first
-  if (clean.phone) {
-    const { data: byPhone } = await supabase
-      .from("contestants")
-      .select("id")
-      .eq("phone", clean.phone)
-      .maybeSingle();
-    if (byPhone) {
-      return { success: true, data: { id: byPhone.id, matched: true } };
-    }
-  }
-
-  // Then school_id + name
-  if (clean.school_id) {
-    const { data: bySchool } = await supabase
-      .from("contestants")
-      .select("id")
-      .eq("school_id", clean.school_id)
-      .ilike("full_name", clean.full_name)
-      .maybeSingle();
-    if (bySchool) {
-      return { success: true, data: { id: bySchool.id, matched: true } };
-    }
-  }
-
-  // Else school_name + name
-  if (clean.school_name) {
-    const { data: bySchoolName } = await supabase
-      .from("contestants")
-      .select("id")
-      .ilike("school_name", clean.school_name)
-      .ilike("full_name", clean.full_name)
-      .maybeSingle();
-    if (bySchoolName) {
-      return { success: true, data: { id: bySchoolName.id, matched: true } };
-    }
-  }
-
-  // Create fresh
-  const { data, error } = await supabase
-    .from("contestants")
-    .insert(clean)
-    .select("id")
-    .single();
-  if (error) return { success: false, error: error.message };
-  return { success: true, data: { id: data.id, matched: false } };
-}
+// findOrCreatePerson moved to lib/yip/people/find-or-create (see the
+// import note at the top of this file — it was the one ungated export here).
 
 // ─── Journey ─────────────────────────────────────────────────────
 
 export async function getPersonJourney(personId: string): Promise<JourneyStep[]> {
   const supabase = await createServiceClient();
 
-  const { data: parts } = await supabase
+  // `yi_year_id`, NOT `season_id`. yip.events.season_id does not exist — it was
+  // renamed — and PostgREST answers an unknown embedded column with a hard 400
+  // (`42703: column events_1.season_id does not exist`), not a partial row. The
+  // error used to be discarded here, so every journey silently came back empty
+  // and both career pages ("The Record" at /yip/me/journey and the admin person
+  // page) rendered blank for EVERY student, including the linked ones. That read
+  // as "not set up yet" rather than "broken", which is why it survived.
+  //
+  // results_published_at is selected here rather than re-queried per step; the
+  // old per-step lookup was an N+1 over the same rows this join already returns.
+  const { data: parts, error } = await supabase
     .from("participants")
     .select(
       `
@@ -292,12 +214,23 @@ export async function getPersonJourney(personId: string): Promise<JourneyStep[]>
       committee_name,
       constituency_name,
       qualified_for_next,
-      event:events(id, name, level, day1_date, zone, season_id),
+      event:events(id, name, level, day1_date, zone, yi_year_id, results_published_at),
       result:results!results_participant_id_fkey(avg_score, rank, award_category)
     `
     )
     .eq("person_id", personId)
     .order("created_at", { ascending: true });
+
+  // Never swallow this again: an empty journey and a failed query look identical
+  // to the caller, and that is exactly how the bug above stayed invisible.
+  if (error) {
+    console.error("getPersonJourney query failed", {
+      personId,
+      code: error.code,
+      message: error.message,
+    });
+    return [];
+  }
 
   if (!parts) return [];
 
@@ -310,7 +243,8 @@ export async function getPersonJourney(personId: string): Promise<JourneyStep[]>
       level: string;
       day1_date: string;
       zone: string | null;
-      season_id: string | null;
+      yi_year_id: string | null;
+      results_published_at: string | null;
     } | null;
     const resArr = (p.result as Array<{
       avg_score: number | null;
@@ -319,16 +253,8 @@ export async function getPersonJourney(personId: string): Promise<JourneyStep[]>
     }>) ?? [];
     const res = resArr[0];
 
-    // Publish status
-    let publishedAt: string | null = null;
-    if (ev) {
-      const { data: evDetail } = await supabase
-        .from("events")
-        .select("results_published_at")
-        .eq("id", ev.id)
-        .single();
-      publishedAt = evDetail?.results_published_at ?? null;
-    }
+    // Publish status — comes from the join above, no per-step round trip.
+    const publishedAt = ev?.results_published_at ?? null;
 
     // Year
     let year: number | null = null;

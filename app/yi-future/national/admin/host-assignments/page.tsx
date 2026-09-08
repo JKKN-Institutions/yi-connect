@@ -69,7 +69,7 @@ const REGION_LABELS: Record<string, string> = {
 
 function formatDate(d: string | null): string {
   if (!d) return "TBA";
-  return new Date(d + "T00:00:00").toLocaleDateString("en-IN", {
+  return new Date(d + "T00:00:00").toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata",
     day: "numeric",
     month: "short",
   });

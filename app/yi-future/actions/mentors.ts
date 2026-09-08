@@ -6,6 +6,7 @@ import { createClient, createServiceClient } from "@/lib/yi-future/supabase/serv
 import { generateAccessCode } from "@/lib/yi-future/access-code";
 import type { ActionResult } from "./editions";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 /**
  * Chapter-scoped gate for the takeover-grade mentor action (regenerate access
@@ -78,7 +79,7 @@ export async function createMentor(
       access_code,
       is_active: true,
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "mentors.createMentor") };
 
   // Upsert yi_directory.people — cross-app identity bridge
   if (email) {
@@ -131,7 +132,7 @@ export async function updateMentor(
       bio,
     })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "mentors.updateMentor") };
 
   revalidatePath("/yi-future/chapter/mentors");
   redirect("/yi-future/chapter/mentors");
@@ -149,7 +150,7 @@ export async function regenerateMentorAccessCode(
     .from("mentors")
     .update({ access_code })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "mentors.regenerateMentorAccessCode") };
   revalidatePath("/yi-future/chapter/mentors");
   return { ok: true, message: `New code: ${access_code}` };
 }
@@ -171,7 +172,7 @@ export async function deleteMentor(id: string): Promise<ActionResult> {
     .from("mentors")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "mentors.deleteMentor") };
   revalidatePath("/yi-future/chapter/mentors");
   return { ok: true, message: "Mentor removed." };
 }
@@ -206,7 +207,7 @@ export async function assignMentorToTeam(
     .upsert({ mentor_id: mentorId, team_id: teamId }, {
       onConflict: "mentor_id,team_id",
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "mentors.assignMentorToTeam") };
   revalidatePath("/yi-future/chapter/mentors");
   revalidatePath(`/yi-future/chapter/teams/${teamId}`);
   return { ok: true, message: "Assigned." };
@@ -226,7 +227,7 @@ export async function unassignMentorFromTeam(
     .delete()
     .eq("mentor_id", mentorId)
     .eq("team_id", teamId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "mentors.unassignMentorFromTeam") };
   revalidatePath("/yi-future/chapter/mentors");
   revalidatePath(`/yi-future/chapter/teams/${teamId}`);
   return { ok: true, message: "Unassigned." };

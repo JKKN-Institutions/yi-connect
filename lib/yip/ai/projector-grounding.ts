@@ -1,4 +1,5 @@
 import "server-only";
+import { fetchCommitteeTopicForEvent } from "@/lib/yip/committee-topics";
 
 /**
  * Grounding builders for the DIRECTOR-TRIGGERED projector-moment kinds.
@@ -187,13 +188,7 @@ export async function buildProjectorBillSummaryGrounding(
 
   let ministry: ProjectorBillSummaryGrounding["ministry"] = null;
   if (bill.committee_name) {
-    const { data: ct } = await svc
-      .from("topics")
-      .select("description, linked_scheme")
-      .eq("category", "committee")
-      .eq("title", bill.committee_name)
-      .eq("is_active", true)
-      .maybeSingle();
+    const ct = await fetchCommitteeTopicForEvent(svc as never, eventId, bill.committee_name);
     if (ct) {
       ministry = {
         topic: ct.description ?? null,

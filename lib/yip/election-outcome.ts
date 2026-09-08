@@ -40,6 +40,11 @@ export interface ElectionOutcome {
   // participant ids for a party's ministerial quota.
   winnerIds: string[];
   tie: ElectionTie | null;
+  // Multi-seat only (from computeMultiSeatOutcome) — how many of this round's
+  // seats are unfilled, and why ("under_subscribed" vs "tie_pending"; see
+  // computeMultiSeatOutcome). Undefined for every other vote type.
+  unfilledSeats?: number;
+  shortfall?: "under_subscribed" | "tie_pending" | null;
 }
 
 // Single-winner bench elections: one seat, electorate scoped to one bench
@@ -247,22 +252,55 @@ export function fillDeputiesFromParent(
 // awards only the clearly-ahead and reports the rest for a runoff among the
 // tied — identical cutline logic to computeDeputyRunoffOutcome, but the winners
 // land in `winnerIds` and the tie carries the seat label (cabinet/shadow).
+//
+// A full quota can go unfilled two ways, and they need different remedies, so
+// `shortfall` names which one happened instead of leaving callers to guess
+// from `winnerIds.length < seats`:
+//  - "under_subscribed": fewer candidates stood than there are seats. This
+//    used to be reported as a clean, tie-free win ("everyone fits —
+//    uncontested") with the empty seats never mentioned anywhere. There is
+//    nobody left to run a runoff against — only more nominations or a
+//    smaller quota for this round closes it.
+//  - "tie_pending": `tie` is set — the seats are held open by an unresolved
+//    cutline tie, and the runoff above is the existing remedy.
+// `unfilledSeats` is `seats - winnerIds.length`, never negative. Both fields
+// are additive reporting only — they never change who is in `winnerIds`.
 
 export function computeMultiSeatOutcome(
   tallies: VoteTally[],
   seats: number,
   seat: "cabinet_minister" | "shadow_minister"
-): { winnerIds: string[]; tie: ElectionTie | null } {
-  if (tallies.length === 0 || seats <= 0) return { winnerIds: [], tie: null };
+): {
+  winnerIds: string[];
+  tie: ElectionTie | null;
+  unfilledSeats: number;
+  shortfall: "under_subscribed" | "tie_pending" | null;
+} {
+  if (seats <= 0) {
+    // No quota to fill — there is nothing to be short of.
+    return { winnerIds: [], tie: null, unfilledSeats: 0, shortfall: null };
+  }
   if (tallies.length <= seats) {
-    // Everyone fits — uncontested.
-    return { winnerIds: tallies.map((t) => t.vote_value), tie: null };
+    // Everyone fits — but "everyone" may still be short of the quota, all the
+    // way down to zero candidates. Say so: a runoff has nobody left to run,
+    // so silence here reads as a clean win. (tallies.length === 0 falls
+    // through to here rather than an earlier guard, specifically so this is
+    // where it gets reported too — the maximal case of the same shortfall.)
+    const winnerIds = tallies.map((t) => t.vote_value);
+    const unfilledSeats = seats - winnerIds.length;
+    return {
+      winnerIds,
+      tie: null,
+      unfilledSeats,
+      shortfall: unfilledSeats > 0 ? "under_subscribed" : null,
+    };
   }
   const boundary = tallies[seats - 1].count;
   if (tallies[seats].count === boundary) {
     // Tied across the last open seat: award the clearly-ahead, runoff the rest.
+    const winnerIds = tallies.filter((t) => t.count > boundary).map((t) => t.vote_value);
     return {
-      winnerIds: tallies.filter((t) => t.count > boundary).map((t) => t.vote_value),
+      winnerIds,
       tie: {
         seat,
         tiedCount: boundary,
@@ -270,11 +308,15 @@ export function computeMultiSeatOutcome(
           .filter((t) => t.count === boundary)
           .map((t) => t.vote_value),
       },
+      unfilledSeats: seats - winnerIds.length,
+      shortfall: "tie_pending",
     };
   }
   return {
     winnerIds: tallies.slice(0, seats).map((t) => t.vote_value),
     tie: null,
+    unfilledSeats: 0,
+    shortfall: null,
   };
 }
 

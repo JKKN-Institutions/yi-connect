@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/yi-future/supabase/server";
+import { safeError } from "@/lib/yi-future/db-error";
 
 export type ChangePasswordResult =
   | { ok: true }
@@ -56,7 +57,7 @@ export async function changeMyPassword(
     password: newPassword,
   });
   if (updErr) {
-    return { ok: false, error: updErr.message };
+    return { ok: false, error: safeError(updErr.message, "chair-account.changeMyPassword") };
   }
 
   return { ok: true };

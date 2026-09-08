@@ -45,7 +45,7 @@ async function getEvents(
 
 function fmt(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleString("en-IN", {
+  return d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata",
     month: "short",
     day: "numeric",
     hour: "2-digit",

@@ -26,6 +26,12 @@ import {
 import { updateCommitteeDimensionsConfig } from "@/app/yip/actions/committee-dimensions";
 import { type CommitteeDimensionsConfig } from "@/lib/yip/committee-score";
 import {
+  ROUND_LEVELS,
+  ROUND_LEVEL_LABELS,
+  describeRoundLevels,
+  type RoundLevel,
+} from "@/lib/yip/round-level";
+import {
   AWARD_ELIGIBILITIES,
   AWARD_RANK_MODES,
   ELIGIBILITY_LABELS,
@@ -206,13 +212,24 @@ export function ScoringConfigClient({
   >(
     Object.fromEntries(
       initialBuckets.map((b) => [
-        b.bucket_key,
+        // Keyed by row id, not bucket_key: a component may now exist once for
+        // every round and again scoped to one level, sharing a bucket_key.
+        b.id,
         { weightage: String(b.weightage), merit_max: String(b.merit_max), jury_max: String(b.jury_max) },
       ])
     )
   );
   const [savingBuckets, setSavingBuckets] = useState(false);
   const [bucketsMsg, setBucketsMsg] = useState<string | null>(null);
+  // Which rounds' buckets to show. A bucket with no scope applies everywhere,
+  // so it stays visible under every filter.
+  const [bucketLevelFilter, setBucketLevelFilter] = useState<"all" | RoundLevel>("all");
+  const visibleBuckets =
+    bucketLevelFilter === "all"
+      ? initialBuckets
+      : initialBuckets.filter(
+          (b) => !b.levels?.length || b.levels.includes(bucketLevelFilter)
+        );
 
   async function saveModel() {
     setSavingModel(true);
@@ -299,9 +316,9 @@ export function ScoringConfigClient({
     setSavingBuckets(true);
     setBucketsMsg(null);
     for (const b of initialBuckets) {
-      const d = bucketDrafts[b.bucket_key];
+      const d = bucketDrafts[b.id];
       const res = await setBucketWeightage({
-        bucket_key: b.bucket_key,
+        id: b.id,
         weightage: Number(d.weightage),
         merit_max: Number(d.merit_max),
         jury_max: Number(d.jury_max),
@@ -467,6 +484,18 @@ export function ScoringConfigClient({
         <h2 className={h2Cls}>
           <Crown className="size-4 text-[#FF9933]" /> Leadership bonuses (points, 0–10)
         </h2>
+        <p className="mt-1 text-xs text-[#1a1a3e]/50">
+          These are the <strong>shared</strong> points — every round uses them
+          unless it has its own set. To give regional or national rounds their
+          own merit points (they have roles chapter rounds do not), use{" "}
+          <Link
+            href="/yip/dashboard/admin/scoring-framework"
+            className="font-medium text-[#B35C00] underline"
+          >
+            Scoring Framework
+          </Link>
+          .
+        </p>
         <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
           {ROLE_LABELS.map((r) => (
             <label key={r.key} className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2">
@@ -618,25 +647,56 @@ export function ScoringConfigClient({
           </h2>
           <p className="mt-1 text-xs text-[#1a1a3e]/50">
             Each bucket&apos;s weightage caps its contribution to the /100 total.
-            Edit which sessions feed a bucket on the Scoring Framework page.
+            Edit which sessions feed a bucket — and which rounds it applies to —
+            on the Scoring Framework page. A bucket marked for one round level is
+            used <strong>instead of</strong> the shared ones at that level, never
+            alongside them, so each set must total 100 on its own.
           </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-[#1a1a3e]/50">Show buckets used by</span>
+            {(["all", ...ROUND_LEVELS] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setBucketLevelFilter(f)}
+                className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                  bucketLevelFilter === f
+                    ? "border-[#1a1a3e] bg-[#1a1a3e] text-white"
+                    : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                {f === "all" ? "All rounds" : `${ROUND_LEVEL_LABELS[f]} rounds`}
+              </button>
+            ))}
+          </div>
           <div className="mt-3 space-y-2">
-            {initialBuckets.map((b) => {
-              const d = bucketDrafts[b.bucket_key];
+            {visibleBuckets.map((b) => {
+              const d = bucketDrafts[b.id];
               return (
-                <div key={b.bucket_key} className="flex flex-wrap items-center gap-3 rounded-lg border border-gray-200 px-3 py-2">
-                  <span className="min-w-[200px] flex-1 text-sm text-[#1a1a3e]">{b.label}</span>
+                <div key={b.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-gray-200 px-3 py-2">
+                  <span className="min-w-[200px] flex-1 text-sm text-[#1a1a3e]">
+                    {b.label}
+                    <span
+                      className={`ml-2 rounded px-1.5 py-0.5 align-middle text-[10px] font-medium ${
+                        b.levels?.length
+                          ? "bg-[#FF9933]/10 text-[#B35C00]"
+                          : "bg-gray-100 text-gray-500"
+                      }`}
+                    >
+                      {describeRoundLevels(b.levels)}
+                    </span>
+                  </span>
                   <label className="flex items-center gap-1.5 text-xs text-[#1a1a3e]/70">
                     Weight
-                    <input type="number" value={d.weightage} onChange={(e) => setBucketDrafts((p) => ({ ...p, [b.bucket_key]: { ...d, weightage: e.target.value } }))} className={numInput} />
+                    <input type="number" value={d.weightage} onChange={(e) => setBucketDrafts((p) => ({ ...p, [b.id]: { ...d, weightage: e.target.value } }))} className={numInput} />
                   </label>
                   <label className="flex items-center gap-1.5 text-xs text-[#1a1a3e]/70">
                     Merit
-                    <input type="number" value={d.merit_max} onChange={(e) => setBucketDrafts((p) => ({ ...p, [b.bucket_key]: { ...d, merit_max: e.target.value } }))} className={numInput} />
+                    <input type="number" value={d.merit_max} onChange={(e) => setBucketDrafts((p) => ({ ...p, [b.id]: { ...d, merit_max: e.target.value } }))} className={numInput} />
                   </label>
                   <label className="flex items-center gap-1.5 text-xs text-[#1a1a3e]/70">
                     Jury
-                    <input type="number" value={d.jury_max} onChange={(e) => setBucketDrafts((p) => ({ ...p, [b.bucket_key]: { ...d, jury_max: e.target.value } }))} className={numInput} />
+                    <input type="number" value={d.jury_max} onChange={(e) => setBucketDrafts((p) => ({ ...p, [b.id]: { ...d, jury_max: e.target.value } }))} className={numInput} />
                   </label>
                 </div>
               );

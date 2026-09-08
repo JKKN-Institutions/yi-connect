@@ -43,7 +43,7 @@ import {
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 import { createBooking } from '@/app/actions/session-bookings'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import type {
   SessionTypeWithVertical,
   TimeSlot,

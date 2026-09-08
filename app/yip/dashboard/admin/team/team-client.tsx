@@ -555,10 +555,20 @@ function MemberCard({
                   Yi {m.yi_year}
                 </Badge>
               )}
-              {m.user_id && (
+              {m.user_id ? (
                 <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-[9px]">
                   Linked
                 </Badge>
+              ) : (
+                m.is_active && (
+                  // Say it out loud. An unlinked member signs in fine and then
+                  // sees an EMPTY APP with no error, because roles resolve
+                  // through yi_directory.people.user_id. The absence of a
+                  // "Linked" badge was too quiet to notice.
+                  <Badge className="bg-red-50 text-red-700 border-red-200 text-[9px]">
+                    No login — cannot see events
+                  </Badge>
+                )
               )}
             </div>
           </div>

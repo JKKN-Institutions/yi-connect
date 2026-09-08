@@ -11,7 +11,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarCheck, CalendarClock, Eye, EyeOff, Loader2, UserMinus } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { deactivateMentor } from "@/app/youth-academy/actions/mentors";
 import {
   AlertDialog,

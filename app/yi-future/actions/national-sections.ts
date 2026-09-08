@@ -11,6 +11,7 @@ import {
   NATIONAL_DAY2_SECTION_LABELS,
 } from "@/lib/yi-future/constants";
 import { requireFutureNationalAdmin } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 // NATIONAL scope: the national event run-of-show (which section is live) is
 // shared state for the whole finale, not per-chapter content.
@@ -76,7 +77,7 @@ export async function seedNationalSections(
     onConflict: "event_id,day,section_key",
     ignoreDuplicates: true,
   });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "national-sections.seedNationalSections") };
 
   revalidatePath("/yi-future/host/agenda/day1");
   revalidatePath("/yi-future/host/agenda/day2");
@@ -109,7 +110,7 @@ export async function activateNationalSection(
     .eq("event_id", eventId)
     .eq("day", day)
     .eq("section_key", sectionKey);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "national-sections.activateNationalSection") };
 
   revalidatePath("/yi-future/host/agenda/day1");
   revalidatePath("/yi-future/host/agenda/day2");
@@ -129,7 +130,7 @@ export async function endAllNationalSections(
     .update({ is_active: false, ends_at: now })
     .eq("event_id", eventId)
     .eq("is_active", true);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "national-sections.endAllNationalSections") };
 
   revalidatePath("/yi-future/host/agenda/day1");
   revalidatePath("/yi-future/host/agenda/day2");
@@ -152,7 +153,7 @@ export async function updateNationalSectionNotes(
     .eq("event_id", eventId)
     .eq("day", day)
     .eq("section_key", sectionKey);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "national-sections.updateNationalSectionNotes") };
 
   revalidatePath(`/yi-future/host/agenda/day${day}`);
   return { ok: true };

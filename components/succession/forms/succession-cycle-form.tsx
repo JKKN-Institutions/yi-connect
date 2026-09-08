@@ -29,7 +29,7 @@ import { Switch } from '@/components/ui/switch'
 import { createSuccessionCycle, updateSuccessionCycle } from '@/app/actions/succession'
 import { SuccessionCycleStatusSchema } from '@/lib/validations/succession'
 import type { SuccessionCycle } from '@/lib/types/succession'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 // Form schema - defined locally to avoid refinement extension issues
 const FormSchema = z.object({

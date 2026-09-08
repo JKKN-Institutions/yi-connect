@@ -221,6 +221,9 @@ export type Database = {
         | "ex_leader_of_opposition"
         | "ex_speaker"
         | "ex_deputy_speaker"
+        | "deputy_minister"
+        | "parliamentary_administrator"
+        | "parliamentary_journalist"
       party_side: "ruling" | "opposition"
       registration_source:
         | "microsoft_forms"
@@ -1291,7 +1294,8 @@ export type Database = {
       }
       bill_documents: {
         Row: {
-          committee_name: string
+          bill_id: string | null
+          committee_name: string | null
           content_type: string
           created_at: string
           description: string
@@ -1305,7 +1309,8 @@ export type Database = {
           uploaded_by: string
         }
         Insert: {
-          committee_name: string
+          bill_id?: string | null
+          committee_name?: string | null
           content_type: string
           created_at?: string
           description?: string
@@ -1319,7 +1324,8 @@ export type Database = {
           uploaded_by: string
         }
         Update: {
-          committee_name?: string
+          bill_id?: string | null
+          committee_name?: string | null
           content_type?: string
           created_at?: string
           description?: string
@@ -1333,6 +1339,13 @@ export type Database = {
           uploaded_by?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "bill_documents_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "bill_documents_event_id_fkey"
             columns: ["event_id"]
@@ -3544,6 +3557,8 @@ export type Database = {
           participant_id: string
           position_bonus: number
           rubric_id: string
+          scored_role_source: string | null
+          scored_roles: string[] | null
           status: Database["public"]["Enums"]["score_status"] | null
           submitted_at: string | null
           total_score: number
@@ -3566,6 +3581,8 @@ export type Database = {
           occurrence?: number
           position_bonus?: number
           rubric_id: string
+          scored_role_source?: string | null
+          scored_roles?: string[] | null
           status?: Database["public"]["Enums"]["score_status"] | null
           submitted_at?: string | null
           total_score: number
@@ -3588,6 +3605,8 @@ export type Database = {
           occurrence?: number
           position_bonus?: number
           rubric_id?: string
+          scored_role_source?: string | null
+          scored_roles?: string[] | null
           status?: Database["public"]["Enums"]["score_status"] | null
           submitted_at?: string | null
           total_score?: number
@@ -3681,6 +3700,7 @@ export type Database = {
           id: string
           is_active: boolean
           label: string
+          levels: Database["public"]["Enums"]["event_level"][] | null
           lock_on_submit: boolean
           parameters: Json
           session_key: string
@@ -3695,6 +3715,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           label: string
+          levels?: Database["public"]["Enums"]["event_level"][] | null
           lock_on_submit?: boolean
           parameters?: Json
           session_key: string
@@ -3709,6 +3730,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           label?: string
+          levels?: Database["public"]["Enums"]["event_level"][] | null
           lock_on_submit?: boolean
           parameters?: Json
           session_key?: string
@@ -4276,6 +4298,9 @@ export const Constants = {
         "ex_leader_of_opposition",
         "ex_speaker",
         "ex_deputy_speaker",
+        "deputy_minister",
+        "parliamentary_administrator",
+        "parliamentary_journalist",
       ],
       party_side: ["ruling", "opposition"],
       registration_source: [

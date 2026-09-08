@@ -7,6 +7,7 @@ import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 import type { ActionResult } from "./editions";
 import type { Database } from "@/types/yi-future/database";
 import { sendPushToSubject } from "@/lib/yi-future/push";
+import { safeError } from "@/lib/yi-future/db-error";
 
 type ConsentStatus = Database["future"]["Enums"]["consent_status"];
 
@@ -126,13 +127,13 @@ export async function submitConsent(
       .from("consent_letters")
       .update(payload)
       .eq("id", ex.id);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: safeError(error.message, "consent.submitConsent") };
   } else {
     const { error } = await svc
       .schema("future")
       .from("consent_letters")
       .insert(payload);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: safeError(error.message, "consent.submitConsent") };
   }
 
   revalidatePath("/yi-future/me/consent");
@@ -160,7 +161,7 @@ export async function approveConsent(
       rejection_reason: null,
     })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "consent.approveConsent") };
   revalidatePath("/yi-future/chapter/consent");
 
   // Fire-and-forget push to the delegate
@@ -205,7 +206,7 @@ export async function rejectConsent(
       approved_by: null,
     })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "consent.rejectConsent") };
   revalidatePath("/yi-future/chapter/consent");
 
   // Fire-and-forget push to the delegate

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import { requireFutureNationalAdmin } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 export type SpeakerActionResult =
   | { ok: true; message?: string }
@@ -62,7 +63,7 @@ export async function createHostSpeaker(
       bio,
       expertise_areas,
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "host-speakers.createHostSpeaker") };
 
   revalidatePath("/yi-future/host/speakers");
   redirect("/yi-future/host/speakers");
@@ -100,7 +101,7 @@ export async function updateHostSpeaker(
       expertise_areas,
     })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "host-speakers.updateHostSpeaker") };
 
   revalidatePath("/yi-future/host/speakers");
   redirect("/yi-future/host/speakers");
@@ -116,7 +117,7 @@ export async function deleteHostSpeaker(
     .from("experts")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "host-speakers.deleteHostSpeaker") };
   revalidatePath("/yi-future/host/speakers");
   return { ok: true, message: "Speaker removed." };
 }

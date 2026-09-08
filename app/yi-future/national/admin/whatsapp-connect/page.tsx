@@ -7,6 +7,11 @@ export const metadata: Metadata = {
   title: "Connect WhatsApp · Yi National · Yi Future 6.0",
 };
 
+// This page reads live connection status from an external service, so it must
+// never be prerendered. Without this, a build-time failure in that service is a
+// failed DEPLOY for the whole app rather than a failed page.
+export const dynamic = "force-dynamic";
+
 // ─────────────────────────────────────────────────────────────────────
 // /yi-future/national/admin/whatsapp-connect
 //

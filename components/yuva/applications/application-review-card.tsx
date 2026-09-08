@@ -11,7 +11,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2, X } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import {
   acceptApplication,
   rejectApplication,
@@ -60,7 +60,7 @@ export function ApplicationReviewCard({
       return;
     }
     if (result.warning) {
-      toast(result.warning, { icon: "⚠️", duration: 6000 });
+      toast.warning(result.warning, { duration: 6000 });
     }
     toast.success(
       decision === "accept" ? "Application accepted." : "Application rejected."

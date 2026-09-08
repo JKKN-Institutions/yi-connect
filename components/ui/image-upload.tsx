@@ -14,7 +14,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Upload, X, Loader2 } from 'lucide-react'
 import Image from 'next/image'
 import { uploadImage } from '@/app/actions/upload'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 
 interface ImageUploadProps {
   value?: string

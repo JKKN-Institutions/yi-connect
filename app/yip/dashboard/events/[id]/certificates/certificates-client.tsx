@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { INK, SAFFRON, SERIF, inkA, SectionShell } from "@/app/yip/me/credential-ui";
 
+import { ParticipantNameButton } from "@/components/yip/participant-profile-dialog";
 // ─── Print styles injected into iframe ───────────────────────────
 
 const PRINT_STYLES = `
@@ -250,7 +251,13 @@ export function CertificatesClient({
                     <Trophy className="size-5 shrink-0 text-amber-500" />
                     <div className="min-w-0">
                       <p className="font-semibold text-sm text-gray-900 truncate">
-                        {p.full_name}
+                        <ParticipantNameButton
+                          eventId={eventId}
+                          eventName={eventName}
+                          participantId={p.id}
+                          name={p.full_name}
+                          className="text-left underline-offset-4 hover:underline"
+                        />
                       </p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-xs text-gray-500 truncate">
@@ -331,7 +338,13 @@ export function CertificatesClient({
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="min-w-0">
                     <p className="font-medium text-sm text-gray-900 truncate">
-                      {p.full_name}
+                      <ParticipantNameButton
+                        eventId={eventId}
+                        eventName={eventName}
+                        participantId={p.id}
+                        name={p.full_name}
+                        className="text-left underline-offset-4 hover:underline"
+                      />
                     </p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-xs text-gray-500 truncate">

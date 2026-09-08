@@ -51,7 +51,7 @@ import {
   AlertDialogTitle
 } from '@/components/ui/alert-dialog';
 import { deleteEvent } from '@/app/actions/events';
-import { toast } from 'react-hot-toast';
+import { toast } from 'sonner';
 import {
   Table,
   TableBody,

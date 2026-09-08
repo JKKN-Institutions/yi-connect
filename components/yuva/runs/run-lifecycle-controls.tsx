@@ -10,7 +10,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Ban, CheckCheck, DoorClosed, Loader2, Undo2 } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import {
   cancelRun,
   closeApplications,

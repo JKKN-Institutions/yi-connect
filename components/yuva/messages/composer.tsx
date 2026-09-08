@@ -11,7 +11,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, SendHorizonal } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { sendCohortMessage } from "@/app/youth-academy/actions/messages";
 import { Button } from "@/components/ui/button";
 

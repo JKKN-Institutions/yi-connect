@@ -30,7 +30,7 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { submitVote } from '@/app/actions/succession'
 import { CreateVoteSchema } from '@/lib/validations/succession'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 
 type VoteFormData = Omit<z.infer<typeof CreateVoteSchema>, 'voter_member_id'>
 

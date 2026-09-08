@@ -572,6 +572,43 @@ export async function getAllSeasons(): Promise<Season[]> {
   return data;
 }
 
+// ─── Host chapter (regional / national) ─────────────────────────
+// Regional + national rounds carry their HOST chapter in events.chapter_name.
+// It is load-bearing: getYipEventAccess grants the host chapter's chair +
+// organisers their usual chapter authority on a regional event (Director
+// decision 2026-08-11), and the dashboard lists a regional event to a chapter
+// by the same chapter_name match. A round saved with a blank chapter_name is
+// administrable by NOBODY at chapter level and invisible on their dashboard,
+// so both admin create paths require it. Resolves the canonical yi.chapters
+// row so chapter_name/zone can never drift from the picker's free text.
+const NO_HOST_CHAPTER_ERROR =
+  "Choose the host chapter for a Regional or National round — its chair and organisers manage the round.";
+
+async function resolveHostChapter(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  chapterId: string | undefined
+): Promise<
+  | { ok: true; fields: { yi_chapter_id: string; chapter_name: string; yi_zone_code?: string } }
+  | { ok: false; error: string }
+> {
+  if (!chapterId) return { ok: false, error: NO_HOST_CHAPTER_ERROR };
+  const { data: chapter } = await supabase
+    .schema("yi")
+    .from("chapters")
+    .select("id, name, region")
+    .eq("id", chapterId)
+    .maybeSingle();
+  if (!chapter?.name?.trim()) return { ok: false, error: NO_HOST_CHAPTER_ERROR };
+  return {
+    ok: true,
+    fields: {
+      yi_chapter_id: chapter.id,
+      chapter_name: chapter.name,
+      ...(chapter.region ? { yi_zone_code: chapter.region } : {}),
+    },
+  };
+}
+
 // ─── Create Regional Event ──────────────────────────────────────
 
 export async function createRegionalEvent(
@@ -585,6 +622,8 @@ export async function createRegionalEvent(
     day1_date: string;
     day2_date: string;
     max_participants?: number;
+    /** REQUIRED: the chapter HOSTING this round (see resolveHostChapter). */
+    yi_chapter_id?: string;
   }
 ): Promise<ActionResult<{ id: string }>> {
   const gate = await requireSuperAdmin();
@@ -602,6 +641,9 @@ export async function createRegionalEvent(
     return { success: false, error: "Season not found" };
   }
 
+  const host = await resolveHostChapter(supabase, data.yi_chapter_id);
+  if (!host.ok) return { success: false, error: host.error };
+
   // Get current user for created_by
   const { data: { user } } = await (await import("@/lib/supabase/server")).createClient().then(c => c.auth.getUser());
 
@@ -610,6 +652,7 @@ export async function createRegionalEvent(
     .insert({
       name: data.name,
       level: "regional" as const,
+      ...host.fields,
       yi_year_id: seasonId,
       city: data.city,
       state: data.state,
@@ -646,6 +689,8 @@ export async function createNationalEvent(
     day1_date: string;
     day2_date: string;
     max_participants?: number;
+    /** REQUIRED: the chapter HOSTING this round (see resolveHostChapter). */
+    yi_chapter_id?: string;
   }
 ): Promise<ActionResult<{ id: string }>> {
   const gate = await requireSuperAdmin();
@@ -663,6 +708,9 @@ export async function createNationalEvent(
     return { success: false, error: "Season not found" };
   }
 
+  const host = await resolveHostChapter(supabase, data.yi_chapter_id);
+  if (!host.ok) return { success: false, error: host.error };
+
   // Get current user
   const { data: { user } } = await (await import("@/lib/supabase/server")).createClient().then(c => c.auth.getUser());
 
@@ -671,6 +719,7 @@ export async function createNationalEvent(
     .insert({
       name: data.name,
       level: "national" as const,
+      ...host.fields,
       yi_year_id: seasonId,
       city: data.city,
       state: data.state,

@@ -64,17 +64,34 @@ export async function getAwardOverrides(
  * Pin THE winner of one award to a chosen participant (chair's final say).
  * Upserts the override and re-runs computeResults so it takes effect at once and
  * survives every future recompute (the override is applied as a final pass).
+ *
+ * `note` is REQUIRED (Director ruling 2026-08-29, ruling 07): a hand-picked
+ * award is the one result no score explains, so the reason is the only record
+ * of why that student won. Enforced here on the server, not just in the form.
+ * Validated up front — before the participant lookup, the upsert, the recompute
+ * and the rollback path — so a missing reason costs nothing but the round-trip.
+ * Existing overrides saved before this rule keep their blank note untouched
+ * (ruling 09); this gate binds WRITES only and never blocks a read.
  */
 export async function setAwardWinner(
   eventId: string,
   awardLabel: string,
   participantId: string,
-  note?: string
+  note: string
 ): Promise<ActionResult> {
   const access = await getYipEventAccess(eventId);
   if (!access.canDelete) return { success: false, error: CHAIR_ONLY };
   if (!isAwardLabel(awardLabel)) {
     return { success: false, error: "Unknown award." };
+  }
+
+  const reason = note?.trim() ?? "";
+  if (!reason) {
+    return {
+      success: false,
+      error:
+        "Couldn't pin this winner: every hand-picked award needs a written reason. Say why this student won — it's the only record of the decision.",
+    };
   }
 
   const supabase = await createServiceClient();
@@ -116,7 +133,7 @@ export async function setAwardWinner(
       event_id: eventId,
       award_label: awardLabel,
       participant_id: participantId,
-      note: note?.trim() || null,
+      note: reason,
       set_by_email: email,
       updated_at: new Date().toISOString(),
     },

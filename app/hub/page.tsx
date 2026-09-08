@@ -83,6 +83,18 @@ const MODULE_APPS: { app: string; tile: ModuleTile }[] = [
       accent: "hover:border-[#FD7215]/60",
     },
   },
+  {
+    app: "yiq",
+    tile: {
+      title: "YIQ",
+      desc: "School quiz championship — rounds, teams, and results.",
+      // /yiq/dashboard self-routes: chapter staff see their own chapters,
+      // and national admins get the master-data console from there.
+      href: "/yiq/dashboard",
+      icon: "🧠",
+      accent: "hover:border-[#FD7215]/60",
+    },
+  },
 ];
 
 // A chapter-wide chair leads the whole chapter across every vertical, so they
@@ -92,7 +104,11 @@ const MODULE_APPS: { app: string; tile: ModuleTile }[] = [
 // national summit with no per-chapter slice, so auto-granting would expose
 // every founder's data nationally (decision 2026-06-14). A chair still sees
 // YiFi if they hold an explicit `yifi` role (covered by the activeApps path).
-const CHAIR_DEFAULT_APPS = new Set(["future", "yuva", "yip"]);
+// YIQ joins this set because lib/yiq/auth/event-access.ts ALREADY resolves a
+// `yi` chapter_chair / chapter_co_chair to full YIQ chapter_admin rights on
+// that chapter's event (tier 3b). Without the tile a chair would hold the
+// permission with no way to find the page.
+const CHAIR_DEFAULT_APPS = new Set(["future", "yuva", "yip", "yiq"]);
 
 function parseSession(
   raw: string | undefined

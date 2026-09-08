@@ -108,7 +108,7 @@ export default async function ChapterConsentPage() {
                     {r.uploaded_at && (
                       <div className="text-[10px] text-navy/40 mt-0.5">
                         Uploaded{" "}
-                        {new Date(r.uploaded_at).toLocaleString("en-IN", {
+                        {new Date(r.uploaded_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",
                           dateStyle: "medium",
                           timeStyle: "short",
                         })}

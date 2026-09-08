@@ -5,7 +5,6 @@ import { isCurrentUserSuperAdmin } from "@/lib/yip/auth/require-super-admin";
 import { getRegionalAdminZones, getYipChapterScopes } from "@/lib/yi/auth/yi-directory-roles";
 import { Plus, CalendarDays } from "lucide-react";
 import { EventsGridClient, type EventCard } from "./events-grid-client";
-import { GlobalSearch } from "./global-search";
 import { OnboardingLauncher } from "@/components/yip/guide/onboarding-launcher";
 import { GUIDES } from "@/lib/yip/guide/content";
 import { getCompletedSteps, logGuideEvent } from "@/lib/yip/guide/actions";
@@ -36,13 +35,16 @@ export default async function DashboardPage() {
       ors.push(`yi_zone_code.in.(${regionalZones.map((z) => `"${z}"`).join(",")})`);
     }
     if (myChapters.length > 0) {
-      // Chapter chairs / organisers are scoped to CHAPTER-level events only.
-      // Regional / national events (even if tagged with a chapter_name) belong
-      // to RM (zone) / national roles, not the chapter chair. (2026-06-02)
+      // Chapter chairs / organisers see their chapter's CHAPTER-level events
+      // AND regional events their chapter HOSTS (chapter_name = host chapter).
+      // Widened 2026-08-11 (Director decision 5): host-chapter organisers run
+      // regional rounds; matches the getYipEventAccess chapter block. National
+      // events still belong to RM (zone) / national roles only. (was
+      // level.eq.chapter, 2026-06-02)
       ors.push(
         `and(chapter_name.in.(${myChapters
           .map((c) => `"${c}"`)
-          .join(",")}),level.eq.chapter)`
+          .join(",")}),level.in.("chapter","regional"))`
       );
     }
     eventsQuery = eventsQuery.or(ors.join(","));
@@ -162,8 +164,6 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Global search — members, events and ministries within this user's scope */}
-      <GlobalSearch />
 
       {/* Events list */}
       {hasEvents ? (

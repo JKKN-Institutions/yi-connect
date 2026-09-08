@@ -19,7 +19,7 @@ import {
   Mail,
   Users,
 } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { formCohort } from "@/app/youth-academy/actions/applications";
 import { Button } from "@/components/ui/button";
 import {

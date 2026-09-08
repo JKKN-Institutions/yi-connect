@@ -272,7 +272,7 @@ function CoverPage({ data }: { data: CompendiumData }) {
       <Text style={styles.coverMeta}>
         {data.whitepapers.length} whitepaper
         {data.whitepapers.length === 1 ? "" : "s"} • Generated{" "}
-        {data.published_at.toLocaleDateString("en-IN", {
+        {data.published_at.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata",
           day: "2-digit",
           month: "long",
           year: "numeric",

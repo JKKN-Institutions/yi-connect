@@ -1,9 +1,9 @@
 /**
  * Toast Hook
- * Wrapper around react-hot-toast for consistent toast notifications
+ * Wrapper around sonner for consistent toast notifications
  */
 
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 export interface ToastOptions {
   title?: string

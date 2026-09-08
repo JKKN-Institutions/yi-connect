@@ -12,7 +12,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Camera, Loader2, Plus, X } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import { updateMentorProfile } from "@/app/youth-academy/actions/mentors";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

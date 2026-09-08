@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { UserPlus } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { createConnection } from '@/app/actions/connections';
 
 interface Props {

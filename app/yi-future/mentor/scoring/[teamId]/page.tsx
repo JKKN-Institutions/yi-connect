@@ -98,7 +98,7 @@ function fmtPhaseEventLabel(pe: PhaseEventRow): string {
   const date = new Date(pe.scheduled_at);
   const dateStr = isNaN(date.getTime())
     ? ""
-    : date.toLocaleDateString("en-IN", {
+    : date.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata",
         day: "2-digit",
         month: "short",
       });
@@ -391,7 +391,7 @@ export default async function MentorScoringPage({
                   <div className="mt-1 text-[10px] text-navy/40">
                     {isMine ? "By you" : "By another mentor"}
                     {h.submitted_at
-                      ? ` · ${new Date(h.submitted_at).toLocaleString("en-IN")}`
+                      ? ` · ${new Date(h.submitted_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`
                       : ""}
                   </div>
                 </li>

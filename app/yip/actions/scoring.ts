@@ -2,7 +2,20 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { requireJurySession } from "@/lib/yip/auth/yip-session";
+import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { isJurorAssignedToSession } from "./jury-sessions";
+import { resolveSessionConfig } from "@/lib/yip/session-config-resolution";
+import { fetchEventRoundLevel } from "@/lib/yip/round-level";
+import { fetchAllRows } from "@/lib/pagination";
+import {
+  applicableCriteria,
+  applicableMax,
+  isRoleSplitSheet,
+  normaliseRoleSlugs,
+  resolveRoleForSheet,
+  roleSlugLabel,
+  sheetRoleSlugs,
+} from "@/lib/yip/scoring-roles";
 import type { Tables } from "@/types/yip/database";
 
 type Score = Tables<{ schema: "yip" }, "scores">;
@@ -59,12 +72,37 @@ export async function getRubricForRole(
 // configured parameters (yip.session_parameters), resolved from the agenda item
 // via its session_key (preferred) or agenda_type. Returns null when the session
 // has no configured parameters (caller falls back to the role rubric).
+//
+// THIS IS THE AUTHORITATIVE RESOLUTION — it is what a human actually marked
+// against. It now calls resolveSessionConfig() from
+// lib/yip/session-config-resolution.ts instead of re-applying the rule in SQL,
+// so the jury screen, the results engine and the host's scored-sessions panel
+// share ONE implementation and cannot drift apart. (Previously the rule lived
+// here in SQL and again in TypeScript; #955 fixed a drift between them.)
+//
+// The event's ROUND LEVEL is part of the resolution: a criteria sheet scoped to
+// regional rounds beats the shared one, and a sheet scoped to a different level
+// is never used. When the level cannot be read the resolver falls back to
+// unscoped sheets only, which is how every sheet behaved before scoping existed.
+//
+// ROLE-DEPENDENT CRITERIA (2026-08)
+// A sheet's criteria list may span BOTH sides of the House, with each criterion
+// tagged with the roles it applies to. The FULL list is returned here, tags
+// included, and the per-student subset is taken by the caller through
+// lib/yip/scoring-roles.ts — deliberately, because getJuryScreenBootstrap caches
+// this payload per SESSION (and mirrors it into the offline cache), not per
+// participant. Filtering here would need a participant argument and would break
+// both caches; filtering from the tags is a pure function of data the jury
+// screen already holds, so it also works offline. `total_max` remains the
+// sheet's PUBLISHED total; a student's own maximum is applicableMax().
 export type SessionScoringParams = {
   criteria: {
     key: string;
     label: string;
     max_score: number;
     kind: "evaluation" | "participation";
+    /** Role slugs this criterion applies to. null = everyone. */
+    roles: string[] | null;
   }[];
   total_max: number;
   // When true, this session is scored ONCE per juror and locked on submit: no
@@ -80,26 +118,33 @@ export async function getSessionScoringParams(
   const supabase = await createServiceClient();
   const { data: item } = await supabase
     .from("agenda")
-    .select("session_key, agenda_type")
+    .select("session_key, agenda_type, event_id")
     .eq("id", agendaItemId)
     .maybeSingle();
   if (!item) return null;
+  if (!item.session_key && !item.agenda_type) return null;
 
-  let cfgQuery = supabase
+  const level = item.event_id
+    ? await fetchEventRoundLevel(supabase as never, item.event_id)
+    : null;
+
+  const { data: sheets } = await supabase
     .from("session_parameters")
-    .select("parameters, total_max, lock_on_submit")
+    .select(
+      "session_key, agenda_type, display_order, is_active, levels, parameters, total_max, lock_on_submit"
+    )
     .eq("is_active", true);
-  if (item.session_key) {
-    cfgQuery = cfgQuery.eq("session_key", item.session_key);
-  } else if (item.agenda_type) {
-    cfgQuery = cfgQuery
-      .eq("agenda_type", item.agenda_type)
-      .order("display_order", { ascending: true });
-  } else {
-    return null;
-  }
-  const { data: cfgs } = await cfgQuery.limit(1);
-  const cfg = cfgs?.[0];
+
+  const cfg = resolveSessionConfig(
+    { session_key: item.session_key, agenda_type: item.agenda_type },
+    (sheets ?? []).map((s) => ({
+      ...s,
+      display_order: Number(s.display_order) || 0,
+      is_active: s.is_active !== false,
+      levels: s.levels ?? null,
+    })),
+    level
+  );
   if (!cfg || !Array.isArray(cfg.parameters)) return null;
 
   const params = cfg.parameters as {
@@ -107,18 +152,17 @@ export async function getSessionScoringParams(
     label: string;
     max_score: number;
     kind?: "evaluation" | "participation";
+    roles?: string[] | null;
   }[];
   const criteria = params.map((p) => ({
     key: p.key,
     label: p.label,
     max_score: Number(p.max_score),
     kind: p.kind === "participation" ? "participation" : "evaluation",
-  })) as {
-    key: string;
-    label: string;
-    max_score: number;
-    kind: "evaluation" | "participation";
-  }[];
+    // Carried through untouched. Every criterion on every production sheet has
+    // no tag, so this is null everywhere until an admin splits a sheet.
+    roles: normaliseRoleSlugs(p.roles),
+  })) as SessionScoringParams["criteria"];
   if (criteria.length === 0) return null;
   return {
     criteria,
@@ -163,6 +207,18 @@ interface SubmitScoreInput {
   // Backward-compatible: callers that pass neither behave exactly as before.
   occurrence?: number;
   newTurn?: boolean;
+  // Role-dependent criteria (2026-08). The role slugs this mark was taken
+  // under, and whether the judge overrode the automatic answer. Both optional:
+  // omitted (every existing caller, and every unsplit sheet) is stored as NULL,
+  // which the results engine reads as "no role restriction was in force" — the
+  // pre-role denominator exactly.
+  //
+  // Stored rather than re-derived because a recompute must be able to reproduce
+  // the denominator a human actually marked against. participants.party_side is
+  // editable after the fact; if a student's bench is corrected next week, a
+  // re-derived role would silently change their historical maximum.
+  scoredRoles?: string[] | null;
+  scoredRoleSource?: "auto" | "override" | null;
 }
 
 export async function submitScore(
@@ -242,7 +298,9 @@ export async function submitScore(
   // below INSERTs it; editing an existing turn finds + updates that exact row.
   const { data: existing } = await supabase
     .from("scores")
-    .select("id, criteria_scores, total_score, comments, status")
+    .select(
+      "id, criteria_scores, total_score, comments, status, scored_roles, scored_role_source"
+    )
     .eq("jury_assignment_id", input.juryAssignmentId)
     .eq("participant_id", input.participantId)
     .eq("event_id", input.eventId)
@@ -292,6 +350,35 @@ export async function submitScore(
   // replayed POST with a valid session) from writing out-of-range values that
   // distort the award ranking. (Previously this guard ran only when
   // fromOfflineSync was set, leaving the live path unbounded.)
+  // Role-dependent criteria: a SPLIT sheet cannot be marked without knowing
+  // which side of the House this student was marked as. Refuse rather than
+  // assume — an assumed side silently changes the denominator, and a score
+  // written without a role could not be reproduced by a later recompute. On an
+  // unsplit sheet (every sheet in production today) this never fires, so it
+  // adds no failure mode to any existing round.
+  if (
+    sessionParams &&
+    isRoleSplitSheet(sessionParams.criteria) &&
+    (normaliseRoleSlugs(input.scoredRoles) ?? []).length === 0
+  ) {
+    return {
+      success: false,
+      // A buffered mark taken before the sheet was split can never acquire a
+      // role on replay, so it is reported as STALE — the flush drops it and the
+      // juror re-scores against the live sheet, exactly as it already does for
+      // a changed rubric. A live submit gets the plain instruction.
+      // BENCH-BLIND WORDING (National Admin, 2026-08-18). The refusal itself is
+      // unchanged — a role-less mark on a split sheet is still rejected — but
+      // the message no longer tells the juror that the app splits by side of
+      // the House, and no longer asks them to pick one. The missing data is the
+      // delegate's bench on the ROSTER, and the host is the one who can supply
+      // it; getEventBenchReadiness() below lists exactly who is affected.
+      error: input.fromOfflineSync
+        ? "STALE_OFFLINE_SCORE: the scoring sheet changed since this was saved offline — please re-score this participant"
+        : "This delegate can't be marked yet — their record is incomplete for this session. Ask the host to complete it.",
+    };
+  }
+
   {
     const entries = Object.entries(input.criteriaScores ?? {});
     // Universal numeric sanity: finite, non-negative — applies even when the
@@ -308,10 +395,20 @@ export async function submitScore(
     let rangeBad = false;
     const params = sessionParams; // loaded once above
     if (params && params.criteria.length > 0) {
-      const maxByKey = new Map(params.criteria.map((c) => [c.key, c.max_score]));
+      // Role-dependent criteria: a student is only marked on the subset that
+      // applies to them, so validate against THAT subset and THAT maximum. On
+      // an unsplit sheet (every sheet in production today) the subset is the
+      // whole list and applicableMax === total_max, so this is byte-identical
+      // to the previous check. On a split sheet it is strictly TIGHTER: a
+      // presenter can no longer post the opposition's criteria, and their total
+      // is bounded by their own 10 rather than the sheet's published 16.
+      const roleSlugs = normaliseRoleSlugs(input.scoredRoles) ?? [];
+      const scoped = applicableCriteria(params.criteria, roleSlugs);
+      const maxByKey = new Map(scoped.map((c) => [c.key, c.max_score]));
+      const boundedMax = applicableMax(params.criteria, roleSlugs);
       foreignKey = entries.some(([k]) => !maxByKey.has(k));
       rangeBad =
-        input.totalScore > params.total_max ||
+        input.totalScore > boundedMax ||
         entries.some(([k, v]) => v > (maxByKey.get(k) ?? Infinity));
     } else {
       // Role-rubric fallback (no session parameters configured): still bound the
@@ -359,6 +456,17 @@ export async function submitScore(
     flag_walkout: input.flags?.walkout ?? false,
     flag_ruckus: input.flags?.ruckus ?? false,
     flag_suspension: input.flags?.suspension ?? false,
+    // Role-dependent criteria: the role this mark was taken under, so a later
+    // recompute can reproduce the same denominator. NULL on every unsplit sheet
+    // and on every caller that does not pass one — which the results engine
+    // reads as "no role restriction", i.e. the sheet's full total_max.
+    scored_roles: normaliseRoleSlugs(input.scoredRoles),
+    scored_role_source:
+      input.scoredRoleSource === "override"
+        ? "override"
+        : normaliseRoleSlugs(input.scoredRoles)
+          ? "auto"
+          : null,
   };
 
   let scoreId: string;
@@ -385,6 +493,13 @@ export async function submitScore(
           total_score: existing.total_score,
           comments: existing.comments,
           prior_status: existing.status,
+          // The role the REPLACED mark was taken under — without it the
+          // superseded total could not be re-derived from its own denominator.
+          scored_roles: (existing as { scored_roles?: string[] | null })
+            .scored_roles,
+          scored_role_source: (
+            existing as { scored_role_source?: string | null }
+          ).scored_role_source,
         });
       } catch {
         // Swallowed by design — the revision log is an audit convenience; the
@@ -697,6 +812,150 @@ export async function getScoreableParticipants(
 
   if (error || !data) return [];
   return data as ScoreableParticipant[];
+}
+
+// ─── Bench readiness (organiser-facing) ───────────────────────────
+//
+// The other half of the bench-blind rule. The jury screen no longer asks a
+// juror which side of the House a delegate sits on — so somebody else has to
+// know, before the session starts, that N delegates cannot be marked at all.
+// That somebody is the host.
+//
+// A delegate is UNMARKABLE in a session when the session's criteria sheet is
+// role-split and the delegate matches none of its restricted criteria (no
+// party_side on the roster, or a parliament_role the sheet does not mention).
+// submitScore() refuses their mark; this lists them by name so the host can
+// fix the roster instead of discovering it mid-round from a confused juror.
+//
+// Read-only. Event-scoped, so the gate is getYipEventAccess — canManage, the
+// same gate the rest of the host's event dashboard uses. Fails CLOSED.
+//
+// ZERO SESSIONS ARE SPLIT IN PRODUCTION TODAY, so this returns
+// { splitSessions: [], unmarkable: [] } for every current event and costs one
+// agenda read. It only has anything to say once an admin splits a sheet.
+
+export type BenchReadinessSession = {
+  agenda_item_id: string;
+  title: string;
+  /** The role slugs this sheet restricts criteria to — what the roster must supply. */
+  required_slugs: { slug: string; label: string }[];
+};
+
+export type BenchReadinessDelegate = {
+  participant_id: string;
+  full_name: string;
+  constituency_name: string | null;
+  parliament_role: string | null;
+  party_side: string | null;
+  /** Titles of the split sessions this delegate cannot be marked in. */
+  blocked_sessions: string[];
+};
+
+export type BenchReadiness = {
+  /** Scoreable sessions whose criteria sheet splits by role. */
+  splitSessions: BenchReadinessSession[];
+  /** Delegates who cannot be marked in at least one of those sessions. */
+  unmarkable: BenchReadinessDelegate[];
+  /** unmarkable.length — the number the host needs to see at a glance. */
+  unmarkableCount: number;
+};
+
+export async function getEventBenchReadiness(
+  eventId: string
+): Promise<ActionResult<BenchReadiness>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+
+  const supabase = await createServiceClient();
+
+  const { data: agendaRows } = await supabase
+    .from("agenda")
+    .select("id, title, is_scoreable")
+    .eq("event_id", eventId)
+    .order("display_order", { ascending: true });
+
+  const scoreable = (agendaRows ?? []).filter((a) => a.is_scoreable === true);
+
+  // Which of this event's sessions actually split by role. getSessionScoringParams
+  // applies the SAME resolution the jury screen applies (session_key/agenda_type
+  // + round level), so the host is told about exactly the sheets the jurors get.
+  const splitSessions: BenchReadinessSession[] = [];
+  const criteriaByAgendaItem = new Map<string, SessionScoringParams["criteria"]>();
+  for (const item of scoreable) {
+    const params = await getSessionScoringParams(item.id);
+    if (!params || !isRoleSplitSheet(params.criteria)) continue;
+    criteriaByAgendaItem.set(item.id, params.criteria);
+    splitSessions.push({
+      agenda_item_id: item.id,
+      title: item.title ?? "Untitled session",
+      required_slugs: sheetRoleSlugs(params.criteria).map((slug) => ({
+        slug,
+        label: roleSlugLabel(slug),
+      })),
+    });
+  }
+
+  // Nothing splits -> nothing to report, and no participant read at all.
+  if (splitSessions.length === 0) {
+    return {
+      success: true,
+      data: { splitSessions: [], unmarkable: [], unmarkableCount: 0 },
+    };
+  }
+
+  const participants = await fetchAllRows<{
+    id: string;
+    full_name: string;
+    constituency_name: string | null;
+    parliament_role: string | null;
+    party_side: string | null;
+  }>((from, to) =>
+    supabase
+      .from("participants")
+      .select("id, full_name, constituency_name, parliament_role, party_side")
+      .eq("event_id", eventId)
+      .not("parliament_role", "is", null)
+      .order("id", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{
+      data: {
+        id: string;
+        full_name: string;
+        constituency_name: string | null;
+        parliament_role: string | null;
+        party_side: string | null;
+      }[] | null;
+      error: unknown;
+    }>
+  );
+
+  const unmarkable: BenchReadinessDelegate[] = [];
+  for (const p of participants) {
+    const blocked: string[] = [];
+    for (const s of splitSessions) {
+      const criteria = criteriaByAgendaItem.get(s.agenda_item_id);
+      if (!criteria) continue;
+      // Exactly the resolution the jury screen runs, with no override — if it
+      // says needsChoice, that juror's Submit is refused.
+      if (resolveRoleForSheet(p, criteria).needsChoice) blocked.push(s.title);
+    }
+    if (blocked.length > 0) {
+      unmarkable.push({
+        participant_id: p.id,
+        full_name: p.full_name,
+        constituency_name: p.constituency_name,
+        parliament_role: p.parliament_role,
+        party_side: p.party_side,
+        blocked_sessions: blocked,
+      });
+    }
+  }
+
+  return {
+    success: true,
+    data: { splitSessions, unmarkable, unmarkableCount: unmarkable.length },
+  };
 }
 
 // Compact rubric shape consumed by the jury screen + the bootstrap action.

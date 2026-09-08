@@ -30,7 +30,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { createSegment } from '@/app/actions/communication';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 // Available roles for filtering
 const AVAILABLE_ROLES = [

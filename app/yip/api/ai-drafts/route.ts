@@ -26,6 +26,7 @@ import {
 import {
   buildBillFeedbackGrounding,
   buildParticipantStoryGrounding,
+  buildQuestionnaireQuestionReviewGrounding,
   buildRoundNarrativeGrounding,
   buildSessionFeedbackGrounding,
   getBillFeedbackWork,
@@ -222,6 +223,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         );
       } else if (row.kind === "projector_qh_themes") {
         grounding = await buildProjectorQhThemesGrounding(row.event_id);
+      } else if (row.kind === "questionnaire_question_review") {
+        // Event-level, no subject: one review covering every post's questions.
+        // Reads the question bank ONLY — no attempt, answer or score is in
+        // scope, so none can leak into the payload.
+        grounding = await buildQuestionnaireQuestionReviewGrounding(row.event_id);
       }
       // ministry_verdict and any unknown kind → grounding stays null (skipped).
     } catch {
@@ -294,7 +300,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // venue screen shows nothing without the director's Project tap on the
   // control panel). participant_story and session_feedback auto-show ('ready')
   // — dispute-proof / number-free by construction and gated on
-  // events.ai_enabled at the card.
+  // events.ai_enabled at the card. questionnaire_question_review is also
+  // 'ready', for a different reason: it is not a participant surface at all —
+  // it is a note about the QUESTIONS that only an organiser can reach, so there
+  // is nothing for a chair to gate before anyone sees it.
   const targetStatus: AiDraftStatus =
     row.kind === "round_narrative" || isProjectorAiKind(row.kind)
       ? "pending_review"

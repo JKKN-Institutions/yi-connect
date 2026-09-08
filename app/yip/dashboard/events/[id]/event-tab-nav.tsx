@@ -20,6 +20,7 @@ import {
   Flag,
   Gavel,
   ListChecks,
+  ClipboardList,
   CalendarClock,
   Shield,
   Images,
@@ -29,6 +30,7 @@ import {
   UserCog,
   Crown,
   Landmark,
+  Vote,
   PanelLeftClose,
   PanelLeftOpen,
   CheckCircle2,
@@ -58,12 +60,23 @@ const GROUPS: TabGroup[] = [
       // order. Drives the Control panel + projector view.
       { label: "Agenda", href: "/agenda", icon: CalendarClock },
       { label: "Participants", href: "/participants", icon: Users },
+      // Self-nomination — students put themselves forward for Administrator /
+      // Speaker / Party Leader from home before event day. Applies to EVERY
+      // event level, so unlike Formation it is not level-gated.
+      { label: "Nominations", href: "/nominations", icon: ClipboardList },
+      // The selection step that follows a nomination: each post's questions
+      // open on their own window, and the ranked answers land here. Same
+      // reasoning as Nominations — applies to every event level, not gated.
+      { label: "Questionnaire", href: "/questionnaire", icon: FileText },
       // Committee picker (route stays /topics). Before Parties so the setup
       // order reads Committees → Parties → Allocation.
       { label: "Committees", href: "/topics", icon: BookOpen },
       { label: "Parties", href: "/parties", icon: Flag },
       { label: "Allocation", href: "/allocation", icon: Shuffle },
       { label: "Cabinet", href: "/cabinet", icon: Landmark },
+      // Online House Formation — Regional Round only (visibility-gated below):
+      // pre-event remote elections + appointments, run by the host chapter.
+      { label: "Formation", href: "/formation", icon: Vote },
       { label: "Jury", href: "/jury", icon: Scale },
       // Volunteers tab also hosts YUVA Desks (sub-tabbed on the page).
       { label: "Volunteers", href: "/volunteers", icon: Shield },
@@ -100,6 +113,12 @@ const GROUPS: TabGroup[] = [
       // chapter organiser sets it (Results itself stays national/super-admin).
       { label: "Awards", href: "/awards", icon: Medal },
       { label: "Results", href: "/results", icon: Trophy },
+      // Best Chapter Performer — the per-chapter recognition layer that sits
+      // ABOVE the 15 competitive awards (Director, 2026-08-29). It shipped in
+      // #1033 reachable by URL only, which in this codebase means dark: a page
+      // nothing links to is a page nobody opens. Organiser-only by design — the
+      // ranked five behind it are never shown to students.
+      { label: "Chapter Awards", href: "/results/chapter-recognition", icon: Medal },
       { label: "Certificates", href: "/certificates", icon: Award },
       { label: "Feedback", href: "/feedback", icon: MessageCircleHeart },
       // Chapter Round Report — auto-assembled 8-section official report, printable
@@ -134,11 +153,14 @@ function isActive(tabHref: string, pathname: string, basePath: string) {
 export function EventTabNav({
   eventId,
   eventStatus,
+  eventLevel,
   canViewScores = false,
   setupProgress,
 }: {
   eventId: string;
   eventStatus?: string;
+  /** events.level — Formation is Regional-only, Speeches is Chapter-only. */
+  eventLevel?: string;
   canViewScores?: boolean;
   /** Map of { tabHref → done } for the Before-the-Event setup checklist. Tabs
    *  not present in the map show no indicator. */
@@ -173,6 +195,15 @@ export function EventTabNav({
   const visible = (tab: Tab) => {
     // Certificates only appear once results are published.
     if (tab.label === "Certificates") return eventStatus === "results_published";
+    // Online House Formation exists only for Regional Round events.
+    if (tab.label === "Formation") return eventLevel === "regional";
+    // The 90-second delegate speech is a CHAPTER-ROUND format. Regional and
+    // National agendas do not carry it: across the whole database there are
+    // 134 speech agenda items over 68 chapter events, and zero at either
+    // higher level — so at a regional round the tab opened a roster checklist
+    // for a session that was never going to run. Same shape as Formation
+    // above, and fails closed on an unrecognised level.
+    if (tab.label === "Speeches") return eventLevel === "chapter";
     // Scoring / Committees / Results are score-bearing → super-admin only.
     if (SCORE_TABS.has(tab.label)) return canViewScores;
     return true;

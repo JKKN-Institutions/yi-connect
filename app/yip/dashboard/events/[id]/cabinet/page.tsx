@@ -1,7 +1,7 @@
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
 import { getCabinetConfig } from "@/app/yip/actions/cabinet";
-import { listCommitteeTopics } from "@/app/yip/actions/events";
+import { listCommitteeTopicsForEvent } from "@/app/yip/actions/events";
 import { MINISTRIES } from "@/lib/yip/constants";
 import { CabinetClient } from "./cabinet-client";
 
@@ -20,8 +20,9 @@ export default async function CabinetPage({
 
   const [config, catalog] = await Promise.all([
     getCabinetConfig(id),
-    // The same official ministry/committee catalogue the Committees tab uses.
-    listCommitteeTopics(),
+    // The same official ministry/committee catalogue the Committees tab uses,
+    // resolved for THIS event's round level.
+    listCommitteeTopicsForEvent(id),
   ]);
 
   return (

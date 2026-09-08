@@ -3,8 +3,11 @@ import { redirect } from "next/navigation";
 import { getYipSession } from "@/lib/yip/auth/yip-session";
 import Link from "next/link";
 import { Scale, History, LogOut, ClipboardList } from "lucide-react";
+import { signOutYipSession } from "@/app/yip/actions/auth";
 import { GuideLauncher } from "@/components/yip/guide";
 import { GUIDES } from "@/lib/yip/guide/content";
+import { SearchTrigger } from "@/components/yip/search/search-trigger";
+import { ScrollToTop } from "./scroll-to-top";
 
 interface JurySession {
   type: "jury";
@@ -39,6 +42,8 @@ export default async function JuryLayout({
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50 overflow-x-hidden">
+      {/* Every jury screen opens at the top — see scroll-to-top.tsx. */}
+      <ScrollToTop />
       {/* Header -- fixed for mobile */}
       <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
         <div className="flex h-14 items-center justify-between px-4">
@@ -63,6 +68,10 @@ export default async function JuryLayout({
           </div>
 
           <nav className="flex items-center gap-1">
+            {/* Search — icon-sized: this header is phone-width and already
+                carries the lane title plus four nav actions. The palette shows
+                a juror their sessions and the blind participant labels only. */}
+            <SearchTrigger variant="icon" />
             {/* Score nav — min 44×44 touch target */}
             <Link
               href="/yip/jury"
@@ -95,16 +104,21 @@ export default async function JuryLayout({
               variant="navlink"
               className="w-auto rounded-lg px-3 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
             />
-            {/* Exit — icon only, needs aria-label */}
-            <Link
-              href="/yip/join"
-              className="flex items-center justify-center rounded-lg px-3 text-red-600 hover:bg-red-50 active:bg-red-100 transition-colors"
-              style={{ minHeight: "44px", minWidth: "44px" }}
-              aria-label="Exit jury session"
-              title="Exit"
-            >
-              <LogOut className="size-5" />
-            </Link>
+            {/* Sign out — icon only, needs aria-label. A real sign-out, not a
+                link: this used to navigate to /yip/join while the yip_session
+                cookie stayed live, so the jury member was never actually signed
+                out and the next person on that device inherited the session. */}
+            <form action={signOutYipSession}>
+              <button
+                type="submit"
+                className="flex items-center justify-center rounded-lg px-3 text-red-600 hover:bg-red-50 active:bg-red-100 transition-colors"
+                style={{ minHeight: "44px", minWidth: "44px" }}
+                aria-label="Sign out of jury session"
+                title="Sign out"
+              >
+                <LogOut className="size-5" />
+              </button>
+            </form>
           </nav>
         </div>
       </header>

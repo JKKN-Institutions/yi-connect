@@ -42,12 +42,12 @@ function relTime(iso: string): string {
   if (hr < 24) return `${hr}h ago`;
   const d = Math.floor(hr / 24);
   if (d < 7) return `${d}d ago`;
-  return new Date(iso).toLocaleDateString();
+  return new Date(iso).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" });
 }
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleTimeString(undefined, {
+  return d.toLocaleTimeString(undefined, { timeZone: "Asia/Kolkata",
     hour: "numeric",
     minute: "2-digit",
   });

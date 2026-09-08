@@ -10,6 +10,7 @@ import {
   type CriteriaScores,
 } from "@/lib/yi-future/rubric";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 /**
  * Compute ranked team results for a chapter final event.
@@ -265,7 +266,7 @@ export async function publishShortlist(input: {
     .schema("future")
     .from("advancements")
     .upsert(rows as never, { onConflict: "from_event_id,team_id" });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "shortlist.publishShortlist") };
 
   revalidatePath(`/yi-future/chapter/final/${input.chapterFinalEventId}`);
   revalidatePath("/yi-future/chapter/results");

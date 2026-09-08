@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { ActionResult } from "./editions";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 /**
  * Chapter-scoped gate. Media coverage hangs off an event, whose `chapter_id`
@@ -78,7 +79,7 @@ export async function createMediaCoverage(
       reach_estimate,
       notes,
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "media.createMediaCoverage") };
 
   revalidatePath("/yi-future/host/media");
   return { ok: true, message: "Coverage logged." };
@@ -92,7 +93,7 @@ export async function deleteMediaCoverage(id: string): Promise<ActionResult> {
     .from("media_coverage")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "media.deleteMediaCoverage") };
   revalidatePath("/yi-future/host/media");
   return { ok: true };
 }

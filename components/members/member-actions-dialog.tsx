@@ -29,7 +29,7 @@ import {
   bulkDeleteMembers,
   bulkDeactivateMembers
 } from '@/app/actions/members';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface MemberActionDialogProps {
   memberId: string;

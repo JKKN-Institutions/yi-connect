@@ -11,6 +11,7 @@ import {
   resolveFutureAccessOrNull,
 } from "@/lib/yi-future/auth/require-access";
 import { readSession } from "@/app/yi-future/actions/auth";
+import { safeError } from "@/lib/yi-future/db-error";
 
 type Phase = Database["future"]["Enums"]["phase"];
 
@@ -120,7 +121,7 @@ export async function createFeedback(
       improvements,
       next_actions,
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "feedback.createFeedback") };
 
   revalidatePath(`/yi-future/chapter/teams/${input.teamId}`);
   revalidatePath("/yi-future/me/feedback");
@@ -220,7 +221,7 @@ export async function deleteFeedback(id: string): Promise<ActionResult> {
     .from("mentor_feedback")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "feedback.deleteFeedback") };
   revalidatePath("/yi-future/mentor");
   return { ok: true, message: "Feedback removed." };
 }
@@ -265,7 +266,7 @@ export async function autoAllocateMentors(editionId: string, chapterId: string):
     .schema("future")
     .from("mentor_team_assignments")
     .upsert(rows, { onConflict: "mentor_id,team_id" });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "feedback.autoAllocateMentors") };
 
   revalidatePath("/yi-future/chapter/mentors");
   return {

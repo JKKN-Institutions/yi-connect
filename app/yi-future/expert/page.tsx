@@ -87,7 +87,7 @@ export default async function ExpertHome() {
 
   function fmt(iso: string | null): string {
     if (!iso) return "Date to be confirmed";
-    return new Date(iso).toLocaleString("en-IN", {
+    return new Date(iso).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",
       weekday: "short",
       day: "numeric",
       month: "short",

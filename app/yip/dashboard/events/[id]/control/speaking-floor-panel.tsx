@@ -129,6 +129,15 @@ export function SpeakingFloorPanel({
           )}
         </div>
 
+        {/* Which session this queue belongs to — the raise-to-speak queue is
+            scoped to this item and clears when the House moves on, even if a
+            hand was never explicitly lowered (see speaking-floor-scope.ts). */}
+        <p className="mt-1 text-xs text-gray-500">
+          {data.hasLiveItem
+            ? `Live session: ${data.liveItemTitle ?? "Untitled item"}`
+            : "No live session right now"}
+        </p>
+
         {/* Fairness meter — detailed (Chair). Public aggregate mirrors on the
             projector. */}
         <div className="mt-2">
@@ -184,6 +193,16 @@ export function SpeakingFloorPanel({
             Turns are counted from the Now Speaking desk — call on someone above
             when hands go up to keep the floor fair.
           </p>
+          {/* The chip box above lists only members on zero turns and scrolls at
+              65 names — not something a Chair can act on mid-sitting, and it
+              never shows who has spoken three or five times. The full ledger
+              lives on its own page. */}
+          <a
+            href={`/yip/dashboard/events/${eventId}/speaking`}
+            className="mt-1 inline-block text-[11px] font-medium text-gray-600 underline underline-offset-2 hover:text-gray-900"
+          >
+            See the full speaking record →
+          </a>
         </div>
 
         {/* ── Phone hand-raise queue (only when the placard is on) ── */}

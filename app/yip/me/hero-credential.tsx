@@ -1,4 +1,8 @@
 import { Users } from "lucide-react";
+import {
+  isUnnamedCommittee,
+  UNNAMED_COMMITTEE_TOPIC_LABEL,
+} from "@/lib/yip/event-committees";
 
 export interface HeroCredentialProps {
   name: string;
@@ -15,6 +19,12 @@ export interface HeroCredentialProps {
   committeeName: string | null;
   committeeNumber: number | null;
   committeeTopic: string | null;
+  /** The student's OWN group invites — never anyone else's. */
+  partyWhatsapp?: string | null;
+  committeeWhatsapp?: string | null;
+  /** The student's own bench group, or null when they have no bench yet. */
+  benchWhatsapp?: string | null;
+  benchSide?: "ruling" | "opposition" | null;
   committeeScheme: string | null;
   /** Masthead session stamp — e.g. "ERODE · 2026". */
   sessionStamp: string;
@@ -108,6 +118,10 @@ export function HeroCredential({
   committeeName,
   committeeNumber,
   committeeTopic,
+  partyWhatsapp,
+  committeeWhatsapp,
+  benchWhatsapp,
+  benchSide,
   committeeScheme,
   sessionStamp,
 }: HeroCredentialProps) {
@@ -241,19 +255,35 @@ export function HeroCredential({
           {ministryLabel && <Field label="Portfolio">{ministryLabel}</Field>}
           {committeeName && (
             <Field label="Committee" wide>
+              {/* A committee whose ministry has not been attributed yet is
+                  literally named "Committee 3", so printing number AND name
+                  would read "Committee 3 · Committee 3". Show the number alone
+                  until the chapter attributes a ministry to it. */}
               <span
                 className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold"
                 style={{ background: "#FFF3E6", color: SAFFRON }}
               >
                 <Users className="size-3" />
-                Committee {committeeNumber ?? "—"} · {committeeName}
+                {isUnnamedCommittee(committeeName)
+                  ? committeeName
+                  : `Committee ${committeeNumber ?? "—"} · ${committeeName}`}
               </span>
-              {committeeTopic && (
+              {committeeTopic ? (
                 <p
                   className="mt-1.5 text-[12px] font-normal"
                   style={{ color: `${INK}8c` }}
                 >
                   {committeeTopic}
+                </p>
+              ) : (
+                // Students are handed their committee NUMBER at allocation and
+                // the subject follows later, so say that rather than leaving a
+                // gap they would read as a loading failure (Director's choice).
+                <p
+                  className="mt-1.5 text-[12px] font-normal italic"
+                  style={{ color: `${INK}66` }}
+                >
+                  {UNNAMED_COMMITTEE_TOPIC_LABEL}
                 </p>
               )}
               {committeeScheme && (
@@ -264,6 +294,53 @@ export function HeroCredential({
                   Linked scheme: {committeeScheme}
                 </p>
               )}
+            </Field>
+          )}
+          {/* This student's OWN group invites, the same links their access-code
+              email carried, so losing the email does not lose the groups. Never
+              anyone else's groups. */}
+          {(partyWhatsapp || committeeWhatsapp || benchWhatsapp) && (
+            <Field label="Your WhatsApp groups" wide>
+              <div className="flex flex-wrap gap-2">
+                {partyWhatsapp && (
+                  <a
+                    href={partyWhatsapp}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold"
+                    style={{ background: `${GREEN}14`, color: GREEN }}
+                  >
+                    <Users className="size-3" />
+                    Join your party group
+                  </a>
+                )}
+                {committeeWhatsapp && (
+                  <a
+                    href={committeeWhatsapp}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold"
+                    style={{ background: `${GREEN}14`, color: GREEN }}
+                  >
+                    <Users className="size-3" />
+                    Join your committee group
+                  </a>
+                )}
+                {benchWhatsapp && (
+                  <a
+                    href={benchWhatsapp}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold"
+                    style={{ background: `${GREEN}14`, color: GREEN }}
+                  >
+                    <Users className="size-3" />
+                    Join your{" "}
+                    {benchSide === "opposition" ? "Opposition" : "Treasury"} bench
+                    group
+                  </a>
+                )}
+              </div>
             </Field>
           )}
         </div>

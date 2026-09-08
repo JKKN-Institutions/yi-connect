@@ -16,7 +16,7 @@ import { AssessmentWizard } from './assessment-wizard'
 import { AssessmentResults } from './assessment-results'
 import { startAssessment } from '@/app/actions/assessments'
 import type { SkillWillAssessmentFull, SkillWillCategory } from '@/types/assessment'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 
 interface AssessmentTabProps {

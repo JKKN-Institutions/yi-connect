@@ -24,7 +24,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { removeEvaluator } from '@/app/actions/succession'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 
 interface EvaluatorsTableProps {
   evaluators: any[]

@@ -2,15 +2,40 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
+import { createClient } from "@/lib/yi-future/supabase/server";
+import {
+  ROLE_ALLOWLIST_OWNER,
+  ROLE_PLAIN_ADMIN,
+  ROLE_PLATFORM_OPERATOR,
+  countFutureRoleHolders,
+  deactivateFutureAdminRoles,
+  hasCrossAppOwnerRole,
+  hasFutureBroadAdminRole,
+  hasFuturePlatformTier,
+  isFutureAllowlistOwner,
+  isFuturePlatformOperator,
+  listFutureAdmins,
+  setFutureRoleActive,
+} from "@/lib/yi-future/auth/admin-source";
+
+// SOURCE OF TRUTH (2026-08-11): every read and every write in this file
+// resolves to yi_directory.role_assignments via admin-source.ts above.
+// yi.national_admins is no longer consulted for ANY authorization decision
+// in Yi-Future. See lib/yi-future/auth/admin-source.ts for why, and for the
+// role vocabulary (allowlist_owner / platform_admin / future_admin).
+//
+// "Remove" now REVOKES. It used to delete a yi.national_admins row while the
+// target kept every yi_directory-derived capability — the button lied. It now
+// deactivates every app='future' admin role, and refuses outright for
+// cross-app platform owners rather than half-revoking them.
 
 // ═══════════════════════════════════════════════════════════════════════
 // National admins — allow-list management for /national/admin/*
 //
-// Two tiers (see migration 132):
-//   • super_admin = can mutate the allow-list, reset other admins'
-//     passwords. Today: director@jkkn.ac.in (seeded).
-//   • non-super national admin = read-only on /national/admin/admins.
+// Two tiers (yi_directory, app='future'):
+//   • role='allowlist_owner' ("Super admin" badge) = can mutate the
+//     allow-list, reset other admins' passwords. Today: director@jkkn.ac.in.
+//   • any other admin role = read-only on /national/admin/admins.
 //
 // All write paths in this file MUST call requireSuperAdmin() first.
 // requireSuperAdmin() is exported so the page can decide which buttons
@@ -19,15 +44,14 @@ import { createClient, createServiceClient } from "@/lib/yi-future/supabase/serv
 // Last-super-admin guard
 // ──────────────────────
 // removeNationalAdmin() and toggleSuperAdmin(..., false) both refuse
-// the operation if the target is the LAST remaining super admin. The
+// the operation if the target is the LAST remaining allow-list owner. The
 // guard is computed inside the server action AFTER requireSuperAdmin()
 // passes, so it is race-safe at the application layer (two concurrent
-// super-admin removals from two browser tabs would both see the same
-// count, but the SECOND write would still leave at least one super
-// admin because the FIRST writer already committed by then — at worst
-// you get a no-op error, never zero supers). Belt-and-braces would be
-// a SQL CHECK, but that requires a subquery on every UPDATE, which we
-// deemed too costly for a table this hot in the middleware path.
+// removals from two browser tabs would both see the same count, but the
+// SECOND write would still leave at least one owner because the FIRST
+// writer already committed by then — at worst you get a no-op error,
+// never zero owners). Belt-and-braces would be a SQL CHECK, but that
+// requires a subquery on every UPDATE of a table this hot.
 // ═══════════════════════════════════════════════════════════════════════
 
 export type ActionResult =
@@ -86,18 +110,9 @@ export async function requireSuperAdmin(): Promise<string> {
   if (!user || !user.email) redirect("/yi-future/login");
 
   const email = normalizeEmail(user.email);
-  const svc = await createServiceClient();
-  const { data, error } = await svc
-    .schema("yi")
-    .from("national_admins")
-    // Cast selection list as never to bypass generated-type narrowing —
-    // is_super_admin is added by migration 132, but types may not yet
-    // be regenerated when this file first compiles.
-    .select("email, is_super_admin" as never)
-    .eq("email", email)
-    .maybeSingle<{ email: string; is_super_admin: boolean }>();
-
-  if (error || !data || !data.is_super_admin) {
+  // Source: yi_directory app='future' role='allowlist_owner'. Fail closed —
+  // unknown email, no directory person, or no active role all deny.
+  if (!(await isFutureAllowlistOwner(email))) {
     redirect("/yi-future/national/admin?error=not_super_admin");
   }
   return email;
@@ -120,14 +135,7 @@ export async function isCurrentUserSuperAdmin(): Promise<{
   if (!user || !user.email) return { email: null, isSuper: false };
 
   const email = normalizeEmail(user.email);
-  const svc = await createServiceClient();
-  const { data } = await svc
-    .schema("yi")
-    .from("national_admins")
-    .select("is_super_admin" as never)
-    .eq("email", email)
-    .maybeSingle<{ is_super_admin: boolean }>();
-  return { email, isSuper: Boolean(data?.is_super_admin) };
+  return { email, isSuper: await isFutureAllowlistOwner(email) };
 }
 
 // ─── Role-tier predicates (yi_directory source of truth) ────────────
@@ -141,47 +149,11 @@ export async function isCurrentUserSuperAdmin(): Promise<{
 //
 // Two-step lookup (resolve people.id by email, then probe
 // role_assignments) — kept because it is the known-good path used since
-// the 2026-05-28 source-of-truth migration. Casts via `unknown` mirror
-// chapter-chairs.ts: the future-pinned Database type doesn't include
-// yi_directory tables. Service client bypasses RLS.
-
-// Typed-cast view of the service client into yi_directory.people.
-function dirPeople(svc: Awaited<ReturnType<typeof createServiceClient>>) {
-  return (svc as unknown as {
-    schema: (s: string) => {
-      from: (t: string) => {
-        select: (c: string) => {
-          eq: (k: string, v: string) => {
-            maybeSingle: () => Promise<{ data: { id: string } | null }>;
-          };
-        };
-      };
-    };
-  }).schema("yi_directory");
-}
-
-// Typed-cast view of the service client into yi_directory.role_assignments,
-// filtered to the active rows for one person, then `.in(role, [...])`.
-function dirActiveRolesForPerson(
-  svc: Awaited<ReturnType<typeof createServiceClient>>
-) {
-  return (svc as unknown as {
-    schema: (s: string) => {
-      from: (t: string) => {
-        select: (c: string) => {
-          eq: (k: string, v: string) => {
-            eq: (k: string, v: boolean) => {
-              in: (
-                k: string,
-                v: string[]
-              ) => Promise<{ data: Array<{ role: string }> | null }>;
-            };
-          };
-        };
-      };
-    };
-  }).schema("yi_directory");
-}
+// the 2026-05-28 source-of-truth migration. The four hand-written
+// `as unknown as {...}` builder casts that used to live here (and a fifth
+// copy in push.ts) are now ONE structural accessor in
+// lib/yi-future/auth/admin-source.ts. The role sets moved with them,
+// byte-identical — membership is unchanged.
 
 /**
  * STRICT platform/super tier. Returns true iff `email` resolves to a
@@ -198,69 +170,10 @@ function dirActiveRolesForPerson(
  * national_admin) — those may VIEW but never perform privileged writes.
  *
  * Gates: requirePlatformAdmin, isCurrentUserPlatformAdmin (button
- * visibility), and push.ts#isSuperOrPlatform (via the mirrored inline
- * predicate). Keep the role sets in sync with push.ts if either changes.
+ * visibility), and push.ts#isSuperOrPlatform — all three now call the SAME
+ * implementation (admin-source.ts#hasFuturePlatformTier), so there is no
+ * longer a duplicated role set to keep in sync.
  */
-async function hasYiFuturePlatformTier(email: string): Promise<boolean> {
-  const svc = await createServiceClient();
-
-  const { data: person } = await dirPeople(svc)
-    .from("people")
-    .select("id")
-    .eq("email", email)
-    .maybeSingle();
-  if (!person) return false;
-
-  // (a) Cross-app platform-owner short-circuit — NO app filter, because
-  // platform_super_admin lives on app='platform' for some owners.
-  const { data: platformRows } = await dirActiveRolesForPerson(svc)
-    .from("role_assignments")
-    .select("role")
-    .eq("person_id", person.id)
-    .eq("is_active", true)
-    .in("role", ["platform_super_admin", "super_admin"]);
-  if ((platformRows ?? []).length > 0) return true;
-
-  // (b) app='future' platform/super tier (regular tier excluded).
-  const { data: futureRows } = await dirActiveRolesForPersonScopedToFuture(svc)
-    .from("role_assignments")
-    .select("role")
-    .eq("person_id", person.id)
-    .eq("app", "future")
-    .eq("is_active", true)
-    .in("role", [
-      "future_super_admin",
-      "platform_super_admin",
-      "super_admin",
-      "platform_admin",
-    ]);
-  return (futureRows ?? []).length > 0;
-}
-
-// Typed-cast view scoped to app='future' (adds the .eq("app",...) hop the
-// strict (b) branch and the broad predicate both need).
-function dirActiveRolesForPersonScopedToFuture(
-  svc: Awaited<ReturnType<typeof createServiceClient>>
-) {
-  return (svc as unknown as {
-    schema: (s: string) => {
-      from: (t: string) => {
-        select: (c: string) => {
-          eq: (k: string, v: string) => {
-            eq: (k: string, v: string) => {
-              eq: (k: string, v: boolean) => {
-                in: (
-                  k: string,
-                  v: string[]
-                ) => Promise<{ data: Array<{ role: string }> | null }>;
-              };
-            };
-          };
-        };
-      };
-    };
-  }).schema("yi_directory");
-}
 
 /**
  * BROAD "any future admin" tier. Returns true iff `email` resolves to a
@@ -273,43 +186,8 @@ function dirActiveRolesForPersonScopedToFuture(
  * Used ONLY for the VIEW gate (national/admin/layout.tsx) so a regular
  * national admin (e.g. vedant@wrs.energy = future_admin) keeps read
  * access to /national/admin. MUST NOT gate any privileged write.
+ * Implemented by admin-source.ts#hasFutureBroadAdminRole.
  */
-async function hasYiFutureAdminRole(email: string): Promise<boolean> {
-  const svc = await createServiceClient();
-
-  const { data: person } = await dirPeople(svc)
-    .from("people")
-    .select("id")
-    .eq("email", email)
-    .maybeSingle();
-  if (!person) return false;
-
-  // Cross-app platform-owner short-circuit (same as the strict tier).
-  const { data: platformRows } = await dirActiveRolesForPerson(svc)
-    .from("role_assignments")
-    .select("role")
-    .eq("person_id", person.id)
-    .eq("is_active", true)
-    .in("role", ["platform_super_admin", "super_admin"]);
-  if ((platformRows ?? []).length > 0) return true;
-
-  // app='future' full admin set (regular tier INCLUDED for view access).
-  const { data: rows } = await dirActiveRolesForPersonScopedToFuture(svc)
-    .from("role_assignments")
-    .select("role")
-    .eq("person_id", person.id)
-    .eq("app", "future")
-    .eq("is_active", true)
-    .in("role", [
-      "future_super_admin",
-      "future_admin",
-      "super_admin",
-      "platform_admin",
-      "national_admin",
-    ]);
-
-  return (rows ?? []).length > 0;
-}
 
 /**
  * Non-redirecting probe: returns whether the signed-in user is ANY
@@ -331,7 +209,7 @@ export async function isCurrentUserFutureAdmin(): Promise<{
   if (!user || !user.email) return { email: null, isAdmin: false };
 
   const email = normalizeEmail(user.email);
-  const isAdmin = await hasYiFutureAdminRole(email);
+  const isAdmin = await hasFutureBroadAdminRole(email);
   return { email, isAdmin };
 }
 
@@ -355,7 +233,7 @@ export async function requirePlatformAdmin(): Promise<string> {
   if (!user || !user.email) redirect("/yi-future/login");
 
   const email = normalizeEmail(user.email);
-  const allowed = await hasYiFuturePlatformTier(email);
+  const allowed = await hasFuturePlatformTier(email);
   if (!allowed) {
     redirect("/yi-future/national/admin?error=not_platform_admin");
   }
@@ -382,37 +260,31 @@ export async function isCurrentUserPlatformAdmin(): Promise<{
   if (!user || !user.email) return { email: null, isPlatform: false };
 
   const email = normalizeEmail(user.email);
-  const isPlatform = await hasYiFuturePlatformTier(email);
+  const isPlatform = await hasFuturePlatformTier(email);
   return { email, isPlatform };
 }
 
 // ─── Reads ──────────────────────────────────────────────────────────
 
 /**
- * List all rows in yi.national_admins, joined with auth.users to grab
- * each admin's last_sign_in_at (via the admin REST API; no SQL JOIN
- * across schemas needed). Returns rows sorted: super admins first,
- * then by added_at desc.
+ * Everyone holding ANY Yi-Future admin capability, joined with auth.users
+ * to grab each admin's last_sign_in_at (via the admin REST API). Returns
+ * rows sorted: allow-list owners first, then by added_at desc.
+ *
+ * SOURCE (2026-08-11): yi_directory, not yi.national_admins. The page shape
+ * (NationalAdminRow) is unchanged, so the page renders identically — but two
+ * accounts that held real power while being invisible on this screen
+ * (yiqa.futuresuper@jkkn.ac.in, yiqa.futureadmin@jkkn.ac.in) now appear and
+ * can be removed. Listing anything narrower than what the gates read is how
+ * invisible power happens.
+ *
+ * `note` is now the person's active roles rather than a free-text seed note,
+ * because the roles ARE the grant. `added_by` is null — yi_directory does
+ * not record it and the page does not render it.
  */
 export async function listNationalAdmins(): Promise<NationalAdminRow[]> {
-  const svc = await createServiceClient();
-  const { data: rows, error } = await svc
-    .schema("yi")
-    .from("national_admins")
-    .select(
-      "email, is_super_admin, is_platform_admin, added_at, added_by, note" as never
-    )
-    .returns<
-      {
-        email: string;
-        is_super_admin: boolean;
-        is_platform_admin: boolean;
-        added_at: string;
-        added_by: string | null;
-        note: string | null;
-      }[]
-    >();
-  if (error || !rows) return [];
+  const rows = await listFutureAdmins();
+  if (rows.length === 0) return [];
 
   // Fetch users via the admin REST API. At our scale (≤ ~50 national
   // admins) one page is more than enough; we don't paginate.
@@ -438,18 +310,18 @@ export async function listNationalAdmins(): Promise<NationalAdminRow[]> {
       }
     }
   } catch {
-    // If the REST call fails, we still return the table rows — just
-    // without last_sign_in_at. The page can render a "—" in that cell.
+    // If the REST call fails, we still return the rows — just without
+    // last_sign_in_at. The page renders a "—" in that cell.
   }
 
   const enriched: NationalAdminRow[] = rows.map((r) => ({
     email: r.email,
-    is_super_admin: Boolean(r.is_super_admin),
-    is_platform_admin: Boolean(r.is_platform_admin),
-    added_at: r.added_at,
-    added_by: r.added_by,
-    note: r.note,
-    last_sign_in_at: lastSignInByEmail.get(normalizeEmail(r.email)) ?? null,
+    is_super_admin: r.isAllowlistOwner,
+    is_platform_admin: r.isPlatformOperator,
+    added_at: r.addedAt ?? "",
+    added_by: null,
+    note: r.title ?? (r.roles.join(", ") || null),
+    last_sign_in_at: lastSignInByEmail.get(r.email) ?? null,
   }));
 
   enriched.sort((a, b) => {
@@ -461,28 +333,14 @@ export async function listNationalAdmins(): Promise<NationalAdminRow[]> {
   return enriched;
 }
 
+/** Distinct people holding an active app='future' allowlist_owner role. */
 async function countSuperAdmins(): Promise<number> {
-  const svc = await createServiceClient();
-  const { count } = await svc
-    .schema("yi")
-    .from("national_admins")
-    .select("email", { count: "exact", head: true })
-    // The generated types may not include is_super_admin until after the
-    // human regenerates types post-migration-132. Cast guards the build.
-    .eq("is_super_admin" as never, true as never);
-  return count ?? 0;
+  return countFutureRoleHolders(ROLE_ALLOWLIST_OWNER);
 }
 
+/** Distinct people holding an active app='future' platform_admin role. */
 async function countPlatformAdmins(): Promise<number> {
-  const svc = await createServiceClient();
-  const { count } = await svc
-    .schema("yi")
-    .from("national_admins")
-    .select("email", { count: "exact", head: true })
-    // Same casting reason as countSuperAdmins — column is added by
-    // migration 134 and may pre-date type regeneration.
-    .eq("is_platform_admin" as never, true as never);
-  return count ?? 0;
+  return countFutureRoleHolders(ROLE_PLATFORM_OPERATOR);
 }
 
 // ─── Writes ─────────────────────────────────────────────────────────
@@ -500,29 +358,18 @@ export async function addNationalAdmin(
     return { ok: false, error: "Enter a valid email address." };
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const svc = await createServiceClient();
-  const { error } = await svc
-    .schema("yi")
-    .from("national_admins")
-    .insert({
-      email,
-      added_by: user?.id ?? null,
-      note,
-    });
-
-  if (error) {
-    if (error.code === "23505" || /duplicate/i.test(error.message)) {
-      return { ok: false, error: `${email} is already an admin.` };
-    }
-    return { ok: false, error: error.message };
+  // Already listed? Say so rather than silently re-activating, which is
+  // what the old duplicate-key branch communicated.
+  if (await hasFutureBroadAdminRole(email)) {
+    return { ok: false, error: `${email} is already an admin.` };
   }
 
-  revalidatePath("/national/admin/admins");
+  // Grants the plain view-only tier. Promote to platform/super afterwards
+  // with the row buttons — same two-step as before.
+  const result = await setFutureRoleActive(email, ROLE_PLAIN_ADMIN, true, note);
+  if (!result.ok) return { ok: false, error: result.error };
+
+  revalidatePath("/yi-future/national/admin/admins");
   return { ok: true, message: `Added ${email}.` };
 }
 
@@ -535,20 +382,11 @@ export async function removeNationalAdmin(
   if (!email) return { ok: false, error: "Missing email." };
 
   // Load the target row to learn whether it's a super or platform admin.
-  const svc = await createServiceClient();
-  const { data: target } = await svc
-    .schema("yi")
-    .from("national_admins")
-    .select("email, is_super_admin, is_platform_admin" as never)
-    .eq("email", email)
-    .maybeSingle<{
-      email: string;
-      is_super_admin: boolean;
-      is_platform_admin: boolean;
-    }>();
-  if (!target) return { ok: false, error: `${email} is not an admin.` };
+  if (!(await hasFutureBroadAdminRole(email))) {
+    return { ok: false, error: `${email} is not an admin.` };
+  }
 
-  if (target.is_super_admin) {
+  if (await isFutureAllowlistOwner(email)) {
     const supers = await countSuperAdmins();
     if (supers <= 1) {
       return {
@@ -559,7 +397,7 @@ export async function removeNationalAdmin(
     }
   }
 
-  if (target.is_platform_admin) {
+  if (await isFuturePlatformOperator(email)) {
     const platforms = await countPlatformAdmins();
     if (platforms <= 1) {
       return {
@@ -570,14 +408,23 @@ export async function removeNationalAdmin(
     }
   }
 
-  const { error } = await svc
-    .schema("yi")
-    .from("national_admins")
-    .delete()
-    .eq("email", email);
-  if (error) return { ok: false, error: error.message };
+  // Cross-app platform owners cannot be removed from here. Deactivating
+  // their app='future' roles would leave the cross-app short-circuit intact
+  // (they would still pass every Yi-Future tier gate) while the page showed
+  // them as removed — precisely the lying-button behaviour this change
+  // exists to end. Refuse EXPLICITLY instead of half-revoking.
+  if (await hasCrossAppOwnerRole(email)) {
+    return {
+      ok: false,
+      error: `${email} holds a cross-app platform-owner role. Remove that in the directory admin (/admin/directory) — removing it here would not revoke their access.`,
+    };
+  }
 
-  revalidatePath("/national/admin/admins");
+  // Genuine revoke: every app='future' admin role goes is_active = false.
+  const result = await deactivateFutureAdminRoles(email);
+  if (!result.ok) return { ok: false, error: result.error };
+
+  revalidatePath("/yi-future/national/admin/admins");
   return { ok: true, message: `Removed ${email}.` };
 }
 
@@ -602,16 +449,10 @@ export async function toggleSuperAdmin(
     }
   }
 
-  const svc = await createServiceClient();
-  const { error } = await svc
-    .schema("yi")
-    .from("national_admins")
-    // Cast for the same reason as countSuperAdmins() above.
-    .update({ is_super_admin: next } as never)
-    .eq("email", email);
-  if (error) return { ok: false, error: error.message };
+  const result = await setFutureRoleActive(email, ROLE_ALLOWLIST_OWNER, next);
+  if (!result.ok) return { ok: false, error: result.error };
 
-  revalidatePath("/national/admin/admins");
+  revalidatePath("/yi-future/national/admin/admins");
   return {
     ok: true,
     message: next ? `Promoted ${email} to super admin.` : `Demoted ${email}.`,
@@ -651,16 +492,10 @@ export async function togglePlatformAdmin(
     }
   }
 
-  const svc = await createServiceClient();
-  const { error } = await svc
-    .schema("yi")
-    .from("national_admins")
-    // Cast for the same reason as countPlatformAdmins() above.
-    .update({ is_platform_admin: next } as never)
-    .eq("email", email);
-  if (error) return { ok: false, error: error.message };
+  const result = await setFutureRoleActive(email, ROLE_PLATFORM_OPERATOR, next);
+  if (!result.ok) return { ok: false, error: result.error };
 
-  revalidatePath("/national/admin/admins");
+  revalidatePath("/yi-future/national/admin/admins");
   return {
     ok: true,
     message: next
@@ -694,14 +529,11 @@ export async function resetNationalAdminPassword(
   } = await supabase.auth.getUser();
   if (!user || !user.email) redirect("/yi-future/login");
   const viewerEmail = normalizeEmail(user.email);
-  const svcGuard = await createServiceClient();
-  const { data: viewerRow } = await svcGuard
-    .schema("yi")
-    .from("national_admins")
-    .select("is_super_admin, is_platform_admin" as never)
-    .eq("email", viewerEmail)
-    .maybeSingle<{ is_super_admin: boolean; is_platform_admin: boolean }>();
-  if (!viewerRow || (!viewerRow.is_super_admin && !viewerRow.is_platform_admin)) {
+  const [viewerIsOwner, viewerIsPlatform] = await Promise.all([
+    isFutureAllowlistOwner(viewerEmail),
+    isFuturePlatformOperator(viewerEmail),
+  ]);
+  if (!viewerIsOwner && !viewerIsPlatform) {
     redirect("/yi-future/national/admin?error=not_super_or_platform_admin");
   }
 
@@ -710,14 +542,9 @@ export async function resetNationalAdminPassword(
 
   // Confirm the target is actually a national admin (don't let this
   // turn into a generic password-reset endpoint for arbitrary users).
-  const svc = await createServiceClient();
-  const { data: target } = await svc
-    .schema("yi")
-    .from("national_admins")
-    .select("email")
-    .eq("email", email)
-    .maybeSingle();
-  if (!target) return { ok: false, error: `${email} is not a national admin.` };
+  if (!(await hasFutureBroadAdminRole(email))) {
+    return { ok: false, error: `${email} is not a national admin.` };
+  }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -767,6 +594,6 @@ export async function resetNationalAdminPassword(
     };
   }
 
-  revalidatePath("/national/admin/admins");
+  revalidatePath("/yi-future/national/admin/admins");
   return { ok: true, email, password: newPassword };
 }

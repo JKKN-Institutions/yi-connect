@@ -3,16 +3,22 @@
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { revalidatePath } from "next/cache";
+import { createHash } from "crypto";
 import {
   runAllocation,
+  placeOrphansInSmallestCommittee,
   type AllocationResult,
   type AllocationParticipant,
 } from "@/lib/yip/allocation-engine";
-import { planCommitteeAssignment } from "@/lib/yip/committee-assignment";
 import {
-  getCommitteeNumbering,
-  committeeNumberForName,
-} from "@/lib/yip/committee-number";
+  planCommitteeAssignment,
+  isCommitteeEligible,
+} from "@/lib/yip/committee-assignment";
+import { getCommitteeNumbering } from "@/lib/yip/committee-number";
+import {
+  eventCommitteeNumberByName,
+  orderEventCommittees,
+} from "@/lib/yip/event-committees";
 import { planPartyFill, planFlatPartyFill } from "@/lib/yip/party-formation";
 
 // Gated writes run on the service client AFTER getYipEventAccess() (yip.* tables
@@ -388,10 +394,17 @@ export async function assignCommittees(
   );
 
   // Batch: one UPDATE per committee, plus one UPDATE clearing every office-holder.
-  // Each committee's number is its PERMANENT global number (the catalogue
-  // topic_number) — not a per-event position — so "3" means the same committee
-  // in every event.
+  // Each committee's number is its position WITHIN THIS EVENT — 1..N, always
+  // contiguous, always starting at 1 (Director, 2026-08-14). A chapter running
+  // three committees hands its students Committee 1, 2 and 3, whichever
+  // ministries it later attributes to them. The catalogue numbering is still
+  // loaded, but only to ORDER the named committees in official ministry order —
+  // it no longer supplies the number itself. See lib/yip/event-committees.ts.
   const numbering = await getCommitteeNumbering(supabase);
+  const numberByName = eventCommitteeNumberByName(
+    committeeNames,
+    numbering.numberByName
+  );
   const idsByName = new Map<string, string[]>();
   const cleared: string[] = [];
   for (const a of plan) {
@@ -404,7 +417,7 @@ export async function assignCommittees(
   }
   const byCommittee = new Map<string, { name: string; number: number; ids: string[] }>();
   for (const [name, ids] of idsByName) {
-    const number = (await committeeNumberForName(supabase, numbering, name)) ?? 0;
+    const number = numberByName.get(name.trim().toLowerCase()) ?? 0;
     byCommittee.set(name, { name, number, ids });
   }
 
@@ -447,6 +460,394 @@ export async function assignCommittees(
   revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
   revalidatePath(`/yip/dashboard/events/${eventId}/parties`);
   return { success: true, data: { committees: summary, excluded: cleared.length } };
+}
+
+// ─── Re-spread Committees Only ─────────────────────────────────────
+// The host trims (or adds to) the committee list AFTER allocation has run —
+// e.g. attaches 15 regional committees, then cuts to 10 — and the students are
+// still sitting in the committees they were given on the old list. Re-running
+// the full allocation would fix the committees but would also reshuffle
+// parties, benches, constituencies and parliament roles, which is exactly what
+// a host at that point must NOT lose.
+//
+// This re-spreads students across the committees CURRENTLY on the event and
+// touches nothing else: party_id, party_number, party_side, parliament_role,
+// ministry and constituency are all left alone (Director, 2026-08-19).
+//
+// The committee list comes from events.committee_topics — the { committee →
+// topic } map the organiser edits on the Committees tab. That is the same store
+// allocation reads (see the note above), NOT yip.event_topics, which is the
+// topic CONTENT catalogue.
+//
+// Deterministic: participants are read in id order and the plan is a pure
+// function of that order, so pressing the button twice reports zero moves the
+// second time and writes nothing.
+
+export type CommitteeRespreadPlan = {
+  /** How many committees are on the event right now. */
+  committeeCount: number;
+  committees: Array<{
+    number: number;
+    name: string;
+    /** Members before the re-spread. */
+    before: number;
+    /** Members after it. */
+    after: number;
+    /** Party mix after it — the point of the exercise. */
+    partySpread: Array<{ party: string; count: number }>;
+  }>;
+  /** Students who move from one committee to a different one. */
+  moving: number;
+  /** Students who stay exactly where they are. */
+  staying: number;
+  /** Students who had NO committee and get seated by this run. */
+  placed: number;
+  /**
+   * Students who currently hold a committee but are excluded from committees
+   * by role, so this run takes it away. The Speaker Panel presides over the
+   * House and the duty officials are officers of it — neither sits on a
+   * committee (handbook p.19), and for the Speaker Panel a database trigger
+   * clears it regardless of what the app writes.
+   */
+  removed: number;
+  /** Every role excluded from committees, with its head count. */
+  excludedByRole: Array<{ role: string; count: number }>;
+  /** False for a preview (nothing written), true once applied. */
+  applied: boolean;
+  /**
+   * Identifies this exact plan AND the roster it came from. The client hands it
+   * back when applying; a mismatch means the roster moved under the host and the
+   * apply is refused rather than writing a plan they never saw.
+   */
+  fingerprint: string;
+};
+
+async function planCommitteeRespread(
+  eventId: string,
+  apply: boolean,
+  // The fingerprint of the plan the host actually approved in the confirm
+  // dialog. Required when applying: see the check further down.
+  expectedFingerprint?: string
+): Promise<ActionResult<CommitteeRespreadPlan>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage) {
+    return { success: false, error: "Not authorized to manage this event" };
+  }
+  const supabase = await createServiceClient();
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("id, level, allocation_locked, committee_topics")
+    .eq("id", eventId)
+    .single();
+  if (!event) return { success: false, error: "Event not found" };
+  if (event.allocation_locked) {
+    return {
+      success: false,
+      error:
+        "Allocation is locked for this event, so committees cannot be re-spread. Unlock the allocation first, then try again.",
+    };
+  }
+
+  // REGIONAL AND NATIONAL ROUNDS ONLY, enforced HERE and not merely by hiding
+  // the button. The first version scoped this only in the UI, and review found
+  // 15 non-mock, UNLOCKED, chapter-level events with committees already
+  // assigned - 1,944 students whose committees this could have re-dealt,
+  // including "Erode Chapter Round 2026". The re-spread is a fresh balanced
+  // plan, not a repair, so it moves most students: one mis-click would have
+  // reshuffled a round that already ran. Chapter rounds must stay bit-for-bit
+  // unchanged, and a hidden button is not a guard.
+  //
+  // FAIL CLOSED, unlike the go-live guard in app/yip/actions/agenda.ts. Refusing
+  // here costs a host one message; nobody is waiting in a hall on it.
+  if (event.level !== "regional" && event.level !== "national") {
+    return {
+      success: false,
+      error:
+        "Re-spreading committees is for regional and national rounds. A chapter round's committees are set when it is allocated, and re-dealing them after the round has run would move most of its students.",
+    };
+  }
+
+  // The event's CURRENT committee list (object keys, or the legacy array form).
+  let committeeNames: string[] = [];
+  const ct = event.committee_topics as unknown;
+  if (Array.isArray(ct) && ct.length > 0) {
+    committeeNames = ct.map(String);
+  } else if (ct && typeof ct === "object") {
+    committeeNames = Object.keys(ct as Record<string, unknown>);
+  }
+  committeeNames = [
+    ...new Set(committeeNames.map((n) => n.trim()).filter(Boolean)),
+  ];
+  if (committeeNames.length === 0) {
+    return {
+      success: false,
+      error:
+        "No committees are set for this event. Pick them on the Committees tab first, then re-spread.",
+    };
+  }
+
+  // Read in id order so the plan below is reproducible. Without an explicit
+  // order PostgREST may hand back rows in any order, and the tie-breaks inside
+  // the planner depend on that order — the button would then move students on
+  // every press even when nothing had changed.
+  const { data: participants, error: fetchError } = await supabase
+    .from("participants")
+    .select(
+      "id, party_id, party_number, parliament_role, school_name, committee_name, committee_number"
+    )
+    .eq("event_id", eventId)
+    .order("id");
+  if (fetchError) return { success: false, error: fetchError.message };
+  if (!participants || participants.length === 0) {
+    return { success: false, error: "No participants registered for this event" };
+  }
+
+  const byId = new Map(participants.map((p) => [p.id, p]));
+
+  // Balanced plan: every committee draws evenly from every party AND every
+  // school, so no committee is one party arguing with itself.
+  const plan = planCommitteeAssignment(
+    participants.map((p) => ({
+      id: p.id,
+      partyId: p.party_id,
+      parliamentRole: p.parliament_role,
+      schoolName: p.school_name,
+    })),
+    committeeNames
+  );
+
+  const numbering = await getCommitteeNumbering(supabase);
+  const ordered = orderEventCommittees(committeeNames, numbering.numberByName);
+  const numberByName = new Map(
+    ordered.map((c) => [c.name.trim().toLowerCase(), c.number])
+  );
+
+  const target = new Map<string, { name: string; number: number }>();
+  const excludedIds: string[] = [];
+  for (const a of plan) {
+    if (!a.committeeName) {
+      excludedIds.push(a.participantId);
+      continue;
+    }
+    const number = numberByName.get(a.committeeName.trim().toLowerCase()) ?? 0;
+    target.set(a.participantId, { name: a.committeeName, number });
+  }
+
+  // Stragglers: committee-eligible students the plan left unseated.
+  //
+  // THIS IS CURRENTLY UNREACHABLE, and that is worth stating rather than
+  // implying otherwise. planCommitteeAssignment() seats EVERY committee-eligible
+  // participant whenever the committee list is non-empty, and the empty case
+  // already returned above - so orphanIds is always []. It is kept as a net in
+  // case that planner ever changes, but `placed` will read 0 on every event
+  // today, and the dialog must not promise the host an auto-placement that
+  // cannot fire.
+  //
+  // The students a host actually notices as "in no committee" are the Speaker
+  // Panel: excluded from committees by the handbook AND cleared by the database
+  // trigger participants_clear_committee_presiding on every write. No
+  // application code can seat them. `excludedByRole` below tells the host that
+  // truth instead.
+  const orphanIds = participants
+    .filter((p) => isCommitteeEligible(p.parliament_role) && !target.has(p.id))
+    .map((p) => p.id);
+  if (orphanIds.length > 0) {
+    const sizes = new Map<string, number>(ordered.map((c) => [c.name, 0]));
+    for (const t of target.values()) {
+      sizes.set(t.name, (sizes.get(t.name) ?? 0) + 1);
+    }
+    for (const seat of placeOrphansInSmallestCommittee(
+      orphanIds,
+      ordered.map((c) => ({ name: c.name, number: c.number })),
+      sizes
+    )) {
+      target.set(seat.participantId, {
+        name: seat.committeeName,
+        number: seat.committeeNumber,
+      });
+    }
+  }
+
+  // THE PLAN THE HOST APPROVES MUST BE THE PLAN THAT GETS WRITTEN.
+  //
+  // Preview and apply are two separate server round-trips, and apply recomputes
+  // from scratch. If a participant is imported or deleted, or any party, role or
+  // school changes in between, the applied re-deal would differ from the
+  // before/after table the host approved - the confirm dialog would be advisory
+  // rather than binding. So the preview returns a fingerprint over BOTH the
+  // resulting seating AND the roster it was computed from, and apply refuses
+  // unless the fingerprint still matches.
+  const fingerprint = createHash("sha256")
+    .update(
+      JSON.stringify({
+        // The seating this plan produces.
+        seats: [...target.entries()]
+          .map(([pid, t]) => `${pid}:${t.number}`)
+          .sort(),
+        // The roster it was computed FROM. Any change to the inputs the planner
+        // reads must invalidate the plan, not just a change to its output.
+        roster: participants
+          .map(
+            (p) =>
+              `${p.id}|${p.party_id ?? ""}|${p.parliament_role ?? ""}|${
+                p.school_name ?? ""
+              }`
+          )
+          .sort(),
+      })
+    )
+    .digest("hex")
+    .slice(0, 32);
+
+  if (apply) {
+    if (!expectedFingerprint) {
+      return {
+        success: false,
+        error:
+          "This re-spread was not previewed, so there is nothing to confirm. Press Re-spread Committees to see the plan first.",
+      };
+    }
+    if (expectedFingerprint !== fingerprint) {
+      return {
+        success: false,
+        error:
+          "The roster changed since you previewed this re-spread, so the plan you approved is no longer the plan that would be applied. Nothing has been changed. Press Re-spread Committees again to see the new plan.",
+      };
+    }
+  }
+
+  // What changes, so the host is told before pressing.
+  let moving = 0;
+  let staying = 0;
+  let placed = 0;
+  const toClear: string[] = [];
+  const changedByCommittee = new Map<string, { number: number; ids: string[] }>();
+  for (const p of participants) {
+    const t = target.get(p.id);
+    if (!t) {
+      if (p.committee_name || p.committee_number != null) toClear.push(p.id);
+      continue;
+    }
+    const unchanged =
+      p.committee_name === t.name && p.committee_number === t.number;
+    if (unchanged) {
+      staying += 1;
+      continue;
+    }
+    if (!p.committee_name) placed += 1;
+    else moving += 1;
+    if (!changedByCommittee.has(t.name)) {
+      changedByCommittee.set(t.name, { number: t.number, ids: [] });
+    }
+    changedByCommittee.get(t.name)!.ids.push(p.id);
+  }
+
+  const excludedByRole = [
+    ...excludedIds
+      .reduce((acc, id) => {
+        const role = byId.get(id)?.parliament_role ?? "unknown";
+        acc.set(role, (acc.get(role) ?? 0) + 1);
+        return acc;
+      }, new Map<string, number>())
+      .entries(),
+  ]
+    .map(([role, count]) => ({ role, count }))
+    .sort((a, b) => b.count - a.count || a.role.localeCompare(b.role));
+
+  const beforeByName = new Map<string, number>();
+  for (const p of participants) {
+    if (!p.committee_name) continue;
+    beforeByName.set(p.committee_name, (beforeByName.get(p.committee_name) ?? 0) + 1);
+  }
+  const afterIdsByName = new Map<string, string[]>();
+  for (const [participantId, t] of target) {
+    if (!afterIdsByName.has(t.name)) afterIdsByName.set(t.name, []);
+    afterIdsByName.get(t.name)!.push(participantId);
+  }
+  const committees = ordered.map((c) => {
+    const ids = afterIdsByName.get(c.name) ?? [];
+    const spread = new Map<string, number>();
+    for (const id of ids) {
+      const pn = byId.get(id)?.party_number;
+      const key = pn == null ? "No party" : `Party ${pn}`;
+      spread.set(key, (spread.get(key) ?? 0) + 1);
+    }
+    return {
+      number: c.number,
+      name: c.name,
+      before: beforeByName.get(c.name) ?? 0,
+      after: ids.length,
+      partySpread: [...spread.entries()]
+        .map(([party, count]) => ({ party, count }))
+        .sort((a, b) => a.party.localeCompare(b.party, undefined, { numeric: true })),
+    };
+  });
+
+  const summary: CommitteeRespreadPlan = {
+    committeeCount: ordered.length,
+    committees,
+    moving,
+    staying,
+    placed,
+    removed: toClear.length,
+    excludedByRole,
+    applied: false,
+    fingerprint,
+  };
+
+  if (!apply) return { success: true, data: summary };
+
+  // Write committee_name / committee_number ONLY — one statement per committee
+  // that actually has movers, plus one that clears the office-holders. Rows
+  // that already hold the right committee are not touched, so a second press
+  // writes nothing at all.
+  const errors: string[] = [];
+  for (const [name, { number, ids }] of changedByCommittee) {
+    if (ids.length === 0) continue;
+    const { error } = await supabase
+      .from("participants")
+      .update({ committee_name: name, committee_number: number })
+      .in("id", ids)
+      .eq("event_id", eventId);
+    if (error) errors.push(error.message);
+  }
+  if (toClear.length > 0) {
+    const { error } = await supabase
+      .from("participants")
+      .update({ committee_name: null, committee_number: null })
+      .in("id", toClear)
+      .eq("event_id", eventId);
+    if (error) errors.push(error.message);
+  }
+  if (errors.length > 0) {
+    return {
+      success: false,
+      error: `Committee re-spread partly failed: ${errors[0]}`,
+    };
+  }
+
+  revalidatePath(`/yip/dashboard/events/${eventId}/allocation`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/participants`);
+  revalidatePath(`/yip/dashboard/events/${eventId}/parties`);
+  return { success: true, data: { ...summary, applied: true } };
+}
+
+/** Dry run: what a re-spread would do. Writes nothing. */
+export async function previewCommitteeRespread(
+  eventId: string
+): Promise<ActionResult<CommitteeRespreadPlan>> {
+  return planCommitteeRespread(eventId, false);
+}
+
+/** Re-spread students across the event's current committees, and nothing else. */
+export async function respreadCommittees(
+  eventId: string,
+  // The fingerprint from the preview the host approved. Without it the apply is
+  // refused - the confirm step is binding, not advisory.
+  expectedFingerprint: string
+): Promise<ActionResult<CommitteeRespreadPlan>> {
+  return planCommitteeRespread(eventId, true, expectedFingerprint);
 }
 
 // ─── Lock Allocation ───────────────────────────────────────────────

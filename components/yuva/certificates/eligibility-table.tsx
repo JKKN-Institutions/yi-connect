@@ -19,7 +19,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Award, BadgeCheck, Ban, Download, RefreshCw } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 import {
   getCertificateSignedUrl,
   issueCertificates,

@@ -107,6 +107,11 @@ export async function updateSession(request: NextRequest) {
     return handleYiFiAuth(request, supabaseResponse, user)
   }
 
+  // ─── YIQ nested mount (/yiq/*) ───────────────────────────────────────
+  if (pathname.startsWith('/yiq')) {
+    return handleYiqAuth(request, supabaseResponse, user)
+  }
+
   // ─── Yi Youth Academy nested mount (/youth-academy/*) ────────────────
   if (pathname.startsWith('/youth-academy')) {
     return handleYuvaAuth(request, supabaseResponse, user)
@@ -319,10 +324,15 @@ function handleYiFutureAuth(
       url.searchParams.set('redirectTo', pathname)
       return NextResponse.redirect(url)
     }
-    // Note: deeper /national/admin allow-list check (yi.national_admins) is
-    // performed by the YiFuture-specific middleware/server helpers when the
-    // page or action runs. Keeping the root middleware lean avoids an extra
-    // DB round-trip per request.
+    // Note: this layer proves only "signed in". The deeper /national/admin
+    // allow-list check runs when the page or action does, via
+    // lib/yi-future/auth/admin-source.ts (yi_directory.role_assignments,
+    // app='future') — see app/yi-future/national/admin/layout.tsx for the
+    // view gate and requirePlatformAdmin() for the write gates. Keeping the
+    // root middleware lean avoids a DB round-trip on every request.
+    //
+    // The old note here pointed at yi.national_admins. That table is no
+    // longer read by any Yi-Future authorization path (2026-08-11).
     return supabaseResponse
   }
 
@@ -401,6 +411,79 @@ function parseSessionCookie(value: string): { type?: string } | null {
   } catch {
     return null
   }
+}
+
+/**
+ * YIQ auth gate. Routes are mounted at /yiq/* in yi-connect.
+ *
+ * Public (no auth):
+ *   /yiq                  — landing page
+ *   /yiq/register         — public school-team registration
+ *   /yiq/login            — student access-code sign-in
+ *   /yiq/results          — published chapter standings
+ *   /yiq/live             — the finals scoreboard (projector display)
+ *
+ * Access-code-gated (yiq_session cookie, type=student):
+ *   /yiq/me/*             — the student's own YIQ home
+ *   /yiq/quiz             — sitting a paper
+ *
+ * OAuth-gated (Supabase session required):
+ *   /yiq/dashboard/*      — chapter organiser console
+ *   /yiq/admin/*          — YIQ national master data
+ *
+ * The gate is deliberately DENY-by-default: anything not matched above falls
+ * through to the OAuth check at the end, never to an open pass.
+ */
+function handleYiqAuth(
+  request: NextRequest,
+  supabaseResponse: NextResponse,
+  user: { id: string } | null
+): NextResponse {
+  const { pathname } = request.nextUrl
+
+  // API routes handle their own auth.
+  if (pathname.startsWith('/yiq/api')) {
+    return supabaseResponse
+  }
+
+  if (pathname === '/yiq' || pathname === '/yiq/') {
+    return supabaseResponse
+  }
+
+  const publicYiqPrefixes = [
+    '/yiq/register',
+    '/yiq/login',
+    '/yiq/results',
+    '/yiq/live',
+    '/yiq/offline',
+  ]
+  if (publicYiqPrefixes.some(p => pathname === p || pathname.startsWith(p + '/'))) {
+    return supabaseResponse
+  }
+
+  // Student surfaces — access-code cookie.
+  if (pathname.startsWith('/yiq/me') || pathname.startsWith('/yiq/quiz')) {
+    return requireAccessCodeCookie(
+      request,
+      supabaseResponse,
+      'yiq_session',
+      'student',
+      '/yiq/login'
+    )
+  }
+
+  // Organiser + national surfaces — OAuth.
+  if (pathname.startsWith('/yiq/dashboard') || pathname.startsWith('/yiq/admin')) {
+    if (!user) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/yiq/login'
+      url.searchParams.set('redirectTo', pathname)
+      return NextResponse.redirect(url)
+    }
+    return supabaseResponse
+  }
+
+  return supabaseResponse
 }
 
 function requireAccessCodeCookie(

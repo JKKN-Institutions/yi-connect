@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import type { ActionResult } from "./editions";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 /**
  * Chapter-scoped gate. A government engagement hangs off an event, whose
@@ -92,7 +93,7 @@ export async function createGovEngagement(
       whitepaper_accepted,
       media_coverage_urls,
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "government.createGovEngagement") };
 
   revalidatePath("/yi-future/host/government");
   redirect("/yi-future/host/government");
@@ -140,7 +141,7 @@ export async function updateGovEngagement(
       media_coverage_urls,
     })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "government.updateGovEngagement") };
 
   revalidatePath("/yi-future/host/government");
   redirect("/yi-future/host/government");
@@ -154,7 +155,7 @@ export async function deleteGovEngagement(id: string): Promise<ActionResult> {
     .from("government_engagements")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "government.deleteGovEngagement") };
   revalidatePath("/yi-future/host/government");
   return { ok: true, message: "Engagement removed." };
 }

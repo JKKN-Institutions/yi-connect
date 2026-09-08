@@ -12,6 +12,7 @@ import type { ResultWithParticipant } from "@/app/yip/actions/results";
 import { Button } from "@/components/yip/ui/button";
 import { Download } from "lucide-react";
 
+import { ParticipantNameButton } from "@/components/yip/participant-profile-dialog";
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 function partyLabel(p: ResultWithParticipant["participant"]): string {
@@ -29,10 +30,12 @@ function positionPoints(
 }
 
 export function LeadershipTracker({
+  eventId,
   results,
   positionBonuses,
   eventName,
 }: {
+  eventId: string;
   results: ResultWithParticipant[];
   positionBonuses: Record<string, number>;
   eventName: string;
@@ -145,7 +148,15 @@ export function LeadershipTracker({
                   <td className="px-3 py-2 font-mono text-[#1a1a3e]/70">
                     {p.constituency_number ?? ""}
                   </td>
-                  <td className="px-3 py-2 text-[#1a1a3e]">{p.full_name}</td>
+                  <td className="px-3 py-2 text-[#1a1a3e]">
+                    <ParticipantNameButton
+                      eventId={eventId}
+                      eventName={eventName}
+                      participantId={r.participant_id}
+                      name={p.full_name}
+                      className="text-left underline-offset-4 hover:underline"
+                    />
+                  </td>
                   <td className="px-3 py-2 text-[#1a1a3e]/80">
                     {p.constituency_name ?? ""}
                   </td>

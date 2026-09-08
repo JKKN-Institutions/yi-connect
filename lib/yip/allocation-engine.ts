@@ -443,3 +443,63 @@ export function runAllocation(input: AllocationInput): AllocationResult {
     },
   };
 }
+
+// ─── Committee Re-spread Helper ─────────────────────────────────────
+
+export interface CommitteeSlot {
+  /** The committee's 1..N number within this event. */
+  number: number;
+  /** The stored committee name ("Committee 6", "Ministry of Health", …). */
+  name: string;
+}
+
+export interface OrphanCommitteeSeat {
+  participantId: string;
+  committeeName: string;
+  committeeNumber: number;
+}
+
+/**
+ * Seat students who ended up in NO committee into the smallest committee.
+ *
+ * Used by the "Re-spread committees" action: after the balanced plan has run,
+ * anyone still uncommitted but committee-ELIGIBLE is seated here, so a host
+ * never has to hunt for stragglers by hand (Director, 2026-08-19).
+ *
+ * Sizes are re-checked after every placement, so a run of stragglers fans out
+ * across the smallest committees instead of piling into one. Ties go to the
+ * lowest-numbered committee, which keeps the result deterministic: the same
+ * input order always produces the same seating, so pressing the button twice
+ * is a no-op.
+ *
+ * Callers MUST filter out participants who are excluded from committees by
+ * design — the Speaker Panel (Speaker, Deputy Speakers) and the duty officials
+ * (Parliamentary Administrator / Journalist). Those are not stragglers, and for
+ * the Speaker Panel a database trigger clears the committee again anyway.
+ */
+export function placeOrphansInSmallestCommittee(
+  orphanIds: readonly string[],
+  committees: readonly CommitteeSlot[],
+  currentSizes: ReadonlyMap<string, number>
+): OrphanCommitteeSeat[] {
+  if (committees.length === 0 || orphanIds.length === 0) return [];
+
+  const ordered = [...committees].sort((a, b) => a.number - b.number);
+  const sizes = ordered.map((c) => currentSizes.get(c.name) ?? 0);
+  const seats: OrphanCommitteeSeat[] = [];
+
+  for (const participantId of orphanIds) {
+    let best = 0;
+    for (let i = 1; i < ordered.length; i++) {
+      if (sizes[i] < sizes[best]) best = i;
+    }
+    seats.push({
+      participantId,
+      committeeName: ordered[best].name,
+      committeeNumber: ordered[best].number,
+    });
+    sizes[best] += 1;
+  }
+
+  return seats;
+}

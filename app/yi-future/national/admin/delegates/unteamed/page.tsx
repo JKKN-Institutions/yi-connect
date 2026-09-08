@@ -43,7 +43,7 @@ const REGIONS = ["ER", "NER", "NR", "SRTKKA", "SRTN", "WR"] as const;
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleDateString("en-IN", {
+    return new Date(iso).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata",
       day: "2-digit",
       month: "short",
       year: "numeric",

@@ -17,6 +17,7 @@ import {
   requireChapterAdmin,
   requireFutureNationalAdmin,
 } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 type EventType = Database["future"]["Enums"]["event_type"];
 type ChapterFinalSection =
@@ -81,7 +82,7 @@ export async function createChapterFinal(
     })
     .select("id")
     .maybeSingle();
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "events.createChapterFinal") };
 
   const eventId = (inserted as { id: string } | null)?.id;
   if (!eventId) {
@@ -143,7 +144,7 @@ export async function createRegionalFinale(
     })
     .select("id")
     .maybeSingle();
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "events.createRegionalFinale") };
 
   const eventId = (inserted as { id: string } | null)?.id;
   if (!eventId) {
@@ -195,7 +196,7 @@ export async function createNationalFinals(
     } as never)
     .select("id")
     .maybeSingle();
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "events.createNationalFinals") };
 
   const eventId = (inserted as { id: string } | null)?.id;
   if (eventId) {
@@ -253,7 +254,7 @@ export async function updateEvent(
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "events.updateEvent") };
 
   revalidatePath("/yi-future/chapter/final");
   revalidatePath(`/yi-future/chapter/final/${id}`);
@@ -271,7 +272,7 @@ export async function setEventPublished(
     .from("events")
     .update({ is_published: publish })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "events.setEventPublished") };
   revalidatePath(`/yi-future/chapter/final/${id}`);
   return { ok: true };
 }
@@ -305,7 +306,7 @@ export async function activateSection(
     })
     .eq("event_id", eventId)
     .eq("section", section);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "events.activateSection") };
 
   revalidatePath(`/yi-future/chapter/final/${eventId}`);
   revalidatePath(`/yi-future/chapter/final/${eventId}/live`);
@@ -325,7 +326,7 @@ export async function endAllSections(
     .update({ is_active: false, ends_at: now })
     .eq("event_id", eventId)
     .eq("is_active", true);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "events.endAllSections") };
   revalidatePath(`/yi-future/chapter/final/${eventId}`);
   revalidatePath(`/yi-future/chapter/final/${eventId}/live`);
   revalidatePath(`/event/${eventId}/display`);
@@ -346,7 +347,7 @@ export async function updateSectionNotes(
     .update({ notes })
     .eq("event_id", eventId)
     .eq("section", section);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "events.updateSectionNotes") };
   revalidatePath(`/yi-future/chapter/final/${eventId}`);
   return { ok: true };
 }

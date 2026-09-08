@@ -11,6 +11,7 @@ import {
   requireFutureAdmin,
   requireChapterAdmin,
 } from "@/lib/yi-future/auth/require-access";
+import { safeError } from "@/lib/yi-future/db-error";
 
 type JuryArchetype = Database["future"]["Enums"]["jury_archetype"];
 
@@ -180,7 +181,7 @@ export async function createJury(
       access_code,
       is_active: true,
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "jury.createJury") };
 
   // Upsert yi_directory.people — cross-app identity bridge
   if (email) {
@@ -235,7 +236,7 @@ export async function updateJury(
       archetype: archetype as JuryArchetype,
     })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "jury.updateJury") };
 
   revalidatePath("/yi-future/chapter/jury");
   redirect("/yi-future/chapter/jury");
@@ -251,7 +252,7 @@ export async function regenerateJuryCode(id: string): Promise<ActionResult> {
     .from("jury_assignments")
     .update({ access_code })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "jury.regenerateJuryCode") };
   revalidatePath("/yi-future/chapter/jury");
   return { ok: true, message: `New code: ${access_code}` };
 }
@@ -270,7 +271,7 @@ export async function deleteJury(id: string): Promise<ActionResult> {
     .from("jury_assignments")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "jury.deleteJury") };
   revalidatePath("/yi-future/chapter/jury");
   return { ok: true, message: "Jury removed." };
 }
@@ -290,7 +291,7 @@ export async function assignJuryToTeam(
       { jury_id: juryId, team_id: teamId },
       { onConflict: "jury_id,team_id" }
     );
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "jury.assignJuryToTeam") };
   revalidatePath("/yi-future/chapter/jury");
   return { ok: true, message: "Assigned." };
 }
@@ -308,7 +309,7 @@ export async function unassignJuryFromTeam(
     .delete()
     .eq("jury_id", juryId)
     .eq("team_id", teamId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "jury.unassignJuryFromTeam") };
   revalidatePath("/yi-future/chapter/jury");
   return { ok: true, message: "Unassigned." };
 }
@@ -334,22 +335,33 @@ export async function assignJuryToTrack(
   const { data: juryRow } = await svc
     .schema("future")
     .from("jury_assignments")
-    .select("id, edition_id")
+    .select("id, edition_id, chapter_id")
     .eq("id", juryId)
     .maybeSingle();
   if (!juryRow) return { ok: false, error: "Jury member not found." };
   const editionId = (juryRow as unknown as { edition_id: string }).edition_id;
+  const chapterId = (juryRow as unknown as { chapter_id: string | null })
+    .chapter_id;
+  // Fail closed: a jury row with no chapter cannot have its per-track cap
+  // computed safely, so refuse rather than count edition-wide.
+  if (!chapterId) {
+    return { ok: false, error: "Jury member is not scoped to a chapter." };
+  }
 
-  // Current ACTIVE panel for this track within the same edition.
+  // Current ACTIVE panel for this track within THIS CHAPTER's edition.
+  // Without the chapter_id filter the cap counted every chapter's jurors,
+  // so a track could read "full" (10/10) on another chapter's jurors and
+  // block this chapter from adding its own even with zero of its own on it.
   // jury_track_assignments is not in generated types yet → cast (established pattern).
   const { data: panelRows, error: panelErr } = await (svc as any)
     .schema("future")
     .from("jury_track_assignments")
-    .select("jury_id, jury_assignments!inner(edition_id, is_active)")
+    .select("jury_id, jury_assignments!inner(edition_id, chapter_id, is_active)")
     .eq("track_id", trackId)
     .eq("jury_assignments.edition_id", editionId)
+    .eq("jury_assignments.chapter_id", chapterId)
     .eq("jury_assignments.is_active", true);
-  if (panelErr) return { ok: false, error: panelErr.message };
+  if (panelErr) return { ok: false, error: safeError(panelErr.message, "jury.assignJuryToTrack") };
 
   const memberIds = new Set(
     (((panelRows ?? []) as { jury_id: string }[])).map((r) => r.jury_id)
@@ -380,7 +392,7 @@ export async function assignJuryToTrack(
       { jury_id: juryId, track_id: trackId },
       { onConflict: "jury_id,track_id" }
     );
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "jury.assignJuryToTrack") };
 
   revalidatePath("/yi-future/chapter/jury");
   revalidatePath("/yi-future/chapter/jury/categories");
@@ -402,7 +414,7 @@ export async function unassignJuryFromTrack(
     .delete()
     .eq("jury_id", juryId)
     .eq("track_id", trackId);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "jury.unassignJuryFromTrack") };
 
   revalidatePath("/yi-future/chapter/jury");
   revalidatePath("/yi-future/chapter/jury/categories");
@@ -425,10 +437,13 @@ export async function autoAssignJuryToTeams(
   const { data: jtaRows, error: jtaErr } = await (svc as any)
     .schema("future")
     .from("jury_track_assignments")
-    .select("jury_id, track_id, jury_assignments!inner(edition_id, is_active)")
+    .select(
+      "jury_id, track_id, jury_assignments!inner(edition_id, is_active, chapter_id)"
+    )
+    .eq("jury_assignments.chapter_id", chapterId)
     .eq("jury_assignments.edition_id", editionId)
     .eq("jury_assignments.is_active", true);
-  if (jtaErr) return { ok: false, error: jtaErr.message };
+  if (jtaErr) return { ok: false, error: safeError(jtaErr.message, "jury.autoAssignJuryToTeams") };
 
   const juryList =
     ((jtaRows ?? []) as { jury_id: string; track_id: string }[]);
@@ -491,7 +506,7 @@ export async function autoAssignJuryToTeams(
     .schema("future")
     .from("jury_team_assignments")
     .upsert(rows, { onConflict: "jury_id,team_id" });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "jury.autoAssignJuryToTeams") };
 
   revalidatePath("/yi-future/chapter/jury");
   revalidatePath("/yi-future/chapter/jury/categories");
@@ -521,6 +536,7 @@ export async function autoAllocateJury(
       .schema("future")
       .from("jury_assignments")
       .select("id, archetype")
+      .eq("chapter_id", chapterId)
       .eq("edition_id", editionId)
       .eq("is_active", true),
   ]);
@@ -567,7 +583,7 @@ export async function autoAllocateJury(
     .schema("future")
     .from("jury_team_assignments")
     .upsert(rows, { onConflict: "jury_id,team_id" });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "jury.autoAllocateJury") };
 
   revalidatePath("/yi-future/chapter/jury");
   return {

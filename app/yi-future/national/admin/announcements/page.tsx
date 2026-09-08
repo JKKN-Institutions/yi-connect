@@ -75,7 +75,7 @@ const AUDIENCE_LABEL: Record<string, string> = {
 };
 
 function when(iso: string): string {
-  return new Date(iso).toLocaleString("en-IN", {
+  return new Date(iso).toLocaleString("en-IN", { timeZone: "Asia/Kolkata",
     day: "numeric",
     month: "short",
     hour: "numeric",

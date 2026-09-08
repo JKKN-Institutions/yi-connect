@@ -32,7 +32,7 @@ import {
   approveMemberRequest,
   rejectMemberRequest
 } from '@/app/actions/member-requests';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { Check, X, Eye, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { WhatsAppIconButton } from '@/components/whatsapp';

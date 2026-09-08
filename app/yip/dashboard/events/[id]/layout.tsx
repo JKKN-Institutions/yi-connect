@@ -64,6 +64,7 @@ export default async function EventLayout({
         <EventTabNav
           eventId={id}
           eventStatus={event.status}
+          eventLevel={event.level ?? undefined}
           canViewScores={access.canViewScores}
           setupProgress={setupProgress}
         />

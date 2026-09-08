@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/yi-future/supabase/server";
 import { requirePlatformAdmin } from "./national-admins";
 import type { ActionResult } from "./editions";
+import { safeError } from "@/lib/yi-future/db-error";
 
 async function requireAdmin(): Promise<void> {
   const supabase = await createClient();
@@ -50,7 +51,7 @@ export async function createTrack(
       icon,
       display_order,
     });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "tracks.createTrack") };
 
   revalidatePath("/national/admin/tracks");
   redirect(`/national/admin/tracks?edition=${editionId}`);
@@ -79,7 +80,7 @@ export async function updateTrack(
     .from("tracks")
     .update({ name, description, color_hex, icon, display_order })
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "tracks.updateTrack") };
 
   revalidatePath("/national/admin/tracks");
   redirect(`/national/admin/tracks?edition=${editionId}`);
@@ -113,7 +114,7 @@ export async function deleteTrack(
     .from("tracks")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "tracks.deleteTrack") };
 
   revalidatePath("/national/admin/tracks");
   return { ok: true, message: "Track deleted." };

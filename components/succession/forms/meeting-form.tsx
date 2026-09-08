@@ -27,7 +27,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { createMeeting, updateMeeting } from '@/app/actions/succession'
 import { CreateMeetingSchema, UpdateMeetingSchema } from '@/lib/validations/succession'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 
 type CreateFormData = Omit<z.infer<typeof CreateMeetingSchema>, 'created_by'>
 type UpdateFormData = z.infer<typeof UpdateMeetingSchema>

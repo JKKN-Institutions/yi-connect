@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/yip/utils";
 import { PARTY_COLORS } from "@/lib/yip/constants";
+import { billSourceOf, billSourceBadgeLabel } from "@/lib/yip/bill-sources";
 import { toast } from "sonner";
 import {
   getBills,
@@ -76,6 +77,9 @@ export function BillSession({ eventId, agendaItemId }: BillSessionProps) {
     total: number;
   } | null>(null);
 
+  // Rejected bills are collapsed by default — see presentableBills below.
+  const [showRejected, setShowRejected] = useState(false);
+
   // Load bills
   useEffect(() => {
     loadBills();
@@ -93,7 +97,18 @@ export function BillSession({ eventId, agendaItemId }: BillSessionProps) {
     const isForce = !(bill.status === "approved" || bill.status === "submitted");
     setConfirmDialog({
       open: true,
-      title: `Present ${bill.committee_name ?? (bill.party_side === "ruling" ? "Ruling" : bill.party_side === "opposition" ? "Opposition" : "Committee")} Bill`,
+      title: `Present ${
+        billSourceOf(bill) === "government"
+          ? "Government"
+          : billSourceOf(bill) === "private_member"
+            ? "Private Member's"
+            : (bill.committee_name ??
+              (bill.party_side === "ruling"
+                ? "Ruling"
+                : bill.party_side === "opposition"
+                  ? "Opposition"
+                  : "Committee"))
+      } Bill`,
       description: isForce
         ? `"${bill.title}" isn't finalised (status: ${bill.status ?? "drafting"}). Present it and put it to a vote anyway?`
         : `Mark "${bill.title}" as presented? This will show the bill on the projector display.`,
@@ -113,6 +128,41 @@ export function BillSession({ eventId, agendaItemId }: BillSessionProps) {
           setConfirmDialog((prev) => ({ ...prev, open: false }));
         });
       },
+    });
+  }
+
+  /**
+   * Put the bill to the House in ONE tap (Director, 2026-08-28, from the SRTN
+   * floor: "we need an on-spot yes or no ... to simplify the voting").
+   *
+   * The confirm dialog this replaces asked the Chair to approve opening a vote
+   * they had just tapped to open, and blocked on a check-in lookup to do it.
+   * The safety it carried is NOT lost: openVote still returns checkinWarning
+   * and the same warning toast still fires — after the vote opens instead of
+   * before, which is the right trade when the House is waiting and the fix is
+   * simply to close it and re-open with the override.
+   *
+   * The slower dialog path stays available on any bill that is not finalised
+   * (see handlePresentBill), where a confirmation genuinely is warranted.
+   */
+  function handleQuickBillVote(bill: BillWithMembers) {
+    startTransition(async () => {
+      const result = await openVote(eventId, agendaItemId, "bill_vote", {
+        billId: bill.id,
+        override_checkin: false,
+      });
+      if (result.success) {
+        toast.success(`Voting open on "${bill.title}" — Aye, Nay or Abstain.`);
+        const w = result.data.checkinWarning;
+        if (w) {
+          toast.warning(
+            `Nobody is checked in for Day ${w.day} yet — no one can vote. Check students in (Participants → "Check In All · Day ${w.day}"), then close and re-open this vote with the not-checked-in override.`,
+            { duration: 12000 }
+          );
+        }
+      } else {
+        toast.error(result.error);
+      }
     });
   }
 
@@ -169,9 +219,19 @@ export function BillSession({ eventId, agendaItemId }: BillSessionProps) {
   // One card per committee's bill. Benchless events (the default) have no
   // ruling/opposition split, so bills are identified by committee_name and carry
   // no party_side — keying off party_side dropped every committee bill and
-  // dead-ended the session. We now show ALL bills (incl. drafts): the organiser
-  // can force-present a draft to put it to a vote (live-event override).
-  const presentableBills = bills;
+  // dead-ended the session. Drafts stay in the list: the organiser can
+  // force-present one to put it to a vote (live-event override).
+  //
+  // REJECTED bills are hidden behind a toggle (Director, 2026-08-28, from the
+  // floor). A rejected bill is FINAL — it cannot come back to the House — so it
+  // is never the one being moved, yet on the SRTN round 96 of 111 bills were
+  // rejected and buried the 10 live ones the organiser was hunting for
+  // mid-session. They stay reachable, one tap away, because force-present still
+  // has to work on anything.
+  const rejectedBills = bills.filter((b) => b.status === "rejected");
+  const presentableBills = showRejected
+    ? bills
+    : bills.filter((b) => b.status !== "rejected");
 
   return (
     <>
@@ -196,10 +256,22 @@ export function BillSession({ eventId, agendaItemId }: BillSessionProps) {
                   bill={bill}
                   onPresent={handlePresentBill}
                   onVote={handleOpenBillVote}
+                  onQuickVote={handleQuickBillVote}
                   isPending={isPending}
                 />
               ))}
             </div>
+          )}
+          {rejectedBills.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowRejected((v) => !v)}
+              className="w-full rounded-md border border-dashed py-2 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+            >
+              {showRejected
+                ? `Hide ${rejectedBills.length} rejected bill${rejectedBills.length === 1 ? "" : "s"}`
+                : `Show ${rejectedBills.length} rejected bill${rejectedBills.length === 1 ? "" : "s"}`}
+            </button>
           )}
         </CardContent>
       </Card>
@@ -293,27 +365,35 @@ function BillCard({
   bill,
   onPresent,
   onVote,
+  onQuickVote,
   isPending,
 }: {
   bill: BillWithMembers;
   onPresent: (bill: BillWithMembers) => void;
   onVote: (bill: BillWithMembers) => void;
+  onQuickVote: (bill: BillWithMembers) => void;
   isPending: boolean;
 }) {
   const side =
     bill.party_side === "ruling" || bill.party_side === "opposition"
       ? bill.party_side
       : null;
+  // Regional Round: "Govt" / "PMB" badge for the new sources, committee name
+  // (or party fallback) for committee bills.
+  const source = billSourceOf(bill);
   const partyLabel =
-    bill.committee_name ??
-    (side === "ruling"
-      ? "Ruling Party"
-      : side === "opposition"
-        ? "Opposition"
-        : "Committee Bill");
+    source !== "committee"
+      ? billSourceBadgeLabel(bill)
+      : (bill.committee_name ??
+        (side === "ruling"
+          ? "Ruling Party"
+          : side === "opposition"
+            ? "Opposition"
+            : "Committee Bill"));
   const status = bill.status ?? "drafting";
   const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.drafting;
   const provisions = clauseTexts(bill.provisions);
+  const moverName = bill.mover_name ?? bill.presenter_1_name ?? null;
 
   const canPresent =
     status === "approved" || status === "submitted";
@@ -335,7 +415,13 @@ function BillCard({
           <span
             className={cn(
               "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
-              side ? PARTY_COLORS[side].badge : "bg-[#FF9933]/15 text-[#9a5212]"
+              source === "government"
+                ? "bg-emerald-100 text-emerald-800"
+                : source === "private_member"
+                  ? "bg-violet-100 text-violet-800"
+                  : side
+                    ? PARTY_COLORS[side].badge
+                    : "bg-[#FF9933]/15 text-[#9a5212]"
             )}
           >
             {partyLabel}
@@ -373,19 +459,30 @@ function BillCard({
         </div>
       )}
 
-      {/* Presenters */}
+      {/* Presenters — the MOVER for government / private-member bills */}
       <div className="flex flex-wrap gap-2 mb-3">
-        {bill.presenter_1_name && (
-          <span className="inline-flex items-center gap-1 rounded bg-gray-50 px-2 py-0.5 text-[10px] text-gray-600">
-            <Users className="size-2.5" />
-            P1: {bill.presenter_1_name}
-          </span>
-        )}
-        {bill.presenter_2_name && (
-          <span className="inline-flex items-center gap-1 rounded bg-gray-50 px-2 py-0.5 text-[10px] text-gray-600">
-            <Users className="size-2.5" />
-            P2: {bill.presenter_2_name}
-          </span>
+        {source !== "committee" ? (
+          moverName && (
+            <span className="inline-flex items-center gap-1 rounded bg-gray-50 px-2 py-0.5 text-[10px] text-gray-600">
+              <Users className="size-2.5" />
+              Moved by: {moverName}
+            </span>
+          )
+        ) : (
+          <>
+            {bill.presenter_1_name && (
+              <span className="inline-flex items-center gap-1 rounded bg-gray-50 px-2 py-0.5 text-[10px] text-gray-600">
+                <Users className="size-2.5" />
+                P1: {bill.presenter_1_name}
+              </span>
+            )}
+            {bill.presenter_2_name && (
+              <span className="inline-flex items-center gap-1 rounded bg-gray-50 px-2 py-0.5 text-[10px] text-gray-600">
+                <Users className="size-2.5" />
+                P2: {bill.presenter_2_name}
+              </span>
+            )}
+          </>
         )}
       </div>
 
@@ -424,16 +521,29 @@ function BillCard({
             Present Bill
           </Button>
         )}
+        {/* One tap puts the bill to the House. The old confirm-first path stays
+            beside it for a Chair who wants the check-in warning up front. */}
         {canVote && (
-          <Button
-            size="sm"
-            disabled={isPending}
-            onClick={() => onVote(bill)}
-            className="flex-1"
-          >
-            <Vote className="size-3.5 mr-1" />
-            Open Bill Vote
-          </Button>
+          <>
+            <Button
+              size="sm"
+              disabled={isPending}
+              onClick={() => onQuickVote(bill)}
+              className="flex-1"
+            >
+              <Vote className="size-3.5 mr-1" />
+              Put to the House
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isPending}
+              onClick={() => onVote(bill)}
+              title="Open the vote with the check-in warning and override first"
+            >
+              Check first
+            </Button>
+          </>
         )}
       </div>
     </div>

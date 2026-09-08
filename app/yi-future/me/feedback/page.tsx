@@ -41,7 +41,7 @@ async function getFeedback(teamId: string): Promise<FeedbackRow[]> {
 
 function formatDate(iso: string): string {
   try {
-    return new Date(iso).toLocaleDateString("en-IN", {
+    return new Date(iso).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata",
       day: "numeric",
       month: "short",
       year: "numeric",

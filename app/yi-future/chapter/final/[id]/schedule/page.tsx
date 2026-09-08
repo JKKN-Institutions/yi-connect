@@ -69,7 +69,7 @@ export default async function SchedulePage({
 
   // Default start time: event start_date or 10:00
   const defaultStart = event.start_date
-    ? new Date(event.start_date).toLocaleTimeString("en-IN", {
+    ? new Date(event.start_date).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata",
         hour: "2-digit",
         minute: "2-digit",
         hour12: false,

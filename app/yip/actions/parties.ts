@@ -37,6 +37,10 @@ export type Party = {
   tagline: string | null;
   party_leader_id: string | null;
   created_at: string;
+  /** WhatsApp group invite link, sent to this party's members with their
+   *  access code. Arrives in migration 20260814170000; null until an
+   *  organiser types one in on the Parties tab. */
+  whatsapp_invite_url?: string | null;
 };
 
 export async function listParties(eventId: string): Promise<Party[]> {
@@ -52,6 +56,10 @@ export async function listParties(eventId: string): Promise<Party[]> {
   return data.map((p) => ({
     ...p,
     manifesto: Array.isArray(p.manifesto) ? p.manifesto : [],
+    // Present once migration 20260814170000 is applied; null before that, so
+    // the Parties tab renders an empty box rather than crashing.
+    whatsapp_invite_url:
+      (p as { whatsapp_invite_url?: string | null }).whatsapp_invite_url ?? null,
   })) as Party[];
 }
 

@@ -4,11 +4,13 @@ import { getYipSession } from "@/lib/yip/auth/yip-session";
 import Link from "next/link";
 import { LogOut, MessageSquare, Home } from "lucide-react";
 import { CHAT_ENABLED } from "@/lib/yip/chat-config";
+import { signOutYipSession } from "@/app/yip/actions/auth";
 import { GuideLauncher } from "@/components/yip/guide";
 import { GUIDES } from "@/lib/yip/guide/content";
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getPrimaryDesk } from "@/lib/yip/participant-desk";
 import { ParticipantBottomNav } from "@/app/yip/me/_components/participant-bottom-nav";
+import { SearchTrigger } from "@/components/yip/search/search-trigger";
 
 interface ParticipantSession {
   type: "participant";
@@ -91,6 +93,11 @@ export default async function ParticipantLayout({
           </Link>
 
           <div className="flex shrink-0 items-center gap-1">
+            {/* Search — icon-sized for the same reason as the jury lane: this
+                is a phone header. A student's palette is limited to the running
+                order, their own party and committee, and their own pages; it
+                never lists other delegates. */}
+            <SearchTrigger variant="icon" />
             {/* Chat entry point — only rendered when the chat flag is ON.
                 Flag off (the default) → no link, nothing changes for students. */}
             {CHAT_ENABLED && (
@@ -108,13 +115,21 @@ export default async function ParticipantLayout({
               variant="navlink"
               className="w-auto rounded-lg px-3 py-2 text-[#FF9933] hover:bg-[#FF9933]/10 hover:text-[#FF9933]"
             />
-            <Link
-              href="/yip/join"
-              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
-              title="Exit"
-            >
-              <LogOut className="size-4" />
-            </Link>
+            {/* A real sign-out, not a link. This used to be
+                <Link href="/yip/join">, which navigated away while the
+                yip_session cookie stayed live — so the student bounced straight
+                back in, and on a shared phone the next person was signed in as
+                them. */}
+            <form action={signOutYipSession}>
+              <button
+                type="submit"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                title="Sign out"
+                aria-label="Sign out"
+              >
+                <LogOut className="size-4" />
+              </button>
+            </form>
           </div>
         </div>
       </header>

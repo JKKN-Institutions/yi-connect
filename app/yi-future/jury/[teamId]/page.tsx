@@ -14,6 +14,7 @@ import {
   type MemberScores,
 } from "@/lib/yi-future/member-rubric";
 import { ScoreSlider } from "@/components/yi-future/jury/ScoreSlider";
+import { AutoSaveDraft } from "@/components/yi-future/jury/AutoSaveDraft";
 import { SubmitButtons } from "./submit-buttons";
 
 type Team = {
@@ -236,7 +237,13 @@ export default async function JuryEvaluationPage({
   const teamMembers = await getTeamMembers(team.id);
   const memberEvals = await getMemberEvals(session.id, team.id, event.id);
 
-  async function save(formData: FormData) {
+  // Auto-save needs to know whether the write actually landed, and a form
+  // action must return void — so the shared body lives in persist() and the two
+  // entry points differ only in what they return. <form action={save}> is
+  // untouched.
+  async function persist(
+    formData: FormData
+  ): Promise<{ ok: true; message?: string } | { ok: false; error: string }> {
     "use server";
     const scores: CriteriaScores = {};
     for (const c of rubric!.criteria) {
@@ -260,6 +267,39 @@ export default async function JuryEvaluationPage({
         : null;
     const submit = formData.get("_submit") === "1";
 
+    // Per-member recognition scores are written BEFORE the team evaluation.
+    // ORDER IS THE FIX — nothing else here changed.
+    //
+    // saveEvaluation() ends a successful SUBMIT with redirect(), and redirect()
+    // throws. So on submit, everything after that call was unreachable and the
+    // per-member recognition scores were silently dropped. They only ever
+    // survived if the juror happened to press "Save draft" first.
+    //
+    // Measured on the live screen 2026-08-11, the first time this page had been
+    // opened by a jury: a draft wrote member_evaluations at 16:14:43.212, the
+    // submit landed about a minute later and flipped the evaluation to
+    // "submitted" — and member_evaluations.updated_at was still 16:14:43.212.
+    // The upsert sets updated_at = now() on every run, so it had not run.
+    //
+    // A member failure still must not cost the team its score: this call is not
+    // allowed to abort the team evaluation below, exactly as before.
+    const memberPayload = teamMembers.map((m) => {
+      const ms: MemberScores = {};
+      for (const c of MEMBER_CRITERIA) {
+        const raw = String(
+          formData.get(`member_${m.delegate_id}_${c.key}`) ?? ""
+        ).trim();
+        if (raw !== "") ms[c.key] = Number(raw);
+      }
+      return { delegateId: m.delegate_id, scores: ms };
+    });
+    await saveMemberEvaluations({
+      juryId: session!.id,
+      teamId: team!.id,
+      eventId: event!.id,
+      members: memberPayload,
+    });
+
     await saveEvaluation({
       juryId: session!.id,
       teamId: team!.id,
@@ -282,25 +322,20 @@ export default async function JuryEvaluationPage({
       submit,
     });
 
-    // Per-member recognition scores. Saved after the team evaluation and kept
-    // separate from it: a failure here must not lose the team score, and an
-    // untouched member is skipped rather than written as zeros.
-    const memberPayload = teamMembers.map((m) => {
-      const ms: MemberScores = {};
-      for (const c of MEMBER_CRITERIA) {
-        const raw = String(
-          formData.get(`member_${m.delegate_id}_${c.key}`) ?? ""
-        ).trim();
-        if (raw !== "") ms[c.key] = Number(raw);
-      }
-      return { delegateId: m.delegate_id, scores: ms };
-    });
-    await saveMemberEvaluations({
-      juryId: session!.id,
-      teamId: team!.id,
-      eventId: event!.id,
-      members: memberPayload,
-    });
+    // Only reached when submit was false or the submit was refused —
+    // saveEvaluation redirects away on a successful submit.
+    return { ok: true, message: "Draft saved." };
+  }
+
+  async function save(formData: FormData) {
+    "use server";
+    await persist(formData);
+  }
+
+  async function autoSaveDraft(formData: FormData) {
+    "use server";
+    formData.set("_submit", "0");
+    return await persist(formData);
   }
 
   return (
@@ -516,6 +551,11 @@ export default async function JuryEvaluationPage({
           </div>
         </details>
 
+        {!submitted && (
+          <div className="flex items-center justify-end pt-1">
+            <AutoSaveDraft action={autoSaveDraft} enabled={!submitted} />
+          </div>
+        )}
         {!submitted && <SubmitButtons />}
       </form>
 

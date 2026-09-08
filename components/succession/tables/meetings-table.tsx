@@ -30,7 +30,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { MeetingStatusBadge, MeetingTypeBadge } from '../displays/succession-status-badges'
 import { deleteMeeting } from '@/app/actions/succession'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import { format } from 'date-fns'
 
 interface MeetingsTableProps {

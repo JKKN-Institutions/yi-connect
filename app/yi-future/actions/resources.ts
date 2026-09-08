@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yi-future/supabase/server";
 import { readSession } from "@/app/yi-future/actions/auth";
 import type { ActionResult } from "./editions";
+import { safeError } from "@/lib/yi-future/db-error";
 
 export type ResourceType = "file" | "url";
 
@@ -108,7 +109,7 @@ export async function addResource(input: {
         file_path: filePath,
         external_url: null,
       } as never);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: safeError(error.message, "resources") };
   } else if (input.type === "url") {
     const externalUrl = input.externalUrl?.trim();
     if (!externalUrl) {
@@ -139,7 +140,7 @@ export async function addResource(input: {
         file_path: null,
         external_url: externalUrl,
       } as never);
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: safeError(error.message, "resources") };
   } else {
     return { ok: false, error: "Invalid resource type." };
   }
@@ -212,7 +213,7 @@ export async function deleteResource(
     .from("resources")
     .delete()
     .eq("id", id);
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: safeError(error.message, "resources") };
 
   // Best-effort storage cleanup for file resources.
   if (existing.resource_type === "file" && existing.file_path) {
@@ -334,7 +335,7 @@ export async function getResourceSignedUrl(
     const { data, error } = await storage
       .from(BUCKET)
       .createSignedUrl(filePath, 60 * 60);
-    if (error) return { url: null, error: error.message };
+    if (error) return { url: null, error: safeError(error.message, "resources") };
     return { url: data?.signedUrl ?? null };
   } catch (err) {
     return { url: null, error: (err as Error).message };

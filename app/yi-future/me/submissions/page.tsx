@@ -412,7 +412,7 @@ export default async function MySubmissionsPage({
           Deliverables · {team.team_name}
         </h2>
         <p className="mt-1 text-sm text-navy/60">
-          3 phases, each produces a deliverable. Phase C produces 4 artifacts.
+          3 phases, each produces a deliverable. Phase C is a final report and a pitch deck.
         </p>
       </div>
 

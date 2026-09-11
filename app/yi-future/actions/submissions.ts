@@ -8,6 +8,8 @@ import type { ActionResult } from "./editions";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 import { readSession } from "@/app/yi-future/actions/auth";
 import { safeError } from "@/lib/yi-future/db-error";
+import { checkReviewFeedback } from "@/lib/yi-future/submission-review";
+import { insertRejectionNotice } from "@/lib/yi-future/submission-rejection-notice";
 
 type DeliverablePhase = Database["future"]["Enums"]["deliverable_phase"];
 type SubmissionStatus = Database["future"]["Enums"]["submission_status"];
@@ -321,23 +323,49 @@ export async function reviewSubmission(
   await requireChapterAdmin(chapterId);
   if (!sub) return { ok: false, error: "Submission not found." };
 
+  // Sending work back needs a reason the team can act on. Rejections used to go
+  // out with no feedback at all and no word to the team.
+  const checked = checkReviewFeedback(decision, feedback);
+  if (!checked.ok) return { ok: false, error: checked.error };
+
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { error } = await svc
+  const { data: updated, error } = await svc
     .schema("future")
     .from("submissions")
     .update({
       status: decision,
-      feedback: feedback ?? null,
+      feedback: checked.feedback,
       reviewed_at: new Date().toISOString(),
       reviewed_by: user?.id ?? null,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", submissionId);
+    .eq("id", submissionId)
+    .select("phase")
+    .maybeSingle();
   if (error) return { ok: false, error: safeError(error.message, "submissions") };
+  if (!updated) return { ok: false, error: "Submission not found." };
+
+  // Tell the team in the app. The rejection above already stands: a notice that
+  // fails to save is logged, and never undoes or hides the decision.
+  if (decision === "rejected" && checked.feedback) {
+    const notice = await insertRejectionNotice(svc, {
+      teamId: sub.team_id,
+      phase: (updated as { phase: string }).phase,
+      reason: checked.feedback,
+      authorUserId: user?.id ?? null,
+    });
+    if (notice.ok) {
+      revalidatePath("/yi-future/me/announcements");
+    } else {
+      console.warn(
+        `[yi-future] submission ${submissionId} was rejected, but the in-app notice to its team was not saved: ${notice.error}`
+      );
+    }
+  }
 
   revalidatePath("/yi-future/chapter/submissions");
   revalidatePath("/yi-future/me/submissions");

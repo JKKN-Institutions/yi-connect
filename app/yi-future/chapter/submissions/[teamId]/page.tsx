@@ -5,6 +5,7 @@ import { SUBMISSION_BUCKET } from "@/lib/yi-future/submission-files";
 import { getChapterContext } from "@/lib/yi-future/chapter-context";
 import { reviewSubmission } from "@/app/yi-future/actions/submissions";
 import { PHASES, PHASE_LABELS, type Phase } from "@/lib/yi-future/constants";
+import { MIN_REJECTION_REASON_LENGTH } from "@/lib/yi-future/submission-review";
 
 type Team = {
   id: string;
@@ -161,10 +162,21 @@ function ArtifactRow({
   );
 }
 
+/**
+ * Where to send a chair whose approve or reject was refused. The wrappers used
+ * to throw the result away, so a refusal looked exactly like a button that did
+ * nothing. Capped so the message cannot bloat the URL.
+ */
+function reviewRefusal(teamPath: string, error: string): string {
+  return `${teamPath}?error=${encodeURIComponent(error.slice(0, 300))}`;
+}
+
 export default async function AdminSubmissionDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ teamId: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   const ctx = await getChapterContext();
   if (!ctx) redirect("/yi-future/chapter");
@@ -173,6 +185,10 @@ export default async function AdminSubmissionDetailPage({
   const team = await getTeam(teamId);
   if (!team) notFound();
   if (team.chapter_id !== ctx.chapterId) redirect("/yi-future/chapter/submissions");
+
+  // A refused approve or reject comes back here carrying its reason.
+  const pageError = ((await searchParams).error ?? "").slice(0, 300) || null;
+  const teamPath = `/yi-future/chapter/submissions/${encodeURIComponent(team.id)}`;
 
   const subs = await getSubmissions(teamId);
   const signedFiles = await getSignedFiles(subs.map((x) => x.id));
@@ -185,18 +201,48 @@ export default async function AdminSubmissionDetailPage({
     "use server";
     const id = String(formData.get("id") ?? "");
     const fb = String(formData.get("feedback") ?? "").trim() || null;
-    await reviewSubmission(id, "approved", fb);
+    const res = await reviewSubmission(id, "approved", fb);
+    if (!res.ok) {
+      redirect(
+        reviewRefusal(
+          teamPath,
+          "error" in res && res.error ? res.error : "That did not go through — try again."
+        )
+      );
+    }
+    // Always land on the clean URL, so an earlier refusal does not linger.
+    redirect(teamPath);
   }
 
   async function reject(formData: FormData) {
     "use server";
     const id = String(formData.get("id") ?? "");
     const fb = String(formData.get("feedback") ?? "").trim() || null;
-    await reviewSubmission(id, "rejected", fb);
+    const res = await reviewSubmission(id, "rejected", fb);
+    if (!res.ok) {
+      redirect(
+        reviewRefusal(
+          teamPath,
+          "error" in res && res.error ? res.error : "That did not go through — try again."
+        )
+      );
+    }
+    // Always land on the clean URL, so an earlier refusal does not linger.
+    redirect(teamPath);
   }
 
   return (
     <div className="space-y-6">
+      {/* A refused approve or reject used to leave this page looking unchanged,
+          which read as a button that does nothing. */}
+      {pageError && (
+        <div
+          role="alert"
+          className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
+          {pageError}
+        </div>
+      )}
       <div>
         <Link
           href="/yi-future/chapter/submissions"
@@ -328,13 +374,23 @@ export default async function AdminSubmissionDetailPage({
                 {s.status === "submitted" && (
                   <form className="space-y-2 pt-3 border-t border-navy/10">
                     <input type="hidden" name="id" value={s.id} />
-                    <label className="block text-xs font-semibold uppercase tracking-widest text-navy/70 mb-1">
-                      Feedback (optional for approve, recommended for reject)
+                    <label
+                      htmlFor={`feedback_${s.id}`}
+                      className="block text-xs font-semibold uppercase tracking-widest text-navy/70 mb-1"
+                    >
+                      Reason — required to reject
                     </label>
+                    <p className="text-xs text-navy/50 mb-1">
+                      To send this back, write at least{" "}
+                      {MIN_REJECTION_REASON_LENGTH} characters telling the team
+                      what to fix. They see it in the app. A note with an
+                      approval is optional.
+                    </p>
                     <textarea
+                      id={`feedback_${s.id}`}
                       name="feedback"
-                      rows={2}
-                      placeholder="Notes for the team…"
+                      rows={3}
+                      placeholder="What should the team fix before resubmitting?"
                       className="w-full px-3 py-2 border border-navy/20 rounded-md text-sm"
                     />
                     <div className="flex justify-end gap-2">

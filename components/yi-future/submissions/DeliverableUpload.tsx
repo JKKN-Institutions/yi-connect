@@ -276,6 +276,11 @@ export function DeliverableUpload({
       )}
 
       {hint && <p className="text-xs text-navy/50">{hint}</p>}
+      {canUpload && replaceWhat && (
+        <p className="text-xs text-navy/50">
+          A new upload replaces {replaceWhat} above.
+        </p>
+      )}
       {canUpload && files.length === 0 && (
         <p className="text-xs text-navy/50">
           Uploading the file means the jury can open it straight away, with no

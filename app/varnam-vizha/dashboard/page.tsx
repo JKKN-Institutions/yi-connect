@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { getVarnamAccess } from "@/lib/varnam/auth/access";
 import { getDashboardData } from "@/lib/varnam/data/dashboard";
+import { getWeekAhead, type WeekAhead } from "@/lib/varnam/data/tasks";
 import { Forbidden403 } from "@/app/varnam-vizha/_components/Forbidden403";
 import { logoutCommittee } from "@/app/varnam-vizha/actions/auth";
 import { CalendarDays, Users, HandCoins, Wallet } from "lucide-react";
@@ -13,6 +15,105 @@ const inr = (n: number) =>
     currency: "INR",
     maximumFractionDigits: 0,
   }).format(n);
+
+const fmtShortDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    timeZone: "Asia/Kolkata",
+  });
+
+/** Compact "This Week" strip — the four numbers a chair checks first. */
+function ThisWeekStrip({ week }: { week: WeekAhead }) {
+  const hasOverdue = week.overdueCount > 0;
+  const tileCls =
+    "flex-1 min-w-[10rem] rounded-2xl border p-4 shadow-sm transition";
+
+  return (
+    <section aria-label="This week" className="mb-6">
+      <div className="flex flex-wrap gap-3">
+        {/* Overdue tasks */}
+        <Link
+          href="/varnam-vizha/dashboard/tasks"
+          className={`${tileCls} ${
+            hasOverdue
+              ? "border-[#D6336C]/30 bg-[#D6336C]/5 hover:bg-[#D6336C]/10"
+              : "border-[#3B0A45]/10 bg-white hover:bg-[#FFF9F0]"
+          }`}
+        >
+          <p
+            className={`font-[family-name:var(--font-vv-display)] text-2xl font-bold ${
+              hasOverdue ? "text-[#b02a59]" : "text-[#3B0A45]"
+            }`}
+          >
+            {hasOverdue ? "⚠ " : ""}
+            {week.overdueCount}
+          </p>
+          <p
+            className={`text-xs ${
+              hasOverdue ? "font-medium text-[#b02a59]" : "text-[#2B0A33]/60"
+            }`}
+          >
+            {hasOverdue ? "Overdue — needs chasing" : "Nothing overdue"}
+          </p>
+        </Link>
+
+        {/* Due in 7 days */}
+        <Link
+          href="/varnam-vizha/dashboard/tasks"
+          className={`${tileCls} border-[#3B0A45]/10 bg-white hover:bg-[#FFF9F0]`}
+        >
+          <p className="font-[family-name:var(--font-vv-display)] text-2xl font-bold text-[#3B0A45]">
+            {week.dueThisWeekCount}
+          </p>
+          <p className="text-xs text-[#2B0A33]/60">Tasks due in 7 days</p>
+        </Link>
+
+        {/* Next milestone */}
+        <div className={`${tileCls} border-[#3B0A45]/10 bg-white`}>
+          {week.nextMilestone ? (
+            <>
+              <p className="font-[family-name:var(--font-vv-display)] text-2xl font-bold text-[#3B0A45]">
+                {week.nextMilestone.daysToGo === 0
+                  ? "Today"
+                  : `${week.nextMilestone.daysToGo}d`}
+              </p>
+              <p className="truncate text-xs text-[#2B0A33]/60">
+                {fmtShortDate(week.nextMilestone.due_date)} ·{" "}
+                {week.nextMilestone.title}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="font-[family-name:var(--font-vv-display)] text-2xl font-bold text-[#3B0A45]">
+                —
+              </p>
+              <p className="text-xs text-[#2B0A33]/60">No upcoming milestone</p>
+            </>
+          )}
+        </div>
+
+        {/* Days to festival */}
+        <div className={`${tileCls} border-[#F4A300]/30 bg-[#F4A300]/8`}>
+          <p className="font-[family-name:var(--font-vv-display)] text-2xl font-bold text-[#3B0A45]">
+            {week.festivalStartsInDays === null
+              ? "—"
+              : week.festivalStartsInDays > 0
+                ? `${week.festivalStartsInDays} days`
+                : "Live!"}
+          </p>
+          <p className="text-xs text-[#2B0A33]/60">
+            {week.festivalStartsInDays !== null && week.festivalStartsInDays <= 0
+              ? "The festival is underway"
+              : week.festivalStartDate
+                ? `Until the festival · ${fmtShortDate(week.festivalStartDate)}`
+                : "Festival dates not set yet"}
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function StatCard({
   icon,
@@ -58,7 +159,7 @@ export default async function VarnamDashboard() {
   const access = await getVarnamAccess();
   if (!access.canView) return <Forbidden403 reason={access.reason} />;
 
-  const d = await getDashboardData();
+  const [d, week] = await Promise.all([getDashboardData(), getWeekAhead()]);
   const budgetPct =
     d.budget && d.budget.total > 0
       ? Math.round((d.budget.spent / d.budget.total) * 100)
@@ -86,6 +187,9 @@ export default async function VarnamDashboard() {
           </button>
         </form>
       </div>
+
+      {/* This Week — the four numbers a chair checks first */}
+      <ThisWeekStrip week={week} />
 
       {/* Stat cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

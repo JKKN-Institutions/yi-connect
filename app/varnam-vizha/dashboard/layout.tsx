@@ -11,9 +11,14 @@ import { Forbidden403 } from "@/app/varnam-vizha/_components/Forbidden403";
 const TABS = [
   { href: "/varnam-vizha/dashboard", label: "Overview" },
   { href: "/varnam-vizha/dashboard/events", label: "Events" },
+  { href: "/varnam-vizha/dashboard/tasks", label: "Tasks" },
   { href: "/varnam-vizha/dashboard/registrations", label: "Registrations" },
+  { href: "/varnam-vizha/dashboard/paperwork", label: "Paperwork" },
   { href: "/varnam-vizha/dashboard/sponsors", label: "Sponsors" },
   { href: "/varnam-vizha/dashboard/budget", label: "Budget" },
+  { href: "/varnam-vizha/dashboard/reports", label: "Reports" },
+  { href: "/varnam-vizha/dashboard/assets", label: "Assets" },
+  { href: "/varnam-vizha/dashboard/digest", label: "Digest" },
   { href: "/varnam-vizha/dashboard/team", label: "Team" },
   { href: "/varnam-vizha/playbook", label: "Playbook" },
 ];

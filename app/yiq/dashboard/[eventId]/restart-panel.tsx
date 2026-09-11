@@ -27,7 +27,7 @@ import {
   listRestartCandidates,
   type RestartCandidate,
 } from "@/app/yiq/actions/restart";
-import { REASON_MIN, validateReason } from "@/lib/yiq/restart";
+import { REASON_MIN, validateReason, formatDuration } from "@/lib/yiq/restart";
 
 const INK = "#0a1633";
 const PAPER = "#f7f4ed";
@@ -160,6 +160,25 @@ export function RestartPanel({ eventId }: { eventId: string }) {
                   <p className="yiq-eyebrow mt-2" style={{ color: DIM }}>
                     {statusLabel(c.status)} · scored {c.score}
                   </p>
+
+                  {/*
+                    Left the page while the paper was open. EVIDENCE, NOT A
+                    VERDICT — a phone call, a notification and a dying
+                    battery all blur a page, so this is something to read
+                    next to a surprising score, never grounds on its own.
+                    Shown only when it happened, so it does not become
+                    wallpaper the organiser stops seeing.
+                  */}
+                  {c.focusLostCount > 0 ? (
+                    <p className="mt-1 text-[0.8125rem]" style={{ color: "#e8a33d" }}>
+                      Left the page {c.focusLostCount}{" "}
+                      time{c.focusLostCount === 1 ? "" : "s"}
+                      {c.focusLostSeconds > 0
+                        ? `, about ${formatDuration(c.focusLostSeconds * 1000)} in total`
+                        : ""}
+                      . Worth a look, but a phone call does this too.
+                    </p>
+                  ) : null}
 
                   {/* Already granted — the permanent record, shown in full. */}
                   {c.grant ? (

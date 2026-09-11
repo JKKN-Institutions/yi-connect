@@ -191,7 +191,7 @@ export default async function MySubmissionsPage({
   const filesBySlot = await getSubmissionFiles(submissions.map((s) => s.id));
 
   /** Files already attached to one deliverable slot. */
-  function slotFiles(sub: Submission | undefined, slot: string): SubmissionFileRow[] {
+  function slotFiles(sub: Submission | undefined, slot: string): SubmissionFileView[] {
     return sub ? filesBySlot.get(`${sub.id}:${slot}`) ?? [] : [];
   }
 

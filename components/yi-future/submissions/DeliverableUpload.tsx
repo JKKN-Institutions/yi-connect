@@ -212,16 +212,29 @@ export function DeliverableUpload({
                 <span className="font-semibold">{f.file_name}</span>
                 <span className="text-navy/50"> · {formatBytes(f.size_bytes)}</span>
               </span>
-              {!readOnly && (
-                <button
-                  type="button"
-                  onClick={() => onRemove(f.id)}
-                  disabled={pending}
-                  className="flex-shrink-0 text-xs font-semibold text-red-600 hover:underline disabled:opacity-40 min-h-[44px] px-2"
-                >
-                  Remove
-                </button>
-              )}
+              <span className="flex-shrink-0 flex items-center">
+                {/* Lets the team open exactly the version the jury will read. */}
+                {f.signedUrl && (
+                  <a
+                    href={f.signedUrl}
+                    target="_blank"
+                    rel="noopener"
+                    className="text-xs font-semibold text-navy/70 hover:underline min-h-[44px] px-2 inline-flex items-center"
+                  >
+                    Open
+                  </a>
+                )}
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => onRemove(f.id)}
+                    disabled={pending}
+                    className="flex-shrink-0 text-xs font-semibold text-red-600 hover:underline disabled:opacity-40 min-h-[44px] px-2"
+                  >
+                    Remove
+                  </button>
+                )}
+              </span>
             </li>
           ))}
         </ul>

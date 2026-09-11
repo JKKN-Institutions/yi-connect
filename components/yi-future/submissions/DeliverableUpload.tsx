@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * One deliverable slot: paste a share link, upload a file, or both.
+ * One deliverable slot: paste a share link or upload a file. A new upload
+ * replaces the link and any earlier file (see finishSubmissionUpload).
  *
  * WHY BOTH
  * Until now this accepted a LINK only, and every one of the 734 URLs on file is

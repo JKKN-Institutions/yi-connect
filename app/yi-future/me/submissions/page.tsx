@@ -7,7 +7,11 @@ import {
   submitSubmission,
 } from "@/app/yi-future/actions/submissions";
 import { DeliverableUpload } from "@/components/yi-future/submissions/DeliverableUpload";
-import type { SubmissionFileRow } from "@/lib/yi-future/submission-files";
+import {
+  SUBMISSION_BUCKET,
+  type SubmissionFileRow,
+  type SubmissionFileView,
+} from "@/lib/yi-future/submission-files";
 import { SopDownloadCard } from "@/components/yi-future/SopDownloadCard";
 import type { Database } from "@/types/yi-future/database";
 

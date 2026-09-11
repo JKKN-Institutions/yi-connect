@@ -73,6 +73,10 @@ export type SubmissionFileRow = {
   uploaded_at: string;
 };
 
+/** A file as the team's own page shows it: the row plus a short-lived link to
+ *  open it, so the team can check the exact version the jury will read. */
+export type SubmissionFileView = SubmissionFileRow & { signedUrl: string | null };
+
 /** Human-readable size, for a student deciding whether their file is too big. */
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

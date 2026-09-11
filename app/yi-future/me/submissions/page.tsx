@@ -21,7 +21,6 @@ type Team = {
   id: string;
   team_name: string;
   captain_id: string | null;
-  leader_delegate_id: string | null;
   problem_statement_id: string | null;
 };
 
@@ -48,17 +47,20 @@ type Submission = {
   feedback: string | null;
 };
 
-const TEAM_FIELDS = "id, team_name, captain_id, leader_delegate_id, problem_statement_id";
+const TEAM_FIELDS = "id, team_name, captain_id, problem_statement_id";
 
 /**
- * The delegate's team in the ACTIVE edition. Any member may file deliverables:
- * the save, submit and upload actions all accept the captain, the leader or a
- * team_members row. This page used to look up only a team the delegate
- * captained and showed every other member "Captain only", so a team whose
- * captain was away at a deadline could not submit at all.
+ * The delegate's team in the ACTIVE edition. Any member may file deliverables.
+ * This page used to look up only a team the delegate captained and showed
+ * every other member "Captain only", so a team whose captain was away at a
+ * deadline could not submit at all.
  *
- * Fails CLOSED. A failed query, or a delegate with no member row who captains or
- * leads more than one team, gets an explicit state — never an arbitrary pick.
+ * Being on a team means holding its team_members row. The captain and leader
+ * columns are not proof on their own: they can point at someone who has moved
+ * or been taken off the team.
+ *
+ * Fails CLOSED. A failed query, or a delegate who could belong to more than one
+ * team, gets an explicit state — never an arbitrary pick.
  */
 async function getMyTeam(delegateId: string): Promise<TeamLookup> {
   const svc = await createServiceClient();
@@ -72,7 +74,7 @@ async function getMyTeam(delegateId: string): Promise<TeamLookup> {
   if (editionIds.length === 0) return { kind: "none" };
 
   // Plain queries per route onto a team, each held to the active edition.
-  const [memberRows, asCaptain, asLeader] = await Promise.all([
+  const [memberRows, asCaptain] = await Promise.all([
     svc.schema("future").from("team_members").select("team_id").eq("delegate_id", delegateId),
     svc
       .schema("future")
@@ -80,14 +82,8 @@ async function getMyTeam(delegateId: string): Promise<TeamLookup> {
       .select(TEAM_FIELDS)
       .in("edition_id", editionIds)
       .eq("captain_id", delegateId),
-    svc
-      .schema("future")
-      .from("teams")
-      .select(TEAM_FIELDS)
-      .in("edition_id", editionIds)
-      .eq("leader_delegate_id", delegateId),
   ]);
-  if (memberRows.error || asCaptain.error || asLeader.error) return { kind: "failed" };
+  if (memberRows.error || asCaptain.error) return { kind: "failed" };
 
   const memberTeamIds = ((memberRows.data as { team_id: string }[] | null) ?? []).map(
     (r) => r.team_id
@@ -114,17 +110,34 @@ async function getMyTeam(delegateId: string): Promise<TeamLookup> {
   if (asMember.length > 1) return { kind: "several", count: asMember.length };
   if (asMember.length === 1) return { kind: "team", team: asMember[0] };
 
-  // No member row: a team they captain or lead, if there is exactly one.
-  const runs = new Map<string, Team>();
-  for (const t of [
-    ...((asCaptain.data as unknown as Team[] | null) ?? []),
-    ...((asLeader.data as unknown as Team[] | null) ?? []),
-  ]) {
-    runs.set(t.id, t);
-  }
-  if (runs.size === 0) return { kind: "none" };
-  if (runs.size === 1) return { kind: "team", team: [...runs.values()][0] };
-  return { kind: "several", count: runs.size };
+  // No member row. The one team that can still be theirs is a team they captain
+  // that nobody has joined yet (a new team, or a placement team before its
+  // leader accepts). A captain of a team that HAS members is not on it.
+  //
+  // The leader column is never enough on its own: the admin "remove member"
+  // action clears captain_id but leaves leader_delegate_id pointing at the
+  // person it removed. On 2026-09-11 seven delegates were a team's leader with
+  // no member row anywhere: two on teams that still had members, five on teams
+  // with no members and no captain. Trusting the column would have let them
+  // open those teams' deliverables and change them.
+  const captained = (asCaptain.data as unknown as Team[] | null) ?? [];
+  if (captained.length === 0) return { kind: "none" };
+  const { data: occupied, error: occupiedError } = await svc
+    .schema("future")
+    .from("team_members")
+    .select("team_id")
+    .in(
+      "team_id",
+      captained.map((t) => t.id)
+    );
+  if (occupiedError) return { kind: "failed" };
+  const joined = new Set(
+    ((occupied as { team_id: string }[] | null) ?? []).map((r) => r.team_id)
+  );
+  const unjoined = captained.filter((t) => !joined.has(t.id));
+  if (unjoined.length === 0) return { kind: "none" };
+  if (unjoined.length === 1) return { kind: "team", team: unjoined[0] };
+  return { kind: "several", count: unjoined.length };
 }
 
 async function getSubmissions(teamId: string): Promise<Submission[]> {

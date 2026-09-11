@@ -18,6 +18,10 @@ import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yiq/supabase/server";
 import { applyOptionOrder } from "@/lib/yiq/option-order";
 import {
+  canRevealNow,
+  type CardFeedback,
+} from "@/lib/yiq/practice-feedback";
+import {
   checkStudentSessionLive,
   STALE_SESSION_MESSAGE,
 } from "@/lib/yiq/auth/stale-session";
@@ -498,5 +502,93 @@ export async function finaliseAttempt(
     wrongCount: graded.wrongCount,
     unansweredCount: graded.unansweredCount,
     totalQuestions: order.length,
+  };
+}
+
+/**
+ * Save a PRACTICE answer and say immediately whether it was right.
+ *
+ * THE ONE PLACE A CORRECT ANSWER LEAVES THE DATABASE MID-PAPER. On a
+ * practice deck that is the entire point — you tap, the card turns, you find
+ * out and read why. On the scored round the same behaviour would hand every
+ * student the answer key one tap at a time.
+ *
+ * So this refuses on ANYTHING it does not positively recognise
+ * (lib/yiq/practice-feedback.ts: `is_mock` must be exactly true, the attempt
+ * must be in progress, and it must belong to the student asking, checked
+ * against the server session). A refusal returns `feedback: null` rather
+ * than an error — the answer is still SAVED, the card simply does not turn.
+ *
+ * WHY THE KEY IS NOT SENT WITH THE PAPER INSTEAD. Shipping the answers to
+ * the client for practice papers would put the key in the page source, and
+ * one bad conditional later that same payload is on a scored paper. A round
+ * trip per answer costs a few hundred milliseconds on a practice paper and
+ * keeps the key server-side, permanently.
+ */
+export async function answerPracticeCard(
+  attemptId: string,
+  questionId: string,
+  option: OptionKey
+): Promise<{
+  success: boolean;
+  error?: string;
+  feedback: CardFeedback | null;
+}> {
+  const gate = await requireStudentSession();
+  if (!gate.ok) return { success: false, error: gate.error, feedback: null };
+
+  if (!OPTION_KEYS.includes(option)) {
+    return { success: false, error: "Invalid option.", feedback: null };
+  }
+
+  // Save through the ordinary path, so every deadline, guard and audit that
+  // applies to an answer applies to this one too. No shortcuts.
+  const saved = await saveAnswer(attemptId, questionId, option);
+  if (!saved.success) {
+    return { success: false, error: saved.error, feedback: null };
+  }
+
+  const svc = await createServiceClient();
+
+  const { data: attempt } = await svc
+    .from("attempts")
+    .select("id, student_id, is_mock, status")
+    .eq("id", attemptId)
+    .maybeSingle();
+
+  if (!attempt) return { success: true, feedback: null };
+
+  const verdict = canRevealNow(
+    {
+      id: attempt.id,
+      studentId: attempt.student_id,
+      isMock: attempt.is_mock,
+      status: attempt.status,
+    },
+    gate.session.id
+  );
+
+  if (!verdict.ok) {
+    // The answer IS saved. Only the reveal is refused, and silently — a
+    // student on a scored paper should see nothing unusual at all.
+    return { success: true, feedback: null };
+  }
+
+  const { data: q } = await svc
+    .from("questions")
+    .select("id, correct_option, answer_explanation")
+    .eq("id", questionId)
+    .maybeSingle();
+
+  if (!q?.correct_option) return { success: true, feedback: null };
+
+  const key = q.correct_option.trim().toLowerCase();
+  return {
+    success: true,
+    feedback: {
+      correct: key === option,
+      correctOption: key,
+      explanation: q.answer_explanation,
+    },
   };
 }

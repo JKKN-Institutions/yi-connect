@@ -48,6 +48,21 @@ export const ACCEPTED_UPLOAD_TYPES: Record<string, string> = {
 
 export const ACCEPT_ATTRIBUTE = ".pdf,.pptx,.docx,.doc,.ppt";
 
+/**
+ * The type to store a file as. Some browsers hand over an empty File.type for
+ * Office documents, and storage would then record application/octet-stream,
+ * which the attach step rightly refuses. Falls back to the file extension, and
+ * returns "" when the file is not an accepted kind at all.
+ */
+export function mimeForFile(fileName: string, browserType: string): string {
+  if (browserType && browserType in ACCEPTED_UPLOAD_TYPES) return browserType;
+  const lower = fileName.toLowerCase();
+  for (const [mime, ext] of Object.entries(ACCEPTED_UPLOAD_TYPES)) {
+    if (lower.endsWith(ext)) return mime;
+  }
+  return "";
+}
+
 export type SubmissionFileRow = {
   id: string;
   submission_id: string;

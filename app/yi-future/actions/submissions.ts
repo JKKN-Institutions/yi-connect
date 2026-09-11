@@ -180,6 +180,36 @@ export async function saveSubmissionDraft(input: {
   return { ok: true, message: "Draft saved." };
 }
 
+/**
+ * Deliverable slots this team has uploaded a file into for a phase. An uploaded
+ * file counts as the deliverable just as a pasted link does. Two plain queries
+ * rather than a filter on an embedded table, which trims the embed and not the
+ * parent row.
+ */
+async function uploadedSlots(
+  teamId: string,
+  phase: DeliverablePhase
+): Promise<Set<string>> {
+  const svc = await createServiceClient();
+  const { data: sub } = await svc
+    .schema("future")
+    .from("submissions")
+    .select("id")
+    .eq("team_id", teamId)
+    .eq("phase", phase)
+    .maybeSingle();
+  const id = (sub as { id: string } | null)?.id;
+  if (!id) return new Set();
+  // future.submission_files is not in the generated types → loose client.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await (svc as any)
+    .schema("future")
+    .from("submission_files")
+    .select("slot")
+    .eq("submission_id", id);
+  return new Set(((data as { slot: string }[] | null) ?? []).map((r) => r.slot));
+}
+
 // ─── SUBMIT (captain action) ────────────────────────────────────────
 export async function submitSubmission(input: {
   teamId: string;
@@ -195,12 +225,19 @@ export async function submitSubmission(input: {
   const { values, errors } = collectUrls(input.phase, input.formData);
   if (errors.length) return { ok: false, error: errors.join(" · ") };
 
-  // Enforce at least one URL present at submit-time
-  const hasAny = Object.values(values).some((v) => !!v);
+  // A deliverable is a link OR an uploaded file. Only links used to be checked,
+  // so a team that uploaded its document and left the link box empty was
+  // refused — none of the 157 files attached to a submitted phase came without
+  // a link pasted beside it.
+  const uploaded = await uploadedSlots(input.teamId, input.phase);
+  const provided = (field: string) =>
+    !!values[field as UrlField] || uploaded.has(field.replace(/_url$/, ""));
+
+  const hasAny = Object.keys(values).some(provided);
   if (!hasAny) {
     return {
       ok: false,
-      error: "Provide at least one deliverable URL before submitting.",
+      error: "Nothing was submitted. Add a link or upload a file first.",
     };
   }
 
@@ -211,7 +248,7 @@ export async function submitSubmission(input: {
       final_policy_document_url: "the final report",
       final_presentation_deck_url: "the presentation deck",
     };
-    const missing = PHASE_C_REQUIRED_FIELDS.filter((f) => !values[f]);
+    const missing = PHASE_C_REQUIRED_FIELDS.filter((f) => !provided(f));
     if (missing.length > 0) {
       return {
         ok: false,

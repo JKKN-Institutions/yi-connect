@@ -14,11 +14,14 @@
 //
 // FOUR PROPERTIES
 //
-// 1. THE UPLOAD GOES THROUGH THIS ACTION, not the browser. Students hold an
-//    access-code session, not a Supabase Auth session, so a client-side upload
-//    would need an anonymous-writable bucket — meaning anyone on the internet
-//    could write into it. The file crosses the server action instead, where
-//    team membership has already been proved.
+// 1. PERMISSION IS CHECKED HERE; THE BYTES GO STRAIGHT TO STORAGE. Students
+//    hold an access-code session, not a Supabase Auth session, so the bucket
+//    cannot simply be opened to the browser — anyone on the internet could
+//    write into it. Instead startSubmissionUpload proves team membership and
+//    issues a one-time upload link for ONE path it chose, and
+//    finishSubmissionUpload records the file only after storage confirms it.
+//    The file never crosses a server action: Vercel refuses request bodies
+//    over ~4.5 MB before the function runs.
 //
 // 2. THE BUCKET IS PRIVATE. Reads are short-lived signed URLs minted
 //    server-side, so a leaked link cannot be replayed forever — unlike a Drive
@@ -43,6 +46,7 @@ import {
   SUBMISSION_BUCKET,
   formatBytes,
   isSubmissionSlot,
+  mimeForFile,
   safeFileName,
 } from "@/lib/yi-future/submission-files";
 
@@ -125,73 +129,155 @@ async function resolveMemberAndSubmission(
   return { delegateId: session.id, teamId: sub.team_id, status: sub.status };
 }
 
-/** Attach one uploaded file to a deliverable slot. */
-export async function uploadSubmissionFile(
-  formData: FormData
-): Promise<ActionResult> {
-  const submissionId = String(formData.get("submissionId") ?? "").trim();
-  const slot = String(formData.get("slot") ?? "").trim();
-  const file = formData.get("file");
-
-  if (!submissionId) return { ok: false, error: "Nothing was uploaded. No submission was named." };
+/** Every rule an upload must meet, shared by both steps so the two checks can
+ *  never drift apart. Returns a sentence, or null when the upload is fine. */
+function uploadProblem(slot: string, size: number, type: string): string | null {
   if (!isSubmissionSlot(slot)) {
-    return { ok: false, error: "Nothing was uploaded. That is not a deliverable this phase accepts." };
+    return "Nothing was uploaded. That is not a deliverable this phase accepts.";
   }
-  if (!(file instanceof File) || file.size === 0) {
-    return { ok: false, error: "Nothing was uploaded. Choose a file first." };
+  if (!Number.isFinite(size) || size <= 0) {
+    return "Nothing was uploaded. Choose a file first.";
   }
+  if (size > MAX_UPLOAD_BYTES) {
+    return `Nothing was uploaded. That file is ${formatBytes(size)}; the limit is ${formatBytes(
+      MAX_UPLOAD_BYTES
+    )}. Compress it, or paste a share link instead.`;
+  }
+  if (!type || !(type in ACCEPTED_UPLOAD_TYPES)) {
+    return "Nothing was uploaded. Upload a PDF, Word or PowerPoint file — for anything else (video, a live Google Doc) paste a share link instead.";
+  }
+  return null;
+}
+
+const LOCKED_PHASE =
+  "Nothing was uploaded. This phase is already submitted — ask your chapter admin to reopen it if something needs changing.";
+
+type StartUploadResult =
+  | { ok: true; path: string; token: string; contentType: string }
+  | { ok: false; error: string };
+
+/**
+ * Upload, step 1 of 2: prove the caller may attach this file, then give the
+ * browser a one-time upload link for ONE storage path chosen here.
+ *
+ * WHY THE FILE NO LONGER CROSSES A SERVER ACTION
+ * Vercel refuses a request body over ~4.5 MB with 413
+ * FUNCTION_PAYLOAD_TOO_LARGE before any function code runs — measured against
+ * production on 2026-09-11: a 3 MB POST reached the app, a 6 MB POST got 413.
+ * The first version sent the whole file through a server action, so every file
+ * over that line failed with no message on a screen that promised 8 MB. Of the
+ * first 162 files uploaded, the largest was 4.04 MB, and a team whose
+ * submission had been rejected could not upload its revised document at all.
+ *
+ * Now only the file's name, size and type come here. The bytes go from the
+ * browser straight to storage, and the link works for exactly one path inside
+ * this team's own folder. The bucket stays private.
+ */
+export async function startSubmissionUpload(input: {
+  submissionId: string;
+  slot: string;
+  fileName: string;
+  size: number;
+  type: string;
+}): Promise<StartUploadResult> {
+  const submissionId = String(input.submissionId ?? "").trim();
+  const slot = String(input.slot ?? "").trim();
+  const fileName = String(input.fileName ?? "");
+  if (!submissionId) {
+    return { ok: false, error: "Nothing was uploaded. No submission was named." };
+  }
+
+  const contentType = mimeForFile(fileName, String(input.type ?? ""));
+  const problem = uploadProblem(slot, Number(input.size), contentType);
+  if (problem) return { ok: false, error: problem };
 
   const auth = await resolveMemberAndSubmission(submissionId);
   if ("error" in auth) return { ok: false, error: auth.error };
-
-  // A phase the team has already submitted is locked, matching the read-only
-  // behaviour of the rest of the form.
   if (auth.status === "submitted" || auth.status === "approved") {
-    return {
-      ok: false,
-      error:
-        "Nothing was uploaded. This phase is already submitted — ask your chapter admin to reopen it if something needs changing.",
-    };
-  }
-
-  if (file.size > MAX_UPLOAD_BYTES) {
-    return {
-      ok: false,
-      error: `Nothing was uploaded. That file is ${formatBytes(file.size)}; the limit is ${formatBytes(
-        MAX_UPLOAD_BYTES
-      )}. Compress it, or paste a share link instead.`,
-    };
-  }
-
-  const known = Object.keys(ACCEPTED_UPLOAD_TYPES);
-  if (file.type && !known.includes(file.type)) {
-    return {
-      ok: false,
-      error:
-        "Nothing was uploaded. Upload a PDF, Word or PowerPoint file — for anything else (video, a live Google Doc) paste a share link instead.",
-    };
+    return { ok: false, error: LOCKED_PHASE };
   }
 
   await ensureBucket();
   const svc = await createServiceClient();
 
-  const name = safeFileName(file.name);
   // Team-first path so everything for one team sits together in storage, which
   // is also the order the chapter-wise export walks.
-  const path = `${auth.teamId}/${submissionId}/${slot}/${Date.now()}-${name}`;
+  const path = `${auth.teamId}/${submissionId}/${slot}/${Date.now()}-${safeFileName(fileName)}`;
 
-  const { error: upErr } = await (svc as AnyClient).storage
+  const { data, error } = await (svc as AnyClient).storage
     .from(SUBMISSION_BUCKET)
-    .upload(path, file, {
-      upsert: false,
-      contentType: file.type || "application/octet-stream",
-    });
-  if (upErr) {
+    .createSignedUploadUrl(path);
+  const token = (data as { token?: string } | null)?.token;
+  if (error || !token) {
     return {
       ok: false,
-      error: `Nothing was uploaded. ${safeError(upErr.message, "submission-files.upload")}`,
+      error: `Nothing was uploaded. ${safeError(error?.message, "submission-files.signUpload")}`,
     };
   }
+  return { ok: true, path, token, contentType };
+}
+
+/**
+ * Upload, step 2 of 2: the browser reports the bytes have landed. Nothing it
+ * says about the file is trusted — the object is looked up in storage and its
+ * real size and type are checked before a row is written.
+ */
+export async function finishSubmissionUpload(input: {
+  submissionId: string;
+  slot: string;
+  path: string;
+}): Promise<ActionResult> {
+  const submissionId = String(input.submissionId ?? "").trim();
+  const slot = String(input.slot ?? "").trim();
+  const path = String(input.path ?? "").trim();
+  if (!submissionId || !path || !isSubmissionSlot(slot)) {
+    return { ok: false, error: "Nothing was attached. The upload was incomplete — try again." };
+  }
+
+  const auth = await resolveMemberAndSubmission(submissionId);
+  if ("error" in auth) return { ok: false, error: auth.error };
+  if (auth.status === "submitted" || auth.status === "approved") {
+    return { ok: false, error: LOCKED_PHASE };
+  }
+
+  // Only a path of the exact shape step 1 produces, inside this team's folder
+  // for this submission and slot, may be recorded. Fails closed.
+  const folder = `${auth.teamId}/${submissionId}/${slot}`;
+  const base = path.startsWith(`${folder}/`) ? path.slice(folder.length + 1) : "";
+  if (!base || base.includes("/")) {
+    return {
+      ok: false,
+      error: "Nothing was attached. That upload does not belong to this deliverable.",
+    };
+  }
+
+  const svc = await createServiceClient();
+  const bucket = (svc as AnyClient).storage.from(SUBMISSION_BUCKET);
+
+  const { data: listed, error: listErr } = await bucket.list(folder, {
+    limit: 100,
+    search: base,
+  });
+  const stored = (
+    (listed as { name: string; metadata?: { size?: number; mimetype?: string } | null }[] | null) ?? []
+  ).find((o) => o.name === base);
+  if (listErr || !stored) {
+    return {
+      ok: false,
+      error: "Nothing was attached. The file did not reach storage — try uploading it again.",
+    };
+  }
+
+  const size = Number(stored.metadata?.size ?? 0);
+  const contentType = String(stored.metadata?.mimetype ?? "");
+  const problem = uploadProblem(slot, size, contentType);
+  if (problem) {
+    await bucket.remove([path]).catch(() => null);
+    return { ok: false, error: problem };
+  }
+
+  // Stored as "<timestamp>-<safe name>"; students see the name they chose.
+  const name = base.replace(/^\d+-/, "");
 
   const { error: rowErr } = await (svc as AnyClient)
     .schema("future")
@@ -201,21 +287,19 @@ export async function uploadSubmissionFile(
       slot,
       file_path: path,
       file_name: name,
-      size_bytes: file.size,
-      content_type: file.type || null,
+      size_bytes: size,
+      content_type: contentType,
       uploaded_by_delegate_id: auth.delegateId,
     });
 
-  if (rowErr) {
-    // Put storage back the way it was rather than leaving an object nothing
-    // points at.
-    await (svc as AnyClient).storage
-      .from(SUBMISSION_BUCKET)
-      .remove([path])
-      .catch(() => null);
+  // 23505 means this exact path is already recorded — a repeated step 2. That
+  // object belongs to the existing row, so it must NOT be removed.
+  if (rowErr && rowErr.code !== "23505") {
+    // Otherwise put storage back rather than leave an object nothing points at.
+    await bucket.remove([path]).catch(() => null);
     return {
       ok: false,
-      error: `Nothing was uploaded. ${safeError(rowErr.message, "submission-files.insert")}`,
+      error: `Nothing was attached. ${safeError(rowErr.message, "submission-files.insert")}`,
     };
   }
 

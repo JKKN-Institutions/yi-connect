@@ -14,19 +14,24 @@
  * only way to hand over a 200MB video or a living Google Doc, and taking it
  * away would strand a team at a deadline with no fallback.
  *
- * The upload posts on its own, NOT with the surrounding form: a file crossing
+ * The upload runs on its own, NOT with the surrounding form: a file crossing
  * the phase form would have to survive every draft save, and a failed upload
- * would take the typed link down with it.
+ * would take the typed link down with it. The bytes go straight from the
+ * browser to storage through a one-time link (see startSubmissionUpload) —
+ * never through a server action, which Vercel caps at ~4.5 MB.
  */
 
 import { useRef, useState, useTransition } from "react";
 import {
-  uploadSubmissionFile,
+  startSubmissionUpload,
+  finishSubmissionUpload,
   deleteSubmissionFile,
 } from "@/app/yi-future/actions/submission-files";
+import { createClient } from "@/lib/yi-future/supabase/client";
 import {
   ACCEPT_ATTRIBUTE,
   MAX_UPLOAD_BYTES,
+  SUBMISSION_BUCKET,
   formatBytes,
   type SubmissionFileRow,
 } from "@/lib/yi-future/submission-files";
@@ -63,9 +68,8 @@ export function DeliverableUpload({
     if (!file || !submissionId || !slot) return;
     setMsg(null);
 
-    // Checked here as well as on the server: above the Server Action body
-    // limit the request is rejected by the framework before our code runs, and
-    // the student sees a blank failure instead of a sentence.
+    // Checked here as well as on the server, so a too-big file is named before
+    // anything is sent.
     if (file.size > MAX_UPLOAD_BYTES) {
       setMsg({
         ok: false,
@@ -77,19 +81,57 @@ export function DeliverableUpload({
       return;
     }
 
-    const fd = new FormData();
-    fd.set("submissionId", submissionId);
-    fd.set("slot", slot);
-    fd.set("file", file);
-
     startTransition(async () => {
-      const res = await uploadSubmissionFile(fd);
-      setMsg(
-        res.ok
-          ? { ok: true, text: res.message ?? "Attached." }
-          : { ok: false, text: res.error }
-      );
-      if (inputRef.current) inputRef.current.value = "";
+      try {
+        // 1. Permission and a one-time upload link — the file is not sent yet.
+        const start = await startSubmissionUpload({
+          submissionId,
+          slot,
+          fileName: file.name,
+          size: file.size,
+          type: file.type,
+        });
+        if (!start.ok) {
+          setMsg({ ok: false, text: start.error });
+          return;
+        }
+
+        // 2. The bytes go straight to storage. Sending them through a server
+        //    action hit Vercel's ~4.5 MB request limit and failed silently.
+        const { error: upErr } = await createClient()
+          .storage.from(SUBMISSION_BUCKET)
+          .uploadToSignedUrl(start.path, start.token, file, {
+            contentType: start.contentType,
+          });
+        if (upErr) {
+          setMsg({
+            ok: false,
+            text: "The file could not be uploaded. Check your connection and try again.",
+          });
+          return;
+        }
+
+        // 3. Record it. The server checks the stored file, not what we claimed.
+        const done = await finishSubmissionUpload({
+          submissionId,
+          slot,
+          path: start.path,
+        });
+        setMsg(
+          done.ok
+            ? { ok: true, text: done.message ?? "Attached." }
+            : { ok: false, text: done.error }
+        );
+      } catch {
+        // A dropped connection or a deploy mid-upload rejects the call instead
+        // of returning a result — it must still produce a sentence.
+        setMsg({
+          ok: false,
+          text: "The upload did not finish. Check your connection and try again.",
+        });
+      } finally {
+        if (inputRef.current) inputRef.current.value = "";
+      }
     });
   }
 
@@ -98,12 +140,19 @@ export function DeliverableUpload({
     const fd = new FormData();
     fd.set("fileId", fileId);
     startTransition(async () => {
-      const res = await deleteSubmissionFile(fd);
-      setMsg(
-        res.ok
-          ? { ok: true, text: res.message ?? "Removed." }
-          : { ok: false, text: res.error }
-      );
+      try {
+        const res = await deleteSubmissionFile(fd);
+        setMsg(
+          res.ok
+            ? { ok: true, text: res.message ?? "Removed." }
+            : { ok: false, text: res.error }
+        );
+      } catch {
+        setMsg({
+          ok: false,
+          text: "That did not go through. Check your connection and try again.",
+        });
+      }
     });
   }
 

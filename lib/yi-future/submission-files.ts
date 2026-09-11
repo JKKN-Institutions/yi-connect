@@ -25,10 +25,9 @@ export function isSubmissionSlot(value: string): value is SubmissionSlot {
 }
 
 /**
- * Upload ceiling. Server Actions are configured at 10mb in next.config.ts and
- * the whole file crosses that boundary, so this MUST stay under it — a larger
- * file is rejected by the framework before any of our code runs, which shows
- * the student a blank failure instead of a sentence.
+ * Upload ceiling. The file goes from the browser straight to storage through a
+ * one-time link, so this is our own limit rather than a platform one — checked
+ * in the browser before sending, and again on the stored object.
  */
 export const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 

@@ -66,8 +66,8 @@ async function getSubmissions(teamId: string): Promise<Submission[]> {
 /** Files uploaded against these submissions, grouped by (submission, slot). */
 async function getSubmissionFiles(
   submissionIds: string[]
-): Promise<Map<string, SubmissionFileRow[]>> {
-  const grouped = new Map<string, SubmissionFileRow[]>();
+): Promise<Map<string, SubmissionFileView[]>> {
+  const grouped = new Map<string, SubmissionFileView[]>();
   if (submissionIds.length === 0) return grouped;
   const svc = await createServiceClient();
   // future.submission_files is not in the generated types (as with every table
@@ -79,10 +79,25 @@ async function getSubmissionFiles(
     .select("id, submission_id, slot, file_path, file_name, size_bytes, content_type, uploaded_at")
     .in("submission_id", submissionIds)
     .order("uploaded_at", { ascending: true });
-  for (const row of ((data as SubmissionFileRow[] | null) ?? [])) {
+  const rows = (data as SubmissionFileRow[] | null) ?? [];
+
+  // A short-lived link per file, so the team can open what they uploaded and
+  // check it is the version the jury will read. The bucket stays private.
+  const signed = new Map<string, string>();
+  if (rows.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: urls } = await (svc as any).storage
+      .from(SUBMISSION_BUCKET)
+      .createSignedUrls(rows.map((r) => r.file_path), 60 * 60);
+    for (const u of ((urls as { path: string | null; signedUrl: string | null }[] | null) ?? [])) {
+      if (u.path && u.signedUrl) signed.set(u.path, u.signedUrl);
+    }
+  }
+
+  for (const row of rows) {
     const key = `${row.submission_id}:${row.slot}`;
     if (!grouped.has(key)) grouped.set(key, []);
-    grouped.get(key)!.push(row);
+    grouped.get(key)!.push({ ...row, signedUrl: signed.get(row.file_path) ?? null });
   }
   return grouped;
 }

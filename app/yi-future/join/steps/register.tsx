@@ -290,9 +290,16 @@ export function RegisterStep({
       lookupRef.current = true;
       const email = form.email.trim();
       const phone = form.mobile;
-      lookupReturningDelegate(email, phone).then((p) => {
+      lookupReturningDelegate(email, phone).then((res) => {
         setLookupDone(true);
-        if (p) setReturningProfile(p);
+        if (res.ok) {
+          if (res.profile) setReturningProfile(res.profile);
+        } else {
+          // The lookup was refused (rate limit), not simply empty. Say so —
+          // silently showing no Welcome-back banner would leave a returning
+          // student believing we have no record of them.
+          setError(res.error);
+        }
       }).catch(() => setLookupDone(true));
     }
     if (section < 4) setSection((section + 1) as 1 | 2 | 3 | 4);

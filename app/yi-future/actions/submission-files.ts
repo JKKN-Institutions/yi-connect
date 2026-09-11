@@ -304,9 +304,67 @@ export async function finishSubmissionUpload(input: {
     };
   }
 
+  // THE NEW FILE REPLACES WHAT THE SLOT HELD BEFORE.
+  // A team uploading a revised document after a rejection still had the
+  // rejected link, and any earlier file, on the same deliverable — and the link
+  // is what the chair's "Open link" and the team's own "Open" button opened, so
+  // everyone kept reading the rejected version. The Director's rule
+  // (2026-09-11): a new upload replaces the old link and older files in that
+  // slot. This runs only after the new row exists, so a failure here can never
+  // lose the new file, and a repeated step 2 finds nothing left to replace.
+  const replaced: string[] = [];
+  const problems: string[] = [];
+
+  const { data: olderRaw } = await (svc as AnyClient)
+    .schema("future")
+    .from("submission_files")
+    .select("id, file_path")
+    .eq("submission_id", submissionId)
+    .eq("slot", slot)
+    .neq("file_path", path);
+  const older = (olderRaw as { id: string; file_path: string }[] | null) ?? [];
+  if (older.length > 0) {
+    const { error: olderErr } = await (svc as AnyClient)
+      .schema("future")
+      .from("submission_files")
+      .delete()
+      .in("id", older.map((o) => o.id));
+    if (olderErr) {
+      problems.push("the earlier file is still listed — use Remove on it");
+    } else {
+      // Row first, object second, as in deleteSubmissionFile.
+      await bucket.remove(older.map((o) => o.file_path)).catch(() => null);
+      replaced.push(older.length === 1 ? "the earlier file" : "the earlier files");
+    }
+  }
+
+  // Slots mirror the *_url columns on submissions (see SUBMISSION_SLOTS).
+  const linkColumn = `${slot}_url`;
+  const { data: clearedRaw, error: linkErr } = await (svc as AnyClient)
+    .schema("future")
+    .from("submissions")
+    .update({ [linkColumn]: null, updated_at: new Date().toISOString() })
+    .eq("id", submissionId)
+    .not(linkColumn, "is", null)
+    .select("id");
+  if (linkErr) {
+    problems.push("the old link is still in the box — clear it before you submit");
+  } else if (((clearedRaw as unknown[] | null) ?? []).length > 0) {
+    replaced.push("the earlier link");
+  }
+
   revalidatePath("/yi-future/me/submissions");
   revalidatePath("/yi-future/chapter/submissions");
-  return { ok: true, message: `${name} attached.` };
+
+  if (problems.length > 0) {
+    return { ok: false, error: `${name} attached, but ${problems.join(", and ")}.` };
+  }
+  return {
+    ok: true,
+    message: replaced.length
+      ? `${name} attached. It replaces ${replaced.join(" and ")}.`
+      : `${name} attached.`,
+  };
 }
 
 /** Remove a file the team attached. */

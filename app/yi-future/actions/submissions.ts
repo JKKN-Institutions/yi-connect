@@ -304,10 +304,14 @@ export async function reviewSubmission(
   const { data: subRow } = await svc
     .schema("future")
     .from("submissions")
-    .select("id, team_id")
+    .select("id, team_id, status")
     .eq("id", submissionId)
     .maybeSingle();
-  const sub = subRow as unknown as { id: string; team_id: string } | null;
+  const sub = subRow as unknown as {
+    id: string;
+    team_id: string;
+    status: string | null;
+  } | null;
 
   let chapterId: string | null = null;
   if (sub) {
@@ -322,6 +326,17 @@ export async function reviewSubmission(
   }
   await requireChapterAdmin(chapterId);
   if (!sub) return { ok: false, error: "Submission not found." };
+
+  // Only work that is waiting for review can be approved or sent back. Without
+  // this, a double-clicked Reject — or two chairs acting at once — sent the team
+  // a second notice, and a direct call could reject work already approved.
+  if (sub.status !== "submitted") {
+    return {
+      ok: false,
+      error:
+        "This submission is no longer waiting for review. Reload the page to see where it stands.",
+    };
+  }
 
   // Sending work back needs a reason the team can act on. Rejections used to go
   // out with no feedback at all and no word to the team.
@@ -344,10 +359,19 @@ export async function reviewSubmission(
       updated_at: new Date().toISOString(),
     })
     .eq("id", submissionId)
+    // The same rule again at write time, so the second of two simultaneous
+    // reviews changes nothing and sends no second notice.
+    .eq("status", "submitted")
     .select("phase")
     .maybeSingle();
   if (error) return { ok: false, error: safeError(error.message, "submissions") };
-  if (!updated) return { ok: false, error: "Submission not found." };
+  if (!updated) {
+    return {
+      ok: false,
+      error:
+        "This submission was just reviewed by someone else. Reload the page to see where it stands.",
+    };
+  }
 
   // Tell the team in the app. The rejection above already stands: a notice that
   // fails to save is logged, and never undoes or hides the decision.

@@ -613,10 +613,10 @@ export const GUIDES: GuideBook = {
         },
         {
           "id": "submit-deliverables",
-          "title": "3. Submit deliverables each phase (captain only)",
+          "title": "3. Submit deliverables each phase (any team member)",
           "steps": [
             {
-              "action": "Go to **Submissions** (captain-only page) after your team picks a problem.",
+              "action": "Go to **Submissions** after your team picks a problem. Any member of your team can upload and submit, not only the captain.",
               "detail": "You will see three sections: Phase A (Problem Definition), Phase B (Draft Framework), Phase C (Final). Each has its own upload form.",
               "link": {
                 "label": "Deliverables",

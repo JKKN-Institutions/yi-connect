@@ -21,8 +21,16 @@ type Team = {
   id: string;
   team_name: string;
   captain_id: string | null;
+  leader_delegate_id: string | null;
   problem_statement_id: string | null;
 };
+
+/** The team this delegate files deliverables for, or why none can be shown. */
+type TeamLookup =
+  | { kind: "team"; team: Team }
+  | { kind: "none" }
+  | { kind: "several"; count: number }
+  | { kind: "failed" };
 
 type Submission = {
   id: string;
@@ -40,15 +48,83 @@ type Submission = {
   feedback: string | null;
 };
 
-async function getCaptainTeam(delegateId: string): Promise<Team | null> {
+const TEAM_FIELDS = "id, team_name, captain_id, leader_delegate_id, problem_statement_id";
+
+/**
+ * The delegate's team in the ACTIVE edition. Any member may file deliverables:
+ * the save, submit and upload actions all accept the captain, the leader or a
+ * team_members row. This page used to look up only a team the delegate
+ * captained and showed every other member "Captain only", so a team whose
+ * captain was away at a deadline could not submit at all.
+ *
+ * Fails CLOSED. A failed query, or a delegate with no member row who captains or
+ * leads more than one team, gets an explicit state — never an arbitrary pick.
+ */
+async function getMyTeam(delegateId: string): Promise<TeamLookup> {
   const svc = await createServiceClient();
-  const { data } = await svc
+  const { data: editions, error: editionError } = await svc
     .schema("future")
-    .from("teams")
-    .select("id, team_name, captain_id, problem_statement_id")
-    .eq("captain_id", delegateId)
-    .maybeSingle();
-  return (data as unknown as Team) ?? null;
+    .from("editions")
+    .select("id")
+    .eq("is_active", true);
+  if (editionError) return { kind: "failed" };
+  const editionIds = ((editions as { id: string }[] | null) ?? []).map((e) => e.id);
+  if (editionIds.length === 0) return { kind: "none" };
+
+  // Plain queries per route onto a team, each held to the active edition.
+  const [memberRows, asCaptain, asLeader] = await Promise.all([
+    svc.schema("future").from("team_members").select("team_id").eq("delegate_id", delegateId),
+    svc
+      .schema("future")
+      .from("teams")
+      .select(TEAM_FIELDS)
+      .in("edition_id", editionIds)
+      .eq("captain_id", delegateId),
+    svc
+      .schema("future")
+      .from("teams")
+      .select(TEAM_FIELDS)
+      .in("edition_id", editionIds)
+      .eq("leader_delegate_id", delegateId),
+  ]);
+  if (memberRows.error || asCaptain.error || asLeader.error) return { kind: "failed" };
+
+  const memberTeamIds = ((memberRows.data as { team_id: string }[] | null) ?? []).map(
+    (r) => r.team_id
+  );
+  let asMember: Team[] = [];
+  if (memberTeamIds.length > 0) {
+    const { data, error } = await svc
+      .schema("future")
+      .from("teams")
+      .select(TEAM_FIELDS)
+      .in("edition_id", editionIds)
+      .in("id", memberTeamIds);
+    if (error) return { kind: "failed" };
+    asMember = (data as unknown as Team[] | null) ?? [];
+  }
+
+  // The team_members row decides first. A delegate can hold only one per
+  // edition (a unique constraint) and leaving a team deletes it, so it is
+  // current. The captain and leader columns can outlive a move: on 2026-09-11
+  // all six delegates linked to two teams were captain or leader of a team with
+  // NO members, while their member row sat on the team they actually work in.
+  // Preferring captain/leader there showed four of them an empty team and
+  // refused a captain who could submit before.
+  if (asMember.length > 1) return { kind: "several", count: asMember.length };
+  if (asMember.length === 1) return { kind: "team", team: asMember[0] };
+
+  // No member row: a team they captain or lead, if there is exactly one.
+  const runs = new Map<string, Team>();
+  for (const t of [
+    ...((asCaptain.data as unknown as Team[] | null) ?? []),
+    ...((asLeader.data as unknown as Team[] | null) ?? []),
+  ]) {
+    runs.set(t.id, t);
+  }
+  if (runs.size === 0) return { kind: "none" };
+  if (runs.size === 1) return { kind: "team", team: [...runs.values()][0] };
+  return { kind: "several", count: runs.size };
 }
 
 async function getSubmissions(teamId: string): Promise<Submission[]> {
@@ -128,28 +204,51 @@ export default async function MySubmissionsPage({
   // A refused save or submit comes back here carrying its reason.
   const pageError = ((await searchParams).error ?? "").slice(0, 300) || null;
 
-  const team = await getCaptainTeam(session.id);
-  if (!team) {
+  const lookup = await getMyTeam(session.id);
+  if (lookup.kind !== "team") {
+    // Say exactly why there is nothing to file, instead of a silent bounce.
+    const state =
+      lookup.kind === "none"
+        ? {
+            icon: "👥",
+            title: "Join a team first",
+            body: "Deliverables are filed by a team. Once you are on one, any member can upload and submit here. Anyone can read the submission format above.",
+            href: "/yi-future/me/team",
+            label: "Go to my team →",
+          }
+        : lookup.kind === "several"
+          ? {
+              icon: "⚠️",
+              title: "You are on more than one team",
+              body: `This year's records list you on ${lookup.count} teams, so this page cannot tell which team's deliverables are yours. Ask your chapter admin to take you off the team you are not part of.`,
+              href: "/yi-future/me",
+              label: "← Back to dashboard",
+            }
+          : {
+              icon: "⚠️",
+              title: "Your team could not be loaded",
+              body: "Nothing was changed. Try again in a moment.",
+              href: "/yi-future/me/submissions",
+              label: "Try again →",
+            };
     return (
       <div className="space-y-5">
         <SopDownloadCard />
         <div className="bg-white border border-navy/10 rounded-lg p-6 text-center">
-          <div className="text-4xl mb-2">🔒</div>
-          <h2 className="text-lg font-bold text-navy">Captain only</h2>
-          <p className="mt-2 text-sm text-navy/60">
-            Only captains can file deliverables for their team — but anyone can
-            read the submission format above.
-          </p>
+          <div className="text-4xl mb-2">{state.icon}</div>
+          <h2 className="text-lg font-bold text-navy">{state.title}</h2>
+          <p className="mt-2 text-sm text-navy/60">{state.body}</p>
           <Link
-            href="/yi-future/me"
+            href={state.href}
             className="mt-4 inline-block text-sm text-navy font-semibold hover:text-yi-gold"
           >
-            &larr; Back to dashboard
+            {state.label}
           </Link>
         </div>
       </div>
     );
   }
+  const team = lookup.team;
 
   /* ── Gate: team must have a problem statement ── */
   if (!team.problem_statement_id) {
@@ -345,6 +444,15 @@ export default async function MySubmissionsPage({
             {status}
           </span>
         </div>
+
+        {/* A rejection with no reason used to show nothing but the pill, which
+            left the team guessing what to fix. */}
+        {status === "rejected" && !existing?.feedback?.trim() && (
+          <p className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            Your chapter admin sent this back without a reason. Ask them what to
+            change, then upload a revised file and resubmit.
+          </p>
+        )}
 
         {existing?.feedback && (
           <div className="mb-4 p-3 rounded-md bg-navy/5 border border-navy/10">

@@ -8,9 +8,10 @@
 // REQUEST ACCESS from the student and wait — per submission, per person — and
 // the chapter's work can never be gathered in one place.
 //
-// This adds a real upload ALONGSIDE the link. Neither replaces the other: a
-// slot may hold a link, a file, or both, so a team with a 200MB video or a
-// living Google Doc keeps working exactly as it does today.
+// This adds a real upload alongside the link: a slot takes a link or a file,
+// so a team with a 200MB video or a living Google Doc can still paste a link.
+// Once a file is uploaded it REPLACES whatever the slot held before — the old
+// link and any earlier file — so nobody opens a rejected version by mistake.
 //
 // FOUR PROPERTIES
 //

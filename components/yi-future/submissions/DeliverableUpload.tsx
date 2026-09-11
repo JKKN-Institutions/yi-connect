@@ -56,7 +56,7 @@ export function DeliverableUpload({
   /** Absent until the phase row exists — save a draft first, then upload. */
   submissionId?: string | null;
   slot?: string;
-  files?: SubmissionFileRow[];
+  files?: SubmissionFileView[];
   readOnly?: boolean;
 }): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement | null>(null);

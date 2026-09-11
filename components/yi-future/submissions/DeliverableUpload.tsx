@@ -175,7 +175,11 @@ export function DeliverableUpload({
 
       {/* ── Option 1: a share link (unchanged) ───────────────────── */}
       <div className="flex items-start gap-2">
+        {/* Keyed on the saved link: an upload clears the link on the server,
+            and without a remount this box would keep showing — and re-submit —
+            the old one. */}
         <input
+          key={defaultValue ?? ""}
           id={name}
           name={name}
           type="url"

@@ -64,6 +64,13 @@ export function DeliverableUpload({
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const canUpload = !!submissionId && !!slot && !readOnly;
+  // What an upload will replace, said before it happens.
+  const replaceWhat = [
+    defaultValue ? "the link" : null,
+    files.length === 1 ? "the file" : files.length > 1 ? "the files" : null,
+  ]
+    .filter(Boolean)
+    .join(" and ");
 
   function onPick(file: File | undefined) {
     if (!file || !submissionId || !slot) return;

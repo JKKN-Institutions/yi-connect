@@ -34,7 +34,7 @@ import {
   MAX_UPLOAD_BYTES,
   SUBMISSION_BUCKET,
   formatBytes,
-  type SubmissionFileRow,
+  type SubmissionFileView,
 } from "@/lib/yi-future/submission-files";
 
 export function DeliverableUpload({

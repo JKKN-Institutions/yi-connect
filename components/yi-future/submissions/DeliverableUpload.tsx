@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * One deliverable slot: paste a share link, upload a file, or both.
+ * One deliverable slot: paste a share link or upload a file. A new upload
+ * replaces the link and any earlier file (see finishSubmissionUpload).
  *
  * WHY BOTH
  * Until now this accepted a LINK only, and every one of the 734 URLs on file is
@@ -33,7 +34,7 @@ import {
   MAX_UPLOAD_BYTES,
   SUBMISSION_BUCKET,
   formatBytes,
-  type SubmissionFileRow,
+  type SubmissionFileView,
 } from "@/lib/yi-future/submission-files";
 
 export function DeliverableUpload({
@@ -55,7 +56,7 @@ export function DeliverableUpload({
   /** Absent until the phase row exists — save a draft first, then upload. */
   submissionId?: string | null;
   slot?: string;
-  files?: SubmissionFileRow[];
+  files?: SubmissionFileView[];
   readOnly?: boolean;
 }): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -63,6 +64,13 @@ export function DeliverableUpload({
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const canUpload = !!submissionId && !!slot && !readOnly;
+  // What an upload will replace, said before it happens.
+  const replaceWhat = [
+    defaultValue ? "the link" : null,
+    files.length === 1 ? "the file" : files.length > 1 ? "the files" : null,
+  ]
+    .filter(Boolean)
+    .join(" and ");
 
   function onPick(file: File | undefined) {
     if (!file || !submissionId || !slot) return;
@@ -167,7 +175,11 @@ export function DeliverableUpload({
 
       {/* ── Option 1: a share link (unchanged) ───────────────────── */}
       <div className="flex items-start gap-2">
+        {/* Keyed on the saved link: an upload clears the link on the server,
+            and without a remount this box would keep showing — and re-submit —
+            the old one. */}
         <input
+          key={defaultValue ?? ""}
           id={name}
           name={name}
           type="url"
@@ -200,16 +212,29 @@ export function DeliverableUpload({
                 <span className="font-semibold">{f.file_name}</span>
                 <span className="text-navy/50"> · {formatBytes(f.size_bytes)}</span>
               </span>
-              {!readOnly && (
-                <button
-                  type="button"
-                  onClick={() => onRemove(f.id)}
-                  disabled={pending}
-                  className="flex-shrink-0 text-xs font-semibold text-red-600 hover:underline disabled:opacity-40 min-h-[44px] px-2"
-                >
-                  Remove
-                </button>
-              )}
+              <span className="flex-shrink-0 flex items-center">
+                {/* Lets the team open exactly the version the jury will read. */}
+                {f.signedUrl && (
+                  <a
+                    href={f.signedUrl}
+                    target="_blank"
+                    rel="noopener"
+                    className="text-xs font-semibold text-navy/70 hover:underline min-h-[44px] px-2 inline-flex items-center"
+                  >
+                    Open
+                  </a>
+                )}
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => onRemove(f.id)}
+                    disabled={pending}
+                    className="flex-shrink-0 text-xs font-semibold text-red-600 hover:underline disabled:opacity-40 min-h-[44px] px-2"
+                  >
+                    Remove
+                  </button>
+                )}
+              </span>
             </li>
           ))}
         </ul>
@@ -251,6 +276,11 @@ export function DeliverableUpload({
       )}
 
       {hint && <p className="text-xs text-navy/50">{hint}</p>}
+      {canUpload && replaceWhat && (
+        <p className="text-xs text-navy/50">
+          A new upload replaces {replaceWhat} above.
+        </p>
+      )}
       {canUpload && files.length === 0 && (
         <p className="text-xs text-navy/50">
           Uploading the file means the jury can open it straight away, with no

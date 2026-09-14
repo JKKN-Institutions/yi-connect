@@ -50,7 +50,7 @@ import {
 } from "@/lib/yiq/restart";
 
 const ATTEMPT_COLUMNS =
-  "id, student_id, team_id, chapter_event_id, is_mock, status, started_at, expires_at, submitted_at, score, question_order";
+  "id, student_id, team_id, chapter_event_id, is_mock, status, started_at, expires_at, submitted_at, score, question_order, focus_lost_count, focus_lost_seconds";
 
 type ServiceClient = Awaited<ReturnType<typeof createServiceClient>>;
 
@@ -88,6 +88,8 @@ type AttemptRow = {
   submitted_at: string | null;
   score: number | string | null;
   question_order: string[] | null;
+  focus_lost_count: number | null;
+  focus_lost_seconds: number | null;
 };
 
 function toRestartAttempt(
@@ -162,6 +164,14 @@ export type RestartCandidate = {
   category: string | null;
   status: string;
   score: number;
+  /**
+   * How often the student left the page, and for how long in total.
+   * EVIDENCE FOR A HUMAN, never an automatic verdict — a phone call blurs a
+   * page too. Read the two together: twelve one-second glances is a
+   * different story from two two-minute absences.
+   */
+  focusLostCount: number;
+  focusLostSeconds: number;
   /** Milliseconds that were left when the paper stopped. 0 when none. */
   remainingMs: number;
   remainingLabel: string;
@@ -294,6 +304,8 @@ export async function listRestartCandidates(
       category: s?.teams?.category ?? null,
       status: a.status,
       score: Number(a.score ?? 0),
+      focusLostCount: a.focus_lost_count ?? 0,
+      focusLostSeconds: a.focus_lost_seconds ?? 0,
       remainingMs,
       remainingLabel: formatDuration(remainingMs),
       eligible: decision.ok,

@@ -5,8 +5,10 @@ import { displayLabelFor } from "@/lib/yiq/option-order";
 import { useRouter } from "next/navigation";
 import {
   saveAnswer,
-  answerPracticeCard,
   submitAttempt,
+  beginQuestion,
+  reportFocusLoss,
+  answerPracticeCard,
   type SubmitResult,
 } from "../actions/attempt";
 import { QuestionCard } from "./question-card";
@@ -28,6 +30,11 @@ type Props = {
   paperName: string;
   durationMinutes: number;
   isMock: boolean;
+  /**
+   * Seconds each question is shown for. null = one clock for the whole paper
+   * and the student may revisit earlier questions (the original behaviour).
+   */
+  secondsPerQuestion: number | null;
 };
 
 export function QuizClient({
@@ -38,6 +45,7 @@ export function QuizClient({
   paperName,
   durationMinutes,
   isMock,
+  secondsPerQuestion,
 }: Props) {
   const router = useRouter();
   const [index, setIndex] = useState(0);
@@ -58,6 +66,16 @@ export function QuizClient({
   // no matter what the client does.
   const [feedback, setFeedback] = useState<Record<string, CardFeedback>>({});
   const [streak, setStreak] = useState(0);
+  // ── Per-question pacing (anti-AI, Director 2026-08-27) ────────────────
+  //
+  // The deadline is whatever the SERVER says, from its record of when this
+  // question was first shown. It is never computed here and never restarted
+  // by a reload — that is the whole point of the measure.
+  const paced = typeof secondsPerQuestion === "number" && secondsPerQuestion > 0;
+  const [qDeadline, setQDeadline] = useState<string | null>(null);
+  const [qLeft, setQLeft] = useState<number | null>(null);
+  const [qNotice, setQNotice] = useState<string | null>(null);
+  const advancedForRef = useRef<string | null>(null);
 
   const total = questions.length;
   const answeredCount = useMemo(
@@ -97,12 +115,83 @@ export function QuizClient({
     return () => window.clearInterval(id);
   }, [expiresAt, doSubmit, result]);
 
+  // ── The per-question clock ────────────────────────────────────────────
+  //
+  // Ask the SERVER when this question's time runs out. The server records
+  // the first view once and re-reads it on every later call, so a refresh
+  // returns the ORIGINAL deadline and cannot buy the student more time.
+  const currentId = questions[index]?.id ?? null;
+  useEffect(() => {
+    if (!paced || result || !currentId) return;
+    let cancelled = false;
+    setQDeadline(null);
+    setQLeft(null);
+    void beginQuestion(attemptId, currentId).then((r) => {
+      if (cancelled) return;
+      setQDeadline(r.deadlineAt);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [paced, attemptId, currentId, result]);
+
+  // Tick the question clock and move on when it runs out. Driven from the
+  // server deadline on every tick, never decremented, so a backgrounded
+  // phone cannot gain a second.
+  useEffect(() => {
+    if (!paced || result || !qDeadline || !currentId) return;
+    const tick = () => {
+      const left = Math.max(
+        0,
+        Math.ceil((Date.parse(qDeadline) - Date.now()) / 1000)
+      );
+      setQLeft(left);
+      if (left <= 0 && advancedForRef.current !== currentId) {
+        // Guard against advancing twice for the same question if two ticks
+        // land together.
+        advancedForRef.current = currentId;
+        setQNotice(
+          index + 1 < total
+            ? "Time was up on that question."
+            : "Time was up on the last question."
+        );
+        setIndex((i) => Math.min(i + 1, total - 1));
+      }
+    };
+    tick();
+    const id = window.setInterval(tick, 250);
+    return () => window.clearInterval(id);
+  }, [paced, qDeadline, currentId, result, index, total]);
+
+  // ── Leaving the page is recorded ──────────────────────────────────────
+  //
+  // EVIDENCE FOR A HUMAN, never an automatic verdict: a phone call, a
+  // notification and a dying battery all blur a page. An organiser reads
+  // this next to a score that looks surprising.
+  useEffect(() => {
+    if (result) return;
+    let awaySince: number | null = null;
+    const onHide = () => {
+      if (document.visibilityState === "hidden") {
+        awaySince = Date.now();
+      } else if (awaySince !== null) {
+        const seconds = Math.round((Date.now() - awaySince) / 1000);
+        awaySince = null;
+        // Sub-second flickers are noise, not a signal.
+        if (seconds >= 1) void reportFocusLoss(attemptId, seconds);
+      }
+    };
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
+  }, [attemptId, result]);
+
   async function choose(questionId: string, option: OptionKey) {
     if (result || submitting) return;
     // A card that has already turned is settled. Re-answering it would let a
     // student who has just been shown the answer put the right one in.
     if (feedback[questionId]) return;
 
+    setQNotice(null);
     const previous = answers[questionId];
     setAnswers((a) => ({ ...a, [questionId]: option }));
     setSaving(questionId);
@@ -274,8 +363,8 @@ export function QuizClient({
           disabled={submitting || Boolean(feedback[q.id])}
           feedback={feedback[q.id] ?? null}
           streak={streak}
-          secondsLeft={null}
-          secondsPerQuestion={null}
+          secondsLeft={qLeft}
+          secondsPerQuestion={secondsPerQuestion}
           saving={saving === q.id}
         />
 
@@ -291,7 +380,14 @@ export function QuizClient({
               return (
                 <li key={qq.id}>
                   <button
-                    onClick={() => setIndex(i)}
+                    onClick={() => {
+                      // A paced paper runs forwards only: each question has
+                      // had its own clock started server-side, so returning
+                      // to one whose time is gone would show a dead timer.
+                      if (paced) return;
+                      setIndex(i);
+                    }}
+                    disabled={paced}
                     aria-current={here ? "true" : undefined}
                     aria-label={`Question ${i + 1}${done ? ", answered" : ""}`}
                     className="yiq-data h-8 w-8 rounded-lg text-[0.75rem] font-semibold"
@@ -319,7 +415,7 @@ export function QuizClient({
         <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3">
           <button
             onClick={() => setIndex((i) => Math.max(0, i - 1))}
-            disabled={index === 0}
+            disabled={paced || index === 0}
             className="rounded-full border px-5 py-3 text-[0.875rem] font-semibold disabled:opacity-40"
             style={{ borderColor: "rgba(10,22,51,0.2)", color: INK }}
           >
@@ -327,7 +423,10 @@ export function QuizClient({
           </button>
           {index < total - 1 ? (
             <button
-              onClick={() => setIndex((i) => Math.min(total - 1, i + 1))}
+              onClick={() => {
+                setQNotice(null);
+                setIndex((i) => Math.min(total - 1, i + 1));
+              }}
               className="flex-1 rounded-full py-3 text-[0.9375rem] font-bold"
               style={{ background: INK, color: PAPER }}
             >

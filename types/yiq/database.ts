@@ -544,6 +544,39 @@ export type Database = {
           },
         ]
       }
+      attempt_question_views: {
+        Row: {
+          attempt_id: string
+          first_shown_at: string
+          question_id: string
+        }
+        Insert: {
+          attempt_id: string
+          first_shown_at?: string
+          question_id: string
+        }
+        Update: {
+          attempt_id?: string
+          first_shown_at?: string
+          question_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attempt_question_views_attempt_id_fkey"
+            columns: ["attempt_id"]
+            isOneToOne: false
+            referencedRelation: "attempts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attempt_question_views_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attempt_restarts: {
         Row: {
           attempt_id: string
@@ -624,6 +657,8 @@ export type Database = {
           created_at: string
           disqualified_reason: string | null
           expires_at: string
+          focus_lost_count: number
+          focus_lost_seconds: number
           id: string
           ip_address: string | null
           is_mock: boolean
@@ -647,6 +682,8 @@ export type Database = {
           created_at?: string
           disqualified_reason?: string | null
           expires_at: string
+          focus_lost_count?: number
+          focus_lost_seconds?: number
           id?: string
           ip_address?: string | null
           is_mock?: boolean
@@ -670,6 +707,8 @@ export type Database = {
           created_at?: string
           disqualified_reason?: string | null
           expires_at?: string
+          focus_lost_count?: number
+          focus_lost_seconds?: number
           id?: string
           ip_address?: string | null
           is_mock?: boolean
@@ -1270,6 +1309,7 @@ export type Database = {
           negative_marks: number
           paper_kind: string
           published_at: string | null
+          seconds_per_question: number | null
           shuffle_options: boolean
           shuffle_questions: boolean
           total_questions: number
@@ -1290,6 +1330,7 @@ export type Database = {
           negative_marks?: number
           paper_kind?: string
           published_at?: string | null
+          seconds_per_question?: number | null
           shuffle_options?: boolean
           shuffle_questions?: boolean
           total_questions?: number
@@ -1310,6 +1351,7 @@ export type Database = {
           negative_marks?: number
           paper_kind?: string
           published_at?: string | null
+          seconds_per_question?: number | null
           shuffle_options?: boolean
           shuffle_questions?: boolean
           total_questions?: number

@@ -196,6 +196,24 @@ export async function startAttempt(
   }
 
   order = paper.shuffle_questions ? shuffle(ids) : ids;
+
+  /*
+   * A paper's pinned set is its POOL, not its length.
+   *
+   * `total_questions` is how many the student actually sits, and until now
+   * it was selected on the query above and then thrown away — so a paper
+   * served EVERY question pinned to it. That was invisible while pool and
+   * length happened to match (33 pinned, 33 sat). The moment a deeper pool
+   * is attached it stops matching, and a 17-minute practice paper would
+   * quietly become a 233-question one.
+   *
+   * Shuffle first, then take the paper's length: two students sitting the
+   * same practice paper draw a different set from the same pool, and one
+   * student practising twice does not just repeat themselves.
+   */
+  if (paper.total_questions > 0 && order.length > paper.total_questions) {
+    order = order.slice(0, paper.total_questions);
+  }
   expiresAt = new Date(
     Date.now() + paper.duration_minutes * 60 * 1000
   ).toISOString();

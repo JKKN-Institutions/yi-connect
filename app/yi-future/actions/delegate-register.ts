@@ -8,6 +8,7 @@ import {
   isChapterOpenForRegistration,
 } from "@/lib/yi-future/registration-window";
 import { checkRegistrationAbuse } from "@/lib/yi-future/registration-guard";
+import { checkDelegateLookupAbuse } from "@/lib/yi-future/delegate-lookup-guard";
 
 // ─── TYPES ──────────────────────────────────────────────────────────
 
@@ -67,8 +68,26 @@ export type PreviousProfile = {
   edition_slug: string | null;
 };
 
+/** Outcome of a returning-delegate lookup.
+ *
+ *  `{ ok: true, profile: null }` means "checked, no previous registration" and
+ *  `{ ok: false }` means "not checked at all". Collapsing those two into a bare
+ *  `null` — which is what this action returned before the rate limit — would
+ *  hide every refusal behind a normal-looking empty result, so a limited caller
+ *  would be told nothing and a broken guard would look identical to a working
+ *  one. They are kept distinct so the form can say which happened. */
+export type LookupResult =
+  | { ok: true; profile: PreviousProfile | null }
+  | { ok: false; error: string };
+
 /**
  * Pre-fill helper for a returning delegate on the PUBLIC join form.
+ *
+ * RATE LIMIT (added 2026-08-11): defence in depth on top of the fix below.
+ * `checkDelegateLookupAbuse` applies a per-IP cap and a platform-wide burst
+ * breaker before any delegate row is read, and fails CLOSED — no resolvable
+ * caller IP, or a counter that cannot be read, means no lookup. The cost of a
+ * false denial is one student typing details they could have had auto-filled.
  *
  * SECURITY (tightened 2026-08-10): this is an unauthenticated action that
  * returns a full personal profile — name, phone, WhatsApp, gender, college,
@@ -88,16 +107,25 @@ export type PreviousProfile = {
 export async function lookupReturningDelegate(
   email: string,
   phone: string
-): Promise<PreviousProfile | null> {
+): Promise<LookupResult> {
   const cleanEmail = email?.trim().toLowerCase() ?? "";
   const cleanPhone = normalizeMobile(phone ?? "");
 
-  // Fail closed: a missing or malformed half means no lookup at all.
+  // Fail closed: a missing or malformed half means no lookup at all. Reported
+  // as a successful check with no match, because that is what it is — the form
+  // never reaches here without both fields validating client-side.
   if (!EMAIL_RE.test(cleanEmail) || !INDIA_MOBILE_RE.test(cleanPhone)) {
-    return null;
+    return { ok: true, profile: null };
   }
 
   const svc = await createServiceClient();
+
+  // Rate limit BEFORE the read, so a refused call costs two indexed counts
+  // rather than a 4-way join across 16,712 delegates.
+  const guard = await checkDelegateLookupAbuse(svc);
+  if (!guard.ok) {
+    return { ok: false, error: guard.error };
+  }
 
   const { data } = await svc
     .schema("future")
@@ -111,7 +139,7 @@ export async function lookupReturningDelegate(
     .limit(1)
     .maybeSingle();
 
-  if (!data) return null;
+  if (!data) return { ok: true, profile: null };
   const d = data as unknown as {
     full_name: string;
     email: string;
@@ -130,21 +158,24 @@ export async function lookupReturningDelegate(
   };
 
   return {
-    full_name: d.full_name,
-    email: d.email,
-    phone: d.phone,
-    whatsapp: d.whatsapp,
-    gender: (d.gender === "male" || d.gender === "female") ? d.gender : null,
-    is_yi_yuva_member: d.is_yi_yuva_member,
-    chapter_id: d.chapter_id,
-    chapter_name: d.chapters?.name ?? null,
-    college_name: d.colleges?.name ?? null,
-    college_city: d.colleges?.city ?? null,
-    course: d.course,
-    specialization: d.specialization,
-    year_of_study: d.year_of_study,
-    age: d.age,
-    edition_slug: d.editions?.slug ?? null,
+    ok: true,
+    profile: {
+      full_name: d.full_name,
+      email: d.email,
+      phone: d.phone,
+      whatsapp: d.whatsapp,
+      gender: (d.gender === "male" || d.gender === "female") ? d.gender : null,
+      is_yi_yuva_member: d.is_yi_yuva_member,
+      chapter_id: d.chapter_id,
+      chapter_name: d.chapters?.name ?? null,
+      college_name: d.colleges?.name ?? null,
+      college_city: d.colleges?.city ?? null,
+      course: d.course,
+      specialization: d.specialization,
+      year_of_study: d.year_of_study,
+      age: d.age,
+      edition_slug: d.editions?.slug ?? null,
+    },
   };
 }
 

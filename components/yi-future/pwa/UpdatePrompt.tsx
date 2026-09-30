@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Listens for a waiting service worker (new version downloaded but not yet
@@ -14,6 +14,10 @@ export function UpdatePrompt() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [mounted, setMounted] = useState(false);
+  // Set when the user presses Reload. The controllerchange guard below only
+  // reloads for a controller REPLACEMENT; this covers the one case where the
+  // page never had a controller yet the user still asked for the update.
+  const updateRequestedRef = useRef(false);
 
   useEffect(() => {
     setMounted(true);
@@ -24,7 +28,14 @@ export function UpdatePrompt() {
 
     let reloading = false;
 
+    // A BRAND-NEW service worker calling clients.claim() also fires
+    // controllerchange. Reloading there hard-refreshes the page on a
+    // visitor's very first hit, which is flicker, not an update. Only a
+    // controller that REPLACES an existing one is a real update.
+    const hadController = Boolean(navigator.serviceWorker.controller);
+
     const onControllerChange = () => {
+      if (!hadController && !updateRequestedRef.current) return;
       if (reloading) return;
       reloading = true;
       window.location.reload();
@@ -86,6 +97,7 @@ export function UpdatePrompt() {
   const handleReload = () => {
     const waiting = registration?.waiting;
     if (waiting) {
+      updateRequestedRef.current = true;
       waiting.postMessage({ type: "SKIP_WAITING" });
       // controllerchange listener will reload the page once the new SW
       // takes over.

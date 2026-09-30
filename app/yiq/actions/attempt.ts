@@ -18,6 +18,16 @@ import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/yiq/supabase/server";
 import { applyOptionOrder } from "@/lib/yiq/option-order";
 import {
+  pacingFor,
+  judgeAnswer,
+  ANSWER_REFUSAL_TEXT,
+  questionDeadlineMs,
+} from "@/lib/yiq/pacing";
+import {
+  canRevealNow,
+  type CardFeedback,
+} from "@/lib/yiq/practice-feedback";
+import {
   checkStudentSessionLive,
   STALE_SESSION_MESSAGE,
 } from "@/lib/yiq/auth/stale-session";
@@ -41,6 +51,8 @@ export type StartResult =
       questions: PresentedQuestion[];
       answers: Record<string, OptionKey>;
       paperName: string;
+      /** null = one clock for the whole paper (the original behaviour). */
+      secondsPerQuestion: number | null;
     }
   | { success: false; error: string; alreadyDone?: boolean };
 
@@ -96,7 +108,7 @@ export async function startAttempt(
 
   const { data: paper } = await svc
     .from("papers")
-    .select("id, name, duration_minutes, shuffle_questions, shuffle_options, total_questions")
+    .select("id, name, duration_minutes, shuffle_questions, shuffle_options, total_questions, seconds_per_question")
     .eq("edition_id", event.edition_id)
     .eq("paper_kind", kind)
     .eq("category", session.category)
@@ -184,6 +196,24 @@ export async function startAttempt(
   }
 
   order = paper.shuffle_questions ? shuffle(ids) : ids;
+
+  /*
+   * A paper's pinned set is its POOL, not its length.
+   *
+   * `total_questions` is how many the student actually sits, and until now
+   * it was selected on the query above and then thrown away — so a paper
+   * served EVERY question pinned to it. That was invisible while pool and
+   * length happened to match (33 pinned, 33 sat). The moment a deeper pool
+   * is attached it stops matching, and a 17-minute practice paper would
+   * quietly become a 233-question one.
+   *
+   * Shuffle first, then take the paper's length: two students sitting the
+   * same practice paper draw a different set from the same pool, and one
+   * student practising twice does not just repeat themselves.
+   */
+  if (paper.total_questions > 0 && order.length > paper.total_questions) {
+    order = order.slice(0, paper.total_questions);
+  }
   expiresAt = new Date(
     Date.now() + paper.duration_minutes * 60 * 1000
   ).toISOString();
@@ -221,6 +251,7 @@ async function buildResume(
     name: string;
     duration_minutes: number;
     shuffle_options: boolean;
+    seconds_per_question?: number | null;
   },
   _category: string
 ): Promise<StartResult> {
@@ -278,6 +309,10 @@ async function buildResume(
     questions,
     answers,
     paperName: paper.name,
+    secondsPerQuestion: (() => {
+      const p = pacingFor(paper.seconds_per_question);
+      return p.paced ? p.secondsPerQuestion : null;
+    })(),
   };
 }
 
@@ -310,6 +345,53 @@ export async function saveAnswer(
   }
   if (Date.parse(attempt.expires_at) + LATE_WRITE_GRACE_MS <= Date.now()) {
     return { success: false, error: "Time is up.", expired: true };
+  }
+
+  // PER-QUESTION DEADLINE (anti-AI pacing, Director 2026-08-27).
+  //
+  // Anchored to the SERVER's record of when this question was first shown —
+  // yiq.attempt_question_views, whose primary key makes the first view final.
+  // Anchoring to anything the client sends, or to the wall clock at render,
+  // would let a student refresh the page for a fresh timer and the whole
+  // measure would be theatre.
+  //
+  // An unpaced paper reaches exactly the verdict it always did.
+  const { data: pacingRow } = await svc
+    .from("attempts")
+    .select("papers(seconds_per_question)")
+    .eq("id", attemptId)
+    .maybeSingle();
+  const pacing = pacingFor(
+    (pacingRow?.papers as { seconds_per_question: number | null } | null)
+      ?.seconds_per_question
+  );
+
+  if (pacing.paced) {
+    const { data: view } = await svc
+      .from("attempt_question_views")
+      .select("first_shown_at")
+      .eq("attempt_id", attemptId)
+      .eq("question_id", questionId)
+      .maybeSingle();
+
+    const verdict = judgeAnswer({
+      nowMs: Date.now(),
+      paperExpiresAtMs: Date.parse(attempt.expires_at),
+      questionFirstShownAtMs: view?.first_shown_at
+        ? Date.parse(view.first_shown_at)
+        : null,
+      pacing,
+    });
+
+    if (!verdict.accepted) {
+      return {
+        success: false,
+        error: ANSWER_REFUSAL_TEXT[verdict.reason],
+        // NOT `expired` — that flag makes the client submit the whole paper.
+        // One question running out must not end the paper.
+        expired: verdict.reason === "paper_time_up",
+      };
+    }
   }
 
   const { error } = await svc.from("attempt_answers").upsert(
@@ -498,5 +580,227 @@ export async function finaliseAttempt(
     wrongCount: graded.wrongCount,
     unansweredCount: graded.unansweredCount,
     totalQuestions: order.length,
+  };
+}
+
+/**
+ * Record that a question has been put in front of this student, and say when
+ * its own clock runs out.
+ *
+ * THIS IS THE ANTI-RELOAD LOCK. The insert is ON CONFLICT DO NOTHING against
+ * a primary key of (attempt_id, question_id), so the FIRST view is final and
+ * every later call — a refresh, a back-navigation, a second tab — reads back
+ * the original timestamp instead of writing a new one. Without that a student
+ * refreshes for a fresh timer and the pacing is theatre.
+ *
+ * Returns `deadlineAt: null` for an unpaced paper, which is every paper today
+ * unless a human sets seconds_per_question. Callers must then fall back to the
+ * whole-paper clock rather than inventing a deadline.
+ *
+ * NEVER THROWS AND NEVER BLOCKS THE PAPER. If the view cannot be written, the
+ * student still gets their question — with no per-question deadline, because
+ * `judgeAnswer` treats a missing view record as unpaced. A database blip must
+ * not cost a child their round; the worst case is one question that is not
+ * paced, which is the behaviour every paper has had until now.
+ */
+export async function beginQuestion(
+  attemptId: string,
+  questionId: string
+): Promise<{ deadlineAt: string | null; secondsPerQuestion: number | null }> {
+  const NONE = { deadlineAt: null, secondsPerQuestion: null };
+
+  const gate = await requireStudentSession();
+  if (!gate.ok) return NONE;
+
+  try {
+    const svc = await createServiceClient();
+
+    const { data: attempt } = await svc
+      .from("attempts")
+      .select("id, student_id, status, papers(seconds_per_question)")
+      .eq("id", attemptId)
+      .maybeSingle();
+
+    if (!attempt) return NONE;
+    if (attempt.student_id !== gate.session.id) return NONE;
+    if (attempt.status !== "in_progress") return NONE;
+
+    const pacing = pacingFor(
+      (attempt.papers as { seconds_per_question: number | null } | null)
+        ?.seconds_per_question
+    );
+    if (!pacing.paced) return NONE;
+
+    // First view wins. `ignoreDuplicates` is what makes a refresh harmless.
+    await svc
+      .from("attempt_question_views")
+      .upsert(
+        { attempt_id: attemptId, question_id: questionId },
+        { onConflict: "attempt_id,question_id", ignoreDuplicates: true }
+      );
+
+    // Re-read rather than trusting the insert: on a repeat view the upsert
+    // wrote nothing, and the ORIGINAL timestamp is the one that counts.
+    const { data: view } = await svc
+      .from("attempt_question_views")
+      .select("first_shown_at")
+      .eq("attempt_id", attemptId)
+      .eq("question_id", questionId)
+      .maybeSingle();
+
+    const deadline = questionDeadlineMs(
+      view?.first_shown_at ? Date.parse(view.first_shown_at) : null,
+      pacing
+    );
+
+    return {
+      deadlineAt: deadline === null ? null : new Date(deadline).toISOString(),
+      secondsPerQuestion: pacing.secondsPerQuestion,
+    };
+  } catch (e) {
+    console.error("[yiq] beginQuestion failed", e);
+    return NONE;
+  }
+}
+
+/**
+ * The student left the page while the paper was open.
+ *
+ * EVIDENCE FOR A HUMAN, NEVER AN AUTOMATIC VERDICT. A phone call, a
+ * notification, a dying battery and a nosy sibling all blur a page, and
+ * disqualifying a child on that signal would be wrong. An organiser reads
+ * these counters next to a score that looks surprising and decides.
+ *
+ * Honest about what this is worth: a student who disables scripting simply
+ * reports nothing. It is a signal, not a gate, and it is only meaningful in
+ * aggregate — twelve one-second glances is a different story from two
+ * two-minute absences, which is why both the count and the total are kept.
+ *
+ * Silently ignores anything implausible rather than failing: this runs on a
+ * background event and must never interrupt a paper.
+ */
+export async function reportFocusLoss(
+  attemptId: string,
+  awaySeconds: number
+): Promise<void> {
+  const gate = await requireStudentSession();
+  if (!gate.ok) return;
+
+  // A single absence longer than the longest paper is a clock change or a
+  // suspended phone, not a real reading of time away.
+  const away = Math.floor(awaySeconds);
+  if (!Number.isFinite(away) || away < 0 || away > 4 * 60 * 60) return;
+
+  try {
+    const svc = await createServiceClient();
+
+    const { data: attempt } = await svc
+      .from("attempts")
+      .select("id, student_id, status, focus_lost_count, focus_lost_seconds")
+      .eq("id", attemptId)
+      .maybeSingle();
+
+    if (!attempt) return;
+    if (attempt.student_id !== gate.session.id) return;
+    if (attempt.status !== "in_progress") return;
+
+    await svc
+      .from("attempts")
+      .update({
+        focus_lost_count: (attempt.focus_lost_count ?? 0) + 1,
+        focus_lost_seconds: (attempt.focus_lost_seconds ?? 0) + away,
+      })
+      .eq("id", attemptId)
+      .eq("status", "in_progress");
+  } catch (e) {
+    console.error("[yiq] reportFocusLoss failed", e);
+  }
+}
+
+/**
+ * Save a PRACTICE answer and say immediately whether it was right.
+ *
+ * THE ONE PLACE A CORRECT ANSWER LEAVES THE DATABASE MID-PAPER. On a
+ * practice deck that is the entire point — you tap, the card turns, you find
+ * out and read why. On the scored round the same behaviour would hand every
+ * student the answer key one tap at a time.
+ *
+ * So this refuses on ANYTHING it does not positively recognise
+ * (lib/yiq/practice-feedback.ts: `is_mock` must be exactly true, the attempt
+ * must be in progress, and it must belong to the student asking, checked
+ * against the server session). A refusal returns `feedback: null` rather
+ * than an error — the answer is still SAVED, the card simply does not turn.
+ *
+ * WHY THE KEY IS NOT SENT WITH THE PAPER INSTEAD. Shipping the answers to
+ * the client for practice papers would put the key in the page source, and
+ * one bad conditional later that same payload is on a scored paper. A round
+ * trip per answer costs a few hundred milliseconds on a practice paper and
+ * keeps the key server-side, permanently.
+ */
+export async function answerPracticeCard(
+  attemptId: string,
+  questionId: string,
+  option: OptionKey
+): Promise<{
+  success: boolean;
+  error?: string;
+  feedback: CardFeedback | null;
+}> {
+  const gate = await requireStudentSession();
+  if (!gate.ok) return { success: false, error: gate.error, feedback: null };
+
+  if (!OPTION_KEYS.includes(option)) {
+    return { success: false, error: "Invalid option.", feedback: null };
+  }
+
+  // Save through the ordinary path, so every deadline, guard and audit that
+  // applies to an answer applies to this one too. No shortcuts.
+  const saved = await saveAnswer(attemptId, questionId, option);
+  if (!saved.success) {
+    return { success: false, error: saved.error, feedback: null };
+  }
+
+  const svc = await createServiceClient();
+
+  const { data: attempt } = await svc
+    .from("attempts")
+    .select("id, student_id, is_mock, status")
+    .eq("id", attemptId)
+    .maybeSingle();
+
+  if (!attempt) return { success: true, feedback: null };
+
+  const verdict = canRevealNow(
+    {
+      id: attempt.id,
+      studentId: attempt.student_id,
+      isMock: attempt.is_mock,
+      status: attempt.status,
+    },
+    gate.session.id
+  );
+
+  if (!verdict.ok) {
+    // The answer IS saved. Only the reveal is refused, and silently — a
+    // student on a scored paper should see nothing unusual at all.
+    return { success: true, feedback: null };
+  }
+
+  const { data: q } = await svc
+    .from("questions")
+    .select("id, correct_option, answer_explanation")
+    .eq("id", questionId)
+    .maybeSingle();
+
+  if (!q?.correct_option) return { success: true, feedback: null };
+
+  const key = q.correct_option.trim().toLowerCase();
+  return {
+    success: true,
+    feedback: {
+      correct: key === option,
+      correctOption: key,
+      explanation: q.answer_explanation,
+    },
   };
 }

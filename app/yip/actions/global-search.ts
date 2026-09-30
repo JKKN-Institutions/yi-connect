@@ -69,15 +69,25 @@ type GroupSpec = {
   match: readonly string[];
   /**
    * Columns matched for a viewer who may NOT see names (`canSeeNames: false`).
-   * Omit when the group carries no name at all.
    *
    * Redacting only the DISPLAYED title is not enough. If a juror can type
    * "Ashmitha" and get back "Participant 115", they have just learned the
    * name→number mapping, and blind scoring is defeated by the search box even
    * though no name was ever rendered. A match is an answer. So for those
    * viewers the name column is removed from the QUERY, not just from the output.
+   *
+   * REQUIRED, deliberately — there is no default. It was optional, falling back
+   * to `match`, which is fail-OPEN: a new group carrying a person's name that
+   * forgot to declare this would silently become probeable by every blind
+   * viewer, with no error and nothing failing. That the codebase was safe
+   * anyway was luck — the two groups holding real names (`jury`, `volunteers`)
+   * happen to be staff-only, so the fallback was never reached. Making it
+   * required moves the guarantee from that coincidence to the compiler: adding
+   * a group without answering "what may a blind viewer match here?" no longer
+   * builds. Repeat `match` when the group carries no personal name; use `[]`
+   * to make the group unsearchable for blind viewers entirely.
    */
-  matchWhenBlind?: readonly string[];
+  matchWhenBlind: readonly string[];
   toHit: (row: Record<string, unknown>, ctx: HitContext) => SearchHit | null;
 };
 
@@ -148,6 +158,10 @@ const GROUP_SPECS: readonly GroupSpec[] = [
     table: "parties",
     select: "id, name, party_number, tagline, event_id",
     match: ["name", "tagline"],
+    // A party name is "Party A" / a slogan, never a person. Nothing to hide
+    // from a blind viewer, and students are shown their own party, so match
+    // the same columns.
+    matchWhenBlind: ["name", "tagline"],
     toHit: (row, ctx) => ({
       group: "parties",
       id: `party:${str(row.id)}`,
@@ -164,6 +178,9 @@ const GROUP_SPECS: readonly GroupSpec[] = [
     table: "agenda",
     select: "id, title, session_key, day, event_id",
     match: ["title"],
+    // Session titles ("Question Hour", "Zero Hour") name the running order,
+    // not people. The agenda is the one group EVERY viewer kind may read.
+    matchWhenBlind: ["title"],
     toHit: (row, ctx) => {
       const day = typeof row.day === "number" ? row.day : null;
       const dayLabel = day === 0 ? "Pre-Event" : day != null ? `Day ${day}` : null;
@@ -189,6 +206,9 @@ const GROUP_SPECS: readonly GroupSpec[] = [
     table: "bills",
     select: "id, title, committee_name, event_id",
     match: ["title", "committee_name"],
+    // Bill titles and committee names are house business. `committee_name` is
+    // a ministry ("Ministry of Housing & Urban Affairs"), not a person.
+    matchWhenBlind: ["title", "committee_name"],
     toHit: (row, ctx) => ({
       group: "bills",
       id: `bill:${str(row.id)}`,
@@ -204,6 +224,10 @@ const GROUP_SPECS: readonly GroupSpec[] = [
     table: "questions",
     select: "id, question_text, directed_to_ministry, event_id",
     match: ["question_text"],
+    // The question body carries no name COLUMN. A student could of course type
+    // a name into their own question, but that is authored content, not the
+    // roster leaking — and `questions` is staff-only today regardless.
+    matchWhenBlind: ["question_text"],
     toHit: (row, ctx) => ({
       group: "questions",
       id: `question:${str(row.id)}`,
@@ -241,6 +265,14 @@ const GROUP_SPECS: readonly GroupSpec[] = [
     // either here would put a login credential one keystroke from a text box.
     select: "id, jury_name, event_id",
     match: ["jury_name"],
+    // EMPTY ON PURPOSE — defence in depth. `jury` is in STAFF_GROUPS only, so
+    // no blind viewer reaches this spec today and this value is never read.
+    // It is declared so that the day someone adds `jury` to JURY_GROUPS or
+    // PARTICIPANT_GROUPS, the group is SKIPPED for them (see the
+    // `matchCols.length === 0` guard) instead of turning a juror's search box
+    // into a way to confirm who else is on the panel. Never widen this to
+    // `jury_name`: a real person's name is the one thing this must never match.
+    matchWhenBlind: [],
     toHit: (row, ctx) => ({
       group: "jury",
       id: `jury:${str(row.id)}`,
@@ -256,6 +288,10 @@ const GROUP_SPECS: readonly GroupSpec[] = [
     // on this table and must never be searchable).
     select: "id, full_name, event_id",
     match: ["full_name"],
+    // EMPTY ON PURPOSE — same reasoning as `jury` above. Staff-only today;
+    // declared so a future widening skips the group rather than exposing
+    // volunteers' real names to a blind viewer.
+    matchWhenBlind: [],
     toHit: (row, ctx) => ({
       group: "volunteers",
       id: `volunteer:${str(row.id)}`,
@@ -364,9 +400,12 @@ export async function searchYip(query: string): Promise<SearchResponse> {
     specs.map(async (spec) => {
       // Which columns this VIEWER may match on. A viewer who cannot see names
       // must not be able to probe for them either — see `matchWhenBlind`.
-      const matchCols = viewer.canSeeNames
-        ? spec.match
-        : (spec.matchWhenBlind ?? spec.match);
+      //
+      // No `?? spec.match` fallback: that was fail-OPEN, quietly restoring the
+      // name columns for a blind viewer whenever a group omitted its blind
+      // list. `matchWhenBlind` is now a required field, so every group has
+      // answered this question explicitly and there is nothing to fall back to.
+      const matchCols = viewer.canSeeNames ? spec.match : spec.matchWhenBlind;
       // A group whose only searchable columns were names has nothing left to
       // match on for this viewer; skip it rather than querying for everything.
       if (matchCols.length === 0) return [] as SearchHit[];

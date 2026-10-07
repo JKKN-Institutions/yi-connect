@@ -8,6 +8,8 @@ import type { ActionResult } from "./editions";
 import { requireChapterAdmin } from "@/lib/yi-future/auth/require-access";
 import { readSession } from "@/app/yi-future/actions/auth";
 import { safeError } from "@/lib/yi-future/db-error";
+import { checkReviewFeedback } from "@/lib/yi-future/submission-review";
+import { insertRejectionNotice } from "@/lib/yi-future/submission-rejection-notice";
 
 type DeliverablePhase = Database["future"]["Enums"]["deliverable_phase"];
 type SubmissionStatus = Database["future"]["Enums"]["submission_status"];
@@ -180,6 +182,36 @@ export async function saveSubmissionDraft(input: {
   return { ok: true, message: "Draft saved." };
 }
 
+/**
+ * Deliverable slots this team has uploaded a file into for a phase. An uploaded
+ * file counts as the deliverable just as a pasted link does. Two plain queries
+ * rather than a filter on an embedded table, which trims the embed and not the
+ * parent row.
+ */
+async function uploadedSlots(
+  teamId: string,
+  phase: DeliverablePhase
+): Promise<Set<string>> {
+  const svc = await createServiceClient();
+  const { data: sub } = await svc
+    .schema("future")
+    .from("submissions")
+    .select("id")
+    .eq("team_id", teamId)
+    .eq("phase", phase)
+    .maybeSingle();
+  const id = (sub as { id: string } | null)?.id;
+  if (!id) return new Set();
+  // future.submission_files is not in the generated types → loose client.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await (svc as any)
+    .schema("future")
+    .from("submission_files")
+    .select("slot")
+    .eq("submission_id", id);
+  return new Set(((data as { slot: string }[] | null) ?? []).map((r) => r.slot));
+}
+
 // ─── SUBMIT (captain action) ────────────────────────────────────────
 export async function submitSubmission(input: {
   teamId: string;
@@ -195,12 +227,19 @@ export async function submitSubmission(input: {
   const { values, errors } = collectUrls(input.phase, input.formData);
   if (errors.length) return { ok: false, error: errors.join(" · ") };
 
-  // Enforce at least one URL present at submit-time
-  const hasAny = Object.values(values).some((v) => !!v);
+  // A deliverable is a link OR an uploaded file. Only links used to be checked,
+  // so a team that uploaded its document and left the link box empty was
+  // refused — none of the 157 files attached to a submitted phase came without
+  // a link pasted beside it.
+  const uploaded = await uploadedSlots(input.teamId, input.phase);
+  const provided = (field: string) =>
+    !!values[field as UrlField] || uploaded.has(field.replace(/_url$/, ""));
+
+  const hasAny = Object.keys(values).some(provided);
   if (!hasAny) {
     return {
       ok: false,
-      error: "Provide at least one deliverable URL before submitting.",
+      error: "Nothing was submitted. Add a link or upload a file first.",
     };
   }
 
@@ -211,7 +250,7 @@ export async function submitSubmission(input: {
       final_policy_document_url: "the final report",
       final_presentation_deck_url: "the presentation deck",
     };
-    const missing = PHASE_C_REQUIRED_FIELDS.filter((f) => !values[f]);
+    const missing = PHASE_C_REQUIRED_FIELDS.filter((f) => !provided(f));
     if (missing.length > 0) {
       return {
         ok: false,
@@ -265,10 +304,14 @@ export async function reviewSubmission(
   const { data: subRow } = await svc
     .schema("future")
     .from("submissions")
-    .select("id, team_id")
+    .select("id, team_id, status")
     .eq("id", submissionId)
     .maybeSingle();
-  const sub = subRow as unknown as { id: string; team_id: string } | null;
+  const sub = subRow as unknown as {
+    id: string;
+    team_id: string;
+    status: string | null;
+  } | null;
 
   let chapterId: string | null = null;
   if (sub) {
@@ -284,23 +327,69 @@ export async function reviewSubmission(
   await requireChapterAdmin(chapterId);
   if (!sub) return { ok: false, error: "Submission not found." };
 
+  // Only work that is waiting for review can be approved or sent back. Without
+  // this, a double-clicked Reject — or two chairs acting at once — sent the team
+  // a second notice, and a direct call could reject work already approved.
+  if (sub.status !== "submitted") {
+    return {
+      ok: false,
+      error:
+        "This submission is no longer waiting for review. Reload the page to see where it stands.",
+    };
+  }
+
+  // Sending work back needs a reason the team can act on. Rejections used to go
+  // out with no feedback at all and no word to the team.
+  const checked = checkReviewFeedback(decision, feedback);
+  if (!checked.ok) return { ok: false, error: checked.error };
+
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { error } = await svc
+  const { data: updated, error } = await svc
     .schema("future")
     .from("submissions")
     .update({
       status: decision,
-      feedback: feedback ?? null,
+      feedback: checked.feedback,
       reviewed_at: new Date().toISOString(),
       reviewed_by: user?.id ?? null,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", submissionId);
+    .eq("id", submissionId)
+    // The same rule again at write time, so the second of two simultaneous
+    // reviews changes nothing and sends no second notice.
+    .eq("status", "submitted")
+    .select("phase")
+    .maybeSingle();
   if (error) return { ok: false, error: safeError(error.message, "submissions") };
+  if (!updated) {
+    return {
+      ok: false,
+      error:
+        "This submission was just reviewed by someone else. Reload the page to see where it stands.",
+    };
+  }
+
+  // Tell the team in the app. The rejection above already stands: a notice that
+  // fails to save is logged, and never undoes or hides the decision.
+  if (decision === "rejected" && checked.feedback) {
+    const notice = await insertRejectionNotice(svc, {
+      teamId: sub.team_id,
+      phase: (updated as { phase: string }).phase,
+      reason: checked.feedback,
+      authorUserId: user?.id ?? null,
+    });
+    if (notice.ok) {
+      revalidatePath("/yi-future/me/announcements");
+    } else {
+      console.warn(
+        `[yi-future] submission ${submissionId} was rejected, but the in-app notice to its team was not saved: ${notice.error}`
+      );
+    }
+  }
 
   revalidatePath("/yi-future/chapter/submissions");
   revalidatePath("/yi-future/me/submissions");

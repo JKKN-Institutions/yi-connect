@@ -1,0 +1,11 @@
+{
+  "name": "Yi Recognitions",
+  "short_name": "Recognitions",
+  "description": "Take Pride: national chapter awards of Young Indians.",
+  "start_url": "/recognitions",
+  "scope": "/recognitions",
+  "display": "standalone",
+  "theme_color": "#12372a",
+  "background_color": "#eef2ec",
+  "icons": [{ "src": "/recognitions-assets/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

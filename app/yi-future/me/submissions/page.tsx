@@ -7,7 +7,11 @@ import {
   submitSubmission,
 } from "@/app/yi-future/actions/submissions";
 import { DeliverableUpload } from "@/components/yi-future/submissions/DeliverableUpload";
-import type { SubmissionFileRow } from "@/lib/yi-future/submission-files";
+import {
+  SUBMISSION_BUCKET,
+  type SubmissionFileRow,
+  type SubmissionFileView,
+} from "@/lib/yi-future/submission-files";
 import { SopDownloadCard } from "@/components/yi-future/SopDownloadCard";
 import type { Database } from "@/types/yi-future/database";
 
@@ -62,8 +66,8 @@ async function getSubmissions(teamId: string): Promise<Submission[]> {
 /** Files uploaded against these submissions, grouped by (submission, slot). */
 async function getSubmissionFiles(
   submissionIds: string[]
-): Promise<Map<string, SubmissionFileRow[]>> {
-  const grouped = new Map<string, SubmissionFileRow[]>();
+): Promise<Map<string, SubmissionFileView[]>> {
+  const grouped = new Map<string, SubmissionFileView[]>();
   if (submissionIds.length === 0) return grouped;
   const svc = await createServiceClient();
   // future.submission_files is not in the generated types (as with every table
@@ -75,10 +79,25 @@ async function getSubmissionFiles(
     .select("id, submission_id, slot, file_path, file_name, size_bytes, content_type, uploaded_at")
     .in("submission_id", submissionIds)
     .order("uploaded_at", { ascending: true });
-  for (const row of ((data as SubmissionFileRow[] | null) ?? [])) {
+  const rows = (data as SubmissionFileRow[] | null) ?? [];
+
+  // A short-lived link per file, so the team can open what they uploaded and
+  // check it is the version the jury will read. The bucket stays private.
+  const signed = new Map<string, string>();
+  if (rows.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: urls } = await (svc as any).storage
+      .from(SUBMISSION_BUCKET)
+      .createSignedUrls(rows.map((r) => r.file_path), 60 * 60);
+    for (const u of ((urls as { path: string | null; signedUrl: string | null }[] | null) ?? [])) {
+      if (u.path && u.signedUrl) signed.set(u.path, u.signedUrl);
+    }
+  }
+
+  for (const row of rows) {
     const key = `${row.submission_id}:${row.slot}`;
     if (!grouped.has(key)) grouped.set(key, []);
-    grouped.get(key)!.push(row);
+    grouped.get(key)!.push({ ...row, signedUrl: signed.get(row.file_path) ?? null });
   }
   return grouped;
 }
@@ -90,9 +109,24 @@ const STATUS_STYLE: Record<string, string> = {
   rejected: "bg-red-100 text-red-700",
 };
 
-export default async function MySubmissionsPage() {
+/**
+ * Where to send a student whose save or submit was refused. The page used to
+ * throw the result away, so a refusal looked exactly like a button that did
+ * nothing. Capped so the message cannot bloat the URL.
+ */
+function submissionsRefusal(error: string): string {
+  return `/yi-future/me/submissions?error=${encodeURIComponent(error.slice(0, 300))}`;
+}
+
+export default async function MySubmissionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
   const session = await readSession();
   if (!session || session.type !== "delegate") redirect("/yi-future/join");
+  // A refused save or submit comes back here carrying its reason.
+  const pageError = ((await searchParams).error ?? "").slice(0, 300) || null;
 
   const team = await getCaptainTeam(session.id);
   if (!team) {
@@ -157,7 +191,7 @@ export default async function MySubmissionsPage() {
   const filesBySlot = await getSubmissionFiles(submissions.map((s) => s.id));
 
   /** Files already attached to one deliverable slot. */
-  function slotFiles(sub: Submission | undefined, slot: string): SubmissionFileRow[] {
+  function slotFiles(sub: Submission | undefined, slot: string): SubmissionFileView[] {
     return sub ? filesBySlot.get(`${sub.id}:${slot}`) ?? [] : [];
   }
 
@@ -170,57 +204,111 @@ export default async function MySubmissionsPage() {
 
   async function saveDraftA(formData: FormData) {
     "use server";
-    await saveSubmissionDraft({
+    const res = await saveSubmissionDraft({
       teamId: team!.id,
       phase: "phase_a",
       delegateId: session!.id,
       formData,
     });
+    if (!res.ok) {
+      redirect(
+        submissionsRefusal(
+          "error" in res && res.error ? res.error : "That did not go through — try again."
+        )
+      );
+    }
+    // Always land on the clean URL, so an earlier refusal does not linger.
+    redirect("/yi-future/me/submissions");
   }
   async function submitA(formData: FormData) {
     "use server";
-    await submitSubmission({
+    const res = await submitSubmission({
       teamId: team!.id,
       phase: "phase_a",
       delegateId: session!.id,
       formData,
     });
+    if (!res.ok) {
+      redirect(
+        submissionsRefusal(
+          "error" in res && res.error ? res.error : "That did not go through — try again."
+        )
+      );
+    }
+    // Always land on the clean URL, so an earlier refusal does not linger.
+    redirect("/yi-future/me/submissions");
   }
   async function saveDraftB(formData: FormData) {
     "use server";
-    await saveSubmissionDraft({
+    const res = await saveSubmissionDraft({
       teamId: team!.id,
       phase: "phase_b",
       delegateId: session!.id,
       formData,
     });
+    if (!res.ok) {
+      redirect(
+        submissionsRefusal(
+          "error" in res && res.error ? res.error : "That did not go through — try again."
+        )
+      );
+    }
+    // Always land on the clean URL, so an earlier refusal does not linger.
+    redirect("/yi-future/me/submissions");
   }
   async function submitB(formData: FormData) {
     "use server";
-    await submitSubmission({
+    const res = await submitSubmission({
       teamId: team!.id,
       phase: "phase_b",
       delegateId: session!.id,
       formData,
     });
+    if (!res.ok) {
+      redirect(
+        submissionsRefusal(
+          "error" in res && res.error ? res.error : "That did not go through — try again."
+        )
+      );
+    }
+    // Always land on the clean URL, so an earlier refusal does not linger.
+    redirect("/yi-future/me/submissions");
   }
   async function saveDraftC(formData: FormData) {
     "use server";
-    await saveSubmissionDraft({
+    const res = await saveSubmissionDraft({
       teamId: team!.id,
       phase: "phase_c",
       delegateId: session!.id,
       formData,
     });
+    if (!res.ok) {
+      redirect(
+        submissionsRefusal(
+          "error" in res && res.error ? res.error : "That did not go through — try again."
+        )
+      );
+    }
+    // Always land on the clean URL, so an earlier refusal does not linger.
+    redirect("/yi-future/me/submissions");
   }
   async function submitC(formData: FormData) {
     "use server";
-    await submitSubmission({
+    const res = await submitSubmission({
       teamId: team!.id,
       phase: "phase_c",
       delegateId: session!.id,
       formData,
     });
+    if (!res.ok) {
+      redirect(
+        submissionsRefusal(
+          "error" in res && res.error ? res.error : "That did not go through — try again."
+        )
+      );
+    }
+    // Always land on the clean URL, so an earlier refusal does not linger.
+    redirect("/yi-future/me/submissions");
   }
 
   function PhaseCard({
@@ -322,6 +410,16 @@ export default async function MySubmissionsPage() {
 
   return (
     <div className="space-y-5">
+      {/* A refused save or submit used to leave this page looking unchanged,
+          which read as a button that does nothing. */}
+      {pageError && (
+        <div
+          role="alert"
+          className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
+          {pageError}
+        </div>
+      )}
       <div>
         <Link
           href="/yi-future/me"
@@ -333,7 +431,7 @@ export default async function MySubmissionsPage() {
           Deliverables · {team.team_name}
         </h2>
         <p className="mt-1 text-sm text-navy/60">
-          3 phases, each produces a deliverable. Phase C produces 4 artifacts.
+          3 phases, each produces a deliverable. Phase C is a final report and a pitch deck.
         </p>
       </div>
 

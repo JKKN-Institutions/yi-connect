@@ -1,0 +1,67 @@
+/* Stage 2 / governance views. Lane-local additions to recognitions.css. */
+
+.rx-p-fold {
+  border: 1px solid var(--rx-line);
+  border-radius: var(--rx-radius);
+  background: var(--rx-plate);
+}
+.rx-p-fold + .rx-p-fold { margin-top: 8px; }
+.rx-p-fold > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 10px 14px;
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.rx-p-fold > summary::-webkit-details-marker { display: none; }
+.rx-p-fold > summary::before {
+  content: "+";
+  font-family: var(--font-rx-mono), monospace;
+  color: var(--rx-gilt-deep);
+  width: 12px;
+  flex: none;
+}
+.rx-p-fold[open] > summary::before { content: "−"; }
+.rx-p-fold[open] > summary { border-bottom: 1px solid var(--rx-line); }
+.rx-p-fold-body { padding: 14px; }
+.rx-p-fold-body > * + * { margin-top: 14px; }
+
+.rx-p-list { margin: 0; padding-left: 20px; }
+.rx-p-list li + li { margin-top: 6px; }
+.rx-p-quote {
+  border-left: 2px solid var(--rx-line-strong);
+  padding-left: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.rx-p-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.rx-p-flag { color: var(--rx-vermilion); font-weight: 600; }
+.rx-p-avg { background: var(--rx-gilt-wash); }
+.rx-p-total { background: var(--rx-laurel-wash); font-weight: 650; }
+
+.rx-p-num-input { width: 96px; min-width: 80px; padding: 8px 10px; text-align: right; font-family: var(--font-rx-mono), monospace; }
+
+.rx-p-bar { display: flex; align-items: center; gap: 10px; }
+.rx-p-bar-track { flex: 1; height: 8px; background: var(--rx-laurel-wash); border-radius: 4px; overflow: hidden; min-width: 60px; }
+.rx-p-bar-fill { height: 100%; background: var(--rx-gilt); }
+
+.rx-p-dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; }
+.rx-p-dl dt { color: var(--rx-mute); font-size: 0.85rem; }
+.rx-p-dl dd { margin: 0; overflow-wrap: anywhere; }
+
+.rx-p-sticky-actions {
+  position: sticky;
+  bottom: 0;
+  background: var(--rx-paper);
+  border-top: 1px solid var(--rx-line);
+  padding: 12px 0;
+  z-index: 2;
+}
+
+@media (max-width: 640px) {
+  .rx-p-dl { grid-template-columns: 1fr; gap: 2px; }
+  .rx-p-dl dd { margin-bottom: 8px; }
+}

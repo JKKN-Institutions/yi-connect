@@ -25,10 +25,9 @@ export function isSubmissionSlot(value: string): value is SubmissionSlot {
 }
 
 /**
- * Upload ceiling. Server Actions are configured at 10mb in next.config.ts and
- * the whole file crosses that boundary, so this MUST stay under it — a larger
- * file is rejected by the framework before any of our code runs, which shows
- * the student a blank failure instead of a sentence.
+ * Upload ceiling. The file goes from the browser straight to storage through a
+ * one-time link, so this is our own limit rather than a platform one — checked
+ * in the browser before sending, and again on the stored object.
  */
 export const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 
@@ -48,6 +47,21 @@ export const ACCEPTED_UPLOAD_TYPES: Record<string, string> = {
 
 export const ACCEPT_ATTRIBUTE = ".pdf,.pptx,.docx,.doc,.ppt";
 
+/**
+ * The type to store a file as. Some browsers hand over an empty File.type for
+ * Office documents, and storage would then record application/octet-stream,
+ * which the attach step rightly refuses. Falls back to the file extension, and
+ * returns "" when the file is not an accepted kind at all.
+ */
+export function mimeForFile(fileName: string, browserType: string): string {
+  if (browserType && browserType in ACCEPTED_UPLOAD_TYPES) return browserType;
+  const lower = fileName.toLowerCase();
+  for (const [mime, ext] of Object.entries(ACCEPTED_UPLOAD_TYPES)) {
+    if (lower.endsWith(ext)) return mime;
+  }
+  return "";
+}
+
 export type SubmissionFileRow = {
   id: string;
   submission_id: string;
@@ -58,6 +72,10 @@ export type SubmissionFileRow = {
   content_type: string | null;
   uploaded_at: string;
 };
+
+/** A file as the team's own page shows it: the row plus a short-lived link to
+ *  open it, so the team can check the exact version the jury will read. */
+export type SubmissionFileView = SubmissionFileRow & { signedUrl: string | null };
 
 /** Human-readable size, for a student deciding whether their file is too big. */
 export function formatBytes(bytes: number): string {

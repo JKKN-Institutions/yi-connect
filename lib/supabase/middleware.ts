@@ -49,6 +49,15 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+/** Yi Recognitions' own web address(es), separate from the Yi Connect one. */
+const RECOGNITIONS_HOSTS = new Set(['yi-recognitions.vercel.app'])
+/** The only paths served on those addresses. */
+const RECOGNITIONS_HOST_PATHS = [
+  '/recognitions',
+  '/recognitions-assets',
+  '/auth/callback', // Google / email-link sign-in returns here
+]
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -92,6 +101,31 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
+  // ─── Yi Recognitions' own address ────────────────────────────────────
+  // On yi-recognitions.vercel.app only Recognitions (and the sign-in
+  // callback it needs) is reachable; every other path, including "/",
+  // goes to /recognitions, so no other Yi app shows on that address.
+  const requestHost = (
+    request.headers.get('x-forwarded-host') ??
+    request.headers.get('host') ??
+    request.nextUrl.hostname
+  )
+    .split(',')[0]
+    .split(':')[0]
+    .trim()
+    .toLowerCase()
+  if (RECOGNITIONS_HOSTS.has(requestHost)) {
+    const allowed = RECOGNITIONS_HOST_PATHS.some(
+      p => pathname === p || pathname.startsWith(p + '/')
+    )
+    if (!allowed) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/recognitions'
+      url.search = ''
+      return NextResponse.redirect(url)
+    }
+  }
+
   // ─── YIP nested mount (/yip/*) ────────────────────────────────────────
   if (pathname.startsWith('/yip')) {
     return handleYipAuth(request, supabaseResponse, user)
@@ -110,6 +144,18 @@ export async function updateSession(request: NextRequest) {
   // ─── YIQ nested mount (/yiq/*) ───────────────────────────────────────
   if (pathname.startsWith('/yiq')) {
     return handleYiqAuth(request, supabaseResponse, user)
+  }
+
+  // ─── Yi Recognitions nested mount (/recognitions/*) ──────────────────
+  // Its own sign-in page; never the Yi Connect /login. Role checks happen in
+  // the pages (lib/recognitions/auth.ts) and deny with an explicit panel.
+  if (pathname === '/recognitions' || pathname.startsWith('/recognitions/')) {
+    if (pathname.startsWith('/recognitions/sign-in') || user) return supabaseResponse
+    const url = request.nextUrl.clone()
+    url.pathname = '/recognitions/sign-in'
+    url.search = ''
+    url.searchParams.set('next', pathname)
+    return NextResponse.redirect(url)
   }
 
   // ─── Yi Youth Academy nested mount (/youth-academy/*) ────────────────

@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react'
+import { usePathname } from 'next/navigation'
 import { RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -26,6 +27,7 @@ export function UpdatePrompt() {
   // reloads for a controller REPLACEMENT; this covers the one case where the
   // page never had a controller yet the user still asked for the update.
   const updateRequestedRef = useRef(false)
+  const pathname = usePathname()
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
@@ -91,7 +93,8 @@ export function UpdatePrompt() {
     setShowReload(false)
   }
 
-  if (!showReload) {
+  // Yi Recognitions is separately branded; this prompt names Yi Connect.
+  if (!showReload || pathname?.startsWith('/recognitions')) {
     return null
   }
 

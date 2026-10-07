@@ -118,6 +118,7 @@ export function ConfirmDialog({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
@@ -126,9 +127,9 @@ export function ConfirmDialog({
   }, [open]);
   const btn = tone === "gilt" ? "rx-btn rx-btn-gilt" : tone === "danger" ? "rx-btn rx-btn-danger" : "rx-btn";
   return (
-    <dialog ref={ref} className="rx-dialog" onClose={onClose} aria-labelledby="rx-dialog-title">
+    <dialog ref={ref} className="rx-dialog" onClose={onClose} aria-labelledby={titleId}>
       <div className="rx-stack">
-        <h2 id="rx-dialog-title" className="rx-h2">{title}</h2>
+        <h2 id={titleId} className="rx-h2">{title}</h2>
         <div>{children}</div>
         <div className="rx-row" style={{ justifyContent: "flex-end" }}>
           <button type="button" className="rx-btn rx-btn-quiet" onClick={onClose} disabled={busy}>

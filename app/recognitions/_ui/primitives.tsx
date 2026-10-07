@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Phase } from "@/lib/recognitions/phase";
-import { PHASE_LABEL } from "@/lib/recognitions/phase";
+import { isPast, PHASE_LABEL } from "@/lib/recognitions/phase";
 import { IconClock, IconGate, IconLock } from "./icons";
 
 export function Seal({
@@ -83,7 +83,7 @@ export function formatWhen(iso: string | null | undefined): string {
 }
 
 export function Deadline({ label, iso }: { label: string; iso: string | null }) {
-  const past = !!iso && Date.now() > Date.parse(iso);
+  const past = isPast(iso);
   return (
     <div className="rx-row rx-small" style={{ gap: 8 }}>
       <IconClock size={16} className="rx-mute" />

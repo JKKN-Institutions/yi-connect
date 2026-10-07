@@ -341,6 +341,55 @@ begin
 end;
 $$;
 
+-- A submitted nomination's CONTENT is frozen. Only the RM/NMT flag columns
+-- may still change (mail 1: RM recommends, NMT approves, after submission).
+create or replace function yi_connect.recognition_freeze_submitted_nomination()
+returns trigger
+language plpgsql
+as $$
+begin
+  if old.status = 'submitted' and (
+       new.status is distinct from old.status
+    or new.reasons is distinct from old.reasons
+    or new.flagship_event is distinct from old.flagship_event
+    or new.hosted_event is distinct from old.hosted_event
+    or new.hosted_event_name is distinct from old.hosted_event_name
+    or new.hosted_event_type is distinct from old.hosted_event_type
+    or new.announcement_draft is distinct from old.announcement_draft
+    or new.category is distinct from old.category
+    or new.region is distinct from old.region
+    or new.award_id is distinct from old.award_id
+    or new.chapter_id is distinct from old.chapter_id
+    or new.submitted_at is distinct from old.submitted_at
+  ) then
+    raise exception 'recognition: a submitted nomination is frozen';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists recognition_nominations_freeze on yi_connect.recognition_nominations;
+create trigger recognition_nominations_freeze
+  before update on yi_connect.recognition_nominations
+  for each row execute function yi_connect.recognition_freeze_submitted_nomination();
+
+create or replace function yi_connect.recognition_refuse_submitted_delete()
+returns trigger
+language plpgsql
+as $$
+begin
+  if old.status = 'submitted' then
+    raise exception 'recognition: a submitted % cannot be deleted', tg_table_name;
+  end if;
+  return old;
+end;
+$$;
+
+drop trigger if exists recognition_nominations_no_delete on yi_connect.recognition_nominations;
+create trigger recognition_nominations_no_delete
+  before delete on yi_connect.recognition_nominations
+  for each row execute function yi_connect.recognition_refuse_submitted_delete();
+
 drop trigger if exists recognition_moderation_freeze on yi_connect.recognition_moderation_versions;
 create trigger recognition_moderation_freeze
   before update on yi_connect.recognition_moderation_versions

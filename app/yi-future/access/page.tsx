@@ -278,8 +278,20 @@ function GoogleLoginTab() {
       }
 
       if (code) {
-        // Drop ?code= so a refresh cannot replay a now-spent code.
-        window.history.replaceState({}, "", "/yi-future/access?tab=google");
+        // Drop ?code= so a refresh cannot replay a now-spent code, but keep
+        // the rest of the query string. The previous version rewrote the URL
+        // to a hardcoded "/yi-future/access?tab=google", which also threw away
+        // ?step=pick-chapter — the very parameter that tells a reloaded page
+        // the user is mid-way through the Google flow. A refresh after that
+        // rewrite therefore dropped the signed-in user back on the "Continue
+        // with Google" button they had just finished pressing.
+        params.delete("code");
+        params.set("tab", "google"); // keep the Google tab on a refresh
+        window.history.replaceState(
+          {},
+          "",
+          `${window.location.pathname}?${params.toString()}`
+        );
       }
       // Same work as loadChapters(), inlined so this effect does not depend on
       // a function declared further down the component. `user` is already

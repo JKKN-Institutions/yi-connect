@@ -1,0 +1,66 @@
+/* Control room — lane styles. Scoped under .rx-root, rx-ad-* only. */
+
+.rx-ad-nav {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--rx-line);
+  margin: -8px 0 28px;
+  scrollbar-width: thin;
+}
+.rx-ad-nav a {
+  flex: none;
+  padding: 10px 12px;
+  font-size: 0.86rem;
+  color: var(--rx-mute);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+.rx-ad-nav a:hover { color: var(--rx-ink); }
+.rx-ad-nav a[aria-current="page"] { color: var(--rx-laurel-deep); border-bottom-color: var(--rx-gilt); font-weight: 600; }
+
+.rx-ad-award { display: grid; grid-template-columns: auto 1fr; gap: 14px; }
+.rx-ad-bar { height: 6px; background: var(--rx-line); border-radius: 3px; overflow: hidden; }
+.rx-ad-bar > span { display: block; height: 100%; background: var(--rx-laurel); }
+.rx-ad-bar[data-done="true"] > span { background: var(--rx-gilt); }
+.rx-ad-kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; font-size: 0.88rem; }
+.rx-ad-kv dt { color: var(--rx-mute); }
+.rx-ad-kv dd { margin: 0; }
+
+.rx-ad-fields { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.rx-ad-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.rx-ad-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--rx-line-strong);
+  background: var(--rx-plate);
+  font-size: 0.84rem; color: var(--rx-ink); text-decoration: none;
+}
+.rx-ad-chip[aria-current="page"] { background: var(--rx-laurel-deep); color: var(--rx-ivory); border-color: var(--rx-laurel-deep); }
+
+.rx-ad-checks {
+  display: grid; gap: 4px 12px;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  max-height: 240px; overflow-y: auto;
+  padding: 10px; border: 1px solid var(--rx-line); border-radius: var(--rx-radius);
+  background: #fbfcfa;
+}
+.rx-ad-checks label { display: flex; gap: 8px; align-items: center; font-size: 0.85rem; }
+.rx-ad-check { width: 16px; height: 16px; accent-color: var(--rx-laurel); flex: none; }
+
+.rx-ad-pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.rx-ad-mini { font-size: 0.78rem; color: var(--rx-mute); }
+.rx-ad-select-sm { padding: 6px 8px; min-width: 130px; }
+.rx-ad-details > summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; color: var(--rx-laurel); }
+.rx-ad-details[open] > summary { margin-bottom: 10px; }
+.rx-ad-counts { display: flex; gap: 18px; flex-wrap: wrap; }
+.rx-ad-count { display: flex; flex-direction: column; }
+.rx-ad-count b { font-family: var(--font-rx-mono), monospace; font-size: 1.4rem; font-weight: 500; }
+
+@media (max-width: 640px) {
+  .rx-ad-award { grid-template-columns: 1fr; }
+  .rx-ad-kv { grid-template-columns: 1fr; }
+  .rx-ad-kv dt { margin-top: 6px; }
+}

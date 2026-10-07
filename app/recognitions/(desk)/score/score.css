@@ -1,0 +1,56 @@
+/* Scoring desk — lane styles. Builds on recognitions.css tokens only. */
+
+.rx-sheet {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+@media (min-width: 960px) {
+  .rx-sheet { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); }
+  .rx-sheet-dossier { position: sticky; top: 16px; }
+}
+
+.rx-sheet-reasons {
+  margin: 0;
+  padding-left: 1.4em;
+}
+.rx-sheet-reasons > li + li { margin-top: 10px; }
+.rx-sheet-reasons > li { overflow-wrap: anywhere; }
+
+.rx-sheet-field { overflow-wrap: anywhere; white-space: pre-wrap; }
+
+.rx-sheet-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--rx-line);
+  border-radius: var(--rx-radius);
+  background: var(--rx-laurel-wash);
+}
+.rx-sheet-total-n {
+  font-family: var(--font-rx-mono), monospace;
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: var(--rx-ink);
+}
+
+.rx-sheet-params > * + * {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--rx-line);
+}
+
+.rx-sheet-nav {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.rx-deck-dot { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+
+.rx-sheet-duty + .rx-sheet-duty { margin-top: 16px; }

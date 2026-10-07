@@ -112,6 +112,18 @@ export async function updateSession(request: NextRequest) {
     return handleYiqAuth(request, supabaseResponse, user)
   }
 
+  // ─── Yi Recognitions nested mount (/recognitions/*) ──────────────────
+  // Its own sign-in page; never the Yi Connect /login. Role checks happen in
+  // the pages (lib/recognitions/auth.ts) and deny with an explicit panel.
+  if (pathname === '/recognitions' || pathname.startsWith('/recognitions/')) {
+    if (pathname.startsWith('/recognitions/sign-in') || user) return supabaseResponse
+    const url = request.nextUrl.clone()
+    url.pathname = '/recognitions/sign-in'
+    url.search = ''
+    url.searchParams.set('next', pathname)
+    return NextResponse.redirect(url)
+  }
+
   // ─── Yi Youth Academy nested mount (/youth-academy/*) ────────────────
   if (pathname.startsWith('/youth-academy')) {
     return handleYuvaAuth(request, supabaseResponse, user)

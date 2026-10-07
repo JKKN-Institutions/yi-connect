@@ -30,12 +30,14 @@ export function safeName(raw: string): string {
   const dot = raw.lastIndexOf(".");
   const base = dot > 0 ? raw.slice(0, dot) : raw;
   const ext = dot > 0 ? raw.slice(dot + 1).toLowerCase() : "";
-  const slug =
-    base
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 60) || "health-card";
+  // Bound the input first, then trim dashes with a loop: an anchored `-+$`
+  // regex is polynomial on long dash runs in an uploaded file name.
+  const collapsed = base.slice(0, 200).toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  let start = 0;
+  let end = collapsed.length;
+  while (start < end && collapsed[start] === "-") start++;
+  while (end > start && collapsed[end - 1] === "-") end--;
+  const slug = collapsed.slice(start, end).slice(0, 60) || "health-card";
   return ext ? `${slug}.${ext}` : slug;
 }
 

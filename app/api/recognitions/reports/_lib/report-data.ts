@@ -210,5 +210,11 @@ export async function verticalReport(): Promise<{ cycle: CycleRow; sheets: Verti
 }
 
 export function fileSlug(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "cycle";
+  // Bounded input + loop trim: an anchored `-+$` regex is polynomial on long dash runs.
+  const collapsed = s.slice(0, 200).toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  let start = 0;
+  let end = collapsed.length;
+  while (start < end && collapsed[start] === "-") start++;
+  while (end > start && collapsed[end - 1] === "-") end--;
+  return collapsed.slice(start, end).slice(0, 40) || "cycle";
 }

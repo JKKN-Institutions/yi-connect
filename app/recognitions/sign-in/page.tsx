@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { RibbonRail } from "../_ui/ribbon";
 import { MedalMark } from "../_ui/icons";
+import { ResultLine } from "../_ui/client";
 import { SignInForm } from "./sign-in-form";
 
 export const metadata: Metadata = { title: "Sign in" };
@@ -11,12 +12,18 @@ function safeNext(raw: string | undefined): string {
   return raw;
 }
 
+const ERRORS: Record<string, string> = {
+  unauthorized: "This email could not be signed in. Use the email your Yi account is registered under.",
+  auth_failed: "Sign-in did not finish. Please try again.",
+};
+
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; error?: string }>;
 }) {
-  const { next } = await searchParams;
+  const { next, error } = await searchParams;
+  const errorText = error ? (Object.hasOwn(ERRORS, error) ? ERRORS[error] : ERRORS.auth_failed) : null;
   return (
     <>
       <RibbonRail />
@@ -31,6 +38,7 @@ export default async function SignInPage({
             <p className="rx-mute">Sign in with the email your Yi account is registered under.</p>
           </div>
           <div className="rx-plate">
+            <ResultLine result={errorText ? { ok: false, text: errorText } : null} />
             <SignInForm next={safeNext(next)} devPassword={process.env.NODE_ENV === "development"} />
           </div>
         </div>

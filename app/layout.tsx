@@ -86,6 +86,13 @@ export const metadata: Metadata = {
       { url: '/icons/icon.svg', type: 'image/svg+xml' }
     ],
     apple: [{ url: '/icons/apple-touch-icon.svg', type: 'image/svg+xml' }]
+  },
+  // These used to be hand-written <meta>/<link> tags in <head> below. As
+  // metadata they render identically, and a nested app with its own brand
+  // (e.g. /recognitions) can override them; hand-written tags it could not.
+  other: {
+    'mobile-web-app-capable': 'yes',
+    'msapplication-TileColor': '#3b82f6'
   }
   // Manifest is automatically handled by Next.js 16 via app/manifest.ts
   // No need to explicitly declare it here
@@ -98,28 +105,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang='en' suppressHydrationWarning>
-      <head>
-        {/* PWA Meta Tags */}
-        <meta name='mobile-web-app-capable' content='yes' />
-        <meta name='apple-mobile-web-app-capable' content='yes' />
-        <meta name='apple-mobile-web-app-status-bar-style' content='default' />
-        <meta name='apple-mobile-web-app-title' content='Yi Connect' />
-
-        {/* Favicons */}
-        <link rel='icon' href='/favicon.svg' type='image/svg+xml' />
-        <link
-          rel='icon'
-          href='/icons/icon.svg'
-          type='image/svg+xml'
-          sizes='any'
-        />
-
-        {/* Apple Touch Icons */}
-        <link rel='apple-touch-icon' href='/icons/apple-touch-icon.svg' />
-
-        {/* MS Tile */}
-        <meta name='msapplication-TileColor' content='#3b82f6' />
-      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning

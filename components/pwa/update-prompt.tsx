@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 import { RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -22,6 +23,7 @@ export function UpdatePrompt() {
   const [showReload, setShowReload] = useState(false)
   const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
+  const pathname = usePathname()
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
@@ -78,7 +80,8 @@ export function UpdatePrompt() {
     setShowReload(false)
   }
 
-  if (!showReload) {
+  // Yi Recognitions is separately branded; this prompt names Yi Connect.
+  if (!showReload || pathname?.startsWith('/recognitions')) {
     return null
   }
 

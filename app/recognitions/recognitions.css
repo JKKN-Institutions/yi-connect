@@ -1,0 +1,349 @@
+/*
+ * Yi Recognitions — its own visual system. Nothing here reuses the shared
+ * shadcn tokens; every class is prefixed rx- and scoped under .rx-root.
+ *
+ * Palette: laurel + gilt (the wreath and the medal), on a cool sage-white.
+ * Type: Marcellus (engraved plaque caps) for award names and headings,
+ *       Figtree for reading, Spline Sans Mono for scores and dates.
+ * Signature: every award wears its own medal-ribbon stripe.
+ */
+
+.rx-root {
+  --rx-ink: #13241c;
+  --rx-mute: #5c6e64;
+  --rx-paper: #eef2ec;
+  --rx-plate: #ffffff;
+  --rx-line: #ccd6ce;
+  --rx-line-strong: #9fb0a5;
+  --rx-laurel: #1f5a43;
+  --rx-laurel-deep: #12372a;
+  --rx-laurel-wash: #e1ebe4;
+  --rx-gilt: #b4862f;
+  --rx-gilt-deep: #8a6420;
+  --rx-gilt-wash: #f4ead2;
+  --rx-vermilion: #c8442c;
+  --rx-vermilion-wash: #f8e3de;
+  --rx-cobalt: #2c4a7a;
+  --rx-ivory: #f6f1e4;
+  --rx-teal: #0e7c86;
+  --rx-saffron: #d9952b;
+  --rx-rose: #a8384a;
+  --rx-sky: #7fb3c9;
+  --rx-forest: #2e6b3a;
+
+  --rx-radius: 6px;
+  --rx-radius-lg: 10px;
+
+  color-scheme: light;
+  min-height: 100dvh;
+  background: var(--rx-paper);
+  color: var(--rx-ink);
+  font-family: var(--font-rx-body), system-ui, sans-serif;
+  font-size: 15.5px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.rx-root *:focus-visible {
+  outline: 2px solid var(--rx-gilt);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* ---------------------------------------------------------------- type */
+.rx-display {
+  font-family: var(--font-rx-display), serif;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  line-height: 1.15;
+}
+.rx-h1 { font-family: var(--font-rx-display), serif; font-size: clamp(1.7rem, 4.6vw, 2.5rem); letter-spacing: 0.03em; line-height: 1.12; }
+.rx-h2 { font-family: var(--font-rx-display), serif; font-size: 1.35rem; letter-spacing: 0.04em; line-height: 1.2; }
+.rx-h3 { font-weight: 650; font-size: 1.02rem; letter-spacing: -0.005em; }
+.rx-eyebrow {
+  font-family: var(--font-rx-mono), monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--rx-mute);
+}
+.rx-num { font-family: var(--font-rx-mono), monospace; font-variant-numeric: tabular-nums; }
+.rx-mute { color: var(--rx-mute); }
+.rx-small { font-size: 0.85rem; }
+
+/* -------------------------------------------------------------- frame */
+.rx-rail { height: 7px; display: flex; }
+.rx-rail > span { flex: 1; }
+
+.rx-top {
+  border-bottom: 1px solid var(--rx-line);
+  background: var(--rx-plate);
+}
+.rx-top-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.rx-mark { display: flex; align-items: center; gap: 10px; color: var(--rx-laurel-deep); text-decoration: none; }
+.rx-mark-word { font-family: var(--font-rx-display), serif; font-size: 1.15rem; letter-spacing: 0.08em; }
+.rx-desks { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
+.rx-desk-link {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  color: var(--rx-ink);
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+.rx-desk-link:hover { border-color: var(--rx-line); }
+.rx-desk-link[aria-current="page"] { background: var(--rx-laurel-deep); color: var(--rx-ivory); }
+.rx-who { display: flex; align-items: center; gap: 10px; font-size: 0.82rem; color: var(--rx-mute); }
+
+.rx-main { max-width: 1120px; margin: 0 auto; padding: 28px 16px 72px; }
+.rx-narrow { max-width: 760px; margin: 0 auto; }
+
+/* ------------------------------------------------------------- plates */
+/* A plate is the base surface: a thin rule with an inner hairline, like the
+   double edge of an engraved plaque. No drop shadows. */
+.rx-plate {
+  background: var(--rx-plate);
+  border: 1px solid var(--rx-line);
+  border-radius: var(--rx-radius-lg);
+  box-shadow: inset 0 0 0 3px var(--rx-plate), inset 0 0 0 4px var(--rx-laurel-wash);
+  padding: 20px;
+}
+.rx-plate-tight { padding: 14px 16px; }
+.rx-plate-gilt { box-shadow: inset 0 0 0 3px var(--rx-plate), inset 0 0 0 4px var(--rx-gilt-wash); border-color: #dcc690; }
+
+.rx-stack > * + * { margin-top: 16px; }
+.rx-stack-lg > * + * { margin-top: 28px; }
+.rx-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.rx-spread { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.rx-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.rx-rule { border: 0; border-top: 1px solid var(--rx-line); margin: 20px 0; }
+
+/* ------------------------------------------------------------ ribbons */
+.rx-ribbon {
+  display: inline-block;
+  width: 34px;
+  height: 12px;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(19, 36, 28, 0.18);
+  flex: none;
+}
+.rx-ribbon-lg { width: 56px; height: 18px; }
+.rx-ribbon-tall { width: 14px; height: auto; align-self: stretch; border-radius: 3px; }
+
+/* ------------------------------------------------------------ buttons */
+.rx-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: var(--rx-radius);
+  border: 1px solid var(--rx-laurel-deep);
+  background: var(--rx-laurel-deep);
+  color: var(--rx-ivory);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.93rem;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 120ms ease, transform 120ms ease;
+}
+.rx-btn:hover { background: var(--rx-laurel); }
+.rx-btn:active { transform: translateY(1px); }
+.rx-btn:disabled, .rx-btn[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; transform: none; }
+.rx-btn-gilt { background: var(--rx-gilt); border-color: var(--rx-gilt-deep); color: #1d1405; }
+.rx-btn-gilt:hover { background: #c3953b; }
+.rx-btn-quiet { background: transparent; color: var(--rx-laurel-deep); border-color: var(--rx-line-strong); }
+.rx-btn-quiet:hover { background: var(--rx-laurel-wash); }
+.rx-btn-danger { background: var(--rx-plate); color: var(--rx-vermilion); border-color: var(--rx-vermilion); }
+.rx-btn-danger:hover { background: var(--rx-vermilion-wash); }
+.rx-btn-sm { min-height: 34px; padding: 0 12px; font-size: 0.84rem; }
+.rx-link { color: var(--rx-laurel); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+
+/* ------------------------------------------------------------- fields */
+.rx-label { display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 6px; }
+.rx-help { font-size: 0.82rem; color: var(--rx-mute); margin-top: 4px; }
+.rx-input, .rx-textarea, .rx-select {
+  width: 100%;
+  font: inherit;
+  color: var(--rx-ink);
+  background: #fbfcfa;
+  border: 1px solid var(--rx-line-strong);
+  border-radius: var(--rx-radius);
+  padding: 10px 12px;
+}
+.rx-textarea { min-height: 96px; resize: vertical; line-height: 1.5; }
+.rx-input:focus, .rx-textarea:focus, .rx-select:focus { outline: none; border-color: var(--rx-laurel); box-shadow: 0 0 0 3px var(--rx-laurel-wash); }
+.rx-input[readonly], .rx-textarea[readonly] { background: var(--rx-paper); }
+
+/* Word meter: a thin bar under a text box that fills as you write. */
+.rx-meter { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.rx-meter-track { flex: 1; height: 3px; background: var(--rx-line); border-radius: 2px; overflow: hidden; }
+.rx-meter-fill { height: 100%; background: var(--rx-laurel); transition: width 160ms ease; }
+.rx-meter[data-over="true"] .rx-meter-fill { background: var(--rx-vermilion); }
+.rx-meter-count { font-family: var(--font-rx-mono), monospace; font-size: 0.74rem; color: var(--rx-mute); white-space: nowrap; }
+.rx-meter[data-over="true"] .rx-meter-count { color: var(--rx-vermilion); font-weight: 600; }
+
+/* Pip scale: six stops, 0 to 5, for one parameter. */
+.rx-pips { display: inline-flex; gap: 6px; }
+.rx-pip {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--rx-line-strong);
+  background: var(--rx-plate);
+  font-family: var(--font-rx-mono), monospace;
+  font-size: 0.9rem;
+  color: var(--rx-ink);
+  cursor: pointer;
+  transition: background 100ms ease, border-color 100ms ease;
+}
+.rx-pip:hover { border-color: var(--rx-laurel); }
+.rx-pip[aria-checked="true"] { background: var(--rx-gilt); border-color: var(--rx-gilt-deep); color: #1d1405; font-weight: 600; }
+.rx-pip:disabled { cursor: default; }
+
+/* Choice tiles (checkbox matrix, quiz picks). */
+.rx-tile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--rx-line);
+  border-radius: var(--rx-radius);
+  background: var(--rx-plate);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  width: 100%;
+}
+.rx-tile:hover { border-color: var(--rx-line-strong); }
+.rx-tile[aria-pressed="true"], .rx-tile[aria-checked="true"] { border-color: var(--rx-laurel); background: var(--rx-laurel-wash); }
+.rx-tile:disabled { cursor: default; opacity: 0.7; }
+
+/* --------------------------------------------------------- stepper */
+.rx-steps { display: flex; gap: 0; list-style: none; padding: 0; margin: 0 0 24px; overflow-x: auto; }
+.rx-step {
+  flex: 1;
+  min-width: 96px;
+  padding: 10px 8px 12px;
+  border-top: 3px solid var(--rx-line);
+  font-size: 0.78rem;
+  color: var(--rx-mute);
+}
+.rx-step[data-state="done"] { border-top-color: var(--rx-laurel); color: var(--rx-laurel-deep); }
+.rx-step[data-state="current"] { border-top-color: var(--rx-gilt); color: var(--rx-ink); font-weight: 600; }
+.rx-step-n { font-family: var(--font-rx-mono), monospace; display: block; font-size: 0.7rem; letter-spacing: 0.1em; }
+
+/* ---------------------------------------------------------- seals */
+/* Status seals: round, engraved-looking stamps instead of pill badges. */
+.rx-seal {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  border-radius: 999px;
+  border: 1px dashed currentColor;
+  font-family: var(--font-rx-mono), monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.rx-seal::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.rx-seal-laurel { color: var(--rx-laurel); }
+.rx-seal-gilt { color: var(--rx-gilt-deep); }
+.rx-seal-vermilion { color: var(--rx-vermilion); }
+.rx-seal-mute { color: var(--rx-mute); }
+
+/* ---------------------------------------------------------- notices */
+.rx-notice {
+  border-left: 3px solid var(--rx-gilt);
+  background: var(--rx-gilt-wash);
+  padding: 12px 14px;
+  border-radius: 0 var(--rx-radius) var(--rx-radius) 0;
+  font-size: 0.9rem;
+}
+.rx-notice-alert { border-left-color: var(--rx-vermilion); background: var(--rx-vermilion-wash); }
+.rx-notice-ok { border-left-color: var(--rx-laurel); background: var(--rx-laurel-wash); }
+
+/* ---------------------------------------------------------- ledger */
+/* The ledger is this app's data grid: ruled lines, no zebra, no card. */
+.rx-ledger-wrap { overflow-x: auto; border: 1px solid var(--rx-line); border-radius: var(--rx-radius-lg); background: var(--rx-plate); }
+.rx-ledger { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+.rx-ledger th {
+  text-align: left;
+  font-family: var(--font-rx-mono), monospace;
+  font-weight: 500;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--rx-mute);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--rx-line-strong);
+  white-space: nowrap;
+  background: #f7f9f6;
+}
+.rx-ledger td { padding: 10px 12px; border-bottom: 1px solid var(--rx-line); vertical-align: top; }
+.rx-ledger tr:last-child td { border-bottom: 0; }
+.rx-ledger td.rx-num, .rx-ledger th.rx-num { text-align: right; }
+
+/* ---------------------------------------------------------- deck */
+/* Evaluators move through chapters one at a time, like a deck of dossiers. */
+.rx-deck-strip { display: flex; gap: 4px; flex-wrap: wrap; }
+.rx-deck-dot {
+  min-width: 34px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--rx-radius);
+  border: 1px solid var(--rx-line);
+  background: var(--rx-plate);
+  font-family: var(--font-rx-mono), monospace;
+  font-size: 0.75rem;
+  cursor: pointer;
+  color: var(--rx-ink);
+}
+.rx-deck-dot[data-state="submitted"] { background: var(--rx-laurel-deep); color: var(--rx-ivory); border-color: var(--rx-laurel-deep); }
+.rx-deck-dot[data-state="draft"] { border-color: var(--rx-gilt); background: var(--rx-gilt-wash); }
+.rx-deck-dot[aria-current="true"] { outline: 2px solid var(--rx-gilt); outline-offset: 1px; }
+
+/* ---------------------------------------------------------- podium */
+.rx-podium { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.rx-place { border-top: 4px solid var(--rx-line-strong); }
+.rx-place[data-rank="1"] { border-top-color: var(--rx-gilt); }
+.rx-place[data-rank="2"] { border-top-color: #9aa3a8; }
+.rx-place[data-rank="3"] { border-top-color: #a8714a; }
+
+/* ---------------------------------------------------------- dialog */
+.rx-dialog::backdrop { background: rgba(18, 55, 42, 0.45); }
+.rx-dialog {
+  border: 1px solid var(--rx-line);
+  border-radius: var(--rx-radius-lg);
+  padding: 22px;
+  width: min(560px, calc(100vw - 32px));
+  background: var(--rx-plate);
+  color: var(--rx-ink);
+}
+
+@media (max-width: 640px) {
+  .rx-root { font-size: 15px; }
+  .rx-plate { padding: 16px; }
+  .rx-pip { width: 38px; height: 38px; }
+  .rx-pips { gap: 4px; }
+  .rx-desks { margin-left: 0; width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rx-root * { transition: none !important; animation: none !important; }
+}

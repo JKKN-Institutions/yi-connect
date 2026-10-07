@@ -44,6 +44,13 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/* The base reset makes every svg a block; icons here sit inline with text. */
+.rx-root svg { display: inline-block; vertical-align: -0.15em; flex: none; }
+
+/* Consecutive form sections (wizard steps) need air between them. */
+.rx-root fieldset + fieldset { margin-top: 36px !important; }
+.rx-root fieldset > legend { margin-bottom: 4px; }
+
 .rx-root *:focus-visible {
   outline: 2px solid var(--rx-gilt);
   outline-offset: 2px;
@@ -328,6 +335,8 @@
 /* ---------------------------------------------------------- dialog */
 .rx-dialog::backdrop { background: rgba(18, 55, 42, 0.45); }
 .rx-dialog {
+  /* The base reset zeroes every margin, which un-centres a native modal. */
+  margin: auto;
   border: 1px solid var(--rx-line);
   border-radius: var(--rx-radius-lg);
   padding: 22px;

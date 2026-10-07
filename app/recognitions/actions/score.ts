@@ -159,11 +159,13 @@ export async function saveScore(input: SaveScoreInput): Promise<ActionResult> {
   }
 
   // Audit without the marks themselves — the log is read by oversight, but marks stay in one place.
-  await audit({
+  // Only submissions are logged: drafts auto-save every few seconds while an
+  // evaluator types, and logging each one would bury the trail.
+  if (submit) await audit({
     cycleId: state.cycle.id,
     awardId: duty.award_id,
     actorPersonId: personId,
-    action: submit ? "score_submitted" : "score_draft_saved",
+    action: "score_submitted",
     entity: "recognition_scores",
     entityId: (written as { id: string } | null)?.id ?? (existing as { id: string } | null)?.id ?? null,
     detail: { nomination_id: nomination.id, chapter_id: nomination.chapter_id, layer: duty.layer, evaluator_id: duty.id },

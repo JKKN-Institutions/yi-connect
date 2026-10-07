@@ -17,6 +17,8 @@ export async function GET(request: NextRequest) {
   const error = requestUrl.searchParams.get('error');
   const errorDescription = requestUrl.searchParams.get('error_description');
   const next = requestUrl.searchParams.get('next') || '/dashboard';
+  // Recognitions has its own sign-in page; its own host bounces /login away with no message.
+  const failBase = next.startsWith('/recognitions') ? '/recognitions/sign-in' : '/login';
 
   // Check if OAuth provider returned an error
   if (error) {
@@ -30,13 +32,13 @@ export async function GET(request: NextRequest) {
       error === 'server_error'
     ) {
       return NextResponse.redirect(
-        new URL('/login?error=unauthorized', requestUrl.origin)
+        new URL(`${failBase}?error=unauthorized`, requestUrl.origin)
       );
     }
 
     // Generic auth error
     return NextResponse.redirect(
-      new URL('/login?error=auth_failed', requestUrl.origin)
+      new URL(`${failBase}?error=auth_failed`, requestUrl.origin)
     );
   }
 
@@ -74,7 +76,7 @@ export async function GET(request: NextRequest) {
 
   // Authentication failed - redirect to login with error
   return NextResponse.redirect(
-    new URL('/login?error=auth_failed', requestUrl.origin)
+    new URL(`${failBase}?error=auth_failed`, requestUrl.origin)
   );
 }
 

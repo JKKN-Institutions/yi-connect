@@ -25,6 +25,14 @@ function Svg({ size = 18, className, title, children }: P & { children: React.Re
   );
 }
 
+/** The Young Indians mark (from the official logo), shown beside the medal. */
+export function YiMark({ height = 26 }: { height?: number }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- static asset; the recognitions host does not serve the image optimizer
+    <img src="/recognitions-assets/yi-mark.png" alt="Young Indians" height={height} width={Math.round((height * 147) / 160)} style={{ display: "block" }} />
+  );
+}
+
 /** The mark: a medal on a split ribbon. */
 export function MedalMark({ size = 26 }: { size?: number }) {
   return (

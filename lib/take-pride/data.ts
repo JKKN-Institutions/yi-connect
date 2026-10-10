@@ -23,11 +23,12 @@ export async function listDelegates(): Promise<TpDelegate[]> {
   return (data ?? []) as TpDelegate[];
 }
 
-/** Seats taken = partners who have at least sent payment. */
+/** Seats taken = REAL partners who have at least sent payment. Sample (demo) partners never hold a seat. */
 export async function seatsTaken(): Promise<number> {
   const { count, error } = await tpService()
     .from("tp_partners")
     .select("id", { count: "exact", head: true })
+    .eq("is_sample", false)
     .in("status", ["payment_submitted", "confirmed"]);
   if (error) throw new Error(error.message);
   return count ?? 0;
@@ -119,20 +120,44 @@ export type DeskOverview = {
   sampleDelegateToken: string | null;
 };
 
-export async function getDeskOverview(): Promise<DeskOverview> {
+/**
+ * Desk numbers. sampleOnly (review mode) computes EVERYTHING over sample rows:
+ * sample partners, sample delegates, and meetings / leads whose partner AND
+ * delegate are both sample. Nothing real is read into the result.
+ */
+export async function getDeskOverview(opts: { sampleOnly?: boolean } = {}): Promise<DeskOverview> {
   const db = tpService();
+  const sampleOnly = opts.sampleOnly === true;
+  const partnersQ = db.from("tp_partners").select("*").order("created_at", { ascending: false });
+  const delegatesQ = db.from("tp_delegates").select("id", { count: "exact", head: true });
+  const checkedQ = db.from("tp_delegates").select("id", { count: "exact", head: true }).not("checked_in_at", "is", null);
   const [p, d, c, m, l, s] = await Promise.all([
-    db.from("tp_partners").select("*").order("created_at", { ascending: false }),
-    db.from("tp_delegates").select("id", { count: "exact", head: true }),
-    db.from("tp_delegates").select("id", { count: "exact", head: true }).not("checked_in_at", "is", null),
-    db.from("tp_meetings").select("status"),
-    db.from("tp_leads").select("id", { count: "exact", head: true }),
+    sampleOnly ? partnersQ.eq("is_sample", true) : partnersQ,
+    sampleOnly ? delegatesQ.eq("is_sample", true) : delegatesQ,
+    sampleOnly ? checkedQ.eq("is_sample", true) : checkedQ,
+    sampleOnly
+      ? db
+          .from("tp_meetings")
+          .select("status, partner:tp_partners!inner(is_sample), delegate:tp_delegates!inner(is_sample)")
+          .eq("partner.is_sample", true)
+          .eq("delegate.is_sample", true)
+      : db.from("tp_meetings").select("status"),
+    sampleOnly
+      ? db
+          .from("tp_leads")
+          .select("id, partner:tp_partners!inner(is_sample), delegate:tp_delegates!inner(is_sample)", { count: "exact", head: true })
+          .eq("partner.is_sample", true)
+          .eq("delegate.is_sample", true)
+      : db.from("tp_leads").select("id", { count: "exact", head: true }),
     db.from("tp_delegates").select("token").eq("is_sample", true).order("badge_code").limit(1).maybeSingle(),
   ]);
   for (const r of [p, d, c, m, l]) if (r.error) throw new Error(r.error.message);
+  const partners = (p.data ?? []) as TpPartner[];
+  // Belt and braces: review mode must never carry a real partner.
+  if (sampleOnly && partners.some((x) => !x.is_sample)) throw new Error("Review mode read a real partner");
   const ms = (m.data ?? []) as { status: string }[];
   return {
-    partners: (p.data ?? []) as TpPartner[],
+    partners,
     delegates: d.count ?? 0,
     checkedIn: c.count ?? 0,
     meetings: {

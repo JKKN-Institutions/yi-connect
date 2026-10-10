@@ -9,10 +9,22 @@ function ist(iso: string): string {
   return new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", hour: "numeric", minute: "2-digit", day: "numeric", month: "short" }).format(new Date(iso));
 }
 
-export function AwardsDeskClient({ cycleName, cells, rehearsalCount }: { cycleName: string; cells: DeskCell[]; rehearsalCount: number }) {
+export function AwardsDeskClient({
+  cycleName,
+  cells,
+  rehearsalCount,
+  review = false,
+}: {
+  cycleName: string;
+  cells: DeskCell[];
+  rehearsalCount: number;
+  review?: boolean;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [rehearsal, setRehearsal] = useState(false);
+  const [rehearsalPick, setRehearsal] = useState(false);
+  // Review mode is rehearsal only: the real reveal never shows (and the server refuses it).
+  const rehearsal = review || rehearsalPick;
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const run = (fn: () => Promise<{ success: true } | { success: false; error: string }>, okText: string) =>
@@ -35,7 +47,7 @@ export function AwardsDeskClient({ cycleName, cells, rehearsalCount }: { cycleNa
             <h2 className="tp-h2">{rehearsal ? "Rehearsal mode" : "Live mode"}</h2>
             <p className="tp-small" style={{ margin: 0 }}>
               {rehearsal
-                ? "Practice reveals show “Winner: Chapter to be announced” on the screen. No real chapter is ever shown."
+                ? `Practice reveals show “Winner: Chapter to be announced” on the screen. No real chapter is ever shown.${review ? " Review mode can rehearse only." : ""}`
                 : `${cycleName} · ${approvedCount} of ${cells.length} ready to reveal.`}
             </p>
           </div>
@@ -44,6 +56,7 @@ export function AwardsDeskClient({ cycleName, cells, rehearsalCount }: { cycleNa
               type="checkbox"
               data-testid="rehearsal-toggle"
               checked={rehearsal}
+              disabled={review}
               onChange={(e) => {
                 setMsg(null);
                 setRehearsal(e.target.checked);
@@ -106,7 +119,7 @@ export function AwardsDeskClient({ cycleName, cells, rehearsalCount }: { cycleNa
                     )}
                   </div>
                   {onScreen && c.revealedWinner && <span className="tp-small">Winner shown: Yi {c.revealedWinner}</span>}
-                  {(!real || stale) && (
+                  {(!real || stale) && !(review && stale) && (
                     <div className="tp-row" style={{ justifyContent: "flex-start" }}>
                       {rehearsal && !stale ? (
                         <button

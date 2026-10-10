@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Denied, TopBar } from "../../_ui";
-import { requireTpOrganiser } from "@/lib/take-pride/auth";
+import { requireTpDesk } from "@/lib/take-pride/auth";
+import { ReviewBanner } from "../../review/_banner";
 import { getAwardsDesk } from "@/lib/take-pride/recognitions-bridge";
 import { AwardsDeskClient } from "./awards-client";
 
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Awards Night desk" };
 
 export default async function AwardsDeskPage() {
-  const g = await requireTpOrganiser();
+  const g = await requireTpDesk();
   if (!g.ok) {
     if (g.reason === "signed_out") {
       return (
@@ -31,6 +32,7 @@ export default async function AwardsDeskPage() {
   return (
     <main className="tp-main wide">
       <TopBar right={<Link className="tp-btn sm ghost" href="/take-pride/desk">Organiser desk</Link>} />
+      {g.mode === "review" && <ReviewBanner />}
       <section className="tp-stack">
         <div className="tp-eyebrow">Awards Night</div>
         <h1 className="tp-h1">Reveal the winners</h1>
@@ -47,7 +49,7 @@ export default async function AwardsDeskPage() {
           <p className="tp-mute" style={{ margin: 0 }}>Recognitions has no current cycle, so there is nothing to reveal.</p>
         </div>
       ) : (
-        <AwardsDeskClient cycleName={desk.cycleName} cells={desk.cells} rehearsalCount={desk.rehearsalCount} />
+        <AwardsDeskClient cycleName={desk.cycleName} cells={desk.cells} rehearsalCount={desk.rehearsalCount} review={g.mode === "review"} />
       )}
     </main>
   );

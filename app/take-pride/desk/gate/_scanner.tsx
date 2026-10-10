@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { ContinuousScanner } from "../../_scanner";
 import { gateCheckIn } from "../../actions";
+import { reviewGateCheckIn } from "../review-actions";
 
 type Outcome =
   | { kind: "in"; name: string; chapter: string; at: string }
@@ -27,7 +28,9 @@ function istStamp(iso: string): string {
   }).format(new Date(iso));
 }
 
-export function GateScanner() {
+export function GateScanner({ review = false }: { review?: boolean }) {
+  // Review mode uses the sample-only check-in; the server re-checks is_sample.
+  const checkIn = review ? reviewGateCheckIn : gateCheckIn;
   const [result, setResult] = useState<Outcome | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [count, setCount] = useState(0);
@@ -48,7 +51,7 @@ export function GateScanner() {
     setBusy(true);
     let outcome: Outcome;
     try {
-      const r = await gateCheckIn(text);
+      const r = await checkIn(text);
       if (r.success) {
         outcome = { kind: r.data.already ? "already" : "in", name: r.data.name, chapter: r.data.chapter, at: r.data.at };
         setCount((c) => c + 1);
@@ -62,7 +65,7 @@ export function GateScanner() {
     setResult(outcome);
     const row: HistoryRow = { id: ++seq.current, scanned: text, when: istClock(new Date()), outcome };
     setHistory((h) => [row, ...h].slice(0, 10));
-  }, []);
+  }, [checkIn]);
 
   return (
     <div className="tp-stack">

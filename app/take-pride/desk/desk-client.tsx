@@ -3,8 +3,12 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { deskConfirmPartner, deskRejectPartner, deskSavePaymentInstructions } from "../actions";
+import { reviewConfirmPartner, reviewRejectPartner } from "./review-actions";
 
-export function PartnerActions({ partnerId }: { partnerId: string }) {
+export function PartnerActions({ partnerId, review = false }: { partnerId: string; review?: boolean }) {
+  // Review mode uses sample-only actions; the server re-checks is_sample either way.
+  const confirm = review ? reviewConfirmPartner : deskConfirmPartner;
+  const reject = review ? reviewRejectPartner : deskRejectPartner;
   const router = useRouter();
   const [pending, start] = useTransition();
   const [rejecting, setRejecting] = useState(false);
@@ -23,13 +27,13 @@ export function PartnerActions({ partnerId }: { partnerId: string }) {
     <div className="tp-stack" style={{ gap: 6 }}>
       {!rejecting ? (
         <div className="tp-row" style={{ justifyContent: "flex-start" }}>
-          <button className="tp-btn green sm" disabled={pending} onClick={() => run(() => deskConfirmPartner(partnerId))}>
+          <button className="tp-btn green sm" disabled={pending} onClick={() => run(() => confirm(partnerId))}>
             {pending ? "Saving…" : "Payment received, confirm"}
           </button>
           <button className="tp-btn ghost sm" disabled={pending} onClick={() => setRejecting(true)}>Not received</button>
         </div>
       ) : (
-        <form className="tp-row" style={{ justifyContent: "flex-start" }} onSubmit={(e) => { e.preventDefault(); run(() => deskRejectPartner(partnerId, reason)); }}>
+        <form className="tp-row" style={{ justifyContent: "flex-start" }} onSubmit={(e) => { e.preventDefault(); run(() => reject(partnerId, reason)); }}>
           <input className="tp-input" style={{ flex: 1, minWidth: 180 }} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="What the member should fix" aria-label="Reason" />
           <button className="tp-btn sm" disabled={pending}>Send back</button>
           <button type="button" className="tp-btn ghost sm" onClick={() => setRejecting(false)}>Cancel</button>

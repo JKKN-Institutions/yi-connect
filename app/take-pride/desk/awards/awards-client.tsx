@@ -85,13 +85,17 @@ export function AwardsDeskClient({ cycleName, cells, rehearsalCount }: { cycleNa
             {row.map((c) => {
               const key = `${c.awardId}:${c.category}`;
               const real = !!c.reveal && !c.reveal.rehearsal;
-              // A real reveal shows on the screen only while the result is still approved.
-              const onScreen = real && c.canReveal;
+              // Approved result changed after the reveal: hidden until revealed again.
+              const stale = real && !!c.reveal?.stale;
+              // A real reveal shows on the screen only while the SAME result is still approved.
+              const onScreen = real && c.canReveal && !stale;
               return (
                 <div key={key} className="tp-stack" style={{ gap: 6 }} data-testid={`cell-${c.category}`} data-award={c.awardTitle}>
                   <div className="tp-row">
                     <b>{c.categoryLabel}</b>
-                    {real && !onScreen ? (
+                    {stale ? (
+                      <span className="tp-tag bad">Hidden: result changed since reveal</span>
+                    ) : real && !onScreen ? (
                       <span className="tp-tag bad">Hidden: no longer approved</span>
                     ) : onScreen ? (
                       <span className="tp-tag green">On screen · {ist(c.reveal!.at)}</span>
@@ -102,9 +106,9 @@ export function AwardsDeskClient({ cycleName, cells, rehearsalCount }: { cycleNa
                     )}
                   </div>
                   {onScreen && c.revealedWinner && <span className="tp-small">Winner shown: Yi {c.revealedWinner}</span>}
-                  {!real && (
+                  {(!real || stale) && (
                     <div className="tp-row" style={{ justifyContent: "flex-start" }}>
-                      {rehearsal ? (
+                      {rehearsal && !stale ? (
                         <button
                           className="tp-btn saffron sm"
                           data-testid="rehearse-btn"
@@ -119,11 +123,14 @@ export function AwardsDeskClient({ cycleName, cells, rehearsalCount }: { cycleNa
                           data-testid="reveal-btn"
                           disabled={pending || !c.canReveal}
                           onClick={() => {
-                            if (!window.confirm(`Reveal the ${title} · ${c.categoryLabel} winner on the hall screen now?`)) return;
+                            const ask = stale
+                              ? `The approved result for ${title} · ${c.categoryLabel} changed after it was revealed. Reveal the new winner on the hall screen now?`
+                              : `Reveal the ${title} · ${c.categoryLabel} winner on the hall screen now?`;
+                            if (!window.confirm(ask)) return;
                             run(() => revealAward(c.awardId, c.category), `${title} · ${c.categoryLabel} is now on the screen.`);
                           }}
                         >
-                          Reveal
+                          {stale ? "Reveal again" : "Reveal"}
                         </button>
                       )}
                     </div>

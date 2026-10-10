@@ -117,11 +117,45 @@ export async function resolveChapter(text: string): Promise<Chapter | null> {
 // ---------------------------------------------------------------------------
 
 type Approved = { versionId: string; top3: Top3[] };
+type Winner = { chapterId: string; chapterName: string; citation: string | null };
+type Db = ReturnType<typeof tpService>;
+
+/**
+ * Per-request lookups. One service client, and each award's approval (and
+ * each award x version x category winner) is read at most once per request,
+ * however many reveal rows or nominations point at it.
+ */
+type Ctx = {
+  db: Db;
+  approved: Map<string, Promise<Approved | null>>;
+  winners: Map<string, Promise<Winner | null>>;
+};
+function newCtx(): Ctx {
+  return { db: tpService(), approved: new Map(), winners: new Map() };
+}
+
+function approvedResult(ctx: Ctx, award: Pick<Award, "id">, cycle: Pick<Cycle, "nomination_deadline">): Promise<Approved | null> {
+  let p = ctx.approved.get(award.id);
+  if (!p) {
+    p = readApproved(ctx.db, award, cycle);
+    ctx.approved.set(award.id, p);
+  }
+  return p;
+}
+
+function winnerOf(ctx: Ctx, awardId: string, approved: Approved, category: Category): Promise<Winner | null> {
+  const key = `${awardId}:${approved.versionId}:${category}`;
+  let p = ctx.winners.get(key);
+  if (!p) {
+    p = readWinner(ctx.db, awardId, approved, category);
+    ctx.winners.set(key, p);
+  }
+  return p;
+}
 
 /** The approved moderation for an award, or null. Fails closed. */
-async function approvedResult(award: Pick<Award, "id">, cycle: Pick<Cycle, "nomination_deadline">): Promise<Approved | null> {
+async function readApproved(db: Db, award: Pick<Award, "id">, cycle: Pick<Cycle, "nomination_deadline">): Promise<Approved | null> {
   if (!isPast(cycle.nomination_deadline)) return null;
-  const db = tpService();
   const { data: versions, error } = await db
     .from("recognition_moderation_versions")
     .select("id, version, status, top3")
@@ -144,13 +178,10 @@ async function approvedResult(award: Pick<Award, "id">, cycle: Pick<Cycle, "nomi
   return { versionId: latest.id, top3: Array.isArray(latest.top3) ? (latest.top3 as Top3[]) : [] };
 }
 
-type Winner = { chapterId: string; chapterName: string; citation: string | null };
-
 /** Rank-1 chapter in one category of an approved result, with its citation. */
-async function winnerOf(awardId: string, approved: Approved, category: Category): Promise<Winner | null> {
+async function readWinner(db: Db, awardId: string, approved: Approved, category: Category): Promise<Winner | null> {
   const first = approved.top3.find((t) => t.category === category && Number(t.rank) === 1);
   if (!first || !isUuid(first.nomination_id)) return null;
-  const db = tpService();
   const { data: nom, error } = await db
     .from("recognition_nominations")
     .select("chapter_id, award_id")
@@ -188,12 +219,24 @@ export type RevealRow = {
   category: Category;
   revealed_at: string;
   is_rehearsal: boolean;
+  /** The moderation version that was approved when Reveal was pressed. */
+  moderation_version_id: string | null;
 };
 
-async function listReveals(): Promise<RevealRow[]> {
-  const { data, error } = await tpService()
+/**
+ * A real reveal shows its winner only while the CURRENTLY approved version is
+ * the one that was approved when the organiser pressed Reveal. If the award
+ * was sent back and re-approved since, the winner stays hidden until the
+ * organiser reveals again. A missing version id never matches (fail closed).
+ */
+function revealStillValid(r: RevealRow, approved: Approved | null): approved is Approved {
+  return !!approved && !!r.moderation_version_id && r.moderation_version_id === approved.versionId;
+}
+
+async function listReveals(db: Db): Promise<RevealRow[]> {
+  const { data, error } = await db
     .from("tp_award_reveals")
-    .select("id, award_id, category, revealed_at, is_rehearsal")
+    .select("id, award_id, category, revealed_at, is_rehearsal, moderation_version_id")
     .order("revealed_at", { ascending: false });
   if (error) fail("list reveals", error);
   return (data ?? []) as RevealRow[];
@@ -210,32 +253,59 @@ export type FeedItem = {
   revealedAt: string;
 };
 
+export type RevealFeed = { eventName: string | null; items: FeedItem[] };
+
 /**
  * Public feed. Rehearsal rows never touch Recognitions results (placeholder
- * only). A real row shows its winner only if the result is STILL approved
- * right now; otherwise it is dropped (fail closed).
+ * only). A real row shows its winner only if the SAME version is still
+ * approved right now; otherwise it is dropped (fail closed).
  */
-export async function getRevealFeed(): Promise<{ eventName: string | null; items: FeedItem[] }> {
+async function buildRevealFeed(): Promise<RevealFeed> {
   const cycle = await getCurrentCycle();
   if (!cycle) return { eventName: null, items: [] };
-  const [awards, reveals] = await Promise.all([listAwards(cycle.id), listReveals()]);
+  const ctx = newCtx();
+  const [awards, reveals] = await Promise.all([listAwards(cycle.id), listReveals(ctx.db)]);
   const byId = new Map(awards.map((a) => [a.id, a]));
-  const items: FeedItem[] = [];
-  for (const r of reveals) {
-    const award = byId.get(r.award_id);
-    if (!award || !isCategory(r.category)) continue;
-    const base = { id: r.id, award: award.title, category: CATEGORY_LABEL[r.category], revealedAt: r.revealed_at };
-    if (r.is_rehearsal) {
-      items.push({ ...base, winner: REHEARSAL_WINNER, citation: null, rehearsal: true });
-      continue;
-    }
-    const approved = await approvedResult(award, cycle);
-    if (!approved) continue;
-    const w = await winnerOf(award.id, approved, r.category);
-    if (!w) continue;
-    items.push({ ...base, winner: w.chapterName, citation: w.citation, rehearsal: false });
-  }
-  return { eventName: cycle.name, items };
+  // Reveals arrive newest first; Promise.all keeps that order.
+  const rows = await Promise.all(
+    reveals.map(async (r): Promise<FeedItem | null> => {
+      const award = byId.get(r.award_id);
+      if (!award || !isCategory(r.category)) return null;
+      const base = { id: r.id, award: award.title, category: CATEGORY_LABEL[r.category], revealedAt: r.revealed_at };
+      if (r.is_rehearsal) return { ...base, winner: REHEARSAL_WINNER, citation: null, rehearsal: true };
+      const approved = await approvedResult(ctx, award, cycle);
+      if (!revealStillValid(r, approved)) return null;
+      const w = await winnerOf(ctx, award.id, approved, r.category);
+      return w ? { ...base, winner: w.chapterName, citation: w.citation, rehearsal: false } : null;
+    })
+  );
+  return { eventName: cycle.name, items: rows.filter((x): x is FeedItem => x !== null) };
+}
+
+/**
+ * The feed is the same for every viewer and is polled by every phone and the
+ * hall screen, so it is built at most once per FEED_TTL_MS per server
+ * instance. Callers that arrive while a build is running share it. A failed
+ * build is not cached.
+ */
+const FEED_TTL_MS = 3000;
+let feedCache: { at: number; promise: Promise<RevealFeed> } | null = null;
+
+export function getRevealFeed(): Promise<RevealFeed> {
+  const now = Date.now();
+  if (feedCache && now - feedCache.at < FEED_TTL_MS) return feedCache.promise;
+  const promise = buildRevealFeed();
+  const entry = { at: now, promise };
+  feedCache = entry;
+  promise.catch(() => {
+    if (feedCache === entry) feedCache = null;
+  });
+  return promise;
+}
+
+/** Called after a desk change so this instance shows it on its next poll. */
+export async function invalidateRevealFeed(): Promise<void> {
+  feedCache = null;
 }
 
 // ---------------------------------------------------------------------------
@@ -251,7 +321,8 @@ export type DeskCell = {
   canReveal: boolean;
   /** Plain-English reason when canReveal is false. */
   status: string;
-  reveal: { at: string; rehearsal: boolean } | null;
+  /** stale = a real reveal whose approved result has changed since; hidden until revealed again. */
+  reveal: { at: string; rehearsal: boolean; stale: boolean } | null;
   /** Only filled after a REAL reveal; never before. */
   revealedWinner: string | null;
 };
@@ -259,56 +330,68 @@ export type DeskCell = {
 export async function getAwardsDesk(): Promise<{ cycleName: string | null; cells: DeskCell[]; rehearsalCount: number }> {
   const cycle = await getCurrentCycle();
   if (!cycle) return { cycleName: null, cells: [], rehearsalCount: 0 };
-  const [awards, reveals] = await Promise.all([listAwards(cycle.id), listReveals()]);
+  const ctx = newCtx();
+  const [awards, reveals] = await Promise.all([listAwards(cycle.id), listReveals(ctx.db)]);
   const revealByKey = new Map(reveals.map((r) => [`${r.award_id}:${r.category}`, r]));
-  const cells: DeskCell[] = [];
-  for (const award of awards) {
-    const approved = await approvedResult(award, cycle);
-    for (const category of CATEGORIES) {
-      const r = revealByKey.get(`${award.id}:${category}`) ?? null;
-      let canReveal = false;
-      let status = "Not approved yet";
-      let revealedWinner: string | null = null;
-      if (approved) {
-        const w = await winnerOf(award.id, approved, category);
-        if (w) {
-          canReveal = true;
-          status = "Approved, ready to reveal";
-          if (r && !r.is_rehearsal) revealedWinner = w.chapterName;
-        } else {
-          status = "Approved, but no winner in this category";
-        }
-      }
-      cells.push({
-        awardId: award.id,
-        awardTitle: award.title,
-        category,
-        categoryLabel: CATEGORY_LABEL[category],
-        canReveal,
-        status,
-        reveal: r ? { at: r.revealed_at, rehearsal: r.is_rehearsal } : null,
-        revealedWinner,
-      });
-    }
-  }
-  return { cycleName: cycle.name, cells, rehearsalCount: reveals.filter((r) => r.is_rehearsal).length };
+  const perAward = await Promise.all(
+    awards.map(async (award) => {
+      const approved = await approvedResult(ctx, award, cycle);
+      return Promise.all(
+        CATEGORIES.map(async (category): Promise<DeskCell> => {
+          const r = revealByKey.get(`${award.id}:${category}`) ?? null;
+          let canReveal = false;
+          let status = "Not approved yet";
+          let revealedWinner: string | null = null;
+          let stale = false;
+          if (approved) {
+            const w = await winnerOf(ctx, award.id, approved, category);
+            if (w) {
+              canReveal = true;
+              status = "Approved, ready to reveal";
+              if (r && !r.is_rehearsal) {
+                stale = !revealStillValid(r, approved);
+                if (!stale) revealedWinner = w.chapterName;
+              }
+            } else {
+              status = "Approved, but no winner in this category";
+            }
+          }
+          return {
+            awardId: award.id,
+            awardTitle: award.title,
+            category,
+            categoryLabel: CATEGORY_LABEL[category],
+            canReveal,
+            status,
+            reveal: r ? { at: r.revealed_at, rehearsal: r.is_rehearsal, stale } : null,
+            revealedWinner,
+          };
+        })
+      );
+    })
+  );
+  return { cycleName: cycle.name, cells: perAward.flat(), rehearsalCount: reveals.filter((r) => r.is_rehearsal).length };
 }
 
-/** Re-checked inside the reveal action, immediately before the write. */
+/**
+ * Re-checked inside the reveal action, immediately before the write. Returns
+ * the approved moderation version, which the reveal row stores.
+ */
 export async function revealCheck(
   awardId: string,
   category: Category
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; versionId: string } | { ok: false; error: string }> {
   const cycle = await getCurrentCycle();
   if (!cycle) return { ok: false, error: "There is no current Recognitions cycle." };
   const award = (await listAwards(cycle.id)).find((a) => a.id === awardId);
   if (!award) return { ok: false, error: "This award is not in the current Recognitions cycle." };
-  const approved = await approvedResult(award, cycle);
+  const ctx = newCtx();
+  const approved = await approvedResult(ctx, award, cycle);
   if (!approved) return { ok: false, error: "This award is not approved yet, so it cannot be revealed." };
-  if (!(await winnerOf(award.id, approved, category))) {
+  if (!(await winnerOf(ctx, award.id, approved, category))) {
     return { ok: false, error: "The approved result has no winner in this category." };
   }
-  return { ok: true };
+  return { ok: true, versionId: approved.versionId };
 }
 
 /** For a rehearsal: the award must exist in the current cycle. Nothing else is read. */
@@ -348,6 +431,9 @@ export type Journey =
       cycleName: string;
       chapterName: string;
       categoryLabel: string | null;
+      /** null = no nomination deadline set yet. */
+      nominationDeadline: string | null;
+      nominationsClosed: boolean;
       timeline: { label: string; at: string | null }[];
       items: JourneyItem[];
     };
@@ -358,7 +444,8 @@ export async function getChapterJourney(chapterText: string): Promise<Journey> {
   const chapter = await resolveChapter(chapterText);
   if (!chapter) return { kind: "no_chapter", cycleName: cycle.name, chapterText };
 
-  const db = tpService();
+  const ctx = newCtx();
+  const db = ctx.db;
   const awards = await listAwards(cycle.id);
   const awardIds = awards.map((a) => a.id);
   const [catRes, nomRes, verRes, reveals] = await Promise.all([
@@ -369,7 +456,7 @@ export async function getChapterJourney(chapterText: string): Promise<Journey> {
     awardIds.length
       ? db.from("recognition_moderation_versions").select("award_id").in("award_id", awardIds)
       : Promise.resolve({ data: [], error: null }),
-    listReveals(),
+    listReveals(db),
   ]);
   if (catRes.error) fail("read chapter category", catRes.error);
   if (nomRes.error) fail("read chapter nominations", nomRes.error);
@@ -377,7 +464,7 @@ export async function getChapterJourney(chapterText: string): Promise<Journey> {
 
   const myCategory = (catRes.data as { category: string } | null)?.category;
   const moderated = new Set(((verRes.data ?? []) as { award_id: string }[]).map((v) => v.award_id));
-  const realReveals = new Set(reveals.filter((r) => !r.is_rehearsal).map((r) => `${r.award_id}:${r.category}`));
+  const realReveals = new Map(reveals.filter((r) => !r.is_rehearsal).map((r) => [`${r.award_id}:${r.category}`, r]));
   const byId = new Map(awards.map((a) => [a.id, a]));
   const nominations = ((nomRes.data ?? []) as { award_id: string; category: string; status: string }[])
     // Drafts are not nominations yet.
@@ -399,9 +486,10 @@ export async function getChapterJourney(chapterText: string): Promise<Journey> {
     else if (moderated.has(award.id) || award.stage2_unlocked_at) stage = "final_list";
     else stage = checksClosed ? "scoring" : "checked";
 
-    if (realReveals.has(`${award.id}:${n.category}`) && stage !== "not_forward") {
-      const approved = await approvedResult(award, cycle);
-      const w = approved ? await winnerOf(award.id, approved, n.category) : null;
+    const reveal = realReveals.get(`${award.id}:${n.category}`);
+    if (reveal && stage !== "not_forward") {
+      const approved = await approvedResult(ctx, award, cycle);
+      const w = revealStillValid(reveal, approved) ? await winnerOf(ctx, award.id, approved, n.category) : null;
       if (w) {
         stage = "announced";
         announced = { winner: w.chapterName, isYou: w.chapterId === chapter.id };
@@ -416,6 +504,8 @@ export async function getChapterJourney(chapterText: string): Promise<Journey> {
     cycleName: cycle.name,
     chapterName: chapter.name,
     categoryLabel: isCategory(myCategory) ? CATEGORY_LABEL[myCategory] : null,
+    nominationDeadline: cycle.nomination_deadline,
+    nominationsClosed: isPast(cycle.nomination_deadline),
     timeline: [
       { label: "Nominations close", at: cycle.nomination_deadline },
       { label: "Checks close", at: cycle.check_deadline },

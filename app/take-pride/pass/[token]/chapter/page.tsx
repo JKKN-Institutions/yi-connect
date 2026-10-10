@@ -86,9 +86,23 @@ export default async function ChapterJourneyPage({ params }: { params: Promise<{
               {journey.categoryLabel && <span className="tp-tag green">{journey.categoryLabel}</span>}
             </div>
             {journey.items.length === 0 ? (
-              <p className="tp-mute" style={{ margin: 0 }}>
-                Your chapter has not sent a nomination for {journey.cycleName} yet. Nominations close on{" "}
-                {istDate(journey.timeline[0]?.at ?? null)}. Your chapter chair can still nominate.
+              <p className="tp-mute" style={{ margin: 0 }} data-testid="no-noms">
+                {journey.nominationsClosed ? (
+                  <>
+                    Nominations for {journey.cycleName} closed on {istDate(journey.nominationDeadline)}. Your chapter did not send a
+                    nomination this year.
+                  </>
+                ) : journey.nominationDeadline ? (
+                  <>
+                    Your chapter has not sent a nomination for {journey.cycleName} yet. Nominations close on{" "}
+                    {istDate(journey.nominationDeadline)}. Your chapter chair can still nominate.
+                  </>
+                ) : (
+                  <>
+                    Your chapter has not sent a nomination for {journey.cycleName} yet. The closing date is not set yet. Your
+                    chapter chair can still nominate.
+                  </>
+                )}
               </p>
             ) : (
               <div className="tp-list">

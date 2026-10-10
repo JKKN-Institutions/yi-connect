@@ -14,7 +14,12 @@ export function AwardsScreen({ initial }: { initial: Feed }) {
 
   useEffect(() => {
     let alive = true;
+    // One request at a time: a slow response skips the next tick instead of
+    // overlapping it, so an older response can never overwrite a newer one.
+    let inFlight = false;
     const tick = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
         const res = await fetch("/take-pride/awards/feed", { cache: "no-store" });
         if (!res.ok) throw new Error(String(res.status));
@@ -25,6 +30,8 @@ export function AwardsScreen({ initial }: { initial: Feed }) {
         }
       } catch {
         if (alive) setOffline(true);
+      } finally {
+        inFlight = false;
       }
     };
     const id = window.setInterval(tick, POLL_MS);

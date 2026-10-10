@@ -12,7 +12,8 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const feed = await getRevealFeed();
-    return NextResponse.json(feed, { headers: { "Cache-Control": "no-store, max-age=0" } });
+    // Browsers always re-ask; a shared edge cache may hold it for 3 s.
+    return NextResponse.json(feed, { headers: { "Cache-Control": "public, max-age=0, s-maxage=3" } });
   } catch {
     return NextResponse.json({ error: "Feed unavailable" }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }

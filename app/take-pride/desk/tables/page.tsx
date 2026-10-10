@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { TopBar } from "../../_ui";
-import { requireTpOrganiser } from "@/lib/take-pride/auth";
+import { hasReviewSession, requireTpOrganiser } from "@/lib/take-pride/auth";
+import { Denied, TopBar } from "../../_ui";
 import {
   ORGANISER_SEATS,
   TP_TABLE_PLACES,
@@ -19,7 +19,12 @@ export const metadata: Metadata = { title: "Topic tables desk" };
 
 export default async function TablesDeskPage() {
   const g = await requireTpOrganiser();
-  if (!g.ok) return <TablesDeskDenied reason={g.reason} back="/take-pride/desk/tables" />;
+  if (!g.ok) {
+    if (await hasReviewSession()) {
+      return <Denied title="Not available in review mode" text="Topic tables are managed by the Take Pride team with a real organiser login. Delegates' topic tables can be tried from the sample delegate's pass." />;
+    }
+    return <TablesDeskDenied reason={g.reason} back="/take-pride/desk/tables" />;
+  }
 
   const [slots, all] = await Promise.all([getNetworkingSlots(), listCircles({ onlyOpen: false })]);
   const open = all.filter((c) => c.status === "open");

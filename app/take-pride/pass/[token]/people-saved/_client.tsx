@@ -171,7 +171,7 @@ export function PeopleList({ token, people, iShare }: { token: string; people: M
                     {(p.role_title || p.business_name) && (
                       <p style={{ margin: 0 }}>{[p.role_title, p.business_name].filter(Boolean).join(" · ")}</p>
                     )}
-                    <p className="tp-small" style={{ margin: 0 }}>Yi {p.chapter} · since {istDay(p.since)}</p>
+                    <p className="tp-small" style={{ margin: 0 }}>{p.chapter} · since {istDay(p.since)}</p>
                   </div>
                   <div className="tp-chips" style={{ justifyContent: "flex-end" }}>
                     {p.scanned && <span className="tp-tag green">Connected</span>}

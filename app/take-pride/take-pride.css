@@ -32,6 +32,9 @@
 }
 .tp-root *, .tp-root *::before, .tp-root *::after { box-sizing: border-box; }
 .tp-root a { color: var(--tp-green); }
+/* A link styled as a button keeps the button's own text colour. */
+.tp-root a.tp-btn { color: #fff; }
+.tp-root a.tp-btn.ghost { color: var(--tp-ink); }
 .tp-root :focus-visible { outline: 2px solid var(--tp-saffron); outline-offset: 2px; }
 
 .tp-strip { position: fixed; left: 0; right: 0; bottom: 0; height: 8px; display: grid; grid-template-columns: 1fr 1fr 1fr; z-index: 20; }

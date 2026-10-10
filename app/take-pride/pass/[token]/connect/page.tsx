@@ -34,7 +34,7 @@ export default async function ConnectPage({ params }: { params: Promise<{ token:
       <section className="tp-card ok tp-ticket" aria-labelledby="tp-mine" data-tp="my-qr">
         <h2 className="tp-h2" id="tp-mine">Let others scan this</h2>
         <BadgeQr code={me.badge_code} full={full} size={240} nav={false} />
-        <p className="tp-small" style={{ margin: 0 }}>{me.full_name} · Yi {me.chapter}</p>
+        <p className="tp-small" style={{ margin: 0 }}>{me.full_name} · {me.chapter}</p>
       </section>
 
       <section className="tp-card hi" aria-labelledby="tp-scan">

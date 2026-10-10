@@ -47,7 +47,7 @@ export function ConnectScanner({ token }: { token: string }) {
             <p style={{ margin: 0 }}>
               {[outcome.data.role, outcome.data.business].filter(Boolean).join(" · ") || "—"}
             </p>
-            <p className="tp-small" style={{ margin: 0 }}>Yi {outcome.data.chapter}</p>
+            <p className="tp-small" style={{ margin: 0 }}>{outcome.data.chapter}</p>
             <p className="tp-small" style={{ margin: 0 }}>
               {outcome.data.already
                 ? "You two are already connected."

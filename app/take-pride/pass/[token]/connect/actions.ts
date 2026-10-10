@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { parseBadge } from "@/lib/take-pride/badge";
 import {
+  BADGE_NEEDS_SECRET,
   BADGE_UNREADABLE,
   SCAN_LIMIT_MESSAGE,
   connectTo,
@@ -26,10 +27,11 @@ export async function connectByBadge(token: string, scanned: string): Promise<Tp
   if (!me) return { success: false, error: "This pass link is not valid" };
   const scan = await recordScan({ delegateId: me.id });
   if (!scan.allowed) {
-    return { success: false, error: scan.attemptId ? SCAN_LIMIT_MESSAGE : "Could not connect. Please try again." };
+    return { success: false, error: scan.reason === "limit" ? SCAN_LIMIT_MESSAGE : "Could not connect. Please try again." };
   }
   const badge = parseBadge(scanned);
   if (!badge) return { success: false, error: "That is not a Take Pride badge code" };
+  if (!badge.secret) return { success: false, error: BADGE_NEEDS_SECRET };
   const other = await findDelegateByVerifiedBadge(badge);
   if (!other) return { success: false, error: BADGE_UNREADABLE };
   const out = await connectTo(me, other);

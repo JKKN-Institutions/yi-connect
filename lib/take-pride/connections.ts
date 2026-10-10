@@ -20,8 +20,15 @@ import { BADGE_SECRET_ALPHABET, BADGE_SECRET_LENGTH, fullBadgeCode, type ParsedB
 
 export const SCAN_LIMIT_PER_HOUR = 60;
 export const PEOPLE_NOTE_MAX = 500;
-/** One message for a missing secret, a wrong secret and an unknown number, so a guess learns nothing. */
-export const BADGE_UNREADABLE = "That badge could not be read. Scan the QR on the badge.";
+/** One message for a wrong secret and an unknown number, so a guess learns nothing. */
+export const BADGE_UNREADABLE = "That badge could not be read. Scan the QR on the badge, or type the full code under it, like TP26-1234-K7QXM.";
+/**
+ * When only the number was typed ("TP26-1234"). The browser already knows the
+ * secret is missing, so saying so leaks nothing, and it tells a partner who
+ * read the big number off a pass what to type instead.
+ */
+export const BADGE_NEEDS_SECRET =
+  "That is only the badge number. Scan the QR on the badge, or type the full code shown under it, like TP26-1234-K7QXM (the 5 letters at the end are needed).";
 
 export function newBadgeSecret(): string {
   let s = "";
@@ -68,20 +75,26 @@ export type ScanActor = { partnerId: string } | { delegateId: string };
  * count, so parallel scans cannot slip past the cap. FAILS CLOSED: if either
  * call errors, the scan is refused.
  */
-export async function recordScan(actor: ScanActor): Promise<{ allowed: boolean; attemptId: string | null }> {
+export type ScanGate =
+  | { allowed: true; attemptId: string }
+  /** "limit": the hourly cap is reached. "error": the database failed, so a retry may work. */
+  | { allowed: false; reason: "limit" | "error"; attemptId: string | null };
+
+export async function recordScan(actor: ScanActor): Promise<ScanGate> {
   const db = tpService();
   const col = "partnerId" in actor ? "partner_id" : "delegate_id";
   const id = "partnerId" in actor ? actor.partnerId : actor.delegateId;
   const { data: made, error } = await db.from("tp_scan_attempts").insert({ [col]: id }).select("id").single();
-  if (error || !made) return { allowed: false, attemptId: null };
+  if (error || !made) return { allowed: false, reason: "error", attemptId: null };
   const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   const { count, error: cErr } = await db
     .from("tp_scan_attempts")
     .select("id", { count: "exact", head: true })
     .eq(col, id)
     .gte("created_at", since);
-  if (cErr) return { allowed: false, attemptId: made.id };
-  return { allowed: (count ?? 0) <= SCAN_LIMIT_PER_HOUR, attemptId: made.id };
+  if (cErr || count === null) return { allowed: false, reason: "error", attemptId: made.id };
+  if (count > SCAN_LIMIT_PER_HOUR) return { allowed: false, reason: "limit", attemptId: made.id };
+  return { allowed: true, attemptId: made.id };
 }
 
 export async function markScanOk(attemptId: string | null): Promise<void> {
@@ -143,13 +156,38 @@ export type ConnectResult = {
   role: string | null;
 };
 
-/** Mutual connection: one row per pair, whoever scanned first. */
+/** Both orderings of one pair, for a PostgREST .or() filter. */
+function pairFilter(x: string, y: string): string {
+  return `and(a_delegate_id.eq.${x},b_delegate_id.eq.${y}),and(a_delegate_id.eq.${y},b_delegate_id.eq.${x})`;
+}
+
+/**
+ * Mutual connection: one row per pair, whoever scanned first. If the pair's
+ * row already exists only to hold a meeting note (scanned = false), this
+ * first real scan marks it scanned.
+ */
 export async function connectTo(me: ConnectMe, other: BadgeHolder): Promise<ConnectOutcome> {
   if (other.id === me.id) return { kind: "self" };
-  const { error } = await tpService().from("tp_connections").insert({ a_delegate_id: me.id, b_delegate_id: other.id });
+  const db = tpService();
+  const { error } = await db.from("tp_connections").insert({ a_delegate_id: me.id, b_delegate_id: other.id });
   if (!error) return { kind: "connected", person: other };
-  if (error.code === "23505") return { kind: "already", person: other };
-  return { kind: "error" };
+  if (error.code !== "23505") return { kind: "error" };
+  // Find the pair's row first: PostgREST rejects an or() filter on an UPDATE here.
+  const { data: row, error: fErr } = await db
+    .from("tp_connections")
+    .select("id, scanned")
+    .or(pairFilter(me.id, other.id))
+    .maybeSingle();
+  if (fErr || !row) return { kind: "error" };
+  if ((row as { scanned: boolean }).scanned) return { kind: "already", person: other };
+  const { data, error: uErr } = await db
+    .from("tp_connections")
+    .update({ scanned: true })
+    .eq("id", (row as { id: string }).id)
+    .eq("scanned", false)
+    .select("id");
+  if (uErr) return { kind: "error" };
+  return { kind: data?.length ? "connected" : "already", person: other };
 }
 
 // -------------------------------------------------------- My people ----
@@ -178,6 +216,7 @@ type ConnRow = {
   a_delegate_id: string;
   b_delegate_id: string;
   created_at: string;
+  scanned: boolean;
   note_a: string | null;
   note_b: string | null;
   follow_up_a: string | null;
@@ -186,7 +225,7 @@ type ConnRow = {
 
 type MeetRow = { from_delegate_id: string; to_delegate_id: string; responded_at: string | null; created_at: string };
 
-const CONN_COLS = "id, a_delegate_id, b_delegate_id, created_at, note_a, note_b, follow_up_a, follow_up_b";
+const CONN_COLS = "id, a_delegate_id, b_delegate_id, created_at, scanned, note_a, note_b, follow_up_a, follow_up_b";
 
 async function myLinks(meId: string): Promise<{ conns: ConnRow[]; meets: MeetRow[] }> {
   const db = tpService();
@@ -200,7 +239,13 @@ async function myLinks(meId: string): Promise<{ conns: ConnRow[]; meets: MeetRow
   ]);
   if (c.error) throw new Error(c.error.message);
   if (m.error) throw new Error(m.error.message);
-  return { conns: (c.data ?? []) as ConnRow[], meets: (m.data ?? []) as MeetRow[] };
+  const meets = (m.data ?? []) as MeetRow[];
+  const met = new Set(meets.map((x) => (x.from_delegate_id === meId ? x.to_delegate_id : x.from_delegate_id)));
+  // A note-only row (scanned = false) counts only while its meeting is accepted.
+  const conns = ((c.data ?? []) as ConnRow[]).filter(
+    (x) => x.scanned || met.has(x.a_delegate_id === meId ? x.b_delegate_id : x.a_delegate_id)
+  );
+  return { conns, meets };
 }
 
 /** My connections (scanned either way) plus delegates I have an accepted meeting with. */
@@ -212,7 +257,7 @@ export async function getMyPeople(me: Pick<ConnectMe, "id" | "share_contact">): 
     const mine = c.a_delegate_id === me.id;
     const other = mine ? c.b_delegate_id : c.a_delegate_id;
     acc.set(other, {
-      scanned: true,
+      scanned: c.scanned,
       meeting: false,
       since: c.created_at,
       note: mine ? c.note_a : c.note_b,
@@ -222,8 +267,11 @@ export async function getMyPeople(me: Pick<ConnectMe, "id" | "share_contact">): 
   for (const m of meets) {
     const other = m.from_delegate_id === me.id ? m.to_delegate_id : m.from_delegate_id;
     const prev = acc.get(other);
-    if (prev) prev.meeting = true;
-    else acc.set(other, { scanned: false, meeting: true, since: m.responded_at ?? m.created_at, note: null, follow_up: null });
+    if (prev) {
+      prev.meeting = true;
+      // A note-only row's created_at is when the note was written, not when we met.
+      if (!prev.scanned) prev.since = m.responded_at ?? m.created_at;
+    } else acc.set(other, { scanned: false, meeting: true, since: m.responded_at ?? m.created_at, note: null, follow_up: null });
   }
   if (acc.size === 0) return [];
 
@@ -271,7 +319,8 @@ export async function getMyPeople(me: Pick<ConnectMe, "id" | "share_contact">): 
 /**
  * Saves MY note and follow-up for one person in My people. The person must
  * be mutual (a scan or an accepted delegate meeting). For a meeting-only
- * person the connection row is created here, holding my side only.
+ * person a note-only connection row (scanned = false) is created here,
+ * holding my side only; it does not show either of us as "Connected".
  */
 export async function saveMyNote(
   me: Pick<ConnectMe, "id">,
@@ -295,7 +344,7 @@ export async function saveMyNote(
   if (conn) return (await update(conn)) ? "ok" : "error";
   const { error } = await db
     .from("tp_connections")
-    .insert({ a_delegate_id: me.id, b_delegate_id: otherId, note_a: note, follow_up_a: followUp });
+    .insert({ a_delegate_id: me.id, b_delegate_id: otherId, scanned: false, note_a: note, follow_up_a: followUp });
   if (!error) return "ok";
   if (error.code !== "23505") return "error";
   // They scanned me a moment ago: their row exists now, so write my side of it.

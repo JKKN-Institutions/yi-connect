@@ -18,6 +18,9 @@
 --    connection, and only when BOTH sides have share_contact = true.
 -- 3. tp_connections: one row per pair of delegates who scanned each other.
 --    Each side keeps a private note and follow-up date (a = scanner).
+--    scanned = false: the row only holds a note for a pair who have an
+--    accepted delegate meeting but never scanned each other. A later scan
+--    flips it to true.
 -- 4. tp_scan_attempts: every badge scan by a partner or a delegate, success
 --    or failure, so the app can cap scans per hour (wrong guesses count).
 
@@ -48,6 +51,7 @@ create table if not exists yi_connect.tp_connections (
   a_delegate_id uuid not null references yi_connect.tp_delegates(id) on delete cascade,
   b_delegate_id uuid not null references yi_connect.tp_delegates(id) on delete cascade,
   created_at timestamptz not null default now(),
+  scanned boolean not null default true,
   note_a text check (note_a is null or char_length(note_a) <= 500),
   note_b text check (note_b is null or char_length(note_b) <= 500),
   follow_up_a date,

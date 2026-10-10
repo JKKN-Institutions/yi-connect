@@ -9,6 +9,7 @@ import { getPartnerByToken, getSettings } from "@/lib/take-pride/data";
 import type { TpResult } from "@/lib/take-pride/types";
 import { parseBadge } from "@/lib/take-pride/badge";
 import {
+  BADGE_NEEDS_SECRET,
   BADGE_UNREADABLE,
   SCAN_LIMIT_MESSAGE,
   findDelegateByVerifiedBadge,
@@ -116,8 +117,9 @@ export async function requestMeeting(token: string, delegateId: string): Promise
 /**
  * A partner scans a delegate's badge (or types the full code) to save a lead.
  * The badge SECRET is required ("TP26-1234-K7QXM"): the number alone is
- * guessable. Missing secret, wrong secret and unknown number all get the same
- * answer. Every attempt counts toward SCAN_LIMIT_PER_HOUR for the partner.
+ * guessable. A wrong secret and an unknown number get the same answer; a
+ * number typed without the secret is told to add it. Every attempt counts
+ * toward SCAN_LIMIT_PER_HOUR for the partner.
  */
 export async function captureLead(token: string, scanned: string, note: string): Promise<TpResult<{ name: string; chapter: string; duplicate: boolean }>> {
   const p = await getPartnerByToken(token);
@@ -125,10 +127,11 @@ export async function captureLead(token: string, scanned: string, note: string):
   if (p.status !== "confirmed") return { success: false, error: "Lead capture opens once your payment is confirmed" };
   const scan = await recordScan({ partnerId: p.id });
   if (!scan.allowed) {
-    return { success: false, error: scan.attemptId ? SCAN_LIMIT_MESSAGE : "Could not save the lead. Please try again." };
+    return { success: false, error: scan.reason === "limit" ? SCAN_LIMIT_MESSAGE : "Could not save the lead. Please try again." };
   }
   const badge = parseBadge(scanned);
   if (!badge) return { success: false, error: "That is not a Take Pride badge code" };
+  if (!badge.secret) return { success: false, error: BADGE_NEEDS_SECRET };
   const d = await findDelegateByVerifiedBadge(badge);
   if (!d) return { success: false, error: BADGE_UNREADABLE };
   const { error } = await tpService()

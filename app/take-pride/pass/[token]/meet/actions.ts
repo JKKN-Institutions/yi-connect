@@ -40,16 +40,10 @@ export async function askToMeet(token: string, toDelegateId: string, note: strin
   if (!other.delegate_meetings_opt_in) return { success: false, error: `${other.full_name} is not taking delegate meetings` };
 
   // They may have asked me first: answer theirs instead of sending a second one.
-  const { data: reverse } = await db
-    .from("tp_delegate_meetings")
-    .select("status")
-    .eq("from_delegate_id", other.id)
-    .eq("to_delegate_id", me.id)
-    .maybeSingle();
-  if (reverse?.status === "requested") {
-    return { success: false, error: `${other.full_name} has already asked to meet you. Accept their request below.` };
-  }
-  if (reverse?.status === "accepted") return { success: false, error: `You and ${other.full_name} are already meeting` };
+  // Fast path only. The database index tp_delegate_meetings_pair_key is what
+  // actually stops both directions existing when two people tap at once.
+  const theirs = await reverseMessage(other.id, me.id, other.full_name);
+  if (theirs) return { success: false, error: theirs };
 
   const { count, error: cErr } = await db
     .from("tp_delegate_meetings")
@@ -61,15 +55,51 @@ export async function askToMeet(token: string, toDelegateId: string, note: strin
     return { success: false, error: `You have ${DELEGATE_MEET_CAP} requests waiting for an answer. Wait for some replies first.` };
   }
 
-  const { error } = await db
+  const { data: made, error } = await db
     .from("tp_delegate_meetings")
-    .insert({ from_delegate_id: me.id, to_delegate_id: other.id, note: text || null });
-  if (error) {
-    if (error.code === "23505") return { success: false, error: `You have already asked ${other.full_name}` };
+    .insert({ from_delegate_id: me.id, to_delegate_id: other.id, note: text || null })
+    .select("id")
+    .single();
+  if (error || !made) {
+    if (error?.code === "23505") {
+      // One row per pair: either I already asked, or they asked me a moment ago.
+      const theirs = await reverseMessage(other.id, me.id, other.full_name);
+      return { success: false, error: theirs ?? `You have already asked ${other.full_name}` };
+    }
     return { success: false, error: "Could not send the request. Please try again." };
+  }
+
+  // The count above and the insert are two calls, so parallel requests can
+  // slip past the cap. Re-count now that mine is saved; if over, take mine back.
+  const { count: after, error: aErr } = await db
+    .from("tp_delegate_meetings")
+    .select("id", { count: "exact", head: true })
+    .eq("from_delegate_id", me.id)
+    .eq("status", "requested");
+  if (aErr || (after ?? 0) > DELEGATE_MEET_CAP) {
+    await db.from("tp_delegate_meetings").delete().eq("id", made.id).eq("status", "requested");
+    return {
+      success: false,
+      error: aErr
+        ? "Could not send the request. Please try again."
+        : `You have ${DELEGATE_MEET_CAP} requests waiting for an answer. Wait for some replies first.`,
+    };
   }
   refresh(token);
   return { success: true, data: null };
+}
+
+async function reverseMessage(otherId: string, meId: string, otherName: string): Promise<string | null> {
+  const { data: reverse } = await tpService()
+    .from("tp_delegate_meetings")
+    .select("status")
+    .eq("from_delegate_id", otherId)
+    .eq("to_delegate_id", meId)
+    .maybeSingle();
+  if (reverse?.status === "requested") return `${otherName} has already asked to meet you. Accept their request below.`;
+  if (reverse?.status === "accepted") return `You and ${otherName} are already meeting`;
+  if (reverse?.status === "declined") return `A request between you and ${otherName} was already answered`;
+  return null;
 }
 
 export async function answerMeet(token: string, meetingId: string, accept: boolean): Promise<TpResult> {

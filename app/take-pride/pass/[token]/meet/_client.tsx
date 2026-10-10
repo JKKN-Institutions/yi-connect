@@ -23,6 +23,8 @@ export function AskToMeet({ token, toId, name }: { token: string; toId: string; 
         router.refresh();
       } else {
         setMsg({ ok: false, text: r.error });
+        // They may have asked me a moment ago: reload so their request shows below.
+        router.refresh();
       }
     });
   }

@@ -411,7 +411,7 @@ export const STAGE_STEPS: { key: Exclude<JourneyStage, "not_forward">; label: st
   { key: "nominated", label: "Nominated" },
   { key: "checked", label: "Checked" },
   { key: "scoring", label: "Being scored" },
-  { key: "final_list", label: "Final list" },
+  { key: "final_list", label: "Results being finalised" },
   { key: "announced", label: "Winners announced" },
 ];
 
@@ -510,7 +510,7 @@ export async function getChapterJourney(chapterText: string): Promise<Journey> {
       { label: "Nominations close", at: cycle.nomination_deadline },
       { label: "Checks close", at: cycle.check_deadline },
       { label: "Scoring ends", at: cycle.stage1_deadline },
-      { label: "Final list ready", at: cycle.stage2_deadline },
+      { label: "Results finalised (kept secret until Awards Night)", at: cycle.stage2_deadline },
     ],
     items,
   };

@@ -17,7 +17,7 @@ const STAGE_TEXT: Record<JourneyItem["stage"], string> = {
   nominated: "Your chapter has sent its nomination. Regional checkers are looking at it.",
   checked: "The nomination passed its checks and is in the race.",
   scoring: "Evaluators are scoring every chapter in the race.",
-  final_list: "The national team is preparing the final list.",
+  final_list: "Scoring is done. The national team is finalising results, which stay secret until Awards Night.",
   announced: "Winners have been announced on the Awards Night screen.",
   not_forward: "This nomination did not go forward to scoring this year.",
 };

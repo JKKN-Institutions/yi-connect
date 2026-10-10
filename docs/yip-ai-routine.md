@@ -34,6 +34,8 @@ GET  https://yi-connect-app.vercel.app/yip/api/ai-drafts              → pendin
 POST https://yi-connect-app.vercel.app/yip/api/ai-drafts              → write a draft back
 GET  https://yi-connect-app.vercel.app/yip/api/questionnaire-scoring  → papers to mark + the rubric
 POST https://yi-connect-app.vercel.app/yip/api/questionnaire-scoring  → write the marks back
+GET  https://yi-connect-app.vercel.app/take-pride/api/ai              → Take Pride delegate jobs + grounding (see "Take Pride drafting" at the end)
+POST https://yi-connect-app.vercel.app/take-pride/api/ai              → write a Take Pride result back
 ```
 
 all authenticated with the header `X-Cron-Secret: <YIP_AI_ROUTINE_SECRET>`.
@@ -792,3 +794,16 @@ A thin-but-true draft passes. A rich-but-invented draft fails and will be reject
 chair. For session_feedback: a warm, number-free, self-referential nudge passes; anything
 that hints at a score or a rank fails and undermines the dispute-proofing the whole design
 exists to protect.
+
+---
+
+## 7. Take Pride drafting
+
+The same routine (same `X-Cron-Secret`) can also drain the Take Pride 2026 delegate helpers:
+summit plans, profile suggestions, the opportunity radar, "why meet" notes and "Ask the desk"
+answers, at `GET/POST https://yi-connect-app.vercel.app/take-pride/api/ai`. The app never calls
+an LLM for these either; it queues `yi_connect.tp_ai_jobs` rows and validates what is posted back.
+
+The full instructions, output shapes and rules are in
+[`docs/take-pride-ai-routine.md`](take-pride-ai-routine.md). Run that loop as a separate step after
+the YIP loop above; none of the YIP rules change.

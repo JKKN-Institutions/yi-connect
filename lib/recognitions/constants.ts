@@ -130,6 +130,8 @@ export const WORDS = {
   evaluatorReason: 50,
   /** A checker's "send back" note — same 50-word cap as other notes. */
   returnNote: 50,
+  /** National Leadership's reason for adding a chapter that did not nominate (Director, 2026-10-10). */
+  nlAddedReason: 100,
   nmtComments: 250,
   top3Rationale: 300,
   top3Citation: 250,

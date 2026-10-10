@@ -10,7 +10,7 @@ import {
   getCurrentCycle,
 } from "@/lib/recognitions/data";
 import { rxService } from "@/lib/recognitions/supabase";
-import { decideSeat, SEAT_LABEL, type CheckSeat } from "@/lib/recognitions/check-rules";
+import { decideSeat, fixDeadlineFor, isNlAdded, SEAT_LABEL, type CheckSeat } from "@/lib/recognitions/check-rules";
 import { isPast } from "@/lib/recognitions/phase";
 import { countWords } from "@/lib/recognitions/words";
 import { WORDS } from "@/lib/recognitions/constants";
@@ -202,7 +202,12 @@ export async function returnNomination(nominationId: string, note: string): Prom
     return { success: false, error: "Someone changed this nomination a moment ago. Reload the page to see where it stands." };
   }
 
-  const fixClosed = isPast(ctx.cycle.fix_deadline);
+  // An NL-added nomination goes back to National Leadership, which can fix it
+  // until the re-evaluation deadline (recognitions_03).
+  const nl = isNlAdded(ctx.nomination);
+  const fixer = nl ? "National Leadership" : "the chapter";
+  const fixBy = fixDeadlineFor(ctx.nomination, ctx.cycle);
+  const fixClosed = isPast(fixBy);
   await audit({
     cycleId: ctx.cycle.id,
     awardId: ctx.award.id,
@@ -210,15 +215,22 @@ export async function returnNomination(nominationId: string, note: string): Prom
     action: "nomination_returned",
     entity: "recognition_nominations",
     entityId: ctx.nomination.id,
-    detail: { chapter_id: ctx.nomination.chapter_id, region: ctx.nomination.region, as: v.seat, note: text, after_fix_deadline: fixClosed },
+    detail: {
+      chapter_id: ctx.nomination.chapter_id,
+      region: ctx.nomination.region,
+      as: v.seat,
+      note: text,
+      after_fix_deadline: fixClosed,
+      ...(nl ? { origin: "nl_added", returned_to: "national_leadership" } : {}),
+    },
   });
   revalidatePath("/recognitions", "layout");
   return {
     success: true,
     message: fixClosed
-      ? "Sent back. The fix deadline has passed, so the chapter can't resubmit: this nomination is now out of the race."
-      : ctx.cycle.fix_deadline
-        ? `Sent back. The chapter can fix and resubmit it until ${formatWhen(ctx.cycle.fix_deadline)}.`
-        : "Sent back. The chapter can fix and resubmit it.",
+      ? `Sent back. The deadline to fix it has passed, so ${fixer} can't resubmit: this nomination is now out of the race.`
+      : fixBy
+        ? `Sent back. ${nl ? "National Leadership" : "The chapter"} can fix and resubmit it until ${formatWhen(fixBy)}.`
+        : `Sent back. ${nl ? "National Leadership" : "The chapter"} can fix and resubmit it.`,
   };
 }

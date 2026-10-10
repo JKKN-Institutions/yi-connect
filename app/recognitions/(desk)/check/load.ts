@@ -9,7 +9,14 @@ import {
   listAwards,
   listNominationsForAward,
 } from "@/lib/recognitions/data";
-import { decideSeat, effectiveStatus, exclusionReason, SEAT_LABEL } from "@/lib/recognitions/check-rules";
+import {
+  decideSeat,
+  effectiveStatus,
+  exclusionReason,
+  fixDeadlineFor,
+  isNlAdded,
+  SEAT_LABEL,
+} from "@/lib/recognitions/check-rules";
 import type { Category, Vertical } from "@/lib/recognitions/constants";
 import type { CycleRow, NominationStatus } from "@/lib/recognitions/types";
 import { formatWhen } from "../../_ui/primitives";
@@ -41,6 +48,14 @@ export type CheckItem = {
   pass: { ok: true; label: string } | { ok: false; error: string };
   canReturn: boolean;
   returnBlocked: string | null;
+  /**
+   * National Leadership added this chapter, which did not nominate
+   * (recognitions_03): its reason replaces the five-section form, a send-back
+   * goes to National Leadership, and everything runs to re-evaluation's deadline.
+   */
+  nlAdded: { by: string; at: string | null; reason: string } | null;
+  /** The deadline a sent-back nomination must be fixed by (the fix deadline, or re-evaluation's). */
+  fixBy: string | null;
   dossier: {
     reasons: string[];
     flagship: string;
@@ -59,7 +74,7 @@ export async function loadCheckItems(
   const rmDuties = viewer.duties.filter((d) => d.layer === "rm");
   const dutyConflicts = await conflictsForDuties(rmDuties);
 
-  const rows: Array<Omit<CheckItem, "rcPass" | "rmPass" | "returned"> & {
+  const rows: Array<Omit<CheckItem, "rcPass" | "rmPass" | "returned" | "nlAdded"> & {
     rcBy: string | null;
     rcAt: string | null;
     rmBy: string | null;
@@ -67,6 +82,9 @@ export async function loadCheckItems(
     retBy: string | null;
     retAt: string | null;
     retNote: string | null;
+    addBy: string | null;
+    addAt: string | null;
+    addReason: string | null;
   }> = [];
 
   for (const award of awards) {
@@ -118,16 +136,21 @@ export async function loadCheckItems(
         retBy: n.returned_by,
         retAt: n.returned_at,
         retNote: n.status === "returned" ? n.return_note : null,
+        addBy: isNlAdded(n) ? n.added_by : null,
+        addAt: isNlAdded(n) ? n.added_at : null,
+        addReason: isNlAdded(n) ? n.added_reason ?? "" : null,
+        fixBy: fixDeadlineFor(n, cycle),
       });
     }
   }
 
-  const people = await getPeople(rows.flatMap((r) => [r.rcBy, r.rmBy, r.retBy]).filter((x): x is string => !!x));
+  const people = await getPeople(rows.flatMap((r) => [r.rcBy, r.rmBy, r.retBy, r.addBy]).filter((x): x is string => !!x));
   const who = (id: string) => (id === viewer.personId ? "you" : people.get(id)?.full_name ?? "a checker");
 
   return rows
-    .map(({ rcBy, rcAt, rmBy, rmAt, retBy, retAt, retNote, ...r }) => ({
+    .map(({ rcBy, rcAt, rmBy, rmAt, retBy, retAt, retNote, addBy, addAt, addReason, ...r }) => ({
       ...r,
+      nlAdded: addReason !== null ? { by: addBy ? who(addBy) : "National Leadership", at: addAt, reason: addReason } : null,
       rcPass: rcBy ? { by: who(rcBy), at: rcAt } : null,
       rmPass: rmBy ? { by: who(rmBy), at: rmAt } : null,
       returned: retNote !== null ? { by: retBy ? who(retBy) : "a checker", at: retAt, note: retNote } : null,

@@ -20,6 +20,7 @@ export function CheckControls({
   canReturn,
   returnBlocked,
   fixClosed,
+  nlAdded = false,
 }: {
   nominationId: string;
   chapterName: string;
@@ -28,7 +29,10 @@ export function CheckControls({
   returnBlocked: string | null;
   /** True when the fix deadline has passed: a send-back now takes it out of the race. */
   fixClosed: boolean;
+  /** National Leadership added this chapter (recognitions_03): a send-back goes to National Leadership. */
+  nlAdded?: boolean;
 }) {
+  const fixer = nlAdded ? "National Leadership" : "the chapter";
   const [dialog, setDialog] = useState<"pass" | "return" | null>(null);
   const [note, setNote] = useState("");
   const { pending, result, run } = useAction();
@@ -70,7 +74,7 @@ export function CheckControls({
 
       <ConfirmDialog
         open={dialog === "return"}
-        title={`Send ${chapterName}'s nomination back?`}
+        title={nlAdded ? `Send ${chapterName} back to National Leadership?` : `Send ${chapterName}'s nomination back?`}
         confirmLabel="Send back"
         tone="danger"
         busy={pending || !noteOk}
@@ -86,16 +90,18 @@ export function CheckControls({
       >
         <div className="rx-stack">
           <p className="rx-small">
-            The chapter sees your note, fixes the nomination and resubmits it. Any passes it already has are cleared
-            when it comes back, so both checkers pass the final version.
+            {nlAdded
+              ? "National Leadership sees your note, edits its reason and resubmits it. The chapter is not told."
+              : "The chapter sees your note, fixes the nomination and resubmits it."}{" "}
+            Any passes it already has are cleared when it comes back, so both checkers pass the final version.
           </p>
           {fixClosed ? (
             <p className="rx-small" style={{ color: "var(--rx-vermilion)", fontWeight: 600 }}>
-              The fix deadline has passed. If you send it back now, the chapter can&apos;t resubmit and it is out of the race.
+              The deadline to fix it has passed. If you send it back now, {fixer} can&apos;t resubmit and it is out of the race.
             </p>
           ) : null}
           <WordField
-            label="What should the chapter fix? (required)"
+            label={nlAdded ? "What should National Leadership fix? (required)" : "What should the chapter fix? (required)"}
             value={note}
             onChange={setNote}
             limit={WORDS.returnNote}

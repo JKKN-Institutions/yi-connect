@@ -5,11 +5,15 @@ import { getAwardState, getCurrentCycle, listAwards, type AwardState } from "@/l
 import { Ribbon } from "@/app/recognitions/_ui/ribbon";
 import { IconArrowRight } from "@/app/recognitions/_ui/icons";
 import { NoAccess, PageHead, PhaseSeal, formatWhen } from "@/app/recognitions/_ui/primitives";
+import { effectiveStatus, isNlAdded } from "@/lib/recognitions/check-rules";
 
 export const metadata: Metadata = { title: "Review" };
 
 function AwardLine({ state }: { state: AwardState }) {
   const v = state.latestSubmittedVersion;
+  // Chapters National Leadership added (recognitions_03) that a checker sent back to it.
+  const added = state.nominations.filter(isNlAdded);
+  const backToNl = added.filter((n) => effectiveStatus(n, state.cycle) === "returned").length;
   return (
     <Link
       href={`/recognitions/review/${state.award.id}`}
@@ -29,7 +33,14 @@ function AwardLine({ state }: { state: AwardState }) {
       <p className="rx-small rx-mute" style={{ marginTop: 8 }}>
         {state.checkedNominations.length} nomination{state.checkedNominations.length === 1 ? "" : "s"} in the race (passed both checks)
         {v ? ` · version ${v.version} submitted ${formatWhen(v.submitted_at)}` : ""}
+        {added.length > 0 ? ` · ${added.length} added by National Leadership` : ""}
       </p>
+      {backToNl > 0 ? (
+        <p className="rx-small" style={{ marginTop: 4, color: "var(--rx-vermilion)", fontWeight: 600 }}>
+          {backToNl === 1 ? "One chapter" : `${backToNl} chapters`} National Leadership added{" "}
+          {backToNl === 1 ? "was" : "were"} sent back for a fix.
+        </p>
+      ) : null}
     </Link>
   );
 }

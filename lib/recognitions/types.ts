@@ -86,7 +86,20 @@ export type NominationRow = {
   returned_by: string | null;
   returned_at: string | null;
   return_note: string | null;
+  /**
+   * recognitions_03. 'chapter' = the chapter filed it; 'nl_added' = National
+   * Leadership added a chapter that did not nominate. Before migration 03 is
+   * applied the column is absent at runtime: read it ONLY through
+   * isNlAdded() (check-rules.ts), which treats a missing value as 'chapter'.
+   */
+  origin: NominationOrigin;
+  /** nl_added only: who added it, when, and National Leadership's reason (its content). */
+  added_by: string | null;
+  added_at: string | null;
+  added_reason: string | null;
 };
+
+export type NominationOrigin = "chapter" | "nl_added";
 
 /**
  * Stored nomination status (recognitions_02):

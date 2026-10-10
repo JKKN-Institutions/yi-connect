@@ -1,6 +1,7 @@
 import type { Phase } from "@/lib/recognitions/phase";
 import { isPast } from "@/lib/recognitions/phase";
-import type { CycleRow } from "@/lib/recognitions/types";
+import type { CycleRow, NominationOrigin } from "@/lib/recognitions/types";
+import { isNlAdded } from "@/lib/recognitions/check-rules";
 
 /**
  * When may an evaluator write Stage 1 marks or flags? Shared by the sheet
@@ -21,6 +22,31 @@ export function scoringWindow(phase: Phase, cycle: Pick<CycleRow, "stage1_deadli
   if (phase !== "stage1") return { state: "over" };
   if (isPast(cycle.stage1_deadline)) return { state: "closed" };
   return { state: "open" };
+}
+
+/**
+ * The window for ONE nomination. A chapter National Leadership added
+ * (recognitions_03) is scored during re-evaluation, until the cycle's
+ * re-evaluation deadline; every other nomination follows scoringWindow.
+ * Used by the sheet page and the score actions so both always agree.
+ */
+export function nominationScoringWindow(
+  phase: Phase,
+  cycle: Pick<CycleRow, "stage1_deadline" | "reevaluation_deadline">,
+  nomination: { origin?: NominationOrigin | null }
+): ScoringWindow {
+  if (isNlAdded(nomination) && phase === "reevaluation") {
+    return isPast(cycle.reevaluation_deadline) ? { state: "closed" } : { state: "open" };
+  }
+  return scoringWindow(phase, cycle);
+}
+
+/** The deadline that closes this nomination's scoring (for messages). */
+export function scoringDeadlineFor(
+  cycle: Pick<CycleRow, "stage1_deadline" | "reevaluation_deadline">,
+  nomination: { origin?: NominationOrigin | null }
+): string | null {
+  return isNlAdded(nomination) ? cycle.reevaluation_deadline : cycle.stage1_deadline;
 }
 
 /** "Regional Mentor · region SRTN", "NMT" or "NMT leader". Region codes shown as-is. */

@@ -32,7 +32,9 @@ export default async function CheckDeskPage() {
   }
 
   const items = await loadCheckItems(viewer, cycle);
-  const rmRegions = [...new Set(viewer.duties.filter((d) => d.layer === "rm").map((d) => d.region ?? ""))].filter(Boolean);
+  // NL-added nominations (recognitions_03) stay checkable until the re-evaluation deadline.
+  const nlStillOpen = items.filter((i) => i.nlAdded && (i.status === "submitted" || i.status === "returned")).length;
+  const rmRegions =[...new Set(viewer.duties.filter((d) => d.layer === "rm").map((d) => d.region ?? ""))].filter(Boolean);
 
   return (
     <div className="rx-stack-lg">
@@ -48,7 +50,9 @@ export default async function CheckDeskPage() {
         <p className="rx-small">
           Check each nomination from your region for eligibility and completeness. It goes forward to scoring only
           when the <strong>Regional Chair and a Regional Mentor have both passed it</strong>. Either of you can send
-          it back with a note; the chapter fixes it and both of you check the new version.
+          it back with a note; the chapter fixes it and both of you check the new version. A chapter National
+          Leadership added during re-evaluation is marked as such: you check its reason instead of a form, and a
+          send-back goes to National Leadership.
         </p>
         <div className="rx-stack" style={{ gap: 4 }}>
           <Deadline label="Chapters fix sent-back nominations by" iso={cycle.fix_deadline} />
@@ -57,7 +61,15 @@ export default async function CheckDeskPage() {
       </PageHead>
 
       {!checksOpen(cycle) ? (
-        <Notice>Checks closed on {formatWhen(cycle.check_deadline)}. This page is read-only.</Notice>
+        nlStillOpen > 0 ? (
+          <Notice>
+            Checks on chapter nominations closed on {formatWhen(cycle.check_deadline)}.{" "}
+            {nlStillOpen === 1 ? "One chapter" : `${nlStillOpen} chapters`} added by National Leadership can still be
+            checked until {formatWhen(cycle.reevaluation_deadline)}.
+          </Notice>
+        ) : (
+          <Notice>Checks closed on {formatWhen(cycle.check_deadline)}. This page is read-only.</Notice>
+        )
       ) : null}
 
       {items.length === 0 ? (

@@ -13,6 +13,9 @@ import { RankingTable, VersionHistory } from "@/app/recognitions/_parts/ranking-
 import { loadStage2 } from "@/app/recognitions/_parts/load";
 import { buildRankingView, chapterName } from "@/app/recognitions/_parts/shared";
 import { DecisionPanel } from "./decision-panel";
+import { AddChapterPanel, AddedFixForm } from "./add-chapter";
+import { addableChapters, addWindow } from "@/lib/recognitions/nl-add";
+import { canFix, effectiveStatus, exclusionReason, fixDeadlineFor, isNlAdded, NOMINATION_STATUS_LABEL } from "@/lib/recognitions/check-rules";
 
 export const metadata: Metadata = { title: "Award review" };
 
@@ -51,7 +54,19 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
     listAudit({ awardId }),
     listCitationEdits(awardId),
   ]);
-  const actors = await getPeople(auditRows.map((a) => a.actor_person_id).filter((x): x is string => !!x));
+  // Chapters National Leadership added (recognitions_03), and whether more can be added now.
+  const addedNoms = state.nominations
+    .filter(isNlAdded)
+    .sort((a, b) => Date.parse(b.added_at ?? "") - Date.parse(a.added_at ?? ""));
+  const addWin = addWindow(state);
+  const addable = addWin.open ? await addableChapters(state) : null;
+  const actors = await getPeople(
+    [
+      ...auditRows.map((a) => a.actor_person_id),
+      ...addedNoms.flatMap((n) => [n.added_by, n.returned_by, n.rc_checked_by, n.rm_checked_by]),
+    ].filter((x): x is string => !!x)
+  );
+  const nameOf = (id: string | null) => (id ? actors.get(id)?.full_name ?? "Unknown person" : null);
   const evaluatorLayer = new Map(state.duties.map((d) => [d.id, d.layer]));
 
   const finalVersion = state.latestSubmittedVersion;
@@ -91,6 +106,75 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
           <Notice tone="ok">Approved on version {finalVersion?.version}. This award is final.</Notice>
         ) : null}
       </div>
+
+      {/* ------------------------------------- Chapters National Leadership added */}
+      {addable ? (
+        <AddChapterPanel
+          awardId={award.id}
+          awardTitle={award.title}
+          options={addable.eligible}
+          skipped={addable.skipped}
+          sendsBack={phase === "governance"}
+          closesAt={formatWhen(cycle.reevaluation_deadline)}
+        />
+      ) : null}
+
+      {addedNoms.length > 0 ? (
+        <section className="rx-stack" aria-labelledby="rx-nl-added">
+          <h2 className="rx-h2" id="rx-nl-added">Chapters National Leadership added</h2>
+          <p className="rx-small rx-mute">
+            Each one needs the Regional Chair and a Regional Mentor to pass it before it is scored. A send-back comes to
+            you: edit the reason and resubmit by {formatWhen(cycle.reevaluation_deadline)}.
+          </p>
+          {addedNoms.map((n) => {
+            const st = effectiveStatus(n, cycle);
+            const chapter = data.chapters.get(n.chapter_id)?.name ?? "Unknown chapter";
+            return (
+              <article key={n.id} className="rx-plate rx-plate-tight rx-stack">
+                <div className="rx-spread">
+                  <h3 className="rx-h3" style={{ overflowWrap: "anywhere" }}>{chapter}</h3>
+                  <Seal tone={st === "checked" ? "laurel" : st === "returned" ? "vermilion" : st === "submitted" ? "gilt" : "mute"}>
+                    {NOMINATION_STATUS_LABEL[st]}
+                  </Seal>
+                </div>
+                <div className="rx-row rx-small" style={{ gap: 8 }}>
+                  <Seal tone="gilt">Added by National Leadership</Seal>
+                  <Seal tone="mute">Region {n.region}</Seal>
+                  <Seal tone="laurel">{CATEGORY_LABEL[n.category]}</Seal>
+                  <span className="rx-mute">
+                    by {nameOf(n.added_by)} · {formatWhen(n.added_at)}
+                  </span>
+                </div>
+                {st === "submitted" || st === "checked" ? (
+                  <p className="rx-small rx-mute">
+                    Regional Chair: {n.rc_checked_by ? `passed by ${nameOf(n.rc_checked_by)}` : "not yet"} · Regional
+                    Mentor: {n.rm_checked_by ? `passed by ${nameOf(n.rm_checked_by)}` : "not yet"}
+                  </p>
+                ) : null}
+                {n.status === "returned" && n.return_note ? (
+                  <div className="rx-notice rx-notice-alert rx-small">
+                    <strong>Sent back by {nameOf(n.returned_by) ?? "a checker"}</strong>
+                    {n.returned_at ? ` · ${formatWhen(n.returned_at)}` : ""}
+                    <p className="rx-p-quote" style={{ marginTop: 6 }}>{n.return_note}</p>
+                  </div>
+                ) : null}
+                {st === "excluded" ? <p className="rx-small rx-mute">{exclusionReason(n, cycle)}</p> : null}
+                {canFix(n, cycle) ? (
+                  <AddedFixForm nominationId={n.id} chapterName={chapter} initial={n.added_reason ?? ""} />
+                ) : (
+                  <div>
+                    <div className="rx-label">Your reason</div>
+                    <p className="rx-p-quote rx-small">{n.added_reason}</p>
+                    {n.status === "returned" ? (
+                      <p className="rx-small rx-mute">The deadline to fix it passed on {formatWhen(fixDeadlineFor(n, cycle))}.</p>
+                    ) : null}
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </section>
+      ) : null}
 
       {/* ------------------------------------------------ Stage 1 summary */}
       <section className="rx-stack" aria-labelledby="rx-s1">
@@ -190,7 +274,9 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
                           })}
                           <details className="rx-p-fold">
                             <summary>
-                              <span className="rx-small">The chapter&apos;s nomination</span>
+                              <span className="rx-small">
+                                {isNlAdded(n) ? "Why National Leadership added it" : "The chapter's nomination"}
+                              </span>
                             </summary>
                             <div className="rx-p-fold-body">
                               <Dossier
@@ -201,6 +287,7 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
                                   hostedName: n.hosted_event_name,
                                   hostedType: n.hosted_event_type,
                                   announcement: n.announcement_draft ?? "",
+                                  nlAddedReason: isNlAdded(n) ? n.added_reason ?? "" : null,
                                 }}
                               />
                             </div>

@@ -17,7 +17,7 @@ import type {
 import type { Category } from "./constants";
 import { computeCompleteness, dutySeesNomination, type Completeness } from "./scoring";
 import { computePhase, latestDecisionFor, type Phase } from "./phase";
-import { inRace } from "./check-rules";
+import { inRace, isNlAdded } from "./check-rules";
 
 /**
  * Read layer for Yi Recognitions. NO function here checks permissions —
@@ -114,7 +114,20 @@ export async function listNominationsForAward(awardId: string): Promise<Nominati
   return (data ?? []) as NominationRow[];
 }
 
-export async function listNominationsForChapter(chapterId: string, awardIds: string[]): Promise<NominationRow[]> {
+/**
+ * A chapter's OWN nominations. By default a nomination National Leadership
+ * added for the chapter (recognitions_03) is left out: the chapter didn't
+ * file it, chapters never see results, so its desk shows that award as not
+ * applied for (Director, 2026-10-10). The chapter actions pass
+ * includeNlAdded so they can refuse to touch such a row.
+ * Filtered in code, not SQL, so this still works before migration 03 adds
+ * the origin column.
+ */
+export async function listNominationsForChapter(
+  chapterId: string,
+  awardIds: string[],
+  opts: { includeNlAdded?: boolean } = {}
+): Promise<NominationRow[]> {
   if (awardIds.length === 0) return [];
   const { data, error } = await rxService()
     .from("recognition_nominations")
@@ -122,7 +135,8 @@ export async function listNominationsForChapter(chapterId: string, awardIds: str
     .eq("chapter_id", chapterId)
     .in("award_id", awardIds);
   if (error) fail("list chapter nominations", error);
-  return (data ?? []) as NominationRow[];
+  const rows = (data ?? []) as NominationRow[];
+  return opts.includeNlAdded ? rows : rows.filter((n) => !isNlAdded(n));
 }
 
 export async function listEvaluators(awardId: string, includeInactive = false): Promise<EvaluatorRow[]> {
@@ -172,7 +186,7 @@ export async function conflictsForPerson(personId: string): Promise<Set<string>>
 }
 
 /** person_id -> chapter ids the person holds any active directory role in (any app). */
-async function linkedChapters(personIds: string[]): Promise<Map<string, Set<string>>> {
+export async function linkedChapters(personIds: string[]): Promise<Map<string, Set<string>>> {
   const { data, error } = await rxService()
     .schema("yi_directory")
     .from("role_assignments")

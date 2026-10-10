@@ -4,7 +4,8 @@ import { getAwardState, listScoresForDuty, nominationsForDuty, type AwardState }
 import { Ribbon } from "../../_ui/ribbon";
 import { IconArrowRight, IconEyeOff } from "../../_ui/icons";
 import { Deadline, Notice, PageHead, PhaseSeal, Seal, formatWhen } from "../../_ui/primitives";
-import { dutyLayerLabel, scoringWindow } from "./score-rules";
+import { dutyLayerLabel, nominationScoringWindow, scoringWindow } from "./score-rules";
+import { isNlAdded } from "@/lib/recognitions/check-rules";
 import "./score.css";
 
 export const metadata = { title: "My scoring sheets · Yi Recognitions" };
@@ -38,13 +39,22 @@ export default async function MySheetsPage() {
   const rows = await Promise.all(
     duties.map(async (duty) => {
       const state = states.get(duty.award_id) ?? null;
-      if (!state) return { duty, state, total: 0, submitted: 0 };
+      if (!state) return { duty, state, total: 0, submitted: 0, nlOpen: 0 };
       // BLIND: progress comes only from this duty's own scores and the chapters it sees.
       const visible = nominationsForDuty(state, duty);
       const mine = await listScoresForDuty(duty.id);
       const visibleIds = new Set(visible.map((n) => n.id));
-      const submitted = mine.filter((s) => s.status === "submitted" && visibleIds.has(s.nomination_id)).length;
-      return { duty, state, total: visible.length, submitted };
+      const submittedIds = new Set(
+        mine.filter((s) => s.status === "submitted" && visibleIds.has(s.nomination_id)).map((s) => s.nomination_id)
+      );
+      // Chapters National Leadership added (recognitions_03), open for scoring in re-evaluation and not yet submitted.
+      const nlOpen = visible.filter(
+        (n) =>
+          isNlAdded(n) &&
+          !submittedIds.has(n.id) &&
+          nominationScoringWindow(state.phase, state.cycle, n).state === "open"
+      ).length;
+      return { duty, state, total: visible.length, submitted: submittedIds.size, nlOpen };
     })
   );
 
@@ -58,7 +68,7 @@ export default async function MySheetsPage() {
       </PageHead>
 
       <div>
-        {rows.map(({ duty, state, total, submitted }) => {
+        {rows.map(({ duty, state, total, submitted, nlOpen }) => {
           const award = state?.award ?? duty.award;
           const win = state ? scoringWindow(state.phase, state.cycle) : null;
           return (
@@ -94,13 +104,21 @@ export default async function MySheetsPage() {
                   {win?.state === "closed" ? (
                     <Notice>Scoring closed on {formatWhen(state.cycle.stage1_deadline)}. Your sheet is read-only.</Notice>
                   ) : null}
-                  {win?.state === "over" ? <Notice>Stage 1 is over for this award. Your sheet is read-only.</Notice> : null}
+                  {nlOpen > 0 ? (
+                    <Notice tone="alert">
+                      {nlOpen === 1 ? "One chapter" : `${nlOpen} chapters`} added by National Leadership during
+                      re-evaluation {nlOpen === 1 ? "is" : "are"} waiting for your marks. Score by{" "}
+                      {formatWhen(state.cycle.reevaluation_deadline)}.
+                    </Notice>
+                  ) : win?.state === "over" ? (
+                    <Notice>Stage 1 is over for this award. Your sheet is read-only.</Notice>
+                  ) : null}
                   {total === 0 ? (
                     <p className="rx-mute rx-small">No nomination on your sheet has passed both checks yet. Only those reach scoring.</p>
                   ) : null}
                   <div>
                     <Link href={`/recognitions/score/${duty.id}`} className="rx-btn">
-                      {win?.state === "open" && submitted < total ? "Open my sheet" : "View my sheet"}{" "}
+                      {(win?.state === "open" && submitted < total) || nlOpen > 0 ? "Open my sheet" : "View my sheet"}{" "}
                       <IconArrowRight size={16} />
                     </Link>
                   </div>

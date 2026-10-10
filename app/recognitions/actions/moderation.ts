@@ -2,7 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { requireRxNmtLeader } from "@/lib/recognitions/auth";
-import { audit, chapterMap, getAwardState, latestDecisionFor, type AwardState } from "@/lib/recognitions/data";
+import {
+  audit,
+  chapterMap,
+  getAwardState,
+  latestDecisionFor,
+  listScoresForAward,
+  type AwardState,
+} from "@/lib/recognitions/data";
+import { nlAddedBlockers } from "@/lib/recognitions/scoring";
 import { isPast } from "@/lib/recognitions/phase";
 import { rxService } from "@/lib/recognitions/supabase";
 import type { ActionResult } from "@/lib/recognitions/types";
@@ -73,7 +81,25 @@ async function persist(awardId: string, input: ModerationInput, submit: boolean)
     return { success: false, error: "Press \"Reopen moderation\" first. It starts a new version for the re-evaluation." };
   }
 
-  const checked = validateModeration(input, state.checkedNominations, await chapterMap(), submit);
+  const chapters = await chapterMap();
+  // A chapter National Leadership added (recognitions_03) must be checked and
+  // fully scored, or be out of the race, before the re-evaluated ranking is
+  // submitted. Drafts are always allowed.
+  if (submit && state.phase === "reevaluation") {
+    const blockers = nlAddedBlockers({
+      cycle: state.cycle,
+      nominations: state.nominations,
+      duties: state.duties,
+      conflictsByDuty: state.conflictsByDuty,
+      scores: await listScoresForAward(awardId),
+      nameOf: (n) => chapters.get(n.chapter_id)?.name ?? "A chapter",
+    });
+    if (blockers.length > 0) {
+      return { success: false, error: `Not yet: ${blockers.join(" ")} Save a draft meanwhile.` };
+    }
+  }
+
+  const checked = validateModeration(input, state.checkedNominations, chapters, submit);
   if (!checked.ok) return { success: false, error: checked.error };
 
   const svc = rxService();

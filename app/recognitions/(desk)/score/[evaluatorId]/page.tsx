@@ -11,7 +11,8 @@ import { CATEGORY_LABEL, PARAM_KEYS, type ParamKey } from "@/lib/recognitions/co
 import { Ribbon } from "../../../_ui/ribbon";
 import { IconArrowLeft, IconArrowRight, IconDownload, IconEyeOff, IconLock } from "../../../_ui/icons";
 import { Deadline, NoAccess, Notice, PageHead, Seal, formatWhen } from "../../../_ui/primitives";
-import { dutyLayerLabel, scoringWindow } from "../score-rules";
+import { dutyLayerLabel, nominationScoringWindow, scoringDeadlineFor, scoringWindow } from "../score-rules";
+import { isNlAdded } from "@/lib/recognitions/check-rules";
 import { ScoreSheet } from "./sheet";
 import { FlagToggle } from "./flags";
 import { CheckList } from "../../check/check-list";
@@ -129,7 +130,10 @@ export default async function ScoringSheetPage({
   const next = index < visible.length - 1 ? visible[index + 1] : null;
   const score = mine.get(current.id) ?? null;
   const submitted = score?.status === "submitted";
-  const open = win.state === "open";
+  // Per chapter: one National Leadership added is scored during re-evaluation (recognitions_03).
+  const curWin = nominationScoringWindow(state.phase, cycle, current);
+  const open = curWin.state === "open";
+  const added = isNlAdded(current);
   const readOnly = !open || submitted;
   const files = await listHealthCardFiles(duty.award_id);
   const href = (id: string) => `/recognitions/score/${duty.id}?n=${id}`;
@@ -187,9 +191,15 @@ export default async function ScoringSheetPage({
           </div>
         </nav>
 
-        {win.state === "closed" ? (
-          <Notice>Scoring closed on {formatWhen(cycle.stage1_deadline)}. Read-only mode.</Notice>
-        ) : win.state === "over" ? (
+        {added && open && !submitted ? (
+          <Notice>
+            National Leadership added this chapter during re-evaluation, and both checkers passed it. Score it by{" "}
+            {formatWhen(cycle.reevaluation_deadline)}.
+          </Notice>
+        ) : null}
+        {curWin.state === "closed" ? (
+          <Notice>Scoring closed on {formatWhen(scoringDeadlineFor(cycle, current))}. Read-only mode.</Notice>
+        ) : curWin.state === "over" ? (
           <Notice>Stage 1 is over for this award. Read-only mode.</Notice>
         ) : submitted ? (
           <Notice tone="ok">
@@ -209,39 +219,53 @@ export default async function ScoringSheetPage({
                 <Seal tone="mute">Region {current.region}</Seal>
                 <Seal tone="laurel">{CATEGORY_LABEL[current.category]}</Seal>
                 {duty.layer === "nmt" && current.rm_recommended_by ? <Seal tone="gilt">Recommended by RM</Seal> : null}
+                {added ? <Seal tone="gilt">Added by National Leadership</Seal> : null}
               </div>
             </div>
 
-            <section className="rx-stack" style={{ gap: 8 }}>
-              <h3 className="rx-h3">Why they deserve it</h3>
-              <ol className="rx-sheet-reasons">
-                {current.reasons.map((r, i) => (
-                  <li key={i}>{r.trim() === "" ? <span className="rx-mute">Left blank</span> : r}</li>
-                ))}
-              </ol>
-            </section>
-
-            <section className="rx-stack" style={{ gap: 6 }}>
-              <h3 className="rx-h3">Flagship event</h3>
-              <p className="rx-sheet-field">{current.flagship_event || <span className="rx-mute">Left blank</span>}</p>
-            </section>
-
-            <section className="rx-stack" style={{ gap: 6 }}>
-              <h3 className="rx-h3">Hosted a national or regional event</h3>
-              {current.hosted_event ? (
-                <p className="rx-sheet-field">
-                  Yes · {current.hosted_event_name || "Name not given"}
-                  {current.hosted_event_type ? ` (${current.hosted_event_type === "national" ? "National" : "Regional"})` : ""}
+            {added ? (
+              <section className="rx-stack" style={{ gap: 8 }}>
+                <h3 className="rx-h3">Why National Leadership added this chapter</h3>
+                <p className="rx-sheet-field">{current.added_reason || <span className="rx-mute">No reason recorded</span>}</p>
+                <p className="rx-small rx-mute">
+                  This chapter did not nominate, so there is no nomination form. Score it on what you know of its work
+                  and the National Health Card.
                 </p>
-              ) : (
-                <p>No</p>
-              )}
-            </section>
+              </section>
+            ) : (
+              <>
+                <section className="rx-stack" style={{ gap: 8 }}>
+                  <h3 className="rx-h3">Why they deserve it</h3>
+                  <ol className="rx-sheet-reasons">
+                    {current.reasons.map((r, i) => (
+                      <li key={i}>{r.trim() === "" ? <span className="rx-mute">Left blank</span> : r}</li>
+                    ))}
+                  </ol>
+                </section>
 
-            <section className="rx-stack" style={{ gap: 6 }}>
-              <h3 className="rx-h3">Their announcement draft</h3>
-              <p className="rx-sheet-field">{current.announcement_draft || <span className="rx-mute">Left blank</span>}</p>
-            </section>
+                <section className="rx-stack" style={{ gap: 6 }}>
+                  <h3 className="rx-h3">Flagship event</h3>
+                  <p className="rx-sheet-field">{current.flagship_event || <span className="rx-mute">Left blank</span>}</p>
+                </section>
+
+                <section className="rx-stack" style={{ gap: 6 }}>
+                  <h3 className="rx-h3">Hosted a national or regional event</h3>
+                  {current.hosted_event ? (
+                    <p className="rx-sheet-field">
+                      Yes · {current.hosted_event_name || "Name not given"}
+                      {current.hosted_event_type ? ` (${current.hosted_event_type === "national" ? "National" : "Regional"})` : ""}
+                    </p>
+                  ) : (
+                    <p>No</p>
+                  )}
+                </section>
+
+                <section className="rx-stack" style={{ gap: 6 }}>
+                  <h3 className="rx-h3">Their announcement draft</h3>
+                  <p className="rx-sheet-field">{current.announcement_draft || <span className="rx-mute">Left blank</span>}</p>
+                </section>
+              </>
+            )}
 
             <hr className="rx-rule" />
 

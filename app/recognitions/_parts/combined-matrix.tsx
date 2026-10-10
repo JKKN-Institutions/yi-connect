@@ -66,6 +66,9 @@ export function CombinedMatrix({ view }: { view: MatrixView }) {
                       <td className="rx-num">{r.rank}</td>
                       <td>
                         {r.chapterName}
+                        {r.dossier.nlAddedReason !== null ? (
+                          <div className="rx-small rx-mute">Added by National Leadership</div>
+                        ) : null}
                         {r.missing.length > 0 ? (
                           <div className="rx-small rx-p-flag">Missing: {r.missing.join(", ")}</div>
                         ) : null}
@@ -120,6 +123,18 @@ function NominationFold({ row }: { row: MatrixViewRow }) {
 }
 
 export function Dossier({ dossier }: { dossier: DossierView }) {
+  if (dossier.nlAddedReason !== null) {
+    return (
+      <div className="rx-stack">
+        <div className="rx-eyebrow">Added by National Leadership</div>
+        <p className="rx-p-quote">{dossier.nlAddedReason.trim() || "No reason recorded."}</p>
+        <p className="rx-small rx-mute">
+          This chapter did not nominate. National Leadership added it during its review; the Regional Chair and a
+          Regional Mentor passed it before it was scored.
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="rx-stack">
       <div>

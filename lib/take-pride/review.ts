@@ -15,9 +15,9 @@ import { tpService } from "./supabase";
  * plain text). Rows live in yi_connect.tp_review_logins and are seeded by
  * hand, not in a migration. NOT gated: callers decide what a result allows.
  *
- * Lock: more than 5 tries for one username within 15 minutes refuses the
- * next ones until the oldest of them is 15 minutes old. A successful
- * sign-in clears that username's tries.
+ * Lock: after 5 tries for one username within 15 minutes, further tries
+ * are refused until the oldest of those 5 is 15 minutes old. Refused tries
+ * are not counted. A successful sign-in clears that username's tries.
  */
 
 export const TP_REVIEW_COOKIE = "tp_review";
@@ -75,7 +75,8 @@ export function normaliseUsername(u: unknown): string {
  *
  * Returns the attempt's id when this attempt may go ahead, "locked" when
  * more than MAX_FAILS attempts for this username fall in the last 15
- * minutes (counting this one), or "error". FAIL CLOSED: if the attempt
+ * minutes (counting this one; a locked try's row is removed again), or
+ * "error". FAIL CLOSED: if the attempt
  * cannot be written or counted, the caller refuses.
  */
 async function claimAttempt(username: string): Promise<{ id: string } | "locked" | "error"> {
@@ -89,7 +90,13 @@ async function claimAttempt(username: string): Promise<{ id: string } | "locked"
     .eq("username", username)
     .gte("attempted_at", since);
   if (error || count === null) return "error";
-  return count > MAX_FAILS ? "locked" : { id: row.id as string };
+  if (count > MAX_FAILS) {
+    // A refused try does not count, so the lock lifts 15 minutes after the
+    // tries that caused it. The tries that got through keep their rows.
+    await db.from("tp_review_attempts").delete().eq("id", row.id);
+    return "locked";
+  }
+  return { id: row.id as string };
 }
 
 async function housekeeping(): Promise<void> {
@@ -106,17 +113,18 @@ async function housekeeping(): Promise<void> {
  * allowed only while the target is a sample row AND there are no real
  * delegates yet. FAIL CLOSED on any read error.
  */
-async function sampleTargetIsSafe(role: "delegate" | "catalyst", token: string): Promise<boolean> {
+async function sampleTargetIsSafe(role: "delegate" | "catalyst", token: string): Promise<"ok" | "closed" | "error"> {
   const db = tpService();
   const target = await db
     .from(role === "delegate" ? "tp_delegates" : "tp_partners")
     .select("is_sample")
     .eq("token", token)
     .maybeSingle();
-  if (target.error || !target.data || target.data.is_sample !== true) return false;
+  if (target.error) return "error";
+  if (!target.data || target.data.is_sample !== true) return "closed";
   const real = await db.from("tp_delegates").select("id", { count: "exact", head: true }).eq("is_sample", false);
-  if (real.error || real.count === null) return false;
-  return real.count === 0;
+  if (real.error || real.count === null) return "error";
+  return real.count === 0 ? "ok" : "closed";
 }
 
 export type ReviewSignIn =
@@ -161,7 +169,8 @@ export async function reviewSignIn(rawUsername: unknown, rawPassword: unknown): 
   }
   const target = login.target_token as string | null;
   if ((login.role === "delegate" || login.role === "catalyst") && target && /^[0-9a-f]{32}$/.test(target)) {
-    if (!(await sampleTargetIsSafe(login.role, target))) return { ok: false, reason: "closed" };
+    const safe = await sampleTargetIsSafe(login.role, target);
+    if (safe !== "ok") return { ok: false, reason: safe };
     return { ok: true, role: login.role, targetToken: target };
   }
   return { ok: false, reason: "error" };

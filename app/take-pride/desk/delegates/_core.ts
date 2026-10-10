@@ -75,13 +75,20 @@ export async function planImport(db: SupabaseClient, rows: TpImportRow[]): Promi
 
 export type TpImportOutcome = { inserted: number; ids: string[]; alreadyListed: TpImportSkip[]; error: string | null };
 
+/** Unique index (migration take_pride_03) on name + chapter of real delegates. */
+const NAME_INDEX = "tp_delegates_real_name_chapter_key";
+
 export async function runImport(db: SupabaseClient, rows: TpImportRow[]): Promise<TpImportOutcome> {
   const { toInsert, alreadyListed } = await planImport(db, rows);
   const ids: string[] = [];
   for (let start = 0; start < toInsert.length; start += CHUNK) {
-    const chunk = toInsert.slice(start, start + CHUNK);
+    let chunk = toInsert.slice(start, start + CHUNK);
     let done = false;
     for (let attempt = 0; attempt < 4 && !done; attempt++) {
+      if (chunk.length === 0) {
+        done = true;
+        break;
+      }
       const codes = pickBadgeCodes(chunk.length, await usedBadgeCodes(db));
       if (!codes) {
         return { inserted: ids.length, ids, alreadyListed, error: "No free badge numbers left (TP26-1000 to TP26-9999 are all used)." };
@@ -110,8 +117,15 @@ export async function runImport(db: SupabaseClient, rows: TpImportRow[]): Promis
         done = true;
       } else if (error.code !== "23505") {
         return { inserted: ids.length, ids, alreadyListed, error: `Saving stopped after ${ids.length} delegates: ${error.message}` };
+      } else if (error.message.includes(NAME_INDEX)) {
+        // Someone else saved some of these delegates meanwhile (another tab or
+        // organiser). The whole chunk was rejected: re-check it against the
+        // list as it is now and save the rest.
+        const again = await planImport(db, chunk);
+        alreadyListed.push(...again.alreadyListed);
+        chunk = again.toInsert;
       }
-      // 23505 = a badge code was taken meanwhile; the whole chunk was rejected, so pick again.
+      // Other 23505 = a badge code was taken meanwhile; the whole chunk was rejected, so pick again.
     }
     if (!done) return { inserted: ids.length, ids, alreadyListed, error: `Saving stopped after ${ids.length} delegates: badge numbers kept clashing. Try again.` };
   }

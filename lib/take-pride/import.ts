@@ -19,6 +19,8 @@
  *   delegate: a follow-up.)
  * - needs/offers stay empty: delegates fill them in on their pass.
  * - The same name + chapter twice in one file: the later row is skipped.
+ * - Headers: aliases are tried best-first, and a bare "Title" column is NOT
+ *   read as the designation (in myCII-style exports it is Mr / Ms / Dr).
  */
 
 import { TP_INDUSTRIES, TP_ZONES } from "./constants";
@@ -129,7 +131,8 @@ const ALIASES: Record<TpImportField, string[]> = {
   chapter: ["chapter", "yi chapter", "chapter name", "your chapter", "yi chapter name", "home chapter"],
   zone: ["zone", "region", "yi zone", "yi region", "zone name", "region name", "cii region"],
   business_name: ["company", "company name", "business", "business name", "organisation", "organization", "organisation name", "organization name", "firm", "firm name", "enterprise"],
-  role_title: ["designation", "role", "title", "position", "job title", "your designation"],
+  // No bare "title": in myCII-style exports that is the salutation (Mr / Ms / Dr).
+  role_title: ["designation", "your designation", "job title", "role", "position"],
   industry: ["industry", "sector", "industry sector", "business sector", "industry type", "type of industry", "line of business", "business type", "nature of business"],
   email: ["email", "email id", "e mail", "email address", "mail id", "e mail id", "mail"],
   phone: ["phone", "mobile", "mobile number", "mobile no", "phone number", "phone no", "contact", "contact number", "contact no", "whatsapp", "whatsapp number", "whatsapp no", "cell"],
@@ -143,13 +146,24 @@ function normHeader(h: string): string {
     .replace(/\s+/g, " ");
 }
 
-/** Which column index feeds each field. First matching header wins. */
+/**
+ * Which column index feeds each field. Aliases are tried in priority order
+ * (the best name first), so "Zone" beats "Region" and "Designation" beats
+ * "Role" whatever order the columns are in. A column feeds one field only.
+ */
 export function mapHeaders(headers: string[]): Partial<Record<TpImportField, number>> {
   const norm = headers.map(normHeader);
   const found: Partial<Record<TpImportField, number>> = {};
+  const taken = new Set<number>();
   for (const field of Object.keys(ALIASES) as TpImportField[]) {
-    const idx = norm.findIndex((h, i) => ALIASES[field].includes(h) && !Object.values(found).includes(i));
-    if (idx >= 0) found[field] = idx;
+    for (const alias of ALIASES[field]) {
+      const idx = norm.findIndex((h, i) => h === alias && !taken.has(i));
+      if (idx >= 0) {
+        found[field] = idx;
+        taken.add(idx);
+        break;
+      }
+    }
   }
   return found;
 }

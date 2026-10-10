@@ -10,10 +10,13 @@ import {
   fitLine,
   getDelegateProfileByToken,
   getDirectoryPeople,
+  getMyMeetStates,
   hasFilters,
   parseDirectoryFilters,
   type DirectoryPerson,
+  type MeetState,
 } from "@/lib/take-pride/directory";
+import { AskToMeet } from "../meet/_client";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Delegate directory" };
@@ -21,18 +24,44 @@ export const metadata: Metadata = { title: "Delegate directory" };
 /** Cards drawn at once; search or filter to narrow a long list. */
 const SHOW_MAX = 60;
 
-function MeetLink({ token, person }: { token: string; person: Pick<DirectoryPerson, "id" | "delegate_meetings_opt_in"> }) {
+type MeetCtx = { token: string; meOptIn: boolean; states: Map<string, MeetState> };
+
+const STATE_TAG: Record<MeetState["status"], { cls: string; mine: string; theirs: string }> = {
+  requested: { cls: "saffron", mine: "You asked", theirs: "Asked to meet you" },
+  accepted: { cls: "green", mine: "Meeting on", theirs: "Meeting on" },
+  declined: { cls: "", mine: "Declined", theirs: "Declined" },
+};
+
+/** The meeting action for one person: their current status, or a real request form. */
+function MeetAction({ ctx, person }: { ctx: MeetCtx; person: Pick<DirectoryPerson, "id" | "full_name" | "delegate_meetings_opt_in"> }) {
+  const meetHref = `/take-pride/pass/${ctx.token}/meet`;
+  const state = ctx.states.get(person.id);
+  if (state) {
+    const t = STATE_TAG[state.status];
+    const answer = state.status === "requested" && !state.iAsked;
+    return (
+      <div className="tp-row" style={{ justifyContent: "flex-start" }} data-tp="meet-state">
+        <span className={`tp-tag ${t.cls}`.trim()}>{state.iAsked ? t.mine : t.theirs}</span>
+        <Link href={meetHref} className="tp-small">
+          {answer ? "Answer on People to meet" : "See on People to meet"}
+        </Link>
+      </div>
+    );
+  }
   if (!person.delegate_meetings_opt_in) {
     return <span className="tp-small" data-tp="no-meet">Not taking meeting requests</span>;
   }
-  return (
-    <Link href={`/take-pride/pass/${token}/meet?to=${person.id}`} className="tp-btn ghost sm" data-tp="ask-meet">
-      Ask to meet
-    </Link>
-  );
+  if (!ctx.meOptIn) {
+    return (
+      <span className="tp-small" data-tp="me-off">
+        To ask, <Link href={`/take-pride/pass/${ctx.token}/profile`}>turn on delegate meetings</Link> in your profile.
+      </span>
+    );
+  }
+  return <AskToMeet token={ctx.token} toId={person.id} name={person.full_name} />;
 }
 
-function PersonCard({ token, p, fit }: { token: string; p: DirectoryPerson; fit: string }) {
+function PersonCard({ ctx, p, fit }: { ctx: MeetCtx; p: DirectoryPerson; fit: string }) {
   const work = [p.role_title, p.business_name].filter(Boolean).join(" · ");
   return (
     <article className="tp-stack" style={{ gap: 6 }} data-tp="person" data-name={p.full_name}>
@@ -66,9 +95,7 @@ function PersonCard({ token, p, fit }: { token: string; p: DirectoryPerson; fit:
           {fit}
         </p>
       )}
-      <div>
-        <MeetLink token={token} person={p} />
-      </div>
+      <MeetAction ctx={ctx} person={p} />
     </article>
   );
 }
@@ -86,7 +113,8 @@ export default async function PeoplePage({
     return <Denied title="Pass not found" text="This pass link is not valid. Ask the Take Pride desk for your link." />;
   }
 
-  const people = await getDirectoryPeople(me);
+  const [people, states] = await Promise.all([getDirectoryPeople(me), getMyMeetStates(me.id)]);
+  const ctx: MeetCtx = { token, meOptIn: me.delegate_meetings_opt_in, states };
   const industries = [...new Set(people.map((p) => p.industry))].sort();
   const f = parseDirectoryFilters(await searchParams, industries);
   const filtering = hasFilters(f);
@@ -220,12 +248,12 @@ export default async function PeoplePage({
                   </div>
                   <ul className="tp-stack" style={{ gap: 6, margin: 0, padding: 0, listStyle: "none" }}>
                     {t.people.map((p) => (
-                      <li key={p.id} className="tp-row" data-tp="twin-person">
+                      <li key={p.id} className="tp-stack" style={{ gap: 6 }} data-tp="twin-person">
                         <span style={{ minWidth: 0 }}>
                           {p.full_name}
                           {p.role_title && <span className="tp-small"> · {p.role_title}</span>}
                         </span>
-                        <MeetLink token={token} person={p} />
+                        <MeetAction ctx={ctx} person={p} />
                       </li>
                     ))}
                   </ul>
@@ -251,7 +279,7 @@ export default async function PeoplePage({
         ) : (
           <div className="tp-list">
             {shown.map((p) => (
-              <PersonCard key={p.id} token={token} p={p} fit={fitLine(p, me)} />
+              <PersonCard key={p.id} ctx={ctx} p={p} fit={fitLine(p, me)} />
             ))}
           </div>
         )}

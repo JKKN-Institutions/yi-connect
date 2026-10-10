@@ -78,6 +78,27 @@ export async function getDirectoryPeople(me: Pick<TpDelegateProfile, "id" | "is_
   }));
 }
 
+export type MeetState = { status: "requested" | "accepted" | "declined"; iAsked: boolean };
+
+/**
+ * Every delegate meeting request I am part of, keyed by the other person's id,
+ * so the directory shows "Asked" / "Meeting on" instead of a second request
+ * button. Only ids and status are read; notes stay on the meet page.
+ */
+export async function getMyMeetStates(meId: string): Promise<Map<string, MeetState>> {
+  const { data, error } = await tpService()
+    .from("tp_delegate_meetings")
+    .select("from_delegate_id, to_delegate_id, status")
+    .or(`from_delegate_id.eq.${meId},to_delegate_id.eq.${meId}`);
+  if (error) throw new Error(error.message);
+  const out = new Map<string, MeetState>();
+  for (const r of (data ?? []) as { from_delegate_id: string; to_delegate_id: string; status: MeetState["status"] }[]) {
+    const iAsked = r.from_delegate_id === meId;
+    out.set(iAsked ? r.to_delegate_id : r.from_delegate_id, { status: r.status, iAsked });
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Filters (pure)
 

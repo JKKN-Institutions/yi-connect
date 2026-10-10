@@ -107,8 +107,10 @@ export const LAYER3_PARAMS: ParamDef[] = [
   },
   {
     key: "p5",
-    label: "Storytelling & Documentation",
-    hint: "Could this become a national case study? Evidence, narrative, visuals.",
+    // The 2026 deck calls this a bonus criterion (5 pts). How the bonus counts
+    // toward the NMT total is still open with Piyush, so the total stays /25.
+    label: "Storytelling & Documentation (bonus)",
+    hint: "Bonus, up to 5. Could this become a national case study? Narrative clarity, visuals, evidence, replicability.",
   },
 ];
 

@@ -19,6 +19,13 @@ import type { TpResult } from "./types";
  * stay, any row past it is taken back by its own caller. So when three
  * people tap the last two seats at once, the first two keep them instead of
  * everyone being bounced.
+ * Known gap: arrival is the insert's start time, not its commit time, so a
+ * join whose insert commits late (a full round trip after another join that
+ * already passed the re-check) can still rank itself in. Worst case one
+ * extra seat. Closing it needs a row lock in a DB function (follow-up).
+ * Sample and real never mix: a sample pass only sees and joins sample
+ * tables, a real pass only real ones, so deleting sample delegates (and the
+ * tables they host, by FK cascade) can never take a real delegate's seat.
  *
  * Privacy: members are shown by name and chapter only. No contact details.
  */
@@ -217,11 +224,19 @@ async function openHostedCount(delegateId: string): Promise<number | null> {
 const clashMessage = (title: string) =>
   `You are already at "${title}" at that time. Leave it first to pick another table.`;
 
-export async function joinCircle(delegateId: string, circleId: string): Promise<TpResult> {
+/** Sample passes only meet sample tables, real passes only real ones. */
+const sampleMismatch = (tableIsSample: boolean) =>
+  tableIsSample
+    ? "This is a sample table for the demo. Real delegates cannot join it."
+    : "This sample pass can only join sample tables.";
+
+export async function joinCircle(me: { id: string; is_sample: boolean }, circleId: string): Promise<TpResult> {
   if (typeof circleId !== "string" || !UUID.test(circleId)) return { success: false, error: "Table not found" };
   const c = await getCircle(circleId);
   if (!c) return { success: false, error: "Table not found" };
+  if (c.is_sample !== me.is_sample) return { success: false, error: sampleMismatch(c.is_sample) };
   if (c.status !== "open") return { success: false, error: "This table was cancelled" };
+  const delegateId = me.id;
 
   const before = await memberCount(c.id);
   if (before === null) return { success: false, error: TRY_AGAIN };

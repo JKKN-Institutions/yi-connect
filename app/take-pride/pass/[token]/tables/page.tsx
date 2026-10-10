@@ -91,7 +91,11 @@ function TableItem({
         <TableAction token={token} circleId={c.id} mode="host" />
       ) : isIn ? (
         <TableAction token={token} circleId={c.id} mode="leave" />
-      ) : left === 0 ? null : busyWith ? (
+      ) : left === 0 ? (
+        <p className="tp-small" data-tp="full-note" style={{ margin: 0 }}>
+          This table is full. Try another table at this time.
+        </p>
+      ) : busyWith ? (
         <p className="tp-small" data-tp="busy" style={{ margin: 0 }}>
           You are at &ldquo;{busyWith.title}&rdquo; at this time. Leave it to join this one.
         </p>
@@ -111,7 +115,8 @@ export default async function TablesPage({ params }: { params: Promise<{ token: 
 
   const [slots, open, myIds] = await Promise.all([
     getNetworkingSlots(),
-    listCircles({ onlyOpen: true }),
+    // A pass sees only its own kind: sample tables for sample passes, real for real.
+    listCircles({ onlyOpen: true }).then((all) => all.filter((c) => c.is_sample === me.is_sample)),
     getMyCircleIds(me.id),
   ]);
   const mine = new Set(myIds);

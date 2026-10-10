@@ -21,7 +21,7 @@ function refresh(token: string) {
 export async function joinTable(token: string, circleId: string): Promise<TpResult> {
   const me = await getDelegateByToken(token);
   if (!me) return { success: false, error: BAD_LINK };
-  const r = await joinCircle(me.id, circleId);
+  const r = await joinCircle({ id: me.id, is_sample: me.is_sample }, circleId);
   if (r.success) refresh(token);
   return r;
 }

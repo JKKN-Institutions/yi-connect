@@ -157,9 +157,16 @@ export async function respondMeeting(delegateToken: string, meetingId: string, a
   if (!d) return { success: false, error: "This pass link is not valid" };
   const { data, error } = await db
     .from("tp_meetings")
-    .update({ status: accept ? "accepted" : "declined", responded_at: new Date().toISOString() })
+    // Answer once: only a pending request can be accepted or declined, and a
+    // decline drops any time/table so a later change can't revive a stale slot.
+    .update({
+      status: accept ? "accepted" : "declined",
+      responded_at: new Date().toISOString(),
+      ...(accept ? {} : { slot_key: null, table_no: null }),
+    })
     .eq("id", meetingId)
     .eq("delegate_id", d.id)
+    .eq("status", "requested")
     .select("id");
   if (error || !data?.length) return { success: false, error: "Could not update this request" };
   revalidatePath(`/take-pride/pass/${delegateToken}`);

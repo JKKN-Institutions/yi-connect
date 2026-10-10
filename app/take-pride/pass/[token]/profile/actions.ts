@@ -1,23 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 import { tpService } from "@/lib/take-pride/supabase";
 import { isToken } from "@/lib/take-pride/auth";
-import { TP_TAGS } from "@/lib/take-pride/constants";
+import { ProfileSchema } from "@/lib/take-pride/profile";
 import type { TpResult } from "@/lib/take-pride/types";
 
 /*
- * A delegate edits their own matching profile. The row is found by the pass
- * token only; no delegate id comes from the browser. Never redirect.
+ * A delegate edits their own profile. The row is found by the pass token
+ * only; no delegate id comes from the browser. Every field is checked again
+ * here (lib/take-pride/profile.ts). Never redirect.
  */
-
-const ProfileSchema = z.object({
-  needs: z.array(z.enum(TP_TAGS)).max(5, "Pick up to 5 things you need"),
-  offers: z.array(z.enum(TP_TAGS)).max(5, "Pick up to 5 things you offer"),
-  partner_meetings_opt_in: z.boolean(),
-  delegate_meetings_opt_in: z.boolean(),
-});
 
 export async function saveDelegateProfile(token: string, input: unknown): Promise<TpResult> {
   if (!isToken(token)) return { success: false, error: "This pass link is not valid" };
@@ -27,10 +20,17 @@ export async function saveDelegateProfile(token: string, input: unknown): Promis
   const { data, error } = await tpService()
     .from("tp_delegates")
     .update({
-      needs: [...new Set(v.needs)],
-      offers: [...new Set(v.offers)],
+      needs: v.needs,
+      offers: v.offers,
       partner_meetings_opt_in: v.partner_meetings_opt_in,
       delegate_meetings_opt_in: v.delegate_meetings_opt_in,
+      working_on: v.working_on,
+      ask_me_about: v.ask_me_about,
+      pledge: v.pledge,
+      yi_vertical: v.yi_vertical,
+      chapter_strengths: v.chapter_strengths,
+      chapter_wants: v.chapter_wants,
+      directory_visible: v.directory_visible,
     })
     .eq("token", token)
     .select("id");

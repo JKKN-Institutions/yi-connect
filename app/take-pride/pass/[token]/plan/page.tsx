@@ -35,7 +35,7 @@ export default async function PlanPage({ params }: { params: Promise<{ token: st
   const planWaiting = planJob && (planJob.status === "pending" || planJob.status === "generating");
   const planFailed = planJob?.status === "failed";
   // Show the newest finished plan; a newer one being written shows above it.
-  const plan: PlanView | null = readyPlan?.output ? await resolvePlan(me, readyPlan.output as SummitPlanOutput) : null;
+  const plan: PlanView | null = readyPlan?.output ? await resolvePlan(me, readyPlan.output as SummitPlanOutput, readyPlan.allowed?.people ?? []) : null;
 
   let helper: HelperState = { status: "none" };
   if (helperJob) {

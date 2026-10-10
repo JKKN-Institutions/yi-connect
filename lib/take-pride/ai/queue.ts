@@ -74,8 +74,10 @@ const LIMIT_MESSAGE: Record<AiKind, string> = {
 /**
  * Queue one job. Counts every row of this kind today regardless of status
  * (a failed job still counts), so the limit cannot be laundered through
- * failures. Two taps at once can both pass the first count, so the count
- * is checked again after the insert and the extra row takes itself back.
+ * failures. Two taps at once can both pass the first reads, so both checks
+ * run again after the insert, ordered by arrival (created_at, id): the
+ * earliest rows stay and any extra row takes itself back. Every re-check
+ * fails CLOSED: if it cannot be read, the new row is removed.
  * `oneAtATime`: refuse while another job of this kind is still waiting.
  */
 export async function enqueueJob(
@@ -112,6 +114,31 @@ export async function enqueueJob(
     .single();
   if (error || !data) return { ok: false, error: "Something went wrong. Please try again.", reason: "error" };
   const row = data as { id: string; created_at: string };
+  const takeBack = async (reason: "limit" | "busy" | "error"): Promise<EnqueueResult> => {
+    await db.from("tp_ai_jobs").delete().eq("id", row.id);
+    const error =
+      reason === "limit"
+        ? LIMIT_MESSAGE[kind]
+        : reason === "busy"
+          ? "Your last request is still being written. Give it a minute."
+          : "Something went wrong. Please try again.";
+    return { ok: false, error, reason };
+  };
+
+  if (opts.oneAtATime) {
+    // Re-check by arrival: only the earliest waiting job of this kind stays.
+    const { data: firstWaiting, error: wErr } = await db
+      .from("tp_ai_jobs")
+      .select("id")
+      .eq("delegate_id", delegateId)
+      .eq("kind", kind)
+      .in("status", ["pending", "generating"])
+      .order("created_at")
+      .order("id")
+      .limit(1);
+    if (wErr || !firstWaiting) return takeBack("error");
+    if ((firstWaiting as { id: string }[])[0]?.id !== row.id) return takeBack("busy");
+  }
 
   if (counted) {
     // Re-check by arrival: rows within the limit stay, any row past it is taken back.
@@ -125,11 +152,9 @@ export async function enqueueJob(
       .order("id")
       .limit(limit);
     if (kind === "radar") q = q.eq("input->>trigger", "request");
-    const { data: first } = await q;
-    if (first && !(first as { id: string }[]).some((r) => r.id === row.id)) {
-      await db.from("tp_ai_jobs").delete().eq("id", row.id);
-      return { ok: false, error: LIMIT_MESSAGE[kind], reason: "limit" };
-    }
+    const { data: first, error: fErr } = await q;
+    if (fErr || !first) return takeBack("error");
+    if (!(first as { id: string }[]).some((r) => r.id === row.id)) return takeBack("limit");
   }
 
   const left = counted ? await remainingToday(delegateId, kind) : limit;

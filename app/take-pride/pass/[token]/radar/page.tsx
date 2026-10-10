@@ -39,7 +39,7 @@ export default async function RadarPage({ params }: { params: Promise<{ token: s
   if (queued) after(() => pingLiveTrigger());
 
   const waiting = last && (last.status === "pending" || last.status === "generating");
-  const radar = ready?.output ? await resolveRadar(me, ready.output as RadarOutput) : null;
+  const radar = ready?.output ? await resolveRadar(me, ready.output as RadarOutput, ready.allowed?.people ?? []) : null;
   const whyPeople = await livePeople(me, [...why.keys()]);
   const base = `/take-pride/pass/${token}`;
 

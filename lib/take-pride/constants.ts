@@ -48,6 +48,19 @@ export const TP_PARTNER_STATUS_LABEL: Record<string, string> = {
   rejected: "Not confirmed",
 };
 
+/** Shown to a cancelled partner (and their team) on every blocked action. */
+export const CANCELLED_MESSAGE = "Your Catalyst partnership was cancelled, so this is closed. Ask the Take Pride team if you have questions.";
+
+export const TP_REFUND_LABEL: Record<string, string> = {
+  refund_due: "Refund due",
+  no_refund: "No refund",
+  credit: "Credit to a higher tier",
+};
+
+/** Told to a sign-up that did not match the Yi member list (about their OWN details only). */
+export const STANDARD_PRICE_NOTE =
+  "We couldn't find you in the Yi member list, so the standard price applies. If you are a member, sign up with the email or mobile number Yi has for you, or ask the Take Pride team.";
+
 export function inr(n: number): string {
   return "₹" + n.toLocaleString("en-IN");
 }

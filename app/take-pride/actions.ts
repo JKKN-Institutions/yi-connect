@@ -18,6 +18,15 @@ import {
   myFullBadge,
   recordScan,
 } from "@/lib/take-pride/connections";
+import {
+  SIGNUP_LIMIT_MESSAGE,
+  allowSignupAttempt,
+  findYiMember,
+  getCatalystPartner,
+  resolveScanner,
+  type CatalystPartner,
+} from "@/lib/take-pride/catalyst";
+import { CANCELLED_MESSAGE } from "@/lib/take-pride/constants";
 
 /*
  * Every action returns { success:false, error } on a deny. Never redirect.
@@ -33,7 +42,7 @@ const ApplySchema = z.object({
     .trim()
     .transform((s) => s.replace(/[^\d+]/g, ""))
     .refine((s) => s.replace(/\D/g, "").length >= 10, "Enter a 10-digit mobile number"),
-  chapter: z.string().trim().min(2, "Enter your Yi chapter").max(80),
+  chapter: z.string().trim().min(2, "Enter your Yi chapter, or your city if you are not a member").max(80),
   zone: z.enum(TP_ZONES),
   business_name: z.string().trim().min(2, "Enter your business name").max(120),
   industry: z.enum(TP_INDUSTRIES),
@@ -42,29 +51,51 @@ const ApplySchema = z.object({
   pitch: z.string().trim().max(280, "Keep it under 280 characters").optional().default(""),
 });
 
+/**
+ * Sign-up. The price tier is decided HERE, never by the browser: an active
+ * person in yi_directory.people with this email or mobile => member price,
+ * anyone else => standard price. Sign-up is never blocked by the check.
+ */
 export async function applyCatalyst(input: unknown): Promise<TpResult<{ token: string }>> {
   const parsed = ApplySchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Check the form" };
   const v = parsed.data;
+  // Rate limit FIRST: both the duplicate-email answer and the price tier say
+  // something about other people, so a script must not be able to ask fast.
+  if (!(await allowSignupAttempt())) return { success: false, error: SIGNUP_LIMIT_MESSAGE };
   const s = await getSettings();
   const db = tpService();
 
-  // One live application per email: send them back to their own page.
+  // One live application per email. The private link is NEVER handed back
+  // here: anyone can type an email, so returning the token would give a
+  // stranger the member's page. They use the link they saved, or ask the desk.
   const { data: existing } = await db
     .from("tp_partners")
-    .select("token")
+    .select("id")
     .eq("email", v.email)
     .neq("status", "rejected")
-    .maybeSingle();
-  if (existing?.token) return { success: true, data: { token: existing.token } };
+    .is("cancelled_at", null)
+    .limit(1);
+  if (existing?.length) {
+    return {
+      success: false,
+      error: "This email already has a Catalyst sign-up. Open the private link you saved, or ask the Take Pride team to send it again.",
+    };
+  }
+
+  const match = await findYiMember(v.email, v.phone);
+  const tier = match ? "member" : "standard";
+  const fee = match ? s.member_fee_inr : s.standard_fee_inr;
 
   const { data, error } = await db
     .from("tp_partners")
     .insert({
       ...v,
       pitch: v.pitch || null,
-      tier: "member",
-      amount_due_inr: withGst(s.member_fee_inr, s.gst_pct),
+      tier,
+      member_person_id: match?.personId ?? null,
+      member_match: match?.via ?? null,
+      amount_due_inr: withGst(fee, s.gst_pct),
       status: "applied",
     })
     .select("token")
@@ -76,13 +107,15 @@ export async function applyCatalyst(input: unknown): Promise<TpResult<{ token: s
 export async function submitPayment(token: string, reference: string): Promise<TpResult> {
   const ref = (reference ?? "").trim();
   if (ref.length < 6 || ref.length > 60) return { success: false, error: "Enter the UPI or bank reference number (6 to 60 characters)" };
-  const p = await getPartnerByToken(token);
+  const p = await getCatalystPartner(token);
   if (!p) return { success: false, error: "This partner link is not valid" };
+  if (p.cancelled_at) return { success: false, error: CANCELLED_MESSAGE };
   if (p.status === "confirmed") return { success: false, error: "Your payment is already confirmed" };
   const { error } = await tpService()
     .from("tp_partners")
     .update({ payment_reference: ref, payment_submitted_at: new Date().toISOString(), status: "payment_submitted", reject_reason: null })
     .eq("id", p.id)
+    .is("cancelled_at", null)
     .in("status", ["applied", "payment_submitted", "rejected"]);
   if (error) return { success: false, error: "Could not save the reference. Please try again." };
   revalidatePath(`/take-pride/catalyst/p/${token}`);
@@ -93,6 +126,8 @@ export async function submitPayment(token: string, reference: string): Promise<T
 export async function requestMeeting(token: string, delegateId: string): Promise<TpResult> {
   const p = await getPartnerByToken(token);
   if (!p) return { success: false, error: "This partner link is not valid" };
+  // take_pride_05: a cancelled partner can no longer ask for meetings.
+  if ((p as CatalystPartner).cancelled_at) return { success: false, error: CANCELLED_MESSAGE };
   if (p.status !== "confirmed") return { success: false, error: "Meeting requests open once your payment is confirmed" };
   const s = await getSettings();
   const db = tpService();
@@ -120,10 +155,16 @@ export async function requestMeeting(token: string, delegateId: string): Promise
  * guessable. A wrong secret and an unknown number get the same answer; a
  * number typed without the secret is told to add it. Every attempt counts
  * toward SCAN_LIMIT_PER_HOUR for the partner.
+ *
+ * token is the partner's own link OR a team member's link (take_pride_05).
+ * The partner is resolved on the server; the hourly cap is per PARTNER, so it
+ * is shared by the whole team.
  */
 export async function captureLead(token: string, scanned: string, note: string): Promise<TpResult<{ name: string; chapter: string; duplicate: boolean }>> {
-  const p = await getPartnerByToken(token);
-  if (!p) return { success: false, error: "This partner link is not valid" };
+  const who = await resolveScanner(token);
+  if (!who) return { success: false, error: "This link is not valid" };
+  const p = who.partner;
+  if (p.cancelled_at) return { success: false, error: CANCELLED_MESSAGE };
   if (p.status !== "confirmed") return { success: false, error: "Lead capture opens once your payment is confirmed" };
   const scan = await recordScan({ partnerId: p.id });
   if (!scan.allowed) {
@@ -136,10 +177,16 @@ export async function captureLead(token: string, scanned: string, note: string):
   if (!d) return { success: false, error: BADGE_UNREADABLE };
   const { error } = await tpService()
     .from("tp_leads")
-    .insert({ partner_id: p.id, delegate_id: d.id, note: (note ?? "").trim().slice(0, 500) || null });
+    .insert({
+      partner_id: p.id,
+      delegate_id: d.id,
+      note: (note ?? "").trim().slice(0, 500) || null,
+      scanned_by_team_id: who.team?.id ?? null,
+    });
   if (error && error.code !== "23505") return { success: false, error: "Could not save the lead. Please try again." };
   await markScanOk(scan.attemptId);
-  revalidatePath(`/take-pride/catalyst/p/${token}`);
+  revalidatePath(`/take-pride/catalyst/p/${p.token}`);
+  if (who.team) revalidatePath(`/take-pride/catalyst/team/${who.team.token}`);
   return { success: true, data: { name: d.full_name, chapter: d.chapter, duplicate: error?.code === "23505" } };
 }
 
@@ -155,6 +202,19 @@ export async function respondMeeting(delegateToken: string, meetingId: string, a
   const db = tpService();
   const { data: d } = await db.from("tp_delegates").select("id").eq("token", delegateToken).maybeSingle();
   if (!d) return { success: false, error: "This pass link is not valid" };
+  if (accept) {
+    // A partner cancelled (or not confirmed) since the request was sent cannot be accepted.
+    const { data: m } = await db
+      .from("tp_meetings")
+      .select("id, partner:tp_partners(status, cancelled_at)")
+      .eq("id", meetingId)
+      .eq("delegate_id", d.id)
+      .maybeSingle();
+    const partner = (m as unknown as { partner: { status: string; cancelled_at: string | null } | null } | null)?.partner;
+    if (!partner || partner.cancelled_at || partner.status !== "confirmed") {
+      return { success: false, error: "This partner is no longer taking meetings" };
+    }
+  }
   const { data, error } = await db
     .from("tp_meetings")
     // Answer once: only a pending request can be accepted or declined, and a

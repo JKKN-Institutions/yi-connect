@@ -1,12 +1,13 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Denied, SampleNote, TopBar } from "../../../_ui";
-import { TP_PARTNER_STATUS_LABEL, inr } from "@/lib/take-pride/constants";
-import { getAgenda, getPartnerByToken, getPartnerLeads, getPartnerMeetings, getSettings, listDelegates } from "@/lib/take-pride/data";
+import { STANDARD_PRICE_NOTE, TP_PARTNER_STATUS_LABEL, inr } from "@/lib/take-pride/constants";
+import { TEAM_MAX, getCatalystPartner, leadScannerNames, listTeam } from "@/lib/take-pride/catalyst";
+import { getAgenda, getPartnerLeads, getPartnerMeetings, getSettings, listDelegates } from "@/lib/take-pride/data";
 import { matchDelegates } from "@/lib/take-pride/match";
 import { choicesFor, computeSlots, dKey, loadBookings, pKey, whenWhere } from "@/lib/take-pride/slots";
 import type { TpMeeting } from "@/lib/take-pride/types";
-import { CopyLink, LeadCapture, PartnerPickTime, PaymentForm, RequestMeetingButton } from "./partner-client";
+import { CopyLink, LeadCapture, PartnerPickTime, PaymentForm, RequestMeetingButton, TeamPanel } from "./partner-client";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Your Catalyst page" };
@@ -26,18 +27,41 @@ export default async function PartnerPage({
 }) {
   const { token } = await params;
   const sp = await searchParams;
-  const partner = await getPartnerByToken(token);
+  const partner = await getCatalystPartner(token);
   if (!partner) return <Denied title="Link not found" text="This Catalyst Partner link is not valid. Check the link you saved, or ask the Take Pride desk." />;
 
+  // Cancelled by an organiser: nothing else on this page applies any more.
+  if (partner.cancelled_at) {
+    return (
+      <main className="tp-main">
+        <TopBar />
+        <section className="tp-stack">
+          <div className="tp-eyebrow">Catalyst Partner · {partner.chapter}</div>
+          <h1 className="tp-h1">{partner.business_name}</h1>
+        </section>
+        <section className="tp-card" data-tp="cancelled-card">
+          <h2 className="tp-h2">Your Catalyst partnership was cancelled</h2>
+          {partner.cancel_note && <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>Note from the Take Pride team: {partner.cancel_note}</p>}
+          <p className="tp-mute" style={{ margin: 0 }}>
+            Meeting requests and lead scanning are closed. If you have questions, ask the Take Pride team.
+          </p>
+        </section>
+      </main>
+    );
+  }
+
   const tab = TABS.some((t) => t.key === sp.tab) ? sp.tab! : "matches";
-  const [s, delegates, meetings, leads, agenda, bookings] = await Promise.all([
+  const [s, delegates, meetings, leads, agenda, bookings, team, scannedBy] = await Promise.all([
     getSettings(),
     listDelegates(),
     getPartnerMeetings(partner.id),
     getPartnerLeads(partner.id),
     getAgenda(),
     loadBookings(),
+    listTeam(partner.id),
+    leadScannerNames(partner.id),
   ]);
+  const member = partner.tier === "member";
   const confirmed = partner.status === "confirmed";
   const matches = matchDelegates(partner, delegates);
   const byDelegate = new Map(meetings.map((m) => [m.delegate_id, m]));
@@ -96,9 +120,11 @@ export default async function PartnerPage({
               </p>
             ) : (
               <>
-                <p style={{ margin: 0 }}>
-                  Pay <b className="tp-num">{inr(partner.amount_due_inr)}</b> (Yi member fee {inr(s.member_fee_inr)} + {s.gst_pct}% GST).
+                <p style={{ margin: 0 }} data-tp="amount-due">
+                  Pay <b className="tp-num">{inr(partner.amount_due_inr)}</b>
+                  {` (${member ? "Yi member price" : "standard price"} ${inr(member ? s.member_fee_inr : s.standard_fee_inr)} + ${s.gst_pct}% GST).`}
                 </p>
+                {!member && <p className="tp-alert warn" style={{ margin: 0 }} data-tp="standard-note">{STANDARD_PRICE_NOTE}</p>}
                 <div className="tp-alert warn" style={{ whiteSpace: "pre-wrap" }}>
                   {s.payment_instructions ?? "The Take Pride team will send you the UPI ID and bank details on WhatsApp. Once you pay, enter the reference number here."}
                 </div>
@@ -170,11 +196,24 @@ export default async function PartnerPage({
             {leads.map((l) => (
               <div key={l.id}>
                 <div className="tp-row"><b>{l.delegate.full_name}</b><span className="tp-small">{l.delegate.chapter}</span></div>
-                <span className="tp-small">{l.delegate.business_name} · {l.delegate.industry}</span>
+                <span className="tp-small">
+                  {l.delegate.business_name} · {l.delegate.industry}
+                  {scannedBy.get(l.id) ? ` · scanned by ${scannedBy.get(l.id)}` : ""}
+                </span>
                 {l.note && <p style={{ margin: "4px 0 0" }}>{l.note}</p>}
               </div>
             ))}
           </div>
+        </section>
+      )}
+
+      {tab === "leads" && confirmed && (
+        <section className="tp-card">
+          <div className="tp-row">
+            <h2 className="tp-h2">Your team scanners</h2>
+            <span className="tp-small tp-num">{team.length} of {TEAM_MAX}</span>
+          </div>
+          <TeamPanel token={token} members={team.map((m) => ({ id: m.id, name: m.name, token: m.token }))} max={TEAM_MAX} />
         </section>
       )}
 

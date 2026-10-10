@@ -2,9 +2,10 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Denied, TopBar } from "../_ui";
 import { requireTpDesk } from "@/lib/take-pride/auth";
-import { TP_PARTNER_STATUS_LABEL, inr } from "@/lib/take-pride/constants";
+import { TP_PARTNER_STATUS_LABEL, TP_REFUND_LABEL, inr } from "@/lib/take-pride/constants";
+import { memberMatchDetails, type CatalystPartner } from "@/lib/take-pride/catalyst";
 import { getDeskOverview, getSettings } from "@/lib/take-pride/data";
-import { PartnerActions, PaymentInstructionsForm } from "./desk-client";
+import { CancelPartner, PartnerActions, PaymentInstructionsForm } from "./desk-client";
 import { NotInReview, ReviewBanner } from "../review/_banner";
 
 export const dynamic = "force-dynamic";
@@ -33,14 +34,29 @@ export default async function DeskPage() {
   // Review mode (outside reviewers): every number and list is sample rows only.
   const review = g.mode === "review";
   const [o, s] = await Promise.all([getDeskOverview({ sampleOnly: review }), getSettings()]);
-  const count = (st: string) => o.partners.filter((p) => p.status === st).length;
+  const all = o.partners as CatalystPartner[];
+  // Cancelled partners hold no seat and count toward no revenue.
+  const live = all.filter((p) => !p.cancelled_at);
+  const cancelled = all.filter((p) => p.cancelled_at);
+  const count = (st: string) => live.filter((p) => p.status === st).length;
   // Sample (demo) partners never hold a real seat; in review mode the sample seats are the whole picture.
-  const seatHolders = o.partners.filter(
+  const seatHolders = live.filter(
     (p) => (review || !p.is_sample) && (p.status === "confirmed" || p.status === "payment_submitted")
   ).length;
-  const confirmedValue = o.partners.filter((p) => p.status === "confirmed").reduce((a, p) => a + p.amount_due_inr, 0);
-  const waitingValue = o.partners.filter((p) => p.status === "payment_submitted").reduce((a, p) => a + p.amount_due_inr, 0);
-  const partners = [...o.partners].sort((a, b) => ORDER[a.status] - ORDER[b.status] || b.created_at.localeCompare(a.created_at));
+  const confirmedValue = live.filter((p) => p.status === "confirmed").reduce((a, p) => a + p.amount_due_inr, 0);
+  const waitingValue = live.filter((p) => p.status === "payment_submitted").reduce((a, p) => a + p.amount_due_inr, 0);
+  const refundsDue = cancelled.filter((p) => p.refund_decision === "refund_due").length;
+  // Who each member-price sign-up matched. REAL organisers only: review mode
+  // never reads yi_directory, so no real person's name reaches a reviewer.
+  const matches = review
+    ? new Map<string, { name: string; hasRole: boolean }>()
+    : await memberMatchDetails(all.filter((p) => p.tier === "member" && p.member_person_id).map((p) => p.member_person_id as string));
+  const partners = [...all].sort(
+    (a, b) =>
+      Number(!!a.cancelled_at) - Number(!!b.cancelled_at) ||
+      ORDER[a.status] - ORDER[b.status] ||
+      b.created_at.localeCompare(a.created_at)
+  );
 
   return (
     <main className="tp-main wide">
@@ -67,13 +83,14 @@ export default async function DeskPage() {
         <div className="tp-kpi"><b className="tp-num">{o.checkedIn}/{o.delegates}</b><span>delegates checked in</span></div>
         <div className="tp-kpi"><b className="tp-num">{o.meetings.accepted}/{o.meetings.requested + o.meetings.accepted + o.meetings.declined}</b><span>meetings accepted / requested</span></div>
         <div className="tp-kpi"><b className="tp-num">{o.leads}</b><span>leads scanned by partners</span></div>
+        <div className="tp-kpi" data-tp="kpi-cancelled"><b className="tp-num">{cancelled.length}</b><span>cancelled · {refundsDue} refund{refundsDue === 1 ? "" : "s"} due</span></div>
       </section>
 
       <section className="tp-card">
         <div className="tp-row">
           <h2 className="tp-h2">Catalyst Partners</h2>
           {!review && (
-            <a className="tp-btn ghost sm" href="/take-pride/desk/partners.csv" download>
+            <a className="tp-btn ghost sm" href="/take-pride/desk/catalyst-partners.csv" download>
               Download partners (CSV)
             </a>
           )}
@@ -81,22 +98,60 @@ export default async function DeskPage() {
         {partners.length === 0 && <p className="tp-mute" style={{ margin: 0 }}>No sign-ups yet. Share the Catalyst page: /take-pride/catalyst</p>}
         <div className="tp-list">
           {partners.map((p) => (
-            <div key={p.id} className="tp-stack" style={{ gap: 6 }}>
+            <div key={p.id} className="tp-stack" style={{ gap: 6 }} data-tp="desk-partner" data-cancelled={p.cancelled_at ? "1" : "0"}>
               <div className="tp-row">
                 <b>{p.business_name}</b>
-                <span className={`tp-tag ${p.status === "confirmed" ? "green" : p.status === "rejected" ? "bad" : "saffron"}`}>{TP_PARTNER_STATUS_LABEL[p.status]}</span>
+                {p.cancelled_at ? (
+                  <span className="tp-tag bad">Cancelled</span>
+                ) : (
+                  <span className={`tp-tag ${p.status === "confirmed" ? "green" : p.status === "rejected" ? "bad" : "saffron"}`}>{TP_PARTNER_STATUS_LABEL[p.status]}</span>
+                )}
               </div>
               <span className="tp-small">
                 {p.member_name} · {p.chapter} · {p.phone} · {p.email}
               </span>
               <span className="tp-small tp-num">
-                {inr(p.amount_due_inr)} incl. GST{p.payment_reference ? ` · reference ${p.payment_reference}` : ""}
+                {inr(p.amount_due_inr)} incl. GST · {p.tier === "member" ? "Yi member price" : "standard price"}
+                {p.payment_reference ? ` · reference ${p.payment_reference}` : ""}
                 {p.reject_reason ? ` · not confirmed: ${p.reject_reason}` : ""}
               </span>
+              {!review && p.tier === "member" && (() => {
+                const m = p.member_person_id ? matches.get(p.member_person_id) : undefined;
+                if (!m) {
+                  return (
+                    <span className="tp-small" data-tp="member-match">
+                      <span className="tp-tag saffron">Check</span> Member price, but the matched Yi record was not found. Check before confirming.
+                    </span>
+                  );
+                }
+                return (
+                  <span className="tp-small" data-tp="member-match">
+                    Member check: matched by {p.member_match === "phone" ? "mobile number" : p.member_match === "email" ? "email" : "email or mobile"} to <b>{m.name}</b>
+                    {m.hasRole ? (
+                      " · holds a Yi role"
+                    ) : (
+                      <>
+                        {" "}
+                        <span className="tp-tag saffron">Check</span> no Yi role on record (may be a participant or an imported contact). Check before confirming.
+                      </>
+                    )}
+                  </span>
+                );
+              })()}
+              {p.cancelled_at && (
+                <span className="tp-small" data-tp="cancel-info">
+                  Cancelled {new Date(p.cancelled_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                  {p.refund_decision ? ` · ${TP_REFUND_LABEL[p.refund_decision]}` : ""}
+                  {p.cancel_note ? ` · ${p.cancel_note}` : ""}
+                </span>
+              )}
               <div className="tp-row" style={{ justifyContent: "flex-start" }}>
-                {p.status === "payment_submitted" && <PartnerActions partnerId={p.id} review={review} />}
+                {!p.cancelled_at && p.status === "payment_submitted" && <PartnerActions partnerId={p.id} review={review} />}
                 <Link className="tp-small" href={`/take-pride/catalyst/p/${p.token}`}>Open their page</Link>
               </div>
+              {!p.cancelled_at && p.status !== "rejected" && (!review || p.is_sample) && (
+                <CancelPartner partnerId={p.id} review={review} />
+              )}
             </div>
           ))}
         </div>

@@ -1,5 +1,7 @@
 import { isToken } from "@/lib/take-pride/auth";
 import { PARTNER_LEADS_HEADERS, partnerLeadRows, slug, toCsv } from "@/lib/take-pride/csv";
+import type { CatalystPartner } from "@/lib/take-pride/catalyst";
+import { CANCELLED_MESSAGE } from "@/lib/take-pride/constants";
 import { getPartnerByToken, getPartnerLeads, getPartnerMeetings, listDelegates } from "@/lib/take-pride/data";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +23,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
   if (!isToken(token)) return text(404, "Link not found.");
   const partner = await getPartnerByToken(token);
   if (!partner) return text(404, "Link not found.");
+  if ((partner as CatalystPartner).cancelled_at) return text(403, CANCELLED_MESSAGE);
   if (partner.status !== "confirmed") {
     return text(403, "Your leads download opens once the Take Pride team confirms your payment.");
   }

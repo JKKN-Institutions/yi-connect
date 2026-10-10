@@ -3,6 +3,7 @@ import "server-only";
 import { randomInt } from "node:crypto";
 import type { tpService } from "@/lib/take-pride/supabase";
 import { delegateKey, type TpImportRow, type TpImportSkip } from "@/lib/take-pride/import";
+import { newBadgeSecret } from "@/lib/take-pride/connections";
 
 type SupabaseClient = ReturnType<typeof tpService>;
 
@@ -38,10 +39,11 @@ async function usedBadgeCodes(db: SupabaseClient): Promise<Set<string>> {
 }
 
 /**
- * Random, unused badge codes. Format stays "TP26-" + 4 digits because the
- * gate scanner and the partner lead scanner only read that shape
- * (/TP26[-\s]?(\d{4})/). Digits come from crypto, not a counter, so a code
- * cannot be guessed from the one before it.
+ * Random, unused badge numbers ("TP26-" + 4 digits, the badge_code column).
+ * Digits come from crypto, not a counter. The number alone is still
+ * guessable, so each row also gets a badge_secret (newBadgeSecret) that is
+ * printed after it ("TP26-1234-K7QXM") and required by partner lead capture
+ * and scan-to-connect (lib/take-pride/badge.ts).
  */
 export function pickBadgeCodes(n: number, used: Set<string>): string[] | null {
   const free: string[] = [];
@@ -98,12 +100,17 @@ export async function runImport(db: SupabaseClient, rows: TpImportRow[]): Promis
         .insert(
           chunk.map((r, i) => ({
             badge_code: codes[i],
+            badge_secret: newBadgeSecret(),
             full_name: r.full_name,
             chapter: r.chapter,
             zone: r.zone,
             business_name: r.business_name,
             industry: r.industry,
             role_title: r.role_title,
+            // Stored for "My people": shown only to a mutual connection, and
+            // only when both delegates turn on share_contact (default off).
+            phone: r.phone,
+            email: r.email,
             needs: [],
             offers: [],
             // Both DB defaults are the opposite (they were set for sample rows).

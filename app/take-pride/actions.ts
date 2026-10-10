@@ -7,6 +7,16 @@ import { isToken, requireTpOrganiser } from "@/lib/take-pride/auth";
 import { TP_INDUSTRIES, TP_TAGS, TP_ZONES, withGst } from "@/lib/take-pride/constants";
 import { getPartnerByToken, getSettings } from "@/lib/take-pride/data";
 import type { TpResult } from "@/lib/take-pride/types";
+import { parseBadge } from "@/lib/take-pride/badge";
+import {
+  BADGE_UNREADABLE,
+  SCAN_LIMIT_MESSAGE,
+  findDelegateByVerifiedBadge,
+  getConnectMe,
+  markScanOk,
+  myFullBadge,
+  recordScan,
+} from "@/lib/take-pride/connections";
 
 /*
  * Every action returns { success:false, error } on a deny. Never redirect.
@@ -103,22 +113,38 @@ export async function requestMeeting(token: string, delegateId: string): Promise
   return { success: true, data: null };
 }
 
-/** A partner scans a delegate's badge (or types the code) to save a lead. */
+/**
+ * A partner scans a delegate's badge (or types the full code) to save a lead.
+ * The badge SECRET is required ("TP26-1234-K7QXM"): the number alone is
+ * guessable. Missing secret, wrong secret and unknown number all get the same
+ * answer. Every attempt counts toward SCAN_LIMIT_PER_HOUR for the partner.
+ */
 export async function captureLead(token: string, scanned: string, note: string): Promise<TpResult<{ name: string; chapter: string; duplicate: boolean }>> {
   const p = await getPartnerByToken(token);
   if (!p) return { success: false, error: "This partner link is not valid" };
   if (p.status !== "confirmed") return { success: false, error: "Lead capture opens once your payment is confirmed" };
-  const code = extractBadgeCode(scanned);
-  if (!code) return { success: false, error: "That is not a Take Pride badge code" };
-  const db = tpService();
-  const { data: d } = await db.from("tp_delegates").select("id, full_name, chapter").eq("badge_code", code).maybeSingle();
-  if (!d) return { success: false, error: `No delegate with badge ${code}` };
-  const { error } = await db
+  const scan = await recordScan({ partnerId: p.id });
+  if (!scan.allowed) {
+    return { success: false, error: scan.attemptId ? SCAN_LIMIT_MESSAGE : "Could not save the lead. Please try again." };
+  }
+  const badge = parseBadge(scanned);
+  if (!badge) return { success: false, error: "That is not a Take Pride badge code" };
+  const d = await findDelegateByVerifiedBadge(badge);
+  if (!d) return { success: false, error: BADGE_UNREADABLE };
+  const { error } = await tpService()
     .from("tp_leads")
     .insert({ partner_id: p.id, delegate_id: d.id, note: (note ?? "").trim().slice(0, 500) || null });
   if (error && error.code !== "23505") return { success: false, error: "Could not save the lead. Please try again." };
+  await markScanOk(scan.attemptId);
   revalidatePath(`/take-pride/catalyst/p/${token}`);
   return { success: true, data: { name: d.full_name, chapter: d.chapter, duplicate: error?.code === "23505" } };
+}
+
+/** The full code for my own badge QR ("TP26-1234-K7QXM"). Only the pass holder gets it. */
+export async function getMyBadge(delegateToken: string): Promise<TpResult<{ code: string }>> {
+  const me = await getConnectMe(delegateToken);
+  if (!me) return { success: false, error: "This pass link is not valid" };
+  return { success: true, data: { code: myFullBadge(me) } };
 }
 
 export async function respondMeeting(delegateToken: string, meetingId: string, accept: boolean): Promise<TpResult> {
@@ -198,7 +224,8 @@ export async function deskSavePaymentInstructions(text: string): Promise<TpResul
 export async function gateCheckIn(scanned: string): Promise<TpResult<{ name: string; chapter: string; already: boolean; at: string }>> {
   const g = await requireTpOrganiser();
   if (!g.ok) return { success: false, error: "Only Take Pride organisers can check delegates in" };
-  const code = extractBadgeCode(scanned);
+  // Organisers may scan the full code or type just the number: no secret needed at the gate.
+  const code = parseBadge(scanned)?.code;
   if (!code) return { success: false, error: "That is not a Take Pride badge code" };
   const db = tpService();
   const now = new Date().toISOString();
@@ -216,10 +243,4 @@ export async function gateCheckIn(scanned: string): Promise<TpResult<{ name: str
   const { data: d } = await db.from("tp_delegates").select("full_name, chapter, checked_in_at").eq("badge_code", code).maybeSingle();
   if (!d) return { success: false, error: `No delegate with badge ${code}` };
   return { success: true, data: { name: d.full_name, chapter: d.chapter, already: true, at: d.checked_in_at } };
-}
-
-/** Accepts "TP26-1001", "tp26 1001" or any scanned text containing the code. */
-function extractBadgeCode(raw: string): string | null {
-  const m = (raw ?? "").toUpperCase().match(/TP26[-\s]?(\d{4})/);
-  return m ? `TP26-${m[1]}` : null;
 }

@@ -59,6 +59,13 @@ const MODULES: ModuleCard[] = [
     accent: "hover:border-[#000066]/40",
   },
   {
+    title: "Take Pride 2026",
+    desc: "Catalyst Partners, payments, delegates, and the gate for 18–19 Dec, Bengaluru.",
+    href: "/take-pride/desk",
+    icon: "🏅",
+    accent: "hover:border-[#E9690F]/50",
+  },
+  {
     title: "Directory",
     desc: "People, roles, and cross-app identity across every Yi module.",
     href: "/admin/directory",

@@ -1,0 +1,38 @@
+/*
+ * Awards Night hall screen. Every class is tp-aw-* and lives under .tp-aw,
+ * inside the Take Pride .tp-root. Dark stage for a projector, readable on a
+ * 390px phone: type scales with the viewport via clamp().
+ */
+.tp-aw {
+  min-height: 100dvh;
+  background: #121110;
+  color: #f4f2ee;
+  padding: max(16px, env(safe-area-inset-top)) clamp(16px, 4vw, 64px) 40px;
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  gap: clamp(16px, 3vh, 40px);
+}
+.tp-aw-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tp-aw-brand { display: flex; align-items: center; gap: 10px; }
+.tp-aw-brand b { font: 400 clamp(22px, 2.4vw, 40px)/1 var(--tp-display); letter-spacing: .02em; }
+.tp-aw-brand b span { color: var(--tp-saffron); }
+.tp-aw-eyebrow { font: 600 clamp(12px, 1.4vw, 22px)/1.25 var(--tp-body); letter-spacing: .14em; text-transform: uppercase; color: var(--tp-amber); margin: 0; }
+
+.tp-aw-hero { align-self: center; display: grid; gap: clamp(10px, 2vh, 28px); max-width: 1400px; }
+.tp-aw-winner { font: 400 clamp(52px, 11vw, 200px)/0.92 var(--tp-display); letter-spacing: .01em; margin: 0; text-wrap: balance; overflow-wrap: anywhere; }
+.tp-aw-cite { font: 400 clamp(17px, 2vw, 34px)/1.4 var(--tp-body); color: #d9d5cc; margin: 0; max-width: 62ch; }
+.tp-aw-wait .tp-aw-winner { color: #8f8b84; font-size: clamp(40px, 8vw, 140px); }
+.tp-aw-hero.rehearsal .tp-aw-winner { color: #cfcac0; }
+.tp-aw-flag { justify-self: start; margin: 0; font: 700 clamp(12px, 1.2vw, 18px)/1 var(--tp-body); letter-spacing: .12em; text-transform: uppercase; padding: 7px 12px; border-radius: 999px; background: var(--tp-saffron); color: #fff; }
+
+.tp-aw-list { border-top: 1px solid #34312d; padding-top: clamp(12px, 2vh, 24px); display: grid; gap: 10px; }
+.tp-aw-list ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
+.tp-aw-list li { display: grid; gap: 2px; background: #1d1b19; border: 1px solid #34312d; border-radius: 12px; padding: 12px 14px; min-width: 0; }
+.tp-aw-what { font-size: clamp(12.5px, 1.1vw, 17px); color: #b9b4aa; }
+.tp-aw-list b { font: 400 clamp(24px, 2.4vw, 40px)/1.05 var(--tp-display); letter-spacing: .02em; overflow-wrap: anywhere; }
+.tp-aw-offline { margin: 0; font-size: 13px; color: var(--tp-amber); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .tp-aw-hero { animation: tp-aw-in .6s ease both; }
+  @keyframes tp-aw-in { from { transform: translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
+}

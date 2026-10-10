@@ -50,7 +50,9 @@ type Mask = { name: string; as: string };
 
 /**
  * Names to mask: people the job referred to (pinned `allowed` ids plus ids
- * in the output) who are no longer listed now. Read with the service
+ * in the output) who are no longer listed now (directory_visible off, or
+ * not in the viewer's sample / real world). People still listed but not
+ * picked by the routine keep their names. Read with the service
  * client; the names never leave this module except as the mask target.
  */
 async function hiddenNames(me: Me, ids: string[], live: Map<string, ViewPerson>): Promise<Mask[] | null> {
@@ -58,12 +60,15 @@ async function hiddenNames(me: Me, ids: string[], live: Map<string, ViewPerson>)
   if (!gone.length) return [];
   const { data, error } = await tpService()
     .from("tp_delegates")
-    .select("full_name, business_name")
+    .select("full_name, business_name, directory_visible, is_sample")
     .in("id", gone.slice(0, 200));
   // Fail closed: if the names cannot be read, the caller blanks free text.
   if (error) return null;
   const names = new Map<string, string>();
-  for (const r of (data ?? []) as { full_name: string | null; business_name: string | null }[]) {
+  type R = { full_name: string | null; business_name: string | null; directory_visible: boolean; is_sample: boolean };
+  for (const r of (data ?? []) as R[]) {
+    // Not in `live` only because the routine did not pick them: still listed, keep the name.
+    if (r.directory_visible && r.is_sample === me.is_sample) continue;
     const n = (r.full_name ?? "").trim();
     const b = (r.business_name ?? "").trim();
     if (n.length >= 3) names.set(n.toLowerCase(), "another delegate");
@@ -81,7 +86,8 @@ function mask(text: string, names: Mask[] | null): string {
   if (!names.length) return text;
   let out = text;
   for (const n of names) {
-    out = out.replace(new RegExp(escapeRe(n.name), "gi"), (_m, at: number, all: string) =>
+    // Whole words only, so a short name never hits inside a longer word.
+    out = out.replace(new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(n.name)}(?![\\p{L}\\p{N}])`, "giu"), (_m, at: number, all: string) =>
       at === 0 || /[.!?]\s+$/.test(all.slice(0, at)) ? n.as[0].toUpperCase() + n.as.slice(1) : n.as
     );
   }

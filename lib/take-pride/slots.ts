@@ -14,8 +14,9 @@ import type { TpAgendaItem } from "./types";
  * A person is busy in a slot if ANY accepted meeting of theirs (either kind)
  * holds it. A table is taken in a slot if ANY accepted meeting (either kind)
  * holds it. The database only stops a table being booked twice within ONE
- * kind, so bookMeetingSlot re-checks everything after it writes and takes its
- * own change back on a clash.
+ * kind, so bookMeetingSlot re-checks everything after it writes and, on a
+ * clash, clears its own meeting's time (never restores the old one, which may
+ * have been taken in the meantime).
  *
  * Nothing here decides who may book: callers resolve "me" from a secret link
  * token first and pass the meeting they already proved is theirs.
@@ -205,6 +206,7 @@ export async function bookMeetingSlot(input: {
     return { success: true, data: { slot, table_no: cur.table_no } };
   }
 
+  const prevHadTime = !!cur.slot_key;
   const bookings = await loadBookings(slotKey);
   const others = bookings.filter((b) => !isSelf(b, kind, meetingId));
   const clash = others.find((b) => b.people.some((p) => people.includes(p)));
@@ -220,7 +222,6 @@ export async function bookMeetingSlot(input: {
   const tableNo = lowestFreeTable(others, slotKey);
   if (tableNo === null) return { success: false, error: `All ${TABLE_COUNT} tables are taken at ${slot.label}. Pick another time.` };
 
-  const prev = { slot_key: cur.slot_key as string | null, table_no: cur.table_no as number | null };
   const { data: upd, error: updErr } = await db
     .from(table)
     .update({ slot_key: slotKey, table_no: tableNo })
@@ -235,33 +236,31 @@ export async function bookMeetingSlot(input: {
 
   // The checks above and the write are separate calls, so two people booking
   // at once can both pass them. Re-read now that mine is saved; on any clash,
-  // put my meeting back the way it was.
-  let after: Booking[];
+  // clear my meeting's time. Putting the OLD time back is not safe: once the
+  // meeting moved, its old table and both people were free in that slot, and
+  // another booking may have taken them. Clearing never double-books anyone.
+  let after: Booking[] | null;
   try {
     after = await loadBookings(slotKey);
   } catch {
-    after = [];
+    after = null;
   }
-  const atTable = after.filter((b) => b.table_no === tableNo).length;
-  const forPerson = (p: PersonKey) => after.filter((b) => b.people.includes(p)).length;
-  const stillMine = after.some((b) => isSelf(b, kind, meetingId) && b.table_no === tableNo);
+  const atTable = after ? after.filter((b) => b.table_no === tableNo).length : 0;
+  const forPerson = (p: PersonKey) => (after ? after.filter((b) => b.people.includes(p)).length : 0);
+  const stillMine = !!after?.some((b) => isSelf(b, kind, meetingId) && b.table_no === tableNo);
   if (!stillMine || atTable !== 1 || forPerson(people[0]) !== 1 || forPerson(people[1]) !== 1) {
-    const back = await db
+    await db
       .from(table)
-      .update(prev)
+      .update({ slot_key: null, table_no: null })
       .eq("id", meetingId)
       .eq("slot_key", slotKey)
       .eq("table_no", tableNo);
-    // The old table may have been taken meanwhile: then leave it untimed.
-    if (back.error) {
-      await db
-        .from(table)
-        .update({ slot_key: null, table_no: null })
-        .eq("id", meetingId)
-        .eq("slot_key", slotKey)
-        .eq("table_no", tableNo);
-    }
-    return { success: false, error: "That time was just taken by another booking. Please pick again." };
+    return {
+      success: false,
+      error: prevHadTime
+        ? "That time was just taken by another booking, so this meeting has no time now. Please pick a time again."
+        : "That time was just taken by another booking. Please pick a time again.",
+    };
   }
   return { success: true, data: { slot, table_no: tableNo } };
 }

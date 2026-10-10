@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { requireRxNationalLeadership } from "@/lib/recognitions/auth";
-import { audit, getAwardState } from "@/lib/recognitions/data";
-import { rxService } from "@/lib/recognitions/supabase";
+import { getAwardState } from "@/lib/recognitions/data";
+import { recordDecision } from "@/lib/recognitions/governance";
 import type { ActionResult } from "@/lib/recognitions/types";
 
 /**
@@ -23,55 +23,15 @@ async function decide(awardId: string, decision: "approve" | "reevaluate", reaso
 
   const state = await getAwardState(awardId);
   if (!state) return { success: false, error: "This award no longer exists. Go back to Review and reload." };
-  if (state.phase !== "governance") {
-    return {
-      success: false,
-      error:
-        state.phase === "finalized"
-          ? "This award is already finalised."
-          : state.phase === "reevaluation"
-            ? "This award has already been sent back. Wait for the NMT leader to submit a revised version."
-            : "There is no submitted moderation waiting for a decision on this award.",
-    };
-  }
-  const version = state.latestSubmittedVersion;
-  if (!version || version.id !== state.latestVersion?.id) {
-    return { success: false, error: "The moderation changed while you were reading. Reload the page and decide again." };
-  }
 
-  const { data, error } = await rxService()
-    .from("recognition_governance_decisions")
-    .insert({
-      award_id: awardId,
-      moderation_version_id: version.id,
-      decision,
-      reason,
-      decided_by: personId,
-    })
-    .select("id")
-    .single();
-  if (error || !data) {
-    return {
-      success: false,
-      error: "The decision could not be recorded. Reload the page and try again; if it keeps failing, tell the Recognitions super admin.",
-    };
-  }
-
-  await audit({
-    cycleId: state.cycle.id,
-    awardId,
-    actorPersonId: personId,
-    action: decision === "approve" ? "award_approved" : "award_sent_back",
-    entity: "governance_decision",
-    entityId: (data as { id: string }).id,
-    detail: { moderation_version: version.version, moderation_version_id: version.id, reason },
-  });
+  const res = await recordDecision({ state, personId, decision, reason });
+  if (!res.ok) return { success: false, error: res.error };
   revalidatePath("/recognitions", "layout");
   return {
     success: true,
     message:
       decision === "approve"
-        ? `Approved. ${state.award.title} is finalised on version ${version.version}.`
+        ? `Approved. ${state.award.title} is finalised on version ${res.version}.`
         : `Sent back. The NMT leader will see your reason and can reopen the moderation.`,
   };
 }

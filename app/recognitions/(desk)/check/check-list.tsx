@@ -11,7 +11,7 @@ import "./check.css";
 
 const GROUPS: Array<{ status: CheckItem["status"]; title: string; empty: string }> = [
   { status: "submitted", title: "Waiting for checks", empty: "Nothing is waiting for a check right now." },
-  { status: "returned", title: "Sent back to the chapter", empty: "" },
+  { status: "returned", title: "Sent back for a fix", empty: "" },
   { status: "checked", title: "Passed both checks", empty: "" },
   { status: "excluded", title: "Out of the race", empty: "" },
 ];
@@ -58,6 +58,21 @@ function Dossier({ d }: { d: CheckItem["dossier"] }) {
   );
 }
 
+/** What a checker reads for a chapter National Leadership added: its reason, not the five-section form. */
+function AddedReason({ a }: { a: NonNullable<CheckItem["nlAdded"]> }) {
+  return (
+    <div className="rx-notice rx-small rx-check-added">
+      <strong>Why National Leadership added this chapter</strong>
+      <p className="rx-p-quote" style={{ marginTop: 6 }}>{a.reason}</p>
+      <p className="rx-mute" style={{ marginTop: 6 }}>
+        Added by {a.by}
+        {a.at ? ` · ${formatWhen(a.at)}` : ""}. The chapter did not nominate, so there is no nomination form to read:
+        check that the chapter is eligible for this award.
+      </p>
+    </div>
+  );
+}
+
 /** The Check desk list. Server component; the buttons are the client CheckControls. */
 export function CheckList({ items, cycle }: { items: CheckItem[]; cycle: CycleRow }) {
   const fixClosed = isPast(cycle.fix_deadline);
@@ -87,9 +102,14 @@ export function CheckList({ items, cycle }: { items: CheckItem[]; cycle: CycleRo
                   </Seal>
                 </div>
                 <div className="rx-row rx-small" style={{ gap: 8 }}>
+                  {i.nlAdded ? <Seal tone="gilt">Added by National Leadership</Seal> : null}
                   <Seal tone="mute">Region {i.region}</Seal>
                   <Seal tone="laurel">{CATEGORY_LABEL[i.category]}</Seal>
-                  {i.submittedAt ? <span className="rx-mute">Submitted {formatWhen(i.submittedAt)}</span> : null}
+                  {i.submittedAt ? (
+                    <span className="rx-mute">
+                      {i.nlAdded ? "Filed" : "Submitted"} {formatWhen(i.submittedAt)}
+                    </span>
+                  ) : null}
                 </div>
 
                 {i.status === "submitted" || i.status === "checked" ? (
@@ -106,7 +126,9 @@ export function CheckList({ items, cycle }: { items: CheckItem[]; cycle: CycleRo
                     <p className="rx-p-quote" style={{ marginTop: 6 }}>{i.returned.note}</p>
                     {i.status === "returned" ? (
                       <p style={{ marginTop: 6 }}>
-                        {cycle.fix_deadline ? `The chapter can fix it until ${formatWhen(cycle.fix_deadline)}.` : "The chapter can fix it."}
+                        {i.fixBy
+                          ? `${i.nlAdded ? "National Leadership" : "The chapter"} can fix it until ${formatWhen(i.fixBy)}.`
+                          : `${i.nlAdded ? "National Leadership" : "The chapter"} can fix it.`}
                       </p>
                     ) : null}
                   </div>
@@ -114,7 +136,7 @@ export function CheckList({ items, cycle }: { items: CheckItem[]; cycle: CycleRo
 
                 {i.excludedWhy ? <p className="rx-small rx-mute">{i.excludedWhy}</p> : null}
 
-                <Dossier d={i.dossier} />
+                {i.nlAdded ? <AddedReason a={i.nlAdded} /> : <Dossier d={i.dossier} />}
 
                 {i.status === "submitted" ? (
                   <CheckControls
@@ -123,7 +145,8 @@ export function CheckList({ items, cycle }: { items: CheckItem[]; cycle: CycleRo
                     pass={i.pass}
                     canReturn={i.canReturn}
                     returnBlocked={i.returnBlocked}
-                    fixClosed={fixClosed}
+                    fixClosed={i.nlAdded ? isPast(i.fixBy) : fixClosed}
+                    nlAdded={i.nlAdded !== null}
                   />
                 ) : null}
               </article>

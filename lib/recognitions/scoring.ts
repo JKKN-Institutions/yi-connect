@@ -17,7 +17,7 @@
 import { MAX_LAYER_TOTAL, PARAM_KEYS } from "./constants";
 import type { Category, Layer } from "./constants";
 import type { CycleRow, EvaluatorRow, NominationRow, ScoreParams, ScoreRow } from "./types";
-import { inRace, stillInCheck } from "./check-rules";
+import { inRace, isNlAdded, stillInCheck } from "./check-rules";
 
 const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
 
@@ -183,7 +183,7 @@ export type Completeness = {
  * while it may yet enter the race.
  */
 export function computeCompleteness(input: {
-  cycle: Pick<CycleRow, "fix_deadline" | "check_deadline">;
+  cycle: Pick<CycleRow, "fix_deadline" | "check_deadline" | "reevaluation_deadline">;
   nominations: NominationRow[];
   duties: EvaluatorRow[];
   conflictsByDuty: Map<string, Set<string>>;
@@ -251,4 +251,60 @@ export function computeCompleteness(input: {
       blockers.length === 0 &&
       perDuty.every((p) => p.submitted >= p.required),
   };
+}
+
+/**
+ * Re-evaluation with chapters National Leadership ADDED (recognitions_03).
+ * The NMT leader may not submit a re-evaluated ranking while an added
+ * nomination is still moving through the check, or has passed both checks
+ * but is not yet fully scored: the re-evaluation exists to consider it.
+ * Once it is out of the race (sent back and not resubmitted, or not checked,
+ * before re-evaluation closes) it never blocks.
+ *
+ * The denominator is the same as Stage 2 completeness: every active duty
+ * that may see the nomination (dutySeesNomination, conflicts excluded). An
+ * added nomination nobody can score (no RM for its region, or no NMT) is a
+ * blocker sentence, never a silent block.
+ */
+export function nlAddedBlockers(input: {
+  cycle: Pick<CycleRow, "fix_deadline" | "check_deadline" | "reevaluation_deadline">;
+  nominations: NominationRow[];
+  duties: EvaluatorRow[];
+  conflictsByDuty: Map<string, Set<string>>;
+  scores: ScoreRow[];
+  /** Chapter name for the sentences. */
+  nameOf: (n: NominationRow) => string;
+  now?: Date;
+}): string[] {
+  const added = input.nominations.filter(isNlAdded);
+  const duties = input.duties.filter((d) => d.is_active);
+  const submitted = new Set(
+    input.scores.filter((s) => s.status === "submitted").map((s) => `${s.evaluator_id}:${s.nomination_id}`)
+  );
+  const out: string[] = [];
+  for (const n of added) {
+    const who = `${input.nameOf(n)} (added by National Leadership)`;
+    if (stillInCheck(n, input.cycle, input.now)) {
+      out.push(
+        n.status === "returned"
+          ? `${who} was sent back to National Leadership and hasn't been resubmitted yet.`
+          : `${who} is still waiting for the Regional Chair and Regional Mentor checks.`
+      );
+      continue;
+    }
+    if (!inRace(n)) continue; // out of the race: never blocks
+    const seeing = duties.filter((d) => dutySeesNomination(d, n, input.conflictsByDuty.get(d.id) ?? new Set()));
+    for (const layer of ["rm", "nmt"] as const) {
+      if (!seeing.some((d) => d.layer === layer)) {
+        out.push(
+          `${who} has no ${layer === "rm" ? `Regional Mentor for region ${n.region}` : "NMT evaluator"} who can score it. Ask the Recognitions super admin to assign one.`
+        );
+      }
+    }
+    const missing = seeing.filter((d) => !submitted.has(`${d.id}:${n.id}`)).length;
+    if (missing > 0) {
+      out.push(`${who} still needs ${missing} evaluator mark${missing === 1 ? "" : "s"}.`);
+    }
+  }
+  return out;
 }

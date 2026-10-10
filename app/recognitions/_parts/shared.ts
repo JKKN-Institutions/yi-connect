@@ -20,6 +20,7 @@ import type {
 } from "@/lib/recognitions/types";
 import { computeMatrix, paramsTotal } from "@/lib/recognitions/scoring";
 import { countWords } from "@/lib/recognitions/words";
+import { isNlAdded } from "@/lib/recognitions/check-rules";
 
 // ---------------------------------------------------------------------------
 // Combined matrix
@@ -34,6 +35,8 @@ export type DossierView = {
   hostedName: string | null;
   hostedType: string | null;
   announcement: string;
+  /** National Leadership's reason when it added a chapter that did not nominate (recognitions_03), else null. */
+  nlAddedReason: string | null;
 };
 
 export type RationaleView = {
@@ -92,6 +95,7 @@ function dossierOf(n: NominationRow): DossierView {
     hostedName: n.hosted_event_name,
     hostedType: n.hosted_event_type,
     announcement: n.announcement_draft ?? "",
+    nlAddedReason: isNlAdded(n) ? n.added_reason ?? "" : null,
   };
 }
 

@@ -9,7 +9,7 @@ import { countWords } from "@/lib/recognitions/words";
 import { PARAM_KEYS, WORDS } from "@/lib/recognitions/constants";
 import type { ActionResult, NominationRow, ScoreParams, ScoreRow } from "@/lib/recognitions/types";
 import { formatWhen } from "@/app/recognitions/_ui/primitives";
-import { scoringWindow } from "@/app/recognitions/(desk)/score/score-rules";
+import { nominationScoringWindow, scoringDeadlineFor } from "@/app/recognitions/(desk)/score/score-rules";
 import type { FlagInput, SaveScoreInput } from "@/app/recognitions/(desk)/score/score-types";
 
 // Hard character caps so a single giant "word" can't slip past the word count.
@@ -33,7 +33,10 @@ async function loadContext(evaluatorId: string, nominationId: string): Promise<
   const state = await getAwardState(duty.award_id);
   if (!state) return { ok: false, error: "This award no longer exists. Go back to your sheets and reload." };
 
-  const win = scoringWindow(state.phase, state.cycle);
+  const nomination = state.nominations.find((n) => n.id === nominationId);
+  // Per nomination: a chapter National Leadership added is scored during
+  // re-evaluation (recognitions_03); everything else in Stage 1 only.
+  const win = nominationScoringWindow(state.phase, state.cycle, nomination ?? {});
   if (win.state === "notYet") {
     return {
       ok: false,
@@ -43,13 +46,12 @@ async function loadContext(evaluatorId: string, nominationId: string): Promise<
     };
   }
   if (win.state === "closed") {
-    return { ok: false, error: `Scoring closed on ${formatWhen(state.cycle.stage1_deadline)}.` };
+    return { ok: false, error: `Scoring closed on ${formatWhen(scoringDeadlineFor(state.cycle, nomination ?? {}))}.` };
   }
   if (win.state === "over") {
     return { ok: false, error: "Stage 1 is over for this award, so marks and flags can no longer change." };
   }
 
-  const nomination = state.nominations.find((n) => n.id === nominationId);
   // Fail closed: a duty with no conflict entry is treated as unable to see anything.
   const conflicts = state.conflictsByDuty.get(duty.id);
   if (!nomination || !conflicts || !dutySeesNomination(duty, nomination, conflicts)) {

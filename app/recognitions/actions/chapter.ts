@@ -12,7 +12,7 @@ import {
   listPredictionsByChapter,
 } from "@/lib/recognitions/data";
 import { isPast } from "@/lib/recognitions/phase";
-import { canFix } from "@/lib/recognitions/check-rules";
+import { canFix, isNlAdded } from "@/lib/recognitions/check-rules";
 import { CATEGORIES, type Category } from "@/lib/recognitions/constants";
 import type { ActionResult, AwardRow, ChapterRow, CycleRow, NominationRow } from "@/lib/recognitions/types";
 import { cleanForm, validateNomination, type NominationForm } from "../(desk)/chapter/shared";
@@ -156,7 +156,11 @@ async function writeAll(
   submit: boolean
 ): Promise<ActionResult> {
   const existing = new Map(
-    (await listNominationsForChapter(ctx.chapter.id, forms.map((f) => f.awardId))).map((n) => [n.award_id, n])
+    // includeNlAdded: a row National Leadership added also blocks a new filing (one per award).
+    (await listNominationsForChapter(ctx.chapter.id, forms.map((f) => f.awardId), { includeNlAdded: true })).map((n) => [
+      n.award_id,
+      n,
+    ])
   );
   const titles = new Map(ctx.awards.map((a) => [a.id, a.title]));
   // Anything past 'draft' is filed. A sent-back one is fixed through resubmitNomination, not here.
@@ -269,8 +273,11 @@ export async function resubmitNomination(chapterId: string, form: unknown): Prom
   const award = (await listAwards(cycle.id)).find((a) => a.id === f.awardId);
   if (!award) return { success: false, error: "That award is not open this year. Reload the page." };
 
-  const [existing] = await listNominationsForChapter(gate.value.id, [award.id]);
-  if (!existing) return { success: false, error: `Your chapter has no nomination for ${award.title}.` };
+  const [existing] = await listNominationsForChapter(gate.value.id, [award.id], { includeNlAdded: true });
+  // A nomination National Leadership added is fixed by National Leadership,
+  // never by the chapter (recognitions_03). Same answer as "none", so the
+  // chapter learns nothing about the review.
+  if (!existing || isNlAdded(existing)) return { success: false, error: `Your chapter has no nomination for ${award.title}.` };
   if (existing.status !== "returned") {
     return { success: false, error: `${award.title} is not waiting for a fix. Reload the page to see where it stands.` };
   }

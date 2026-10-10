@@ -15,6 +15,7 @@ import {
 import { CATEGORIES, CATEGORY_LABEL, LAYER_LABEL, RANK_LABEL, VERTICAL_LABEL, type Category } from "@/lib/recognitions/constants";
 import { computeMatrix, paramsTotal } from "@/lib/recognitions/scoring";
 import { PHASE_LABEL } from "@/lib/recognitions/phase";
+import { isNlAdded } from "@/lib/recognitions/check-rules";
 import type { CycleRow } from "@/lib/recognitions/types";
 
 /**
@@ -77,6 +78,10 @@ export async function ceremonyReport(includePending: boolean): Promise<CeremonyR
         const chapter = nom ? chapters.get(nom.chapter_id) : undefined;
         const achievements = (nom?.reasons ?? []).map((r) => r.trim()).filter((r) => r !== "");
         if (nom?.flagship_event?.trim()) achievements.push(`Flagship event: ${nom.flagship_event.trim()}`);
+        // A chapter National Leadership added (recognitions_03) has no form: its reason is the case.
+        if (nom && isNlAdded(nom) && nom.added_reason?.trim()) {
+          achievements.push(`Added by National Leadership: ${nom.added_reason.trim()}`);
+        }
         places.push({
           category,
           categoryLabel: CATEGORY_LABEL[category],

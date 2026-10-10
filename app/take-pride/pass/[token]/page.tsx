@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { TopBar, SampleNote, Denied } from "../../_ui";
 import { TP_EVENT } from "@/lib/take-pride/constants";
 import { getAgenda, getDelegateByToken, getDelegateMeetings } from "@/lib/take-pride/data";
 import type { TpAgendaItem } from "@/lib/take-pride/types";
+import { countIncomingPending } from "@/lib/take-pride/delegate-match";
 import { BadgeQr, MeetingRespond, OptInToggle } from "./_client";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +29,11 @@ export default async function PassPage({ params }: { params: Promise<{ token: st
     return <Denied title="Pass not found" text="This pass link is not valid. Ask the Take Pride desk for your link." />;
   }
 
-  const [meetings, agenda] = await Promise.all([getDelegateMeetings(delegate.id), getAgenda()]);
+  const [meetings, agenda, delegatesWaiting] = await Promise.all([
+    getDelegateMeetings(delegate.id),
+    getAgenda(),
+    countIncomingPending(delegate.id),
+  ]);
   const days = new Map<number, TpAgendaItem[]>();
   for (const a of agenda) days.set(a.day, [...(days.get(a.day) ?? []), a]);
   const agendaIsSample = agenda.some((a) => a.is_sample);
@@ -58,6 +64,32 @@ export default async function PassPage({ params }: { params: Promise<{ token: st
         <p className="tp-small" style={{ margin: 0 }}>
           {TP_EVENT.dates} · {TP_EVENT.city}
         </p>
+      </section>
+
+      {/* Delegate meetings */}
+      <section className="tp-card hi" aria-labelledby="tp-people" data-tp="meet-card">
+        <div className="tp-row">
+          <h2 className="tp-h2" id="tp-people">People to meet</h2>
+          {delegatesWaiting > 0 && (
+            <span className="tp-tag saffron tp-num" data-tp="meet-waiting">
+              {delegatesWaiting} asked to meet you
+            </span>
+          )}
+        </div>
+        <p className="tp-small" style={{ margin: 0 }}>
+          Fellow delegates who need what you offer, or offer what you need.
+        </p>
+        <div className="tp-row" style={{ justifyContent: "flex-start" }}>
+          <Link href={`/take-pride/pass/${token}/meet`} className="tp-btn saffron sm" data-tp="go-meet">
+            See who to meet
+          </Link>
+          <Link href={`/take-pride/pass/${token}/profile`} className="tp-btn ghost sm" data-tp="go-profile">
+            Edit my profile
+          </Link>
+        </div>
+        <Link href={`/take-pride/pass/${token}/chapter`} className="tp-small" data-tp="go-chapter">
+          Your chapter&rsquo;s Take Pride journey &rarr;
+        </Link>
       </section>
 
       {/* Catalyst Partner meetings */}

@@ -124,6 +124,21 @@ export async function updateSession(request: NextRequest) {
       url.search = ''
       return NextResponse.redirect(url)
     }
+  } else if (
+    (pathname === '/' || pathname === '/login') &&
+    (request.nextUrl.searchParams.has('error_code') ||
+      request.nextUrl.searchParams.has('error_description'))
+  ) {
+    // A failed sign-in (e.g. "OAuth state has expired" after the Google page
+    // sat open) is sent by Supabase to the Site URL, which is this host, with
+    // no hint of which app started it. Director 2026-10-10: send every such
+    // failure to the Recognitions sign-in page, never to a Yi Connect page.
+    // Our own /auth/callback never sets error_code / error_description.
+    const target = requestHost.endsWith('.vercel.app')
+      ? new URL('https://yi-recognitions.vercel.app/recognitions/sign-in')
+      : new URL('/recognitions/sign-in', request.nextUrl.origin)
+    target.searchParams.set('error', 'auth_failed')
+    return NextResponse.redirect(target)
   }
 
   // ─── YIP nested mount (/yip/*) ────────────────────────────────────────

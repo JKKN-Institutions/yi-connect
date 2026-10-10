@@ -1,23 +1,75 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import QRCode from "qrcode";
-import { respondMeeting, setPartnerMeetingsOptIn } from "../../actions";
+import { getMyBadge, respondMeeting, setPartnerMeetingsOptIn } from "../../actions";
 
-/** QR of the badge code text only (e.g. "TP26-1001"), read by the gate scanner. */
-export function BadgeQr({ code }: { code: string }) {
+/**
+ * QR of the FULL badge code ("TP26-1234-K7QXM": number + secret), read by the
+ * gate, partner lead and scan-to-connect scanners. The secret is not in the
+ * page's delegate data, so when `full` is not passed it is fetched for the
+ * pass token in the URL. No QR is drawn until the full code is known: a
+ * number-only QR would be refused by partners and other delegates.
+ */
+export function BadgeQr({ code, full, size = 180, nav = true }: { code: string; full?: string; size?: number; nav?: boolean }) {
+  const params = useParams<{ token: string }>();
+  const token = typeof params?.token === "string" ? params.token : "";
   const ref = useRef<HTMLCanvasElement>(null);
+  const [fetched, setFetched] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const shown = full ?? fetched;
+
   useEffect(() => {
-    if (!ref.current) return;
-    QRCode.toCanvas(ref.current, code, { width: 180, margin: 1, color: { dark: "#141414", light: "#ffffff" } }).catch(() =>
+    if (full || !token) return;
+    let live = true;
+    getMyBadge(token)
+      .then((r) => {
+        if (!live) return;
+        if (r.success) setFetched(r.data.code);
+        else setFailed(true);
+      })
+      .catch(() => live && setFailed(true));
+    return () => {
+      live = false;
+    };
+  }, [full, token]);
+
+  useEffect(() => {
+    if (!ref.current || !shown) return;
+    QRCode.toCanvas(ref.current, shown, { width: size, margin: 1, color: { dark: "#141414", light: "#ffffff" } }).catch(() =>
       setFailed(true)
     );
-  }, [code]);
+  }, [shown, size]);
+
+  const box = size + 20;
   return (
-    <div className="tp-qr" role="img" aria-label={`QR code for badge ${code}`}>
-      {failed ? <p className="tp-small">Could not draw the QR. Show the badge code below instead.</p> : <canvas ref={ref} />}
+    <div className="tp-stack" style={{ gap: 8, justifyItems: "center" }}>
+      <div className="tp-qr" role="img" aria-label={`QR code for badge ${shown ?? code}`} style={{ width: box, height: box }}>
+        {failed ? (
+          <p className="tp-small">Could not draw the QR. Show the badge code instead.</p>
+        ) : shown ? (
+          <canvas ref={ref} />
+        ) : (
+          <p className="tp-small">Loading your QR…</p>
+        )}
+      </div>
+      {shown && (
+        <p className="tp-small tp-num" data-tp-code={shown} style={{ margin: 0 }}>
+          Full badge code: <b style={{ color: "var(--tp-ink)", letterSpacing: ".06em" }}>{shown}</b>
+        </p>
+      )}
+      {nav && token && (
+        <div className="tp-row" style={{ justifyContent: "center" }}>
+          <Link href={`/take-pride/pass/${token}/connect`} className="tp-btn green sm" data-tp="go-connect" style={{ color: "#fff" }}>
+            Scan to connect
+          </Link>
+          <Link href={`/take-pride/pass/${token}/people-saved`} className="tp-btn ghost sm" data-tp="go-people">
+            My people
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

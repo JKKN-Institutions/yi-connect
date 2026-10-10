@@ -167,7 +167,14 @@ export default async function PartnerPage({
             <div className="tp-kpi"><b>{matches.length}</b><span>matched delegates</span></div>
           </div>
           <div className="tp-card">
-            <h2 className="tp-h2">Follow up</h2>
+            <div className="tp-row">
+              <h2 className="tp-h2">Follow up</h2>
+              {confirmed && (
+                <a className="tp-btn ghost sm" href={`${base}/leads.csv`} download>
+                  Download my leads (CSV)
+                </a>
+              )}
+            </div>
             {accepted.length + leads.length === 0 && <p className="tp-mute" style={{ margin: 0 }}>Accepted meetings and scanned leads appear here.</p>}
             <div className="tp-list">
               {accepted.map((m) => {

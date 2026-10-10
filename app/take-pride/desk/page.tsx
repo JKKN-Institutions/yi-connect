@@ -43,6 +43,13 @@ export default async function DeskPage() {
         <h1 className="tp-h1">Take Pride 2026</h1>
       </section>
 
+      <nav className="tp-tabs" aria-label="Desk sections">
+        <Link href="/take-pride/desk/gate">Gate scanner</Link>
+        <Link href="/take-pride/desk/delegates">Delegates</Link>
+        <Link href="/take-pride/desk/awards">Awards Night</Link>
+        <Link href="/take-pride/awards">Hall screen</Link>
+      </nav>
+
       <section className="tp-grid2">
         <div className="tp-kpi"><b className="tp-num">{count("confirmed")}</b><span>Catalyst Partners confirmed · {inr(confirmedValue)}</span></div>
         <div className="tp-kpi"><b className="tp-num">{count("payment_submitted")}</b><span>payments to confirm · {inr(waitingValue)}</span></div>
@@ -54,7 +61,12 @@ export default async function DeskPage() {
       </section>
 
       <section className="tp-card">
-        <h2 className="tp-h2">Catalyst Partners</h2>
+        <div className="tp-row">
+          <h2 className="tp-h2">Catalyst Partners</h2>
+          <a className="tp-btn ghost sm" href="/take-pride/desk/partners.csv" download>
+            Download partners (CSV)
+          </a>
+        </div>
         {partners.length === 0 && <p className="tp-mute" style={{ margin: 0 }}>No sign-ups yet. Share the Catalyst page: /take-pride/catalyst</p>}
         <div className="tp-list">
           {partners.map((p) => (

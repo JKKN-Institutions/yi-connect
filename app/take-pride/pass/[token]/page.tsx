@@ -120,6 +120,34 @@ export default async function PassPage({ params }: { params: Promise<{ token: st
         </Link>
       </section>
 
+      {/* AI helpers (written off-platform by the AI routine; the app only queues) */}
+      <section className="tp-card" aria-labelledby="tp-ai" data-tp="ai-card">
+        <h2 className="tp-h2" id="tp-ai">AI helpers</h2>
+        <nav aria-label="AI helpers" className="tp-list">
+          {[
+            { href: "plan", label: "My summit plan", hint: "Tell us your goal, get sessions, people and tables", tp: "go-plan" },
+            { href: "radar", label: "Opportunity radar", hint: "Who needs what you offer, and buy-together ideas", tp: "go-radar" },
+            { href: "ask", label: "Ask the desk", hint: "Questions about the agenda and your schedule", tp: "go-ask" },
+          ].map((l) => (
+            <Link
+              key={l.href}
+              href={`/take-pride/pass/${token}/${l.href}`}
+              data-tp={l.tp}
+              style={{ display: "block", textDecoration: "none", color: "inherit" }}
+            >
+              <span className="tp-row" style={{ flexWrap: "nowrap" }}>
+                <span style={{ minWidth: 0 }}>
+                  <b>{l.label}</b>
+                  <br />
+                  <span className="tp-small">{l.hint}</span>
+                </span>
+                <span aria-hidden="true">&rarr;</span>
+              </span>
+            </Link>
+          ))}
+        </nav>
+      </section>
+
       {/* Catalyst Partner meetings */}
       <section className="tp-card" aria-labelledby="tp-meet">
         <h2 className="tp-h2" id="tp-meet">Catalyst Partner meetings</h2>

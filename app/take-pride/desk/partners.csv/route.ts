@@ -1,4 +1,4 @@
-import { requireTpOrganiser } from "@/lib/take-pride/auth";
+import { hasReviewSession, requireTpOrganiser } from "@/lib/take-pride/auth";
 import { DESK_PARTNERS_HEADERS, deskPartnerRows, toCsv, type CsvPartner } from "@/lib/take-pride/csv";
 import { tpService } from "@/lib/take-pride/supabase";
 
@@ -13,8 +13,10 @@ function text(status: number, body: string) {
 
 /** Every Catalyst Partner with payment status and activity, for the organiser desk. */
 export async function GET() {
+  // Real organisers only: review mode (sample data) never downloads partner contacts.
   const g = await requireTpOrganiser();
   if (!g.ok) {
+    if (await hasReviewSession()) return text(403, "Not available in review mode.");
     return text(
       403,
       g.reason === "signed_out"

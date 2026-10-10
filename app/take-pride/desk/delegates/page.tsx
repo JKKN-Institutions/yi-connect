@@ -1,16 +1,30 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Denied, TopBar } from "../../_ui";
-import { requireTpOrganiser } from "@/lib/take-pride/auth";
+import { requireTpDesk } from "@/lib/take-pride/auth";
+import { NotInReview, ReviewBanner } from "../../review/_banner";
 import { tpService } from "@/lib/take-pride/supabase";
-import { listAllDelegates } from "./_core";
+import { listAllDelegates, type TpDeskDelegate } from "./_core";
 import { DelegateList, ImportPanel, RemoveSamples } from "./delegates-client";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Delegates" };
 
+/** Review mode: the is_sample filter is in the query, so no real row is ever read. */
+async function listSampleDelegates(): Promise<TpDeskDelegate[]> {
+  const { data, error } = await tpService()
+    .from("tp_delegates")
+    .select("id, token, badge_code, full_name, chapter, zone, business_name, industry, role_title, partner_meetings_opt_in, checked_in_at, is_sample")
+    .eq("is_sample", true)
+    .order("full_name")
+    .order("id")
+    .limit(1000);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as TpDeskDelegate[];
+}
+
 export default async function DelegatesPage() {
-  const g = await requireTpOrganiser();
+  const g = await requireTpDesk();
   if (!g.ok) {
     if (g.reason === "signed_out") {
       return (
@@ -27,9 +41,11 @@ export default async function DelegatesPage() {
     return <Denied title="No access" text="The delegate list is for the Take Pride team. Ask the national team to add you as a Take Pride admin." />;
   }
 
-  let delegates: Awaited<ReturnType<typeof listAllDelegates>>;
+  // Review mode (outside reviewers): sample delegates only, and no writes.
+  const review = g.mode === "review";
+  let delegates: TpDeskDelegate[];
   try {
-    delegates = await listAllDelegates(tpService());
+    delegates = review ? await listSampleDelegates() : await listAllDelegates(tpService());
   } catch {
     return <Denied title="Could not load delegates" text="The delegate list did not load. Reload the page in a minute." />;
   }
@@ -42,6 +58,7 @@ export default async function DelegatesPage() {
   return (
     <main className="tp-main wide">
       <TopBar right={<Link className="tp-btn ghost sm" href="/take-pride/desk">Back to desk</Link>} />
+      {review && <ReviewBanner />}
       <section className="tp-stack">
         <div className="tp-eyebrow">Organiser desk</div>
         <h1 className="tp-h1">Delegates</h1>
@@ -49,7 +66,7 @@ export default async function DelegatesPage() {
 
       <section className="tp-grid2">
         <div className="tp-kpi"><b className="tp-num">{delegates.length}</b><span>delegates in total</span></div>
-        <div className="tp-kpi"><b className="tp-num">{real}</b><span>real, from myCII</span></div>
+        {!review && <div className="tp-kpi"><b className="tp-num">{real}</b><span>real, from myCII</span></div>}
         <div className="tp-kpi"><b className="tp-num">{sample}</b><span>sample (demo) delegates</span></div>
         <div className="tp-kpi"><b className="tp-num">{checkedIn}</b><span>checked in at the gate</span></div>
       </section>
@@ -62,7 +79,7 @@ export default async function DelegatesPage() {
           Download the registration list from myCII as a CSV file, then choose it here or paste its text. You will see a preview before anything is saved.
           Each imported delegate gets a new badge code and pass link. They start with partner meetings OFF and choose for themselves on their pass.
         </p>
-        <ImportPanel />
+        {review ? <NotInReview what="Importing delegates" /> : <ImportPanel />}
       </section>
 
       {sample > 0 && (
@@ -72,7 +89,7 @@ export default async function DelegatesPage() {
             Do this once the real list is in. It removes the {sampleRemovable} sample delegates nobody has checked in, with their sample meetings and leads.
             Real delegates are never touched.
           </p>
-          <RemoveSamples count={sampleRemovable} />
+          {review ? <NotInReview what="Removing sample delegates" /> : <RemoveSamples count={sampleRemovable} />}
         </section>
       )}
     </main>

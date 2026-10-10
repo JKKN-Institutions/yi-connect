@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Denied, TopBar } from "../../_ui";
-import { requireTpOrganiser } from "@/lib/take-pride/auth";
+import { requireTpDesk } from "@/lib/take-pride/auth";
+import { NotInReview, ReviewBanner } from "../../review/_banner";
 import { getAwardsDesk } from "@/lib/take-pride/recognitions-bridge";
 import { AwardsDeskClient } from "./awards-client";
 
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Awards Night desk" };
 
 export default async function AwardsDeskPage() {
-  const g = await requireTpOrganiser();
+  const g = await requireTpDesk();
   if (!g.ok) {
     if (g.reason === "signed_out") {
       return (
@@ -24,6 +25,31 @@ export default async function AwardsDeskPage() {
       );
     }
     return <Denied title="No access" text="The Awards Night desk is for the Take Pride team. Ask the national team to add you as a Take Pride admin." />;
+  }
+
+  // Review mode (outside reviewers): no Awards Night data or actions. The desk
+  // shows real Recognitions approval state, and reveals (even rehearsals)
+  // land on the public hall screen.
+  if (g.mode === "review") {
+    return (
+      <main className="tp-main wide">
+        <TopBar right={<Link className="tp-btn sm ghost" href="/take-pride/desk">Organiser desk</Link>} />
+        <ReviewBanner />
+        <section className="tp-stack">
+          <div className="tp-eyebrow">Awards Night</div>
+          <h1 className="tp-h1">Reveal the winners</h1>
+          <p className="tp-lede">
+            On the night, the Take Pride team reveals each approved winner from here, and it appears on the hall screen.
+          </p>
+        </section>
+        <div className="tp-card">
+          <NotInReview what="Awards Night" />
+          <p className="tp-small" style={{ margin: 0 }}>
+            It works with the real award results, and anything revealed here shows on the public hall screen, so it is closed in review mode.
+          </p>
+        </div>
+      </main>
+    );
   }
 
   const desk = await getAwardsDesk();

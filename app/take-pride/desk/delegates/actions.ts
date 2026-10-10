@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTpOrganiser } from "@/lib/take-pride/auth";
+import { hasReviewSession, requireTpOrganiser } from "@/lib/take-pride/auth";
 import { tpService } from "@/lib/take-pride/supabase";
 import { mapImport, type TpImportPreviewData } from "@/lib/take-pride/import";
 import type { TpResult } from "@/lib/take-pride/types";
@@ -15,9 +15,14 @@ import { planImport, removeUncheckedSamples, runImport } from "./_core";
 
 const DENIED = "Only Take Pride organisers can do this. Sign in with your Yi account.";
 
+/** Real organisers only; review mode gets its own plain refusal. */
+async function denial(): Promise<string> {
+  return (await hasReviewSession()) ? "Not available in review mode." : DENIED;
+}
+
 export async function previewDelegateImport(text: string): Promise<TpResult<TpImportPreviewData>> {
   const g = await requireTpOrganiser();
-  if (!g.ok) return { success: false, error: DENIED };
+  if (!g.ok) return { success: false, error: await denial() };
   const parsed = mapImport(text);
   if (!parsed.ok) return { success: false, error: parsed.error };
   try {
@@ -39,7 +44,7 @@ export async function previewDelegateImport(text: string): Promise<TpResult<TpIm
 
 export async function confirmDelegateImport(text: string): Promise<TpResult<{ inserted: number; skipped: number; warning: string | null }>> {
   const g = await requireTpOrganiser();
-  if (!g.ok) return { success: false, error: DENIED };
+  if (!g.ok) return { success: false, error: await denial() };
   const parsed = mapImport(text);
   if (!parsed.ok) return { success: false, error: parsed.error };
   if (parsed.rows.length === 0) return { success: false, error: "No rows are ready to import. Fix the skipped rows and try again." };
@@ -58,7 +63,7 @@ export async function confirmDelegateImport(text: string): Promise<TpResult<{ in
 
 export async function removeSampleDelegates(confirmWord: string): Promise<TpResult<{ removed: number }>> {
   const g = await requireTpOrganiser();
-  if (!g.ok) return { success: false, error: DENIED };
+  if (!g.ok) return { success: false, error: await denial() };
   if ((confirmWord ?? "").trim().toUpperCase() !== "REMOVE") return { success: false, error: 'Type REMOVE to confirm.' };
   try {
     const removed = await removeUncheckedSamples(tpService());

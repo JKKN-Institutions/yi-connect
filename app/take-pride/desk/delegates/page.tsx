@@ -5,7 +5,7 @@ import { requireTpDesk } from "@/lib/take-pride/auth";
 import { NotInReview, ReviewBanner } from "../../review/_banner";
 import { tpService } from "@/lib/take-pride/supabase";
 import { listAllDelegates, type TpDeskDelegate } from "./_core";
-import { DelegateList, ImportPanel, RemoveSamples } from "./delegates-client";
+import { DelegateList, ImportPanel, RemoveSamples, WalkInForm } from "./delegates-client";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Delegates" };
@@ -71,13 +71,22 @@ export default async function DelegatesPage() {
         <div className="tp-kpi"><b className="tp-num">{checkedIn}</b><span>checked in at the gate</span></div>
       </section>
 
+      <section className="tp-card" data-testid="walkin-card">
+        <h2 className="tp-h2">Add a walk-in</h2>
+        <p className="tp-small" style={{ margin: 0 }}>
+          For a delegate who is not on the myCII list and has paid. Check their payment proof first. They get a badge code and a pass link straight away.
+          Someone already listed under the same name and chapter is shown instead of being added twice.
+        </p>
+        {review ? <NotInReview what="Adding a walk-in" /> : <WalkInForm />}
+      </section>
+
       <DelegateList delegates={delegates} />
 
       <section className="tp-card">
         <h2 className="tp-h2">Import from myCII</h2>
         <p className="tp-small" style={{ margin: 0 }}>
           Download the registration list from myCII as a CSV file, then choose it here or paste its text. You will see a preview before anything is saved.
-          Each imported delegate gets a new badge code and pass link. They start with partner meetings OFF and choose for themselves on their pass.
+          Each imported delegate gets a new badge code and pass link. They start with partner meetings OFF and are listed in the delegate directory; they can change both on their pass.
         </p>
         {review ? <NotInReview what="Importing delegates" /> : <ImportPanel />}
       </section>

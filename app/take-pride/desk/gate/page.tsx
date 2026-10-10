@@ -4,6 +4,7 @@ import { TopBar, Denied } from "../../_ui";
 import { requireTpDesk } from "@/lib/take-pride/auth";
 import { ReviewBanner } from "../../review/_banner";
 import { GateScanner } from "./_scanner";
+import { GateNameSearch } from "./_search";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Gate check-in" };
@@ -51,7 +52,7 @@ export default async function GatePage() {
         <h1 className="tp-h1">Gate check-in</h1>
         {gate.mode === "review" && <p className="tp-small" style={{ margin: 0 }}>Review mode checks in sample badges only.</p>}
       </div>
-      <GateScanner review={gate.mode === "review"} />
+      <GateScanner review={gate.mode === "review"} nameSearch={<GateNameSearch review={gate.mode === "review"} />} />
     </main>
   );
 }

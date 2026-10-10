@@ -28,7 +28,7 @@ function istStamp(iso: string): string {
   }).format(new Date(iso));
 }
 
-export function GateScanner({ review = false }: { review?: boolean }) {
+export function GateScanner({ review = false, nameSearch }: { review?: boolean; nameSearch?: React.ReactNode }) {
   // Review mode uses the sample-only check-in; the server re-checks is_sample.
   const checkIn = review ? reviewGateCheckIn : gateCheckIn;
   const [result, setResult] = useState<Outcome | null>(null);
@@ -102,6 +102,8 @@ export function GateScanner({ review = false }: { review?: boolean }) {
           </div>
         </div>
       </form>
+
+      {nameSearch}
 
       <section className="tp-card" aria-labelledby="tp-gate-recent">
         <div className="tp-row">

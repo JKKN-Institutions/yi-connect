@@ -2,10 +2,10 @@
 
 import { useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { TP_EVENT } from "@/lib/take-pride/constants";
+import { TP_EVENT, TP_INDUSTRIES, TP_ZONES } from "@/lib/take-pride/constants";
 import { TP_IMPORT_MAX_BYTES, type TpImportPreviewData } from "@/lib/take-pride/import";
 import type { TpDeskDelegate } from "./_core";
-import { confirmDelegateImport, previewDelegateImport, removeSampleDelegates } from "./actions";
+import { addWalkIn, confirmDelegateImport, previewDelegateImport, removeSampleDelegates } from "./actions";
 
 const STEP = 50;
 const noop = () => () => {};
@@ -142,9 +142,174 @@ const FIELD_LABEL: Record<string, string> = {
   business_name: "Company",
   role_title: "Designation",
   industry: "Industry",
-  email: "Email (not saved yet)",
-  phone: "Phone (not saved yet)",
+  email: "Email",
+  phone: "Phone",
 };
+
+/** wa.me wants country code + number, digits only. 10 digits = an Indian mobile. Unusable -> null. */
+function waNumber(phone: string): string | null {
+  const d = phone.replace(/\D/g, "");
+  if (d.length === 10) return `91${d}`;
+  if (d.length === 11 && d.startsWith("0")) return `91${d.slice(1)}`;
+  if (d.length >= 11 && d.length <= 15) return d;
+  return null;
+}
+
+const EMPTY_WALKIN = {
+  full_name: "",
+  chapter: "",
+  zone: "",
+  business_name: "",
+  role_title: "",
+  industry: "",
+  phone: "",
+  email: "",
+};
+
+type WalkInDone = { existing: boolean; token: string; badge_code: string; full_name: string; chapter: string; phone: string };
+
+/** Help desk: add one walk-in (real organisers only; the server re-checks). */
+export function WalkInForm() {
+  const router = useRouter();
+  const origin = useOrigin();
+  const [f, setF] = useState(EMPTY_WALKIN);
+  const [paid, setPaid] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [done, setDone] = useState<WalkInDone | null>(null);
+  const [copied, setCopied] = useState<"yes" | "manual" | null>(null);
+  const [pending, start] = useTransition();
+
+  const set = (k: keyof typeof EMPTY_WALKIN) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setF((s) => ({ ...s, [k]: e.target.value }));
+
+  const submit = () =>
+    start(async () => {
+      setErr(null);
+      const r = await addWalkIn({ ...f, payment_checked: paid });
+      if (!r.success) {
+        setErr(r.error);
+        return;
+      }
+      setDone({ ...r.data, phone: f.phone });
+      setCopied(null);
+      if (!r.data.existing) {
+        setF(EMPTY_WALKIN);
+        setPaid(false);
+        router.refresh();
+      }
+    });
+
+  if (done) {
+    const link = `${origin}/take-pride/pass/${done.token}`;
+    const message = `Hi ${done.full_name}, here is your ${TP_EVENT.name} pass (${TP_EVENT.dates}, ${TP_EVENT.city}). Keep it handy: the QR on it is your entry badge. ${link}`;
+    const to = waNumber(done.phone);
+    const copy = async () => {
+      try {
+        await navigator.clipboard.writeText(link);
+        setCopied("yes");
+      } catch {
+        setCopied("manual");
+      }
+    };
+    return (
+      <div className="tp-stack" data-testid="walkin-done">
+        <p className={`tp-alert ${done.existing ? "warn" : "ok"}`} style={{ margin: 0 }} data-testid="walkin-result">
+          {done.existing
+            ? `${done.full_name}, ${done.chapter} is already a delegate (badge ${done.badge_code}). Nothing new was added: share their existing pass.`
+            : `Added ${done.full_name}, ${done.chapter}. Badge ${done.badge_code}.`}
+        </p>
+        <input className="tp-input" readOnly value={link} onFocus={(e) => e.currentTarget.select()} aria-label="Pass link" data-testid="walkin-link" />
+        <div className="tp-row" style={{ justifyContent: "flex-start", gap: 8 }}>
+          <button type="button" className="tp-btn ghost sm" onClick={copy} disabled={!origin} data-testid="walkin-copy">
+            {copied === "yes" ? "Link copied" : copied === "manual" ? "Copy the link above" : "Copy pass link"}
+          </button>
+          <a
+            className="tp-btn green sm"
+            href={origin ? `https://wa.me/${to ?? ""}?text=${encodeURIComponent(message)}` : undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="walkin-wa"
+          >
+            {to ? "Send on WhatsApp" : "Share on WhatsApp"}
+          </a>
+        </div>
+        <button
+          type="button"
+          className="tp-btn ghost sm"
+          onClick={() => {
+            setDone(null);
+            setErr(null);
+          }}
+          data-testid="walkin-another"
+        >
+          {done.existing ? "Back to the form" : "Add another walk-in"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className="tp-stack"
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+      data-testid="walkin-form"
+    >
+      <div className="tp-field">
+        <label htmlFor="wi-name">Full name</label>
+        <input id="wi-name" className="tp-input" value={f.full_name} onChange={set("full_name")} required minLength={2} maxLength={120} autoComplete="off" />
+      </div>
+      <div className="tp-field">
+        <label htmlFor="wi-chapter">Yi chapter</label>
+        <input id="wi-chapter" className="tp-input" value={f.chapter} onChange={set("chapter")} required minLength={2} maxLength={80} placeholder="Yi Coimbatore" autoComplete="off" />
+      </div>
+      <div className="tp-field">
+        <label htmlFor="wi-zone">Zone</label>
+        <select id="wi-zone" className="tp-select" value={f.zone} onChange={set("zone")} required>
+          <option value="" disabled>Pick a zone</option>
+          {TP_ZONES.map((z) => (
+            <option key={z} value={z}>{z}</option>
+          ))}
+        </select>
+      </div>
+      <div className="tp-field">
+        <label htmlFor="wi-business">Business name</label>
+        <input id="wi-business" className="tp-input" value={f.business_name} onChange={set("business_name")} maxLength={120} autoComplete="off" />
+      </div>
+      <div className="tp-field">
+        <label htmlFor="wi-role">Role</label>
+        <input id="wi-role" className="tp-input" value={f.role_title} onChange={set("role_title")} maxLength={80} placeholder="Director" autoComplete="off" />
+      </div>
+      <div className="tp-field">
+        <label htmlFor="wi-industry">Industry</label>
+        <select id="wi-industry" className="tp-select" value={f.industry} onChange={set("industry")}>
+          <option value="">Other / not sure</option>
+          {TP_INDUSTRIES.map((i) => (
+            <option key={i} value={i}>{i}</option>
+          ))}
+        </select>
+      </div>
+      <div className="tp-field">
+        <label htmlFor="wi-phone">Mobile (for the WhatsApp link)</label>
+        <input id="wi-phone" className="tp-input" type="tel" inputMode="tel" value={f.phone} onChange={set("phone")} maxLength={20} autoComplete="off" />
+      </div>
+      <div className="tp-field">
+        <label htmlFor="wi-email">Email</label>
+        <input id="wi-email" className="tp-input" type="email" value={f.email} onChange={set("email")} maxLength={160} autoComplete="off" />
+      </div>
+      <label className="tp-row" style={{ justifyContent: "flex-start", flexWrap: "nowrap", gap: 10, fontWeight: 600 }}>
+        <input type="checkbox" checked={paid} onChange={(e) => setPaid(e.target.checked)} style={{ width: 22, height: 22, flexShrink: 0 }} data-testid="walkin-paid" />
+        <span>I have checked their payment proof</span>
+      </label>
+      {err && <p className="tp-alert bad" style={{ margin: 0 }} role="alert" data-testid="walkin-err">{err}</p>}
+      <button type="submit" className="tp-btn green" disabled={pending || !paid} data-testid="walkin-submit">
+        {pending ? "Adding…" : "Add walk-in and get pass link"}
+      </button>
+    </form>
+  );
+}
 
 export function ImportPanel() {
   const router = useRouter();

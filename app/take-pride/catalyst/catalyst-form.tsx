@@ -59,10 +59,13 @@ export function CatalystForm() {
 
   return (
     <form onSubmit={submit} className="tp-stack" noValidate>
+      <p className="tp-small" style={{ margin: 0 }} data-tp="member-hint">
+        Yi member? Use the email or mobile number Yi has for you. That is how we find you in the member list and give you the member price.
+      </p>
       <div className="tp-field"><label htmlFor="member_name">Your name</label><input className="tp-input" id="member_name" name="member_name" autoComplete="name" required /></div>
       <div className="tp-field"><label htmlFor="email">Email</label><input className="tp-input" id="email" name="email" type="email" autoComplete="email" required /></div>
       <div className="tp-field"><label htmlFor="phone">Mobile (WhatsApp)</label><input className="tp-input" id="phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" required /></div>
-      <div className="tp-field"><label htmlFor="chapter">Your Yi chapter</label><input className="tp-input" id="chapter" name="chapter" placeholder="e.g. Yi Erode" required /></div>
+      <div className="tp-field"><label htmlFor="chapter">Your Yi chapter (or your city, if you are not a member)</label><input className="tp-input" id="chapter" name="chapter" placeholder="e.g. Yi Erode" required /></div>
       <div className="tp-field"><label htmlFor="zone">Zone</label>
         <select className="tp-select" id="zone" name="zone" defaultValue="South">{TP_ZONES.map((z) => <option key={z}>{z}</option>)}</select></div>
       <div className="tp-field"><label htmlFor="business_name">Business name</label><input className="tp-input" id="business_name" name="business_name" autoComplete="organization" required /></div>

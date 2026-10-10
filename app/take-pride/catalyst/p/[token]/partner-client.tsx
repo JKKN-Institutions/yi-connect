@@ -6,6 +6,7 @@ import { ContinuousScanner } from "../../../_scanner";
 import { captureLead, requestMeeting, submitPayment } from "../../../actions";
 import { PickTimeView, type SlotChoiceProp } from "../../../pass/[token]/schedule/_client";
 import { pickPartnerMeetingTime } from "./slot-actions";
+import { addTeamMember, removeTeamMember } from "./team-actions";
 
 export function PaymentForm({ token, current }: { token: string; current: string | null }) {
   const router = useRouter();
@@ -141,5 +142,117 @@ export function PartnerPickTime({
       choices={choices}
       onPick={(key) => pickPartnerMeetingTime(token, meetingId, key)}
     />
+  );
+}
+
+/**
+ * Team scanners: the partner adds up to `max` people (name only) and shares
+ * each person's own scanner link. The link opens ONLY the lead scanner.
+ */
+export function TeamPanel({
+  token,
+  members,
+  max,
+}: {
+  token: string;
+  members: { id: string; name: string; token: string }[];
+  max: number;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [name, setName] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+  const linkFor = (t: string) => `${window.location.origin}/take-pride/catalyst/team/${t}`;
+
+  return (
+    <div className="tp-stack" data-tp="team-panel">
+      <p className="tp-small" style={{ margin: 0 }}>
+        Add up to {max} people from your company. Each gets a private link that opens only the lead scanner and the leads they scan.
+      </p>
+      {members.length === 0 && <p className="tp-mute" style={{ margin: 0 }}>No team members yet.</p>}
+      <div className="tp-list">
+        {members.map((m) => (
+          <div key={m.id} className="tp-stack" style={{ gap: 6 }} data-tp="team-member">
+            <b>{m.name}</b>
+            <div className="tp-row" style={{ justifyContent: "flex-start" }}>
+              <button
+                type="button"
+                className="tp-btn ghost sm"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(linkFor(m.token));
+                    setCopied(m.id);
+                  } catch {
+                    setCopied(null);
+                  }
+                }}
+              >
+                {copied === m.id ? "Link copied" : "Copy link"}
+              </button>
+              <button
+                type="button"
+                className="tp-btn green sm"
+                onClick={() => {
+                  window.open(`https://wa.me/?text=${encodeURIComponent(`Your Take Pride lead scanner: ${linkFor(m.token)}`)}`, "_blank", "noopener");
+                }}
+              >
+                Share on WhatsApp
+              </button>
+              <button
+                type="button"
+                className="tp-btn ghost sm"
+                disabled={pending}
+                onClick={() =>
+                  start(async () => {
+                    setMsg(null);
+                    const r = await removeTeamMember(token, m.id);
+                    if (!r.success) setMsg({ ok: false, text: r.error });
+                    else {
+                      setMsg({ ok: true, text: `${m.name} removed. Their link no longer works.` });
+                      router.refresh();
+                    }
+                  })
+                }
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+      {members.length < max ? (
+        <form
+          className="tp-row"
+          onSubmit={(e) => {
+            e.preventDefault();
+            start(async () => {
+              setMsg(null);
+              const r = await addTeamMember(token, name);
+              if (!r.success) setMsg({ ok: false, text: r.error });
+              else {
+                setMsg({ ok: true, text: `${name.trim()} added. Share their link with them.` });
+                setName("");
+                router.refresh();
+              }
+            });
+          }}
+        >
+          <input
+            className="tp-input"
+            style={{ flex: 1, minWidth: 0 }}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Team member's name"
+            aria-label="Team member's name"
+            maxLength={80}
+          />
+          <button className="tp-btn sm" disabled={pending}>{pending ? "Saving…" : "Add"}</button>
+        </form>
+      ) : (
+        <p className="tp-small" style={{ margin: 0 }}>Your team is full ({max} people). Remove someone to add another.</p>
+      )}
+      {msg && <p className={`tp-alert ${msg.ok ? "ok" : "bad"}`} role="status">{msg.text}</p>}
+    </div>
   );
 }

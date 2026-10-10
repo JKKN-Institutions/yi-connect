@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { TopBar, ShiftMark } from "./_ui";
 import { TP_EVENT, inr, withGst } from "@/lib/take-pride/constants";
-import { getAudienceStats, getSettings, seatsTaken } from "@/lib/take-pride/data";
+import { getAudienceStats, getSettings } from "@/lib/take-pride/data";
+import { seatsTakenActive } from "@/lib/take-pride/catalyst";
 
 export const dynamic = "force-dynamic";
 
 export default async function TakePrideHome() {
-  const [s, stats, taken] = await Promise.all([getSettings(), getAudienceStats(), seatsTaken()]);
+  const [s, stats, taken] = await Promise.all([getSettings(), getAudienceStats(), seatsTakenActive()]);
   const left = Math.max(0, s.catalyst_seats - taken);
   return (
     <main className="tp-main">
@@ -29,14 +30,14 @@ export default async function TakePrideHome() {
 
       <section className="tp-card hi">
         <div className="tp-row">
-          <span className="tp-eyebrow">For Yi members with a business</span>
+          <span className="tp-eyebrow">For business owners</span>
           <span className="tp-tag saffron">{left} of {s.catalyst_seats} seats left</span>
         </div>
         <h2 className="tp-h2">Become a Catalyst Partner</h2>
         <p style={{ margin: 0 }}>
           Meet the delegates who need what you sell. The app finds them, books the meetings and scans every lead.
-          Members pay {inr(s.member_fee_inr)} + GST ({inr(withGst(s.member_fee_inr, s.gst_pct))}), 40% off the standard{" "}
-          {inr(s.standard_fee_inr)}.
+          Yi members pay {inr(s.member_fee_inr)} + GST ({inr(withGst(s.member_fee_inr, s.gst_pct))}). Non-members pay{" "}
+          {inr(s.standard_fee_inr)} + GST ({inr(withGst(s.standard_fee_inr, s.gst_pct))}).
         </p>
         <p className="tp-small" style={{ margin: 0 }}>
           {stats.total} delegates on the list so far{stats.isSample ? " (sample list for this demo)" : ""}.

@@ -5,6 +5,8 @@ import { tpService } from "@/lib/take-pride/supabase";
 import { getPartnerByToken } from "@/lib/take-pride/data";
 import { bookMeetingSlot, dKey, pKey, tableLabel } from "@/lib/take-pride/slots";
 import type { TpResult } from "@/lib/take-pride/types";
+import type { CatalystPartner } from "@/lib/take-pride/catalyst";
+import { CANCELLED_MESSAGE } from "@/lib/take-pride/constants";
 
 /*
  * A Catalyst Partner picks a time for an ACCEPTED meeting with a delegate.
@@ -22,6 +24,7 @@ export async function pickPartnerMeetingTime(
 ): Promise<TpResult<{ when: string }>> {
   const p = await getPartnerByToken(token);
   if (!p) return { success: false, error: "This partner link is not valid" };
+  if ((p as CatalystPartner).cancelled_at) return { success: false, error: CANCELLED_MESSAGE };
   if (p.status !== "confirmed") return { success: false, error: "Meeting times open once your payment is confirmed" };
   if (typeof meetingId !== "string" || !UUID.test(meetingId)) return { success: false, error: "Meeting not found" };
   if (typeof slotKey !== "string" || !SLOT.test(slotKey)) return { success: false, error: "Pick one of the times shown" };

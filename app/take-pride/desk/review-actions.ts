@@ -60,6 +60,26 @@ export async function reviewRejectPartner(partnerId: string, reason: string): Pr
   return { success: true, data: null };
 }
 
+/** Cancel a SAMPLE partner only (is_sample in the WHERE, whatever id is sent). */
+export async function reviewCancelPartner(partnerId: string, note: string, refund: string): Promise<TpResult> {
+  if (!(await gate())) return { success: false, error: DENIED };
+  if (!isUuid(partnerId)) return { success: false, error: "That partner is not valid." };
+  const why = (note ?? "").trim();
+  if (why.length < 3) return { success: false, error: "Write a short note. The partner sees it on their page." };
+  if (!["refund_due", "no_refund", "credit"].includes(refund)) return { success: false, error: "Choose what happens to the money" };
+  const { data, error } = await tpService()
+    .from("tp_partners")
+    .update({ cancelled_at: new Date().toISOString(), cancel_note: why.slice(0, 500), refund_decision: refund })
+    .eq("id", partnerId)
+    .eq("is_sample", true)
+    .is("cancelled_at", null)
+    .select("id");
+  if (error) return { success: false, error: "Could not cancel. Please try again." };
+  if (!data?.length) return { success: false, error: "Review mode can only cancel a sample partner that is not already cancelled." };
+  revalidatePath("/take-pride/desk");
+  return { success: true, data: null };
+}
+
 /** Gate check-in for sample badges only. */
 export async function reviewGateCheckIn(scanned: string): Promise<TpResult<{ name: string; chapter: string; already: boolean; at: string }>> {
   if (!(await gate())) return { success: false, error: DENIED };

@@ -42,6 +42,7 @@ type Cycle = {
   nomination_deadline: string | null;
   fix_deadline: string | null;
   check_deadline: string | null;
+  reevaluation_deadline: string | null;
   stage1_deadline: string | null;
   stage2_deadline: string | null;
 };
@@ -56,7 +57,7 @@ function fail(context: string, error: { message: string } | null): never {
 export async function getCurrentCycle(): Promise<Cycle | null> {
   const { data, error } = await tpService()
     .from("recognition_cycles")
-    .select("id, name, nomination_deadline, fix_deadline, check_deadline, stage1_deadline, stage2_deadline")
+    .select("id, name, nomination_deadline, fix_deadline, check_deadline, reevaluation_deadline, stage1_deadline, stage2_deadline")
     .eq("is_current", true)
     .maybeSingle();
   if (error) fail("read current cycle", error);
@@ -451,7 +452,7 @@ export async function getChapterJourney(chapterText: string): Promise<Journey> {
   const [catRes, nomRes, verRes, reveals] = await Promise.all([
     db.from("recognition_chapter_categories").select("category").eq("cycle_id", cycle.id).eq("chapter_id", chapter.id).maybeSingle(),
     awardIds.length
-      ? db.from("recognition_nominations").select("award_id, category, status").eq("chapter_id", chapter.id).in("award_id", awardIds)
+      ? db.from("recognition_nominations").select("award_id, category, status, origin").eq("chapter_id", chapter.id).in("award_id", awardIds)
       : Promise.resolve({ data: [], error: null }),
     awardIds.length
       ? db.from("recognition_moderation_versions").select("award_id").in("award_id", awardIds)
@@ -466,7 +467,7 @@ export async function getChapterJourney(chapterText: string): Promise<Journey> {
   const moderated = new Set(((verRes.data ?? []) as { award_id: string }[]).map((v) => v.award_id));
   const realReveals = new Map(reveals.filter((r) => !r.is_rehearsal).map((r) => [`${r.award_id}:${r.category}`, r]));
   const byId = new Map(awards.map((a) => [a.id, a]));
-  const nominations = ((nomRes.data ?? []) as { award_id: string; category: string; status: string }[])
+  const nominations = ((nomRes.data ?? []) as { award_id: string; category: string; status: string; origin: string | null }[])
     // Drafts are not nominations yet.
     .filter((n) => n.status !== "draft");
 
@@ -476,7 +477,10 @@ export async function getChapterJourney(chapterText: string): Promise<Journey> {
     const award = byId.get(n.award_id);
     if (!award || !isCategory(n.category)) continue;
     const status = effectiveStatus(
-      { status: n.status as "submitted" | "returned" | "checked" | "excluded" | "draft" },
+      {
+        status: n.status as "submitted" | "returned" | "checked" | "excluded" | "draft",
+        origin: n.origin === "nl_added" ? "nl_added" : null,
+      },
       cycle
     );
     let stage: JourneyStage;

@@ -27,7 +27,7 @@ function AwardLine({ state }: { state: AwardState }) {
         </div>
       </div>
       <p className="rx-small rx-mute" style={{ marginTop: 8 }}>
-        {state.submittedNominations.length} submitted nomination{state.submittedNominations.length === 1 ? "" : "s"}
+        {state.checkedNominations.length} nomination{state.checkedNominations.length === 1 ? "" : "s"} in the race (passed both checks)
         {v ? ` · version ${v.version} submitted ${formatWhen(v.submitted_at)}` : ""}
       </p>
     </Link>

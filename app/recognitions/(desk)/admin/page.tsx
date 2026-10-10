@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireRxSuperAdmin } from "@/lib/recognitions/auth";
 import { getAwardState, getCurrentCycle, listAwards } from "@/lib/recognitions/data";
 import { PHASE_LABEL } from "@/lib/recognitions/phase";
+import { effectiveStatus } from "@/lib/recognitions/check-rules";
+import type { NominationStatus } from "@/lib/recognitions/types";
 import { Ribbon } from "../../_ui/ribbon";
 import { Deadline, NoAccess, Notice, PageHead, PhaseSeal, formatWhen } from "../../_ui/primitives";
 import { ForceOpenStage2 } from "./force-open";
@@ -52,6 +54,8 @@ export default async function ControlRoomOverview() {
       <PageHead eyebrow="Control room" title={cycle.name}>
         <div className="rx-stack" style={{ gap: 4 }}>
           <Deadline label="Nominations close" iso={cycle.nomination_deadline} />
+          <Deadline label="Sent-back nominations must be fixed by" iso={cycle.fix_deadline} />
+          <Deadline label="Regional Chair + RM checks close" iso={cycle.check_deadline} />
           <Deadline label="Stage 1 scoring closes" iso={cycle.stage1_deadline} />
           <Deadline label="Stage 2 moderation closes" iso={cycle.stage2_deadline} />
           <Deadline label="Re-evaluation closes" iso={cycle.reevaluation_deadline} />
@@ -75,7 +79,9 @@ export default async function ControlRoomOverview() {
       <div className="rx-stack">
         {states.map((st) => {
           const { award, completeness: c } = st;
-          const submitted = st.submittedNominations.length;
+          // Effective status: sent back past the fix deadline / unchecked past the check deadline = out.
+          const count = (s: NominationStatus) => st.nominations.filter((n) => effectiveStatus(n, cycle) === s).length;
+          const filed = st.nominations.length - count("draft");
           return (
             <section key={award.id} className="rx-plate rx-ad-award">
               <Ribbon vertical={award.vertical} size="tall" />
@@ -85,8 +91,9 @@ export default async function ControlRoomOverview() {
                   <PhaseSeal phase={st.phase} />
                 </div>
                 <p className="rx-small rx-mute">
-                  {submitted} nomination{submitted === 1 ? "" : "s"} submitted
-                  {st.nominations.length > submitted ? ` · ${st.nominations.length - submitted} still in draft` : ""} ·{" "}
+                  {filed} nomination{filed === 1 ? "" : "s"} filed: {count("checked")} passed both checks ·{" "}
+                  {count("submitted")} awaiting checks · {count("returned")} sent back · {count("excluded")} out of the race
+                  {count("draft") > 0 ? ` · ${count("draft")} still in draft` : ""} ·{" "}
                   {st.duties.filter((d) => d.layer === "rm").length} RM · {st.duties.filter((d) => d.layer === "nmt").length} NMT
                 </p>
                 <div className="rx-stack" style={{ gap: 10 }}>

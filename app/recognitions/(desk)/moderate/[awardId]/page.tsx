@@ -143,7 +143,7 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
               The top three in each category need a rationale and a citation.
             </p>
             {formCategories.length === 0 ? (
-              <p className="rx-mute">There are no submitted nominations to rank.</p>
+              <p className="rx-mute">No nomination has passed both checks, so there is nothing to rank.</p>
             ) : (
               <ModerationForm
                 awardId={award.id}

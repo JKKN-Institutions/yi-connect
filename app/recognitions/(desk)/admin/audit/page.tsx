@@ -23,6 +23,10 @@ const ACTION_WORD: Record<string, string> = {
   lock: "locked",
   decide: "decided on",
   unlock: "unlocked",
+  // recognitions_02: the Regional Chair + RM check.
+  nomination_check_passed: "passed the check of",
+  nomination_returned: "sent back",
+  nomination_resubmitted: "fixed and resubmitted",
 };
 
 function words(s: string) {

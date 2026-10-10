@@ -63,8 +63,8 @@ async function persist(awardId: string, input: ModerationInput, submit: boolean)
 
   const blocked = notOpen(state) ?? windowClosed(state);
   if (blocked) return { success: false, error: blocked };
-  if (state.submittedNominations.length === 0) {
-    return { success: false, error: "There are no submitted nominations to rank for this award." };
+  if (state.checkedNominations.length === 0) {
+    return { success: false, error: "No nomination for this award has passed both checks, so there is nothing to rank." };
   }
 
   const draft = state.latestVersion?.status === "draft" ? state.latestVersion : null;
@@ -73,7 +73,7 @@ async function persist(awardId: string, input: ModerationInput, submit: boolean)
     return { success: false, error: "Press \"Reopen moderation\" first. It starts a new version for the re-evaluation." };
   }
 
-  const checked = validateModeration(input, state.submittedNominations, await chapterMap(), submit);
+  const checked = validateModeration(input, state.checkedNominations, await chapterMap(), submit);
   if (!checked.ok) return { success: false, error: checked.error };
 
   const svc = rxService();

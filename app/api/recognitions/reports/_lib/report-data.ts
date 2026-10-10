@@ -203,7 +203,7 @@ export async function verticalReport(): Promise<{ cycle: CycleRow; sheets: Verti
         fin?.final_rank ?? null,
       ]);
     }
-    if (matrix.length === 0) aoa.push(["No submitted nominations for this award."]);
+    if (matrix.length === 0) aoa.push(["No nomination for this award passed both checks."]);
     sheets.push({ title: award.title, aoa });
   }
   return { cycle, sheets };

@@ -1,0 +1,6 @@
+/* Check desk (recognitions_02). Lane-local additions to recognitions.css. */
+
+.rx-check-card { min-width: 0; }
+.rx-check-pass { display: block; color: var(--rx-mute); overflow-wrap: anywhere; }
+.rx-check-pass strong { color: var(--rx-ink); }
+.rx-check-pass[data-done="true"] { color: var(--rx-laurel-deep); }

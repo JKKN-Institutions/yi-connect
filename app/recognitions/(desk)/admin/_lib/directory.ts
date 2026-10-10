@@ -1,7 +1,10 @@
 import "server-only";
 
 import { rxService } from "@/lib/recognitions/supabase";
-import { RX_APP } from "@/lib/recognitions/constants";
+import { RX_APP, RX_ROLES } from "@/lib/recognitions/constants";
+
+/** Roles whose scope is a Yi zone (region): yi_zone is part of what they grant. */
+const ZONED_ROLES = new Set<string>([RX_ROLES.rm, RX_ROLES.regionalChair]);
 
 /**
  * Yi directory helpers for the control room. The directory is the mother
@@ -99,14 +102,17 @@ export async function ensureRole(input: {
     if (error) return { ok: false, error: "Couldn't add the role in the Yi directory. Try again." };
     return { ok: true, change: "inserted" };
   }
-  // Only the RM role is scoped by zone; other roles keep whatever zone they had.
-  const zoneDiffers = input.role === "rm" && (existing.yi_zone ?? null) !== (input.yiZone ?? null);
+  // Only the RM and Regional Chair roles are scoped by zone; other roles keep
+  // whatever zone they had. The directory key has no zone, so moving the zone
+  // means one region per person per year for these roles.
+  const zoned = ZONED_ROLES.has(input.role);
+  const zoneDiffers = zoned && (existing.yi_zone ?? null) !== (input.yiZone ?? null);
   if (existing.is_active === false || zoneDiffers) {
     const { error } = await svc
       .from("role_assignments")
       .update({
         is_active: true,
-        ...(input.role === "rm" ? { yi_zone: input.yiZone } : {}),
+        ...(zoned ? { yi_zone: input.yiZone } : {}),
         valid_until: null,
         updated_at: new Date().toISOString(),
       })

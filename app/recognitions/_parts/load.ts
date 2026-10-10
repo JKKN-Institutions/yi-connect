@@ -72,7 +72,7 @@ export async function loadStage2(
       chapters,
       names: opts.withNames ? evaluatorNames : undefined,
     }),
-    predictions: buildPredictionsView(predictions, chapters),
+    predictions: buildPredictionsView(predictions, chapters, state.checkedNominations),
     history: buildHistoryView({
       versions: state.versions,
       decisions: state.decisions,

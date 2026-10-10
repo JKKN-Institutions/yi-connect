@@ -17,6 +17,7 @@ import type {
 import type { Category } from "./constants";
 import { computeCompleteness, dutySeesNomination, type Completeness } from "./scoring";
 import { computePhase, latestDecisionFor, type Phase } from "./phase";
+import { inRace } from "./check-rules";
 
 /**
  * Read layer for Yi Recognitions. NO function here checks permissions —
@@ -154,7 +155,24 @@ export async function getPeople(ids: string[]): Promise<Map<string, PersonLite>>
 export async function conflictsForDuties(duties: EvaluatorRow[]): Promise<Map<string, Set<string>>> {
   const out = new Map<string, Set<string>>();
   if (duties.length === 0) return out;
-  const personIds = [...new Set(duties.map((d) => d.person_id))];
+  const linked = await linkedChapters([...new Set(duties.map((d) => d.person_id))]);
+  for (const d of duties) {
+    out.set(d.id, new Set([...(linked.get(d.person_id) ?? []), ...(d.conflict_chapter_ids ?? [])]));
+  }
+  return out;
+}
+
+/**
+ * The same conflict rule for a nomination CHECKER (recognitions_02): any
+ * ACTIVE directory role the person holds in a chapter. A Regional Chair has
+ * no duty row, so this is keyed by person.
+ */
+export async function conflictsForPerson(personId: string): Promise<Set<string>> {
+  return (await linkedChapters([personId])).get(personId) ?? new Set<string>();
+}
+
+/** person_id -> chapter ids the person holds any active directory role in (any app). */
+async function linkedChapters(personIds: string[]): Promise<Map<string, Set<string>>> {
   const { data, error } = await rxService()
     .schema("yi_directory")
     .from("role_assignments")
@@ -172,10 +190,7 @@ export async function conflictsForDuties(duties: EvaluatorRow[]): Promise<Map<st
     if (!linked.has(r.person_id)) linked.set(r.person_id, new Set());
     linked.get(r.person_id)!.add(id);
   }
-  for (const d of duties) {
-    out.set(d.id, new Set([...(linked.get(d.person_id) ?? []), ...(d.conflict_chapter_ids ?? [])]));
-  }
-  return out;
+  return linked;
 }
 
 /** ALL scores on an award. Oversight / NMT-in-Stage-2 only. Never for evaluators in Stage 1. */
@@ -327,7 +342,8 @@ export type AwardState = {
   award: AwardRow;
   cycle: CycleRow;
   nominations: NominationRow[];
-  submittedNominations: NominationRow[];
+  /** Nominations both checkers passed: the only ones in the race (recognitions_02). */
+  checkedNominations: NominationRow[];
   duties: EvaluatorRow[];
   conflictsByDuty: Map<string, Set<string>>;
   completeness: Completeness;
@@ -357,7 +373,7 @@ export async function getAwardState(awardId: string): Promise<AwardState | null>
     listScoresForAward(awardId),
   ]);
   const conflictsByDuty = await conflictsForDuties(duties);
-  const completeness = computeCompleteness({ nominations, duties, conflictsByDuty, scores });
+  const completeness = computeCompleteness({ cycle, nominations, duties, conflictsByDuty, scores });
   const latestVersion = versions[0] ?? null;
   const latestSubmittedVersion = versions.find((v) => v.status === "submitted") ?? null;
   const phase = computePhase({
@@ -372,7 +388,7 @@ export async function getAwardState(awardId: string): Promise<AwardState | null>
     award,
     cycle,
     nominations,
-    submittedNominations: nominations.filter((n) => n.status === "submitted"),
+    checkedNominations: nominations.filter(inRace),
     duties,
     conflictsByDuty,
     completeness,

@@ -14,6 +14,8 @@ import { Deadline, NoAccess, Notice, PageHead, Seal, formatWhen } from "../../_u
 import { ChapterSwitcher } from "./switcher";
 import { gateChapterPage, nominationWindow, previousWinners } from "./load";
 import { withChapter } from "./shared";
+import { STATUS_TONE } from "./summary";
+import { NOMINATION_STATUS_LABEL, effectiveStatus, exclusionReason } from "@/lib/recognitions/check-rules";
 
 export const metadata = { title: "Chapter" };
 
@@ -67,6 +69,7 @@ export default async function ChapterDashboard({
         .sort((a, b) => a.localeCompare(b))
     : [];
   const drafts = nominations.filter((n) => n.status === "draft").length;
+  const toFix = nominations.filter((n) => effectiveStatus(n, cycle) === "returned").length;
   const quizOpen = cycle.quiz_open && win.state === "open";
 
   return (
@@ -84,6 +87,14 @@ export default async function ChapterDashboard({
         <Deadline label="Nominations close" iso={cycle.nomination_deadline} />
       </PageHead>
 
+      {toFix > 0 ? (
+        <Notice tone="alert">
+          {toFix === 1 ? "One nomination was" : `${toFix} nominations were`} sent back for a fix. Read the note, fix and
+          resubmit by {formatWhen(cycle.fix_deadline)}, or {toFix === 1 ? "it drops" : "they drop"} out of the race.{" "}
+          <Link href={link("/recognitions/chapter/apply")} className="rx-link">Fix now</Link>
+        </Notice>
+      ) : null}
+
       {!category ? (
         <Notice tone="alert">
           Your chapter hasn&apos;t been placed in a category yet. The Recognitions super admin does this. You
@@ -92,7 +103,7 @@ export default async function ChapterDashboard({
       ) : win.state === "not_open" ? (
         <Notice>Nominations haven&apos;t opened yet. The Recognitions super admin will set the deadline.</Notice>
       ) : win.state === "closed" ? (
-        <Notice>Nominations closed on {formatWhen(win.deadline)}. Only submitted nominations are entered.</Notice>
+        <Notice>Nominations closed on {formatWhen(win.deadline)}. Only nominations the Regional Chair and a Regional Mentor both pass are scored.</Notice>
       ) : (
         <Notice>
           Drafts are not entered. Submit before the deadline.
@@ -123,6 +134,7 @@ export default async function ChapterDashboard({
           <div className="rx-stack" style={{ gap: 0 }}>
             {awards.map((a) => {
               const n = byAward.get(a.id);
+              const st = n ? effectiveStatus(n, cycle) : null;
               return (
                 <article key={a.id} className="rx-plate rx-plate-tight rx-stack" style={{ marginTop: 10 }}>
                   <div className="rx-spread">
@@ -130,17 +142,29 @@ export default async function ChapterDashboard({
                       <Ribbon vertical={a.vertical} size="lg" />
                       <h2 className="rx-h3">{a.title}</h2>
                     </div>
-                    {n?.status === "submitted" ? (
-                      <Seal tone="laurel">Submitted</Seal>
-                    ) : n?.status === "draft" ? (
-                      <Seal tone="gilt">Draft</Seal>
+                    {st ? (
+                      <Seal tone={STATUS_TONE[st]}>{NOMINATION_STATUS_LABEL[st]}</Seal>
                     ) : (
                       <Seal tone="mute">Not applied</Seal>
                     )}
                   </div>
                   {a.criteria ? <p className="rx-small" style={{ whiteSpace: "pre-line" }}>{a.criteria}</p> : null}
-                  {n?.status === "submitted" && n.submitted_at ? (
-                    <p className="rx-small rx-mute">Submitted {formatWhen(n.submitted_at)}. Locked.</p>
+                  {n && st === "returned" ? (
+                    <div className="rx-notice rx-notice-alert rx-small">
+                      <strong>Sent back for a fix.</strong> {n.return_note}
+                      <div style={{ marginTop: 6 }}>
+                        Fix and resubmit by {formatWhen(cycle.fix_deadline)}.{" "}
+                        <Link href={link("/recognitions/chapter/apply")} className="rx-link">Fix it now</Link>
+                      </div>
+                    </div>
+                  ) : n && st === "submitted" && n.submitted_at ? (
+                    <p className="rx-small rx-mute">
+                      Submitted {formatWhen(n.submitted_at)}. Waiting for the Regional Chair and a Regional Mentor to check it.
+                    </p>
+                  ) : n && st === "checked" ? (
+                    <p className="rx-small rx-mute">Passed both checks. It is in the race and is being scored.</p>
+                  ) : n && st === "excluded" ? (
+                    <p className="rx-small rx-mute">{exclusionReason(n, cycle)}</p>
                   ) : null}
                 </article>
               );

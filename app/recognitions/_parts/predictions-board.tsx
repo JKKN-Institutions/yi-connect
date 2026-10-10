@@ -28,8 +28,14 @@ export function PredictionsBoard({ view }: { view: PredictionsView }) {
                     {c.voters} vote{c.voters === 1 ? "" : "s"}
                   </span>
                 </div>
+                {c.offRace > 0 ? (
+                  <p className="rx-small rx-mute">
+                    {c.offRace} pick{c.offRace === 1 ? " was" : "s were"} for a chapter not in this race (its nomination did
+                    not pass both checks), so {c.offRace === 1 ? "it is" : "they are"} not counted.
+                  </p>
+                ) : null}
                 {c.entries.length === 0 ? (
-                  <p className="rx-small rx-mute">No predictions in this category.</p>
+                  <p className="rx-small rx-mute">No predictions for a chapter in this race.</p>
                 ) : (
                   <ol className="rx-p-list" style={{ paddingLeft: 0, listStyle: "none" }}>
                     {c.entries.map((e) => (

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { getChapterCategories, getCurrentCycle, listAwards, listNominationsForChapter } from "@/lib/recognitions/data";
+import { getChapterCategories, getCurrentCycle, getPeople, listAwards, listNominationsForChapter } from "@/lib/recognitions/data";
+import { canFix, effectiveStatus, exclusionReason } from "@/lib/recognitions/check-rules";
 import { CATEGORY_LABEL } from "@/lib/recognitions/constants";
 import type { NominationRow } from "@/lib/recognitions/types";
 import { IconArrowLeft } from "../../../_ui/icons";
@@ -9,6 +10,7 @@ import { gateChapterPage, nominationWindow } from "../load";
 import { withChapter, type NominationForm } from "../shared";
 import { NominationSummary } from "../summary";
 import { ApplyWizard } from "./wizard";
+import { FixReturnedForm } from "./fix-form";
 
 export const metadata = { title: "Apply for awards" };
 
@@ -74,28 +76,61 @@ export default async function ApplyPage({
     </div>
   );
 
+  // Sent back by a checker and still inside the fix window (recognitions_02):
+  // editable here even after the nomination deadline, which is the point.
+  const fixable = nominations.filter((n) => canFix(n, cycle));
+  const returners = await getPeople(fixable.map((n) => n.returned_by).filter((x): x is string => !!x));
+  const fixForms =
+    fixable.length === 0 ? null : (
+      <section className="rx-stack-lg">
+        <div className="rx-eyebrow">Sent back to you for a fix</div>
+        {fixable.map((n) => {
+          const a = awards.find((x) => x.id === n.award_id);
+          if (!a) return null;
+          return (
+            <FixReturnedForm
+              key={n.id}
+              chapterId={chapter.id}
+              award={{ id: a.id, title: a.title, vertical: a.vertical, criteria: a.criteria }}
+              initial={toForm(n)}
+              note={n.return_note ?? ""}
+              returnedBy={(n.returned_by && returners.get(n.returned_by)?.full_name) || "A checker"}
+              returnedAt={n.returned_at}
+              fixDeadline={cycle.fix_deadline}
+            />
+          );
+        })}
+      </section>
+    );
+
   // Whatever blocks the wizard, the chapter still sees what it has filed, read-only.
+  const filedList = nominations.filter((n) => !canFix(n, cycle));
   const readOnlyList =
-    nominations.length === 0 ? null : (
+    filedList.length === 0 ? null : (
       <section className="rx-stack">
         <div className="rx-eyebrow">What your chapter has filed</div>
         {awards
-          .filter((a) => nominations.some((n) => n.award_id === a.id))
+          .filter((a) => filedList.some((n) => n.award_id === a.id))
           .map((a) => {
-            const n = nominations.find((x) => x.award_id === a.id)!;
+            const n = filedList.find((x) => x.award_id === a.id)!;
+            const st = effectiveStatus(n, cycle);
             return (
               <NominationSummary
                 key={a.id}
                 title={a.title}
                 vertical={a.vertical}
                 form={toForm(n)}
-                status={n.status}
+                status={st}
                 note={
-                  n.status === "submitted"
-                    ? `Submitted ${formatWhen(n.submitted_at)}. Locked.`
-                    : win.state === "closed"
-                      ? "This draft was not submitted before the deadline, so it is not entered."
-                      : undefined
+                  st === "submitted"
+                    ? `Submitted ${formatWhen(n.submitted_at)}. Locked while the Regional Chair and a Regional Mentor check it.`
+                    : st === "checked"
+                      ? "Passed both checks. It is in the race and is being scored."
+                      : st === "excluded"
+                        ? (exclusionReason(n, cycle) ?? undefined)
+                        : win.state === "closed"
+                          ? "This draft was not submitted before the deadline, so it is not entered."
+                          : undefined
                 }
               />
             );
@@ -129,6 +164,7 @@ export default async function ApplyPage({
       <div className="rx-stack-lg">
         {head(meta)}
         {blocker}
+        {fixForms}
         {readOnlyList}
       </div>
     );
@@ -137,6 +173,7 @@ export default async function ApplyPage({
   return (
     <div className="rx-stack-lg">
       {head(meta)}
+      {fixForms}
       <ApplyWizard
         chapterId={chapter.id}
         chapterName={chapter.name}
@@ -144,7 +181,8 @@ export default async function ApplyPage({
         awards={awards.map((a) => ({ id: a.id, title: a.title, vertical: a.vertical, criteria: a.criteria }))}
         initial={nominations.map((n) => ({
           awardId: n.award_id,
-          status: n.status,
+          // The wizard only knows "draft" and "filed (locked)". A sent-back one is fixed above.
+          status: n.status === "draft" ? ("draft" as const) : ("submitted" as const),
           submittedAt: n.submitted_at,
           form: toForm(n),
         }))}

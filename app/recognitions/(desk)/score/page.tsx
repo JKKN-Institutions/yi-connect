@@ -96,7 +96,7 @@ export default async function MySheetsPage() {
                   ) : null}
                   {win?.state === "over" ? <Notice>Stage 1 is over for this award. Your sheet is read-only.</Notice> : null}
                   {total === 0 ? (
-                    <p className="rx-mute rx-small">No chapter on your sheet has submitted a nomination for this award.</p>
+                    <p className="rx-mute rx-small">No nomination on your sheet has passed both checks yet. Only those reach scoring.</p>
                   ) : null}
                   <div>
                     <Link href={`/recognitions/score/${duty.id}`} className="rx-btn">

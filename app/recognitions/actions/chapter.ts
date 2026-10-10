@@ -12,6 +12,7 @@ import {
   listPredictionsByChapter,
 } from "@/lib/recognitions/data";
 import { isPast } from "@/lib/recognitions/phase";
+import { canFix } from "@/lib/recognitions/check-rules";
 import { CATEGORIES, type Category } from "@/lib/recognitions/constants";
 import type { ActionResult, AwardRow, ChapterRow, CycleRow, NominationRow } from "@/lib/recognitions/types";
 import { cleanForm, validateNomination, type NominationForm } from "../(desk)/chapter/shared";
@@ -19,9 +20,10 @@ import { formatWhen } from "../_ui/primitives";
 
 /**
  * Chapter desk actions. Every one: gate → validate → write → audit →
- * revalidate. recognition_nominations has NO freeze trigger in the
- * database, so the "a submitted nomination is locked" rule lives here:
- * every write re-reads the row and only ever touches status = 'draft'.
+ * revalidate. The "a filed nomination is locked" rule lives here AND in the
+ * database freeze trigger (recognitions_01/02): every write re-reads the row
+ * and only ever touches status = 'draft' — except resubmitNomination, which
+ * touches status = 'returned' until the cycle's fix deadline.
  */
 
 type Ctx = {
@@ -157,11 +159,15 @@ async function writeAll(
     (await listNominationsForChapter(ctx.chapter.id, forms.map((f) => f.awardId))).map((n) => [n.award_id, n])
   );
   const titles = new Map(ctx.awards.map((a) => [a.id, a.title]));
-  const locked = forms.filter((f) => existing.get(f.awardId)?.status === "submitted");
+  // Anything past 'draft' is filed. A sent-back one is fixed through resubmitNomination, not here.
+  const locked = forms.filter((f) => {
+    const s = existing.get(f.awardId)?.status;
+    return s !== undefined && s !== "draft";
+  });
   if (locked.length > 0) {
     return {
       success: false,
-      error: `${locked.map((f) => titles.get(f.awardId)).join(", ")} ${locked.length === 1 ? "is" : "are"} already submitted and can't be changed. Reload the page.`,
+      error: `${locked.map((f) => titles.get(f.awardId)).join(", ")} ${locked.length === 1 ? "is" : "are"} already submitted and can't be changed here. Reload the page.`,
     };
   }
 
@@ -221,7 +227,7 @@ export async function deleteNominationDraft(chapterId: string, awardId: string):
   if (!award) return { success: false, error: "That award is not open this year." };
   const [existing] = await listNominationsForChapter(ctx.chapter.id, [awardId]);
   if (!existing) return { success: true, message: `${award.title} had no saved draft.` };
-  if (existing.status === "submitted") {
+  if (existing.status !== "draft") {
     return { success: false, error: `${award.title} is already submitted and can't be removed.` };
   }
   const { data, error } = await rxService()
@@ -245,6 +251,78 @@ export async function deleteNominationDraft(chapterId: string, awardId: string):
   });
   revalidatePath("/recognitions", "layout");
   return { success: true, message: `Draft for ${award.title} removed.` };
+}
+
+/**
+ * Fix and resubmit a nomination a checker sent back (recognitions_02).
+ * Allowed while status = 'returned' and the cycle's fix deadline has not
+ * passed — even after the nomination deadline, which is the point.
+ */
+export async function resubmitNomination(chapterId: string, form: unknown): Promise<ActionResult> {
+  const gate = await requireRxChapter(typeof chapterId === "string" ? chapterId : "");
+  if (!gate.ok) return { success: false, error: gate.error };
+  const cycle = await getCurrentCycle();
+  if (!cycle) return { success: false, error: "No recognitions cycle is open right now." };
+
+  const f = cleanForm(form);
+  if (!f) return { success: false, error: "The form arrived malformed. Reload the page and try again." };
+  const award = (await listAwards(cycle.id)).find((a) => a.id === f.awardId);
+  if (!award) return { success: false, error: "That award is not open this year. Reload the page." };
+
+  const [existing] = await listNominationsForChapter(gate.value.id, [award.id]);
+  if (!existing) return { success: false, error: `Your chapter has no nomination for ${award.title}.` };
+  if (existing.status !== "returned") {
+    return { success: false, error: `${award.title} is not waiting for a fix. Reload the page to see where it stands.` };
+  }
+  if (!canFix(existing, cycle)) {
+    return {
+      success: false,
+      error: `The fix deadline passed on ${formatWhen(cycle.fix_deadline)}, so ${award.title} can no longer be resubmitted. It is out of the race.`,
+    };
+  }
+  const problems = validateNomination(f, { forSubmit: true });
+  if (problems.length > 0) return { success: false, error: `${award.title}: ${problems.join(" ")}` };
+
+  const now = new Date().toISOString();
+  // Resubmitting CLEARS BOTH PASSES: the Regional Chair and the Regional
+  // Mentor must both pass the FINAL version, never an earlier one (Director,
+  // 2026-10-10). The database trigger refuses a resubmission that keeps one.
+  // The last return note stays on the row as history.
+  const { data, error } = await rxService()
+    .from("recognition_nominations")
+    .update({
+      ...rowValues(f),
+      status: "submitted",
+      submitted_at: now,
+      submitted_by: gate.viewer.personId,
+      rc_checked_by: null,
+      rc_checked_at: null,
+      rm_checked_by: null,
+      rm_checked_at: null,
+      updated_at: now,
+    })
+    .eq("id", existing.id)
+    .eq("status", "returned")
+    .select("id");
+  if (error) return { success: false, error: plainDbError(error.message, error.code) };
+  if (!data || data.length === 0) {
+    return { success: false, error: `${award.title} changed a moment ago. Reload the page to see where it stands.` };
+  }
+
+  await audit({
+    cycleId: cycle.id,
+    awardId: award.id,
+    actorPersonId: gate.viewer.personId,
+    action: "nomination_resubmitted",
+    entity: "recognition_nominations",
+    entityId: existing.id,
+    detail: { chapter_id: gate.value.id, answered_note: existing.return_note, cleared_passes: true },
+  });
+  revalidatePath("/recognitions", "layout");
+  return {
+    success: true,
+    message: `${award.title} resubmitted. The Regional Chair and a Regional Mentor will check it again.`,
+  };
 }
 
 /** Phase 1B: one row per filled cell. Locks for ever once any row exists. Not used in scoring. */

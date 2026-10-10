@@ -81,6 +81,8 @@ export async function updateCycleSettings(input: {
   cycleId: string;
   name: string;
   nominationDeadline: string;
+  fixDeadline: string;
+  checkDeadline: string;
   stage1Deadline: string;
   stage2Deadline: string;
   reevaluationDeadline: string;
@@ -98,6 +100,9 @@ export async function updateCycleSettings(input: {
 
   const labels = [
     ["nominationDeadline", "Nomination deadline"],
+    // recognitions_02: sent-back nominations are fixed, then the checks close.
+    ["fixDeadline", "Fix deadline"],
+    ["checkDeadline", "Check deadline"],
     ["stage1Deadline", "Stage 1 deadline"],
     ["stage2Deadline", "Stage 2 deadline"],
     ["reevaluationDeadline", "Re-evaluation deadline"],
@@ -130,6 +135,8 @@ export async function updateCycleSettings(input: {
   const patch = {
     name,
     nomination_deadline: iso.nominationDeadline,
+    fix_deadline: iso.fixDeadline,
+    check_deadline: iso.checkDeadline,
     stage1_deadline: iso.stage1Deadline,
     stage2_deadline: iso.stage2Deadline,
     reevaluation_deadline: iso.reevaluationDeadline,

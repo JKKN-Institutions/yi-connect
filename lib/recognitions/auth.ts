@@ -20,6 +20,9 @@ import { getCurrentCycle } from "./data";
  *                         app='recognitions' rm with yi_zone = R.
  *   NMT                   duty row (layer nmt) AND directory role nmt or
  *                         nmt_leader. The leader duty needs nmt_leader.
+ *   Regional Chair        app='recognitions' regional_chair with yi_zone = R:
+ *                         checks region R's nominations (with an RM) before
+ *                         they are scored. No duty row.
  *   National Leadership   app='recognitions' national_leadership.
  *   Super admin           app='recognitions' recognitions_super_admin, or any
  *                         platform_super_admin.
@@ -47,6 +50,11 @@ export type RxViewer = {
   chapters: ChapterRow[];
   /** Active evaluator duties in the current cycle that the directory backs. */
   duties: RxDuty[];
+  /**
+   * Regions (Yi zone codes) this person is Regional Chair of: app='recognitions'
+   * role='regional_chair', yi_zone = region. A blank zone grants nothing.
+   */
+  regionalChairZones: string[];
 };
 
 function activeRx(me: PersonRoles, role: string) {
@@ -109,6 +117,17 @@ export const getRxViewer = cache(async (): Promise<RxViewer | null> => {
     });
   }
 
+  // ---- Regional Chair (nomination checker) -----------------------------
+  // FAIL CLOSED: a regional_chair row with a blank zone is dropped here, so it
+  // can never match a nomination's region.
+  const regionalChairZones = [
+    ...new Set(
+      activeRx(me, RX_ROLES.regionalChair)
+        .map((a) => (a.yi_zone ?? "").trim().toUpperCase())
+        .filter((z) => z !== "")
+    ),
+  ];
+
   return {
     userId: me.user_id,
     personId: me.person_id,
@@ -117,8 +136,36 @@ export const getRxViewer = cache(async (): Promise<RxViewer | null> => {
     isNationalLeadership,
     chapters,
     duties,
+    regionalChairZones,
   };
 });
+
+// ---------------------------------------------------------------------------
+// Nomination check (recognitions_02): who may check which nomination.
+// ---------------------------------------------------------------------------
+
+/**
+ * The checker seats this viewer holds for one nomination, BEFORE the conflict
+ * rule (the caller applies that — it needs a directory read):
+ *   asRegionalChair  regional_chair role whose zone = the nomination's region
+ *   rmDuty           an active RM duty on the nomination's award whose region
+ *                    = the nomination's region (the same duty the RM scores with)
+ * Both blank-safe: a blank region on either side never matches.
+ */
+export function checkerSeats(
+  v: RxViewer,
+  n: { award_id: string; region: string | null }
+): { asRegionalChair: boolean; rmDuty: RxDuty | null } {
+  return {
+    asRegionalChair: v.regionalChairZones.some((z) => same(z, n.region)),
+    rmDuty: v.duties.find((d) => d.layer === "rm" && d.award_id === n.award_id && same(d.region, n.region)) ?? null,
+  };
+}
+
+/** True when the viewer can check at least one region (Regional Chair or any RM duty). */
+export function isChecker(v: RxViewer): boolean {
+  return v.regionalChairZones.length > 0 || v.duties.some((d) => d.layer === "rm");
+}
 
 // ---------------------------------------------------------------------------
 // Gates. Each returns a structured verdict; pages render <NoAccess/> and

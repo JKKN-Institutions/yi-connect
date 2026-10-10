@@ -22,22 +22,33 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  // Share previews must point at Recognitions' own address, not the shared host.
+  metadataBase: new URL("https://yi-recognitions.vercel.app"),
   title: { default: "Yi Recognitions", template: "%s · Yi Recognitions" },
   description: "Take Pride: national chapter awards of Young Indians.",
   applicationName: "Yi Recognitions",
   manifest: "/recognitions-assets/manifest.webmanifest",
   appleWebApp: { capable: true, title: "Yi Recognitions", statusBarStyle: "default" },
   icons: {
-    icon: [{ url: "/recognitions-assets/icon.svg", type: "image/svg+xml" }],
-    apple: [{ url: "/recognitions-assets/icon.svg", type: "image/svg+xml" }],
+    icon: [
+      { url: "/recognitions-assets/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/recognitions-assets/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [{ url: "/recognitions-assets/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
   openGraph: {
     type: "website",
     siteName: "Yi Recognitions",
     title: "Yi Recognitions",
     description: "Take Pride: national chapter awards of Young Indians.",
+    images: [{ url: "/recognitions-assets/og.png", width: 1200, height: 630, alt: "Young Indians logo beside the words Yi Recognitions, Chapter awards 2026" }],
   },
-  twitter: { card: "summary", title: "Yi Recognitions", description: "Take Pride: national chapter awards." },
+  twitter: {
+    card: "summary_large_image",
+    title: "Yi Recognitions",
+    description: "Take Pride: national chapter awards of Young Indians.",
+    images: ["/recognitions-assets/og.png"],
+  },
   authors: [{ name: "Young Indians" }],
   creator: "Young Indians",
   publisher: "Young Indians",

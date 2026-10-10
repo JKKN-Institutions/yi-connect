@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { RibbonRail } from "../_ui/ribbon";
-import { MedalMark } from "../_ui/icons";
+import { MedalMark, YiMark } from "../_ui/icons";
 import { ResultLine } from "../_ui/client";
 import { SignInForm } from "./sign-in-form";
 
@@ -30,7 +30,9 @@ export default async function SignInPage({
       <main className="rx-main" style={{ display: "grid", placeItems: "start center", paddingTop: "8vh" }}>
         <div style={{ width: "min(420px, 100%)" }} className="rx-stack-lg">
           <div className="rx-stack" style={{ textAlign: "center" }}>
-            <div style={{ display: "flex", justifyContent: "center" }}>
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 16 }}>
+              <YiMark height={48} />
+              <span className="rx-mark-rule" aria-hidden="true" style={{ height: 40 }} />
               <MedalMark size={48} />
             </div>
             <div className="rx-eyebrow">Take Pride · National chapter awards</div>

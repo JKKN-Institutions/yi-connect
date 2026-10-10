@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getRxViewer } from "@/lib/recognitions/auth";
 import { RibbonRail } from "../_ui/ribbon";
-import { MedalMark } from "../_ui/icons";
+import { MedalMark, YiMark } from "../_ui/icons";
 import { NoAccess } from "../_ui/primitives";
 import { DeskNav, SignOutButton } from "./desk-nav";
 import { desksFor } from "./desks";
@@ -17,6 +17,8 @@ export default async function DeskLayout({ children }: { children: React.ReactNo
       <header className="rx-top">
         <div className="rx-top-inner">
           <Link href="/recognitions" className="rx-mark">
+            <YiMark />
+            <span className="rx-mark-rule" aria-hidden="true" />
             <MedalMark />
             <span className="rx-mark-word">Yi Recognitions</span>
           </Link>

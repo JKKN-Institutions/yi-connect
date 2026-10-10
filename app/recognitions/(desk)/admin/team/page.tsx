@@ -1,7 +1,7 @@
 import { requireRxSuperAdmin } from "@/lib/recognitions/auth";
 import { rxService } from "@/lib/recognitions/supabase";
 import { getCurrentCycle, getPeople, listChapters } from "@/lib/recognitions/data";
-import { RX_APP, RX_ROLES } from "@/lib/recognitions/constants";
+import { REGIONS, RX_APP, RX_ROLES } from "@/lib/recognitions/constants";
 import { NoAccess, Notice, PageHead } from "../../../_ui/primitives";
 import { GrantRoleForm, RevokeRoleButton } from "./team-forms";
 
@@ -10,10 +10,11 @@ export const metadata = { title: "Team" };
 const ROLE_COPY: Record<string, { label: string; what: string }> = {
   [RX_ROLES.superAdmin]: { label: "Recognitions super admin", what: "Runs this control room: timelines, awards, evaluators, citations, reports." },
   [RX_ROLES.nationalLeadership]: { label: "National Leadership", what: "Reads the Stage 1 and Stage 2 summaries; approves an award or sends it back." },
+  [RX_ROLES.regionalChair]: { label: "Regional Chair", what: "Checks one region's nominations with a Regional Mentor before they are scored: passes each one or sends it back with a note." },
   [RX_ROLES.chapterRep]: { label: "Chapter representative", what: "Files nominations and predictions for one chapter, alongside its chair." },
 };
 
-type Holder = { id: string; person_id: string; role: string; yi_chapter: string | null; yi_year: number };
+type Holder = { id: string; person_id: string; role: string; yi_chapter: string | null; yi_zone: string | null; yi_year: number };
 
 export default async function TeamPage() {
   const gate = await requireRxSuperAdmin();
@@ -23,7 +24,7 @@ export default async function TeamPage() {
   const { data, error } = await rxService()
     .schema("yi_directory")
     .from("role_assignments")
-    .select("id, person_id, role, yi_chapter, yi_year")
+    .select("id, person_id, role, yi_chapter, yi_zone, yi_year")
     .eq("app", RX_APP)
     .in("role", Object.keys(ROLE_COPY))
     .eq("is_active", true)
@@ -66,6 +67,7 @@ export default async function TeamPage() {
                     <tr>
                       <th>Person</th>
                       {role === RX_ROLES.chapterRep ? <th>Chapter</th> : null}
+                      {role === RX_ROLES.regionalChair ? <th>Region</th> : null}
                       <th className="rx-num">Yi year</th>
                       <th></th>
                     </tr>
@@ -83,6 +85,7 @@ export default async function TeamPage() {
                             </div>
                           </td>
                           {role === RX_ROLES.chapterRep ? <td>{h.yi_chapter ?? "—"}</td> : null}
+                          {role === RX_ROLES.regionalChair ? <td className="rx-num">{h.yi_zone ?? "—"}</td> : null}
                           <td className="rx-num">{h.yi_year}</td>
                           <td>
                             {h.person_id === gate.viewer.personId && role === RX_ROLES.superAdmin ? (
@@ -107,6 +110,7 @@ export default async function TeamPage() {
         <GrantRoleForm
           roles={Object.entries(ROLE_COPY).map(([value, c]) => ({ value, label: c.label }))}
           chapters={chapters.map((c) => ({ id: c.id, name: c.name }))}
+          regions={[...REGIONS]}
         />
       </section>
     </div>

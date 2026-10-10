@@ -100,11 +100,11 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
           {LAYER2_PARAMS.map((p, i) => `P${i + 1} ${p.label}`).join(", ")}. NMT parameters:{" "}
           {LAYER3_PARAMS.map((p, i) => `P${i + 1} ${p.label}`).join(", ")}.
         </p>
-        {state.submittedNominations.length === 0 ? (
-          <p className="rx-mute">No chapter has submitted a nomination for this award yet.</p>
+        {state.checkedNominations.length === 0 ? (
+          <p className="rx-mute">No nomination for this award has passed both checks yet.</p>
         ) : (
           CATEGORIES.map((category) => {
-            const noms = state.submittedNominations
+            const noms = state.checkedNominations
               .filter((n) => n.category === category)
               .sort((a, b) => chapterName(data.chapters, a.chapter_id).localeCompare(chapterName(data.chapters, b.chapter_id)));
             if (noms.length === 0) return null;

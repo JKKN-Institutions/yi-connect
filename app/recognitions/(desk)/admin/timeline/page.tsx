@@ -31,6 +31,8 @@ export default async function TimelinePage() {
               id: cycle.id,
               name: cycle.name,
               nominationDeadline: isoToIstInput(cycle.nomination_deadline),
+              fixDeadline: isoToIstInput(cycle.fix_deadline),
+              checkDeadline: isoToIstInput(cycle.check_deadline),
               stage1Deadline: isoToIstInput(cycle.stage1_deadline),
               stage2Deadline: isoToIstInput(cycle.stage2_deadline),
               reevaluationDeadline: isoToIstInput(cycle.reevaluation_deadline),

@@ -128,6 +128,8 @@ export const WORDS = {
   flagshipEvent: 50,
   announcementDraft: 100,
   evaluatorReason: 50,
+  /** A checker's "send back" note — same 50-word cap as other notes. */
+  returnNote: 50,
   nmtComments: 250,
   top3Rationale: 300,
   top3Citation: 250,
@@ -146,6 +148,8 @@ export const RX_ROLES = {
   nationalLeadership: "national_leadership",
   chapterRep: "chapter_rep",
   rm: "rm",
+  /** Checks nominations from one region (yi_zone). Piyush's 2026 deck. */
+  regionalChair: "regional_chair",
   nmt: "nmt",
   nmtLeader: "nmt_leader",
 } as const;

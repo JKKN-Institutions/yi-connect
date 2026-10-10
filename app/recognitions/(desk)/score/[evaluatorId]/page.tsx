@@ -14,6 +14,8 @@ import { Deadline, NoAccess, Notice, PageHead, Seal, formatWhen } from "../../..
 import { dutyLayerLabel, scoringWindow } from "../score-rules";
 import { ScoreSheet } from "./sheet";
 import { FlagToggle } from "./flags";
+import { CheckList } from "../../check/check-list";
+import { loadCheckItems } from "../../check/load";
 import "../score.css";
 
 export const metadata = { title: "Scoring sheet · Yi Recognitions" };
@@ -41,6 +43,27 @@ export default async function ScoringSheetPage({
   const { award, cycle } = state;
   const win = scoringWindow(state.phase, cycle);
 
+  // RM only: the nominations from this region still waiting for a check, with
+  // the same Pass / Send back controls as the Check desk. Only nominations
+  // both checkers passed reach the scoring sheet below.
+  const awaiting =
+    duty.layer === "rm"
+      ? (await loadCheckItems(gate.viewer, cycle, { awardId: award.id })).filter(
+          (i) => i.status === "submitted" && i.region === duty.region
+        )
+      : [];
+  const checkPanel =
+    awaiting.length > 0 ? (
+      <section className="rx-stack" style={{ marginBottom: 24 }}>
+        <Notice>
+          {awaiting.length} nomination{awaiting.length === 1 ? " is" : "s are"} from your region still waiting for a check.
+          A chapter reaches your sheet only after the Regional Chair and a Regional Mentor both pass it.{" "}
+          <Link href="/recognitions/check" className="rx-link">Open the Check desk</Link>
+        </Notice>
+        <CheckList items={awaiting} cycle={cycle} />
+      </section>
+    ) : null;
+
   const head = (
     <PageHead eyebrow="Stage 1 · blind scoring" title={award.title}>
       <div className="rx-row" style={{ gap: 10 }}>
@@ -62,6 +85,7 @@ export default async function ScoringSheetPage({
     return (
       <div>
         {head}
+        {checkPanel}
         <Notice>
           {cycle.nomination_deadline
             ? `Scoring opens when nominations close on ${formatWhen(cycle.nomination_deadline)}.`
@@ -82,12 +106,13 @@ export default async function ScoringSheetPage({
     return (
       <div>
         {head}
+        {checkPanel}
         <div className="rx-plate rx-stack">
           <h2 className="rx-h2">No chapters on your sheet</h2>
           <p className="rx-mute">
             {duty.layer === "rm"
-              ? `No chapter in region ${duty.region ?? ""} has submitted a nomination for this award that you can score.`
-              : "No chapter has submitted a nomination for this award that you can score."}
+              ? `No chapter in region ${duty.region ?? ""} has a nomination for this award that passed both checks and that you can score.`
+              : "No chapter has a nomination for this award that passed both checks and that you can score."}
           </p>
         </div>
       </div>
@@ -119,6 +144,7 @@ export default async function ScoringSheetPage({
   return (
     <div>
       {head}
+      {checkPanel}
 
       <div className="rx-stack-lg">
         {/* Deck strip: jump between the chapters on this sheet. */}

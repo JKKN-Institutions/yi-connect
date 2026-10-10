@@ -9,6 +9,8 @@ type Settings = {
   id: string;
   name: string;
   nominationDeadline: string;
+  fixDeadline: string;
+  checkDeadline: string;
   stage1Deadline: string;
   stage2Deadline: string;
   reevaluationDeadline: string;
@@ -21,6 +23,16 @@ type Settings = {
 
 const DEADLINES: Array<{ key: keyof Settings; label: string; help: string }> = [
   { key: "nominationDeadline", label: "Nomination deadline", help: "Chapters can't submit or edit after this." },
+  {
+    key: "fixDeadline",
+    label: "Fix deadline",
+    help: "A nomination a checker sent back can be fixed and resubmitted until this. Still sent back after it = out of the race.",
+  },
+  {
+    key: "checkDeadline",
+    label: "Check deadline",
+    help: "Regional Chairs and Regional Mentors pass or send back nominations until this. Not passed by both = not scored.",
+  },
   { key: "stage1Deadline", label: "Stage 1 deadline", help: "RM and NMT scoring locks." },
   { key: "stage2Deadline", label: "Stage 2 deadline", help: "The NMT leader's final rankings lock." },
   { key: "reevaluationDeadline", label: "Re-evaluation deadline", help: "Only used if National Leadership sends an award back." },
@@ -42,6 +54,8 @@ export function CycleSettingsForm({ cycle }: { cycle: Settings }) {
             cycleId: v.id,
             name: v.name,
             nominationDeadline: v.nominationDeadline,
+            fixDeadline: v.fixDeadline,
+            checkDeadline: v.checkDeadline,
             stage1Deadline: v.stage1Deadline,
             stage2Deadline: v.stage2Deadline,
             reevaluationDeadline: v.reevaluationDeadline,

@@ -32,7 +32,7 @@ export function CombinedMatrix({ view }: { view: MatrixView }) {
         provisional rank.
       </p>
       {!anyRows ? (
-        <p className="rx-mute">No chapter has a submitted nomination for this award.</p>
+        <p className="rx-mute">No nomination for this award has passed both checks.</p>
       ) : null}
       {view.categories
         .filter((c) => c.rows.length > 0)

@@ -201,7 +201,7 @@ export async function updateEvaluatorConflicts(input: { evaluatorId: string; con
 // Recognitions team (directory roles only)
 // ---------------------------------------------------------------------------
 
-const TEAM_ROLES = [RX_ROLES.superAdmin, RX_ROLES.nationalLeadership, RX_ROLES.chapterRep] as const;
+const TEAM_ROLES = [RX_ROLES.superAdmin, RX_ROLES.nationalLeadership, RX_ROLES.regionalChair, RX_ROLES.chapterRep] as const;
 type TeamRole = (typeof TEAM_ROLES)[number];
 
 async function teamYear(): Promise<{ year: number; cycleId: string | null }> {
@@ -209,7 +209,12 @@ async function teamYear(): Promise<{ year: number; cycleId: string | null }> {
   return cycle ? { year: cycle.yi_year, cycleId: cycle.id } : { year: new Date().getFullYear(), cycleId: null };
 }
 
-export async function grantTeamRole(input: { email: string; role: TeamRole; chapterId: string | null }): Promise<ActionResult> {
+export async function grantTeamRole(input: {
+  email: string;
+  role: TeamRole;
+  chapterId: string | null;
+  zone?: string | null;
+}): Promise<ActionResult> {
   const gate = await requireRxSuperAdmin();
   if (!gate.ok) return { success: false, error: gate.error };
   if (!TEAM_ROLES.includes(input.role)) return { success: false, error: "Choose a role." };
@@ -221,10 +226,33 @@ export async function grantTeamRole(input: { email: string; role: TeamRole; chap
     chapterName = chapter.name;
   }
 
+  // A Regional Chair checks ONE region's nominations. FAIL CLOSED: no zone, no role.
+  let zone: string | null = null;
+  if (input.role === RX_ROLES.regionalChair) {
+    zone = (input.zone ?? "").trim().toUpperCase();
+    if (!REGIONS.includes(zone as (typeof REGIONS)[number])) {
+      return { success: false, error: "A Regional Chair needs a region. Choose one." };
+    }
+  }
+
   const found = await findPersonByEmail(input.email ?? "");
   if (!found.ok) return { success: false, error: found.error };
   const { year, cycleId } = await teamYear();
-  const ensured = await ensureRole({ personId: found.person.id, role: input.role, yiYear: year, yiChapter: chapterName, yiZone: null });
+
+  // The Yi directory holds one row per person per role per year (its unique
+  // key has no zone), so a person chairs one region a year. Say so instead of
+  // silently moving them.
+  if (zone) {
+    const row = await findRoleRow({ personId: found.person.id, role: RX_ROLES.regionalChair, yiYear: year, yiChapter: null });
+    if (row && row.is_active !== false && norm(row.yi_zone) !== "" && norm(row.yi_zone) !== norm(zone)) {
+      return {
+        success: false,
+        error: `${found.person.full_name} is already Regional Chair for ${row.yi_zone}. The Yi directory allows one region per person per year. Revoke that first.`,
+      };
+    }
+  }
+
+  const ensured = await ensureRole({ personId: found.person.id, role: input.role, yiYear: year, yiChapter: chapterName, yiZone: zone });
   if (!ensured.ok) return { success: false, error: ensured.error };
 
   if (ensured.change !== "unchanged") {
@@ -234,7 +262,7 @@ export async function grantTeamRole(input: { email: string; role: TeamRole; chap
       action: "grant",
       entity: "role",
       entityId: found.person.id,
-      detail: { person_id: found.person.id, name: found.person.full_name, role: input.role, yi_chapter: chapterName, yi_year: year, change: ensured.change },
+      detail: { person_id: found.person.id, name: found.person.full_name, role: input.role, yi_chapter: chapterName, yi_zone: zone, yi_year: year, change: ensured.change },
     });
   }
   done();

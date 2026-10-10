@@ -8,7 +8,8 @@ import { desksFor } from "./desks";
 
 const DESK_COPY: Record<string, string> = {
   "/recognitions/chapter": "Apply for awards, write your case and make your predictions.",
-  "/recognitions/score": "Score the nominations assigned to you. Your marks stay private.",
+  "/recognitions/check": "Pass each nomination from your region, or send it back with a note. Both checkers must pass it.",
+  "/recognitions/score":"Score the nominations assigned to you. Your marks stay private.",
   "/recognitions/moderate": "Once every score is in, review the combined matrix and the podium.",
   "/recognitions/review": "Read the Stage 1 and Stage 2 summaries and approve or send back.",
   "/recognitions/admin": "Timelines, awards, evaluators, Health Card files, citations and reports.",

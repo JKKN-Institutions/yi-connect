@@ -2,6 +2,16 @@ import type { Vertical } from "@/lib/recognitions/constants";
 import { Ribbon } from "../../_ui/ribbon";
 import { Seal } from "../../_ui/primitives";
 import type { NominationForm } from "./shared";
+import { NOMINATION_STATUS_LABEL } from "@/lib/recognitions/check-rules";
+import type { NominationStatus } from "@/lib/recognitions/types";
+
+export const STATUS_TONE: Record<NominationStatus, "laurel" | "gilt" | "vermilion" | "mute"> = {
+  draft: "gilt",
+  submitted: "laurel",
+  returned: "vermilion",
+  checked: "laurel",
+  excluded: "mute",
+};
 
 /** Read-only view of one nomination: used by the review step and the closed view. */
 export function NominationSummary({
@@ -14,7 +24,8 @@ export function NominationSummary({
   title: string;
   vertical: Vertical;
   form: NominationForm;
-  status: "draft" | "submitted" | "new";
+  /** The EFFECTIVE status (check-rules effectiveStatus), or "new" for an unsaved form. */
+  status: NominationStatus | "new";
   note?: string;
 }) {
   const blank = <span className="rx-mute">Not written yet</span>;
@@ -25,12 +36,10 @@ export function NominationSummary({
           <Ribbon vertical={vertical} size="lg" />
           <h3 className="rx-h3">{title}</h3>
         </div>
-        {status === "submitted" ? (
-          <Seal tone="laurel">Submitted</Seal>
-        ) : status === "draft" ? (
-          <Seal tone="gilt">Draft</Seal>
-        ) : (
+        {status === "new" ? (
           <Seal tone="mute">Not saved</Seal>
+        ) : (
+          <Seal tone={STATUS_TONE[status]}>{status === "submitted" ? "Submitted · awaiting checks" : NOMINATION_STATUS_LABEL[status]}</Seal>
         )}
       </div>
       {note ? <p className="rx-small rx-mute">{note}</p> : null}

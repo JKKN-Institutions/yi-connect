@@ -12,6 +12,10 @@ export type CycleRow = {
   name: string;
   yi_year: number;
   nomination_deadline: string | null;
+  /** A sent-back nomination can be fixed and resubmitted until this. */
+  fix_deadline: string | null;
+  /** Regional Chairs and Regional Mentors check nominations until this. */
+  check_deadline: string | null;
   stage1_deadline: string | null;
   stage2_deadline: string | null;
   reevaluation_deadline: string | null;
@@ -61,7 +65,7 @@ export type NominationRow = {
   chapter_id: string;
   category: Category;
   region: string;
-  status: "draft" | "submitted";
+  status: NominationStatus;
   reasons: string[];
   flagship_event: string;
   hosted_event: boolean;
@@ -73,7 +77,27 @@ export type NominationRow = {
   rm_recommended_at: string | null;
   nmt_approved_by: string | null;
   nmt_approved_at: string | null;
+  /** The two checks (recognitions_02). Both set = status 'checked'. */
+  rc_checked_by: string | null;
+  rc_checked_at: string | null;
+  rm_checked_by: string | null;
+  rm_checked_at: string | null;
+  /** The latest send-back. Kept after a resubmission as history. */
+  returned_by: string | null;
+  returned_at: string | null;
+  return_note: string | null;
 };
+
+/**
+ * Stored nomination status (recognitions_02):
+ *   draft      the chapter is still writing it
+ *   submitted  filed, awaiting the Regional Chair + Regional Mentor checks
+ *   returned   sent back with a note; the chapter may fix it
+ *   checked    both checkers passed it: in the race, scored
+ *   excluded   out of the race
+ * See lib/recognitions/check-rules.ts for the read-time "effective" status.
+ */
+export type NominationStatus = "draft" | "submitted" | "returned" | "checked" | "excluded";
 
 export type ScoreParams = Partial<Record<"p1" | "p2" | "p3" | "p4" | "p5", number>>;
 

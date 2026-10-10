@@ -202,20 +202,36 @@ export type PredictionsView = Array<{
   label: string;
   voters: number;
   entries: Array<{ chapterName: string; votes: number }>;
+  /** Picks for a chapter that is not in this race (did not pass both checks). Not counted in entries. */
+  offRace: number;
 }>;
 
+/**
+ * Tally of the quiz picks. Only picks for a chapter whose nomination for this
+ * award passed both checks count (recognitions_02); picks for anyone else are
+ * reported as `offRace`, not hidden. `racing` = the award's checked nominations.
+ */
 export function buildPredictionsView(
   predictions: PredictionRow[],
-  chapters: Map<string, ChapterRow>
+  chapters: Map<string, ChapterRow>,
+  racing: Array<Pick<NominationRow, "chapter_id" | "category">>
 ): PredictionsView {
   return CATEGORIES.map((category) => {
     const mine = predictions.filter((p) => p.category === category);
+    const inRace = new Set(racing.filter((n) => n.category === category).map((n) => n.chapter_id));
     const counts = new Map<string, number>();
-    for (const p of mine) counts.set(p.predicted_chapter_id, (counts.get(p.predicted_chapter_id) ?? 0) + 1);
+    let offRace = 0;
+    for (const p of mine) {
+      if (!inRace.has(p.predicted_chapter_id)) {
+        offRace++;
+        continue;
+      }
+      counts.set(p.predicted_chapter_id, (counts.get(p.predicted_chapter_id) ?? 0) + 1);
+    }
     const entries = [...counts.entries()]
       .map(([id, votes]) => ({ chapterName: chapterName(chapters, id), votes }))
       .sort((a, b) => b.votes - a.votes || a.chapterName.localeCompare(b.chapterName));
-    return { category, label: CATEGORY_LABEL[category], voters: mine.length, entries };
+    return { category, label: CATEGORY_LABEL[category], voters: mine.length, entries, offRace };
   });
 }
 

@@ -17,6 +17,7 @@
 import { MAX_LAYER_TOTAL, PARAM_KEYS } from "./constants";
 import type { Category, Layer } from "./constants";
 import type { CycleRow, EvaluatorRow, NominationRow, ScoreParams, ScoreRow } from "./types";
+import { inRace, stillInCheck } from "./check-rules";
 
 const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
 
@@ -68,8 +69,9 @@ export function computeMatrix(input: {
   const { cycle, nominations, layer1 } = input;
   const submitted = input.scores.filter((s) => s.status === "submitted");
 
+  // Only nominations both checkers passed are ranked (recognitions_02).
   const base = nominations
-    .filter((n) => n.status === "submitted")
+    .filter(inRace)
     .map((n) => {
       const mine = submitted.filter((s) => s.nomination_id === n.id);
       const rmTotals = mine.filter((s) => s.layer === "rm").map((s) => paramsTotal(s.params));
@@ -135,7 +137,7 @@ export function computeMatrix(input: {
 
 /**
  * Can this evaluator duty see (and therefore score) this nomination?
- *   - only submitted nominations
+ *   - only nominations BOTH checkers passed (status 'checked', recognitions_02)
  *   - never a chapter they are linked to (conflict rule, mail 3)
  *   - an RM only sees their own region; a blank region denies
  */
@@ -144,7 +146,7 @@ export function dutySeesNomination(
   nomination: Pick<NominationRow, "status" | "region" | "chapter_id">,
   conflicts: Set<string>
 ): boolean {
-  if (nomination.status !== "submitted") return false;
+  if (!inRace(nomination)) return false;
   if (conflicts.has(nomination.chapter_id)) return false;
   if (duty.layer === "nmt") return true;
   return norm(duty.region) !== "" && norm(duty.region) === norm(nomination.region);
@@ -172,14 +174,24 @@ export type Completeness = {
  * pairs are excluded, otherwise a conflicted evaluator would hold Stage 2
  * shut for ever. A nomination that NO RM (or no NMT) can see is a blocker:
  * it would otherwise reach "100%" with a layer nobody scored.
+ *
+ * Same shape for the check step (recognitions_02): the denominator holds ONLY
+ * nominations both checkers passed. A nomination that was sent back and not
+ * fixed in time, or never checked before checks closed, is out of the race
+ * and never counts — otherwise it would hold Stage 2 shut for ever. One that
+ * is STILL being checked or fixed is a blocker, so Stage 2 can't open early
+ * while it may yet enter the race.
  */
 export function computeCompleteness(input: {
+  cycle: Pick<CycleRow, "fix_deadline" | "check_deadline">;
   nominations: NominationRow[];
   duties: EvaluatorRow[];
   conflictsByDuty: Map<string, Set<string>>;
   scores: ScoreRow[];
+  now?: Date;
 }): Completeness {
-  const nominations = input.nominations.filter((n) => n.status === "submitted");
+  const nominations = input.nominations.filter(inRace);
+  const inCheck = input.nominations.filter((n) => stillInCheck(n, input.cycle, input.now));
   const duties = input.duties.filter((d) => d.is_active);
   const submittedKey = new Set(
     input.scores.filter((s) => s.status === "submitted").map((s) => `${s.evaluator_id}:${s.nomination_id}`)
@@ -197,7 +209,12 @@ export function computeCompleteness(input: {
   });
 
   const blockers: string[] = [];
-  if (nominations.length === 0) blockers.push("No chapter has submitted a nomination for this award.");
+  if (inCheck.length > 0) {
+    blockers.push(
+      `${inCheck.length} nomination(s) are still being checked or fixed. They count once both checkers pass them, or drop out when the fix or check deadline passes.`
+    );
+  }
+  if (nominations.length === 0) blockers.push("No nomination for this award has passed both checks yet.");
   for (const layer of ["rm", "nmt"] as const) {
     const orphaned = nominations.filter(
       (n) =>

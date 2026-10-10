@@ -6,20 +6,29 @@ import { RX_ROLES } from "@/lib/recognitions/constants";
 import { ConfirmDialog, ResultLine } from "../../../_ui/client";
 import { useAction } from "../_lib/use-action";
 
-type TeamRole = typeof RX_ROLES.superAdmin | typeof RX_ROLES.nationalLeadership | typeof RX_ROLES.chapterRep;
+type TeamRole =
+  | typeof RX_ROLES.superAdmin
+  | typeof RX_ROLES.nationalLeadership
+  | typeof RX_ROLES.regionalChair
+  | typeof RX_ROLES.chapterRep;
 
 export function GrantRoleForm({
   roles,
   chapters,
+  regions,
 }: {
   roles: Array<{ value: string; label: string }>;
   chapters: Array<{ id: string; name: string }>;
+  regions: string[];
 }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<string>(RX_ROLES.nationalLeadership);
   const [chapterId, setChapterId] = useState("");
+  const [zone, setZone] = useState("");
   const { pending, result, run } = useAction();
   const needsChapter = role === RX_ROLES.chapterRep;
+  // A Regional Chair is scoped to one region; no region, no role (the server refuses too).
+  const needsZone = role === RX_ROLES.regionalChair;
 
   return (
     <form
@@ -27,7 +36,13 @@ export function GrantRoleForm({
       onSubmit={(e) => {
         e.preventDefault();
         run(
-          () => grantTeamRole({ email, role: role as TeamRole, chapterId: needsChapter ? chapterId : null }),
+          () =>
+            grantTeamRole({
+              email,
+              role: role as TeamRole,
+              chapterId: needsChapter ? chapterId : null,
+              zone: needsZone ? zone : null,
+            }),
           (r) => r.success && setEmail("")
         );
       }}
@@ -56,10 +71,21 @@ export function GrantRoleForm({
             </select>
           </div>
         ) : null}
+        {needsZone ? (
+          <div>
+            <label className="rx-label" htmlFor="tm-zone">Region</label>
+            <select id="tm-zone" className="rx-select" value={zone} onChange={(e) => setZone(e.target.value)} required>
+              <option value="">Choose a region</option>
+              {regions.map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+          </div>
+        ) : null}
       </div>
       <p className="rx-help">If no one in the Yi directory has that email, nothing is created — they need a Yi account first.</p>
       <div>
-        <button type="submit" className="rx-btn" disabled={pending || email.trim() === "" || (needsChapter && chapterId === "")}>
+        <button type="submit" className="rx-btn" disabled={pending || email.trim() === "" || (needsChapter && chapterId === "") || (needsZone && zone === "")}>
           {pending ? "Saving…" : "Give role"}
         </button>
       </div>

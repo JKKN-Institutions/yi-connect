@@ -114,8 +114,10 @@ export async function runImport(db: SupabaseClient, rows: TpImportRow[]): Promis
             needs: [],
             offers: [],
             // The DB default is the opposite (it was set for sample rows).
-            // directory_visible is left to the DB default (listed; take_pride_05).
             partner_meetings_opt_in: false,
+            // Listed by default (Director, 10 Oct). Set here, not left to the
+            // DB default, so it holds even before take_pride_05 is applied.
+            directory_visible: true,
             is_sample: false,
           }))
         )

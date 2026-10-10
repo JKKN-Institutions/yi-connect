@@ -16,8 +16,8 @@ type SupabaseClient = ReturnType<typeof tpService>;
  * first. Review mode never reaches this: a walk-in is always a REAL delegate.
  *
  * Same shape as an imported delegate: random badge number + badge secret,
- * partner meetings OFF until they switch them on, directory listing left to
- * the DB default (listed, take_pride_05). The organiser must tick that they
+ * partner meetings OFF until they switch them on, listed in the delegate
+ * directory (set explicitly on insert). The organiser must tick that they
  * checked the payment proof; nothing is saved without it.
  */
 
@@ -64,14 +64,18 @@ const COLS = "id, token, badge_code, full_name, chapter";
 /** The real delegate with this name + chapter (same rule as the unique index), or null. */
 export async function findRealDelegate(db: SupabaseClient, fullName: string, chapter: string): Promise<WalkInResult | null> {
   const key = delegateKey(fullName, chapter);
-  // Loose match in the DB, exact delegateKey match here. LIKE wildcards are stripped from the name.
-  const pattern = `%${fullName.replace(/[%_*\\]/g, "").trim().split(/\s+/).join("%")}%`;
+  // Loose match on BOTH name and chapter in the DB (so a short or common name
+  // cannot push the real row past the limit), exact delegateKey match here.
+  // LIKE wildcards are stripped from both.
+  const loose = (s: string) => `%${s.replace(/[%_*\\]/g, "").trim().split(/\s+/).join("%")}%`;
   const { data, error } = await db
     .from("tp_delegates")
     .select(COLS)
     .eq("is_sample", false)
-    .ilike("full_name", pattern)
-    .limit(200);
+    .ilike("full_name", loose(fullName))
+    .ilike("chapter", loose(chapter))
+    .order("id")
+    .limit(1000);
   if (error) throw new Error(error.message);
   const hit = (data ?? []).find((d) => delegateKey(d.full_name, d.chapter) === key);
   return hit ? { existing: true, ...(hit as Omit<WalkInResult, "existing">) } : null;
@@ -105,6 +109,9 @@ export async function createWalkIn(
         offers: [],
         // The DB default is ON (set for sample rows); real delegates choose.
         partner_meetings_opt_in: false,
+        // Listed by default (Director, 10 Oct); set here so it does not depend
+        // on the DB default (take_pride_05).
+        directory_visible: true,
         is_sample: false,
       })
       .select(COLS)

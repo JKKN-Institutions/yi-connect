@@ -4,11 +4,24 @@ import { Denied, TopBar } from "../../_ui";
 import { requireTpDesk } from "@/lib/take-pride/auth";
 import { NotInReview, ReviewBanner } from "../../review/_banner";
 import { tpService } from "@/lib/take-pride/supabase";
-import { listAllDelegates } from "./_core";
+import { listAllDelegates, type TpDeskDelegate } from "./_core";
 import { DelegateList, ImportPanel, RemoveSamples } from "./delegates-client";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Delegates" };
+
+/** Review mode: the is_sample filter is in the query, so no real row is ever read. */
+async function listSampleDelegates(): Promise<TpDeskDelegate[]> {
+  const { data, error } = await tpService()
+    .from("tp_delegates")
+    .select("id, token, badge_code, full_name, chapter, zone, business_name, industry, role_title, partner_meetings_opt_in, checked_in_at, is_sample")
+    .eq("is_sample", true)
+    .order("full_name")
+    .order("id")
+    .limit(1000);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as TpDeskDelegate[];
+}
 
 export default async function DelegatesPage() {
   const g = await requireTpDesk();
@@ -30,10 +43,9 @@ export default async function DelegatesPage() {
 
   // Review mode (outside reviewers): sample delegates only, and no writes.
   const review = g.mode === "review";
-  let delegates: Awaited<ReturnType<typeof listAllDelegates>>;
+  let delegates: TpDeskDelegate[];
   try {
-    const all = await listAllDelegates(tpService());
-    delegates = review ? all.filter((d) => d.is_sample === true) : all;
+    delegates = review ? await listSampleDelegates() : await listAllDelegates(tpService());
   } catch {
     return <Denied title="Could not load delegates" text="The delegate list did not load. Reload the page in a minute." />;
   }

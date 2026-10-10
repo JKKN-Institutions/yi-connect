@@ -9,9 +9,9 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Review the app" };
 
 const LOGINS = [
-  { name: "admin", what: "The organiser desk: payments, gate check-in, delegate list and Awards Night rehearsal. Sample data only." },
-  { name: "delegate", what: "A sample delegate's pass: badge, agenda, meetings and profile." },
-  { name: "catalyst", what: "A sample Catalyst Partner's page: matched delegates, meeting requests and lead scanning." },
+  { name: "admin", what: "The organiser desk: payments, gate check-in and the delegate list. Sample data only. Awards Night is not part of review." },
+  { name: "delegate", what: "A sample delegate's pass: badge, agenda, meetings and profile. Open only until real delegates are added." },
+  { name: "catalyst", what: "A sample Catalyst Partner's page: matched delegates, meeting requests and lead scanning. Open only until real delegates are added." },
 ];
 
 export default async function ReviewPage() {

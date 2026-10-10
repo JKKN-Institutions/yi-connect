@@ -14,6 +14,10 @@ import { tpService } from "./supabase";
  * Passwords are scrypt hashes with a random salt (never stored or logged in
  * plain text). Rows live in yi_connect.tp_review_logins and are seeded by
  * hand, not in a migration. NOT gated: callers decide what a result allows.
+ *
+ * Lock: more than 5 tries for one username within 15 minutes refuses the
+ * next ones until the oldest of them is 15 minutes old. A successful
+ * sign-in clears that username's tries.
  */
 
 export const TP_REVIEW_COOKIE = "tp_review";
@@ -21,7 +25,6 @@ export const TP_REVIEW_COOKIE_PATH = "/take-pride";
 
 const MAX_FAILS = 5;
 const WINDOW_MS = 15 * 60 * 1000;
-const LOCK_MS = 15 * 60 * 1000;
 const SESSION_MS = 7 * 24 * 60 * 60 * 1000;
 const KEYLEN = 64;
 const PARAMS = { N: 16384, r: 8, p: 1 } as const;
@@ -65,39 +68,61 @@ export function normaliseUsername(u: unknown): string {
 }
 
 /**
- * Locked when 5 failures fall within any 15 minutes and the 5th of them was
- * under 15 minutes ago. Returns when the lock lifts, or null.
+ * Records THIS attempt before anything is checked, then counts. Doing it in
+ * that order closes the race where many requests sent at once all read
+ * "no failures yet": each request's own row is in the table before it
+ * counts, so at most MAX_FAILS of any burst get through.
+ *
+ * Returns the attempt's id when this attempt may go ahead, "locked" when
+ * more than MAX_FAILS attempts for this username fall in the last 15
+ * minutes (counting this one), or "error". FAIL CLOSED: if the attempt
+ * cannot be written or counted, the caller refuses.
  */
-async function lockedUntil(username: string): Promise<Date | null | "error"> {
-  const since = new Date(Date.now() - WINDOW_MS - LOCK_MS).toISOString();
-  const { data, error } = await tpService()
+async function claimAttempt(username: string): Promise<{ id: string } | "locked" | "error"> {
+  const db = tpService();
+  const { data: row, error: insErr } = await db.from("tp_review_attempts").insert({ username }).select("id").single();
+  if (insErr || !row) return "error";
+  const since = new Date(Date.now() - WINDOW_MS).toISOString();
+  const { count, error } = await db
     .from("tp_review_attempts")
-    .select("attempted_at")
+    .select("id", { count: "exact", head: true })
     .eq("username", username)
-    .gte("attempted_at", since)
-    .order("attempted_at", { ascending: true })
-    .limit(200);
-  // Fail closed: if the counter cannot be read, the caller refuses.
-  if (error) return "error";
-  const t = (data ?? []).map((r) => new Date(r.attempted_at as string).getTime());
-  let until = 0;
-  for (let i = MAX_FAILS - 1; i < t.length; i++) {
-    if (t[i] - t[i - (MAX_FAILS - 1)] <= WINDOW_MS) until = Math.max(until, t[i] + LOCK_MS);
-  }
-  return until > Date.now() ? new Date(until) : null;
+    .gte("attempted_at", since);
+  if (error || count === null) return "error";
+  return count > MAX_FAILS ? "locked" : { id: row.id as string };
 }
 
-async function recordFailure(username: string): Promise<void> {
+async function housekeeping(): Promise<void> {
+  // Old attempts are never needed again.
+  await tpService()
+    .from("tp_review_attempts")
+    .delete()
+    .lt("attempted_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+}
+
+/**
+ * The delegate and catalyst logins open a sample pass / sample partner page.
+ * Those pages are not sandboxed: they can reach every delegate. So they are
+ * allowed only while the target is a sample row AND there are no real
+ * delegates yet. FAIL CLOSED on any read error.
+ */
+async function sampleTargetIsSafe(role: "delegate" | "catalyst", token: string): Promise<boolean> {
   const db = tpService();
-  await db.from("tp_review_attempts").insert({ username });
-  // Housekeeping: old attempts are never needed again.
-  await db.from("tp_review_attempts").delete().lt("attempted_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+  const target = await db
+    .from(role === "delegate" ? "tp_delegates" : "tp_partners")
+    .select("is_sample")
+    .eq("token", token)
+    .maybeSingle();
+  if (target.error || !target.data || target.data.is_sample !== true) return false;
+  const real = await db.from("tp_delegates").select("id", { count: "exact", head: true }).eq("is_sample", false);
+  if (real.error || real.count === null) return false;
+  return real.count === 0;
 }
 
 export type ReviewSignIn =
   | { ok: true; role: "admin"; sessionId: string; expiresAt: Date }
   | { ok: true; role: "delegate" | "catalyst"; targetToken: string }
-  | { ok: false; reason: "bad" | "locked" | "error" };
+  | { ok: false; reason: "bad" | "locked" | "closed" | "error" };
 
 /** Checks a username + password. Never says which part was wrong. */
 export async function reviewSignIn(rawUsername: unknown, rawPassword: unknown): Promise<ReviewSignIn> {
@@ -105,9 +130,10 @@ export async function reviewSignIn(rawUsername: unknown, rawPassword: unknown): 
   const password = typeof rawPassword === "string" ? rawPassword.slice(0, 200) : "";
   if (!username || !password) return { ok: false, reason: "bad" };
 
-  const lock = await lockedUntil(username);
-  if (lock === "error") return { ok: false, reason: "error" };
-  if (lock) return { ok: false, reason: "locked" };
+  const attempt = await claimAttempt(username);
+  if (attempt === "error") return { ok: false, reason: "error" };
+  if (attempt === "locked") return { ok: false, reason: "locked" };
+  await housekeeping();
 
   const db = tpService();
   const { data: login, error } = await db
@@ -119,10 +145,8 @@ export async function reviewSignIn(rawUsername: unknown, rawPassword: unknown): 
 
   const good = await verifyReviewPassword(password, (login?.password_hash as string | undefined) ?? (await getDummyHash()));
   const usable = !!login && login.active === true && new Date(login.expires_at as string).getTime() > Date.now();
-  if (!good || !usable) {
-    await recordFailure(username);
-    return { ok: false, reason: "bad" };
-  }
+  // A failed attempt keeps its row, so it counts toward the lock.
+  if (!good || !usable) return { ok: false, reason: "bad" };
   await db.from("tp_review_attempts").delete().eq("username", username);
 
   if (login.role === "admin") {
@@ -137,6 +161,7 @@ export async function reviewSignIn(rawUsername: unknown, rawPassword: unknown): 
   }
   const target = login.target_token as string | null;
   if ((login.role === "delegate" || login.role === "catalyst") && target && /^[0-9a-f]{32}$/.test(target)) {
+    if (!(await sampleTargetIsSafe(login.role, target))) return { ok: false, reason: "closed" };
     return { ok: true, role: login.role, targetToken: target };
   }
   return { ok: false, reason: "error" };

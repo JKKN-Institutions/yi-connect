@@ -21,6 +21,9 @@ export async function reviewLogin(_prev: ReviewLoginState, form: FormData): Prom
     const u = form.get("username");
     const username = typeof u === "string" ? u.slice(0, 64) : "";
     if (r.reason === "locked") return { error: "Too many tries. Wait 15 minutes, then try again.", username };
+    if (r.reason === "closed") {
+      return { error: "This review login is closed now that real delegates are in. Use the admin review login instead.", username };
+    }
     if (r.reason === "error") return { error: "Sign-in is not working right now. Try again in a minute.", username };
     return { error: GENERIC, username };
   }

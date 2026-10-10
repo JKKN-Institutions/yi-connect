@@ -33,7 +33,7 @@ async function existingRealKeys(db: SupabaseClient): Promise<Set<string>> {
   return new Set(rows.map((r) => delegateKey(r.full_name, r.chapter)));
 }
 
-async function usedBadgeCodes(db: SupabaseClient): Promise<Set<string>> {
+export async function usedBadgeCodes(db: SupabaseClient): Promise<Set<string>> {
   const rows = await pageAll<{ badge_code: string }>((a, b) => db.from("tp_delegates").select("badge_code").order("id").range(a, b));
   return new Set(rows.map((r) => r.badge_code));
 }
@@ -78,7 +78,7 @@ export async function planImport(db: SupabaseClient, rows: TpImportRow[]): Promi
 export type TpImportOutcome = { inserted: number; ids: string[]; alreadyListed: TpImportSkip[]; error: string | null };
 
 /** Unique index (migration take_pride_03) on name + chapter of real delegates. */
-const NAME_INDEX = "tp_delegates_real_name_chapter_key";
+export const NAME_INDEX = "tp_delegates_real_name_chapter_key";
 
 export async function runImport(db: SupabaseClient, rows: TpImportRow[]): Promise<TpImportOutcome> {
   const { toInsert, alreadyListed } = await planImport(db, rows);
@@ -113,7 +113,8 @@ export async function runImport(db: SupabaseClient, rows: TpImportRow[]): Promis
             email: r.email,
             needs: [],
             offers: [],
-            // Both DB defaults are the opposite (they were set for sample rows).
+            // The DB default is the opposite (it was set for sample rows).
+            // directory_visible is left to the DB default (listed; take_pride_05).
             partner_meetings_opt_in: false,
             is_sample: false,
           }))

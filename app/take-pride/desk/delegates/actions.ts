@@ -5,6 +5,7 @@ import { hasReviewSession, requireTpOrganiser } from "@/lib/take-pride/auth";
 import { tpService } from "@/lib/take-pride/supabase";
 import { mapImport, type TpImportPreviewData } from "@/lib/take-pride/import";
 import type { TpResult } from "@/lib/take-pride/types";
+import { createWalkIn, WalkInSchema, type WalkInResult } from "@/lib/take-pride/walkin";
 import { planImport, removeUncheckedSamples, runImport } from "./_core";
 
 /*
@@ -71,5 +72,26 @@ export async function removeSampleDelegates(confirmWord: string): Promise<TpResu
     return { success: true, data: { removed } };
   } catch {
     return { success: false, error: "Could not remove the sample delegates. Please try again." };
+  }
+}
+
+/**
+ * A walk-in at the help desk: one new REAL delegate. Real organisers only;
+ * review mode is refused. A delegate already listed under the same name and
+ * chapter is returned instead (existing: true), so their own pass is re-shared
+ * rather than a second badge being made. Never returns phone or email.
+ */
+export async function addWalkIn(input: unknown): Promise<TpResult<WalkInResult>> {
+  const g = await requireTpOrganiser();
+  if (!g.ok) return { success: false, error: await denial() };
+  const parsed = WalkInSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Check the form" };
+  try {
+    const out = await createWalkIn(tpService(), parsed.data);
+    if (!out.ok) return { success: false, error: out.error };
+    if (!out.data.existing) revalidatePath("/take-pride", "layout");
+    return { success: true, data: out.data };
+  } catch {
+    return { success: false, error: "Could not check the delegate list. Please try again." };
   }
 }

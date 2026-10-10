@@ -280,7 +280,7 @@ export function ProfileForm({
         <Choice
           name="directory"
           label="List me in the delegate directory"
-          hint="Other delegates can find you and see your name, role, business, chapter, Yi vertical and what you wrote above. Never your phone or email."
+          hint="Every delegate is listed by default. Other delegates can find you and see your name, role, business, chapter, Yi vertical and what you wrote above. Never your phone or email. Turn this off and save to hide yourself."
           on={directory}
           onChange={setDirectory}
         />

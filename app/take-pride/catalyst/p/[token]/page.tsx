@@ -2,9 +2,11 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Denied, SampleNote, TopBar } from "../../../_ui";
 import { TP_PARTNER_STATUS_LABEL, inr } from "@/lib/take-pride/constants";
-import { getPartnerByToken, getPartnerLeads, getPartnerMeetings, getSettings, listDelegates } from "@/lib/take-pride/data";
+import { getAgenda, getPartnerByToken, getPartnerLeads, getPartnerMeetings, getSettings, listDelegates } from "@/lib/take-pride/data";
 import { matchDelegates } from "@/lib/take-pride/match";
-import { CopyLink, LeadCapture, PaymentForm, RequestMeetingButton } from "./partner-client";
+import { choicesFor, computeSlots, dKey, loadBookings, pKey, whenWhere } from "@/lib/take-pride/slots";
+import type { TpMeeting } from "@/lib/take-pride/types";
+import { CopyLink, LeadCapture, PartnerPickTime, PaymentForm, RequestMeetingButton } from "./partner-client";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Your Catalyst page" };
@@ -28,11 +30,13 @@ export default async function PartnerPage({
   if (!partner) return <Denied title="Link not found" text="This Catalyst Partner link is not valid. Check the link you saved, or ask the Take Pride desk." />;
 
   const tab = TABS.some((t) => t.key === sp.tab) ? sp.tab! : "matches";
-  const [s, delegates, meetings, leads] = await Promise.all([
+  const [s, delegates, meetings, leads, agenda, bookings] = await Promise.all([
     getSettings(),
     listDelegates(),
     getPartnerMeetings(partner.id),
     getPartnerLeads(partner.id),
+    getAgenda(),
+    loadBookings(),
   ]);
   const confirmed = partner.status === "confirmed";
   const matches = matchDelegates(partner, delegates);
@@ -41,6 +45,21 @@ export default async function PartnerPage({
   const accepted = meetings.filter((m) => m.status === "accepted");
   const nameOf = new Map(delegates.map((d) => [d.id, d]));
   const base = `/take-pride/catalyst/p/${token}`;
+  const slots = computeSlots(agenda);
+  // Time + table for an accepted meeting (columns added by take_pride_04).
+  const pickTime = (m: TpMeeting) => {
+    if (!confirmed || m.status !== "accepted") return null;
+    const t = m as TpMeeting & { slot_key?: string | null; table_no?: number | null };
+    return (
+      <PartnerPickTime
+        token={token}
+        meetingId={m.id}
+        when={whenWhere(slots, t.slot_key ?? null, t.table_no ?? null)}
+        currentKey={t.slot_key ?? null}
+        choices={choicesFor(slots, bookings, [pKey(partner.id), dKey(m.delegate_id)], { kind: "partner", id: m.id })}
+      />
+    );
+  };
 
   return (
     <main className="tp-main">
@@ -130,6 +149,7 @@ export default async function PartnerPage({
                       <RequestMeetingButton token={token} delegateId={d.id} disabled={!confirmed || used >= s.meeting_cap} />
                     )}
                   </div>
+                  {mt && pickTime(mt)}
                 </div>
               );
             })}
@@ -180,7 +200,13 @@ export default async function PartnerPage({
               {accepted.map((m) => {
                 const d = nameOf.get(m.delegate_id);
                 return d ? (
-                  <div key={m.id}><div className="tp-row"><b>{d.full_name}</b><span className="tp-tag green">Meeting accepted</span></div><span className="tp-small">{d.business_name} · {d.chapter}</span></div>
+                  <div key={m.id} className="tp-stack" style={{ gap: 6 }} data-tp="accepted-row">
+                    <div>
+                      <div className="tp-row"><b>{d.full_name}</b><span className="tp-tag green">Meeting accepted</span></div>
+                      <span className="tp-small">{d.business_name} · {d.chapter}</span>
+                    </div>
+                    {pickTime(m)}
+                  </div>
                 ) : null;
               })}
               {leads.map((l) => (

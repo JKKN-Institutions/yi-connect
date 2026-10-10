@@ -4,6 +4,8 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ContinuousScanner } from "../../../_scanner";
 import { captureLead, requestMeeting, submitPayment } from "../../../actions";
+import { PickTimeView, type SlotChoiceProp } from "../../../pass/[token]/schedule/_client";
+import { pickPartnerMeetingTime } from "./slot-actions";
 
 export function PaymentForm({ token, current }: { token: string; current: string | null }) {
   const router = useRouter();
@@ -115,5 +117,29 @@ export function LeadCapture({ token }: { token: string }) {
       </form>
       {msg && <p className={`tp-alert ${msg.ok ? "ok" : "bad"}`} role="status">{msg.text}</p>}
     </div>
+  );
+}
+
+/** Time + table for an accepted meeting; either side can pick or change it. */
+export function PartnerPickTime({
+  token,
+  meetingId,
+  when,
+  currentKey,
+  choices,
+}: {
+  token: string;
+  meetingId: string;
+  when: string | null;
+  currentKey: string | null;
+  choices: SlotChoiceProp[];
+}) {
+  return (
+    <PickTimeView
+      when={when}
+      currentKey={currentKey}
+      choices={choices}
+      onPick={(key) => pickPartnerMeetingTime(token, meetingId, key)}
+    />
   );
 }

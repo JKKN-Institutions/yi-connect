@@ -8,6 +8,9 @@ import {
   type DelegateMeetRow,
 } from "@/lib/take-pride/delegate-match";
 import { AnswerMeet, AskToMeet } from "./_client";
+import { getAgenda } from "@/lib/take-pride/data";
+import { choicesFor, computeSlots, dKey, getMyAcceptedMeetings, loadBookings, whenWhere } from "@/lib/take-pride/slots";
+import { DelegatePickTime } from "../schedule/_client";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "People to meet" };
@@ -34,7 +37,28 @@ export default async function MeetPage({ params }: { params: Promise<{ token: st
   if (!me) {
     return <Denied title="Pass not found" text="This pass link is not valid. Ask the Take Pride desk for your link." />;
   }
-  const board = await getDelegateMeetBoard(me);
+  const [board, agenda, mine, bookings] = await Promise.all([
+    getDelegateMeetBoard(me),
+    getAgenda(),
+    getMyAcceptedMeetings(me.id),
+    loadBookings(),
+  ]);
+  const slots = computeSlots(agenda);
+  const timeOf = new Map(mine.filter((m) => m.kind === "delegate").map((m) => [m.id, m]));
+  const pickTime = (r: DelegateMeetRow) => {
+    const m = r.status === "accepted" ? timeOf.get(r.id) : undefined;
+    if (!m) return null;
+    return (
+      <DelegatePickTime
+        token={token}
+        kind="delegate"
+        meetingId={m.id}
+        when={whenWhere(slots, m.slot_key, m.table_no)}
+        currentKey={m.slot_key}
+        choices={choicesFor(slots, bookings, [dKey(me.id), m.other], { kind: "delegate", id: m.id })}
+      />
+    );
+  };
   const waitingForMe = board.incoming.filter((r) => r.status === "requested");
   const answered = board.incoming.filter((r) => r.status !== "requested");
   const noTags = me.needs.length === 0 && me.offers.length === 0;
@@ -51,6 +75,11 @@ export default async function MeetPage({ params }: { params: Promise<{ token: st
           Fellow delegates who can help you, or whom you can help. You see their business and chapter once they
           accept. Phone numbers and emails are never shown.
         </p>
+        <div className="tp-row" style={{ justifyContent: "flex-start" }}>
+          <Link href={`/take-pride/pass/${token}/schedule`} className="tp-btn ghost sm" data-tp="go-schedule">
+            My schedule
+          </Link>
+        </div>
       </header>
 
       {!me.delegate_meetings_opt_in && (
@@ -81,6 +110,7 @@ export default async function MeetPage({ params }: { params: Promise<{ token: st
                 </div>
                 {r.note && <p style={{ margin: 0 }}>&ldquo;{r.note}&rdquo;</p>}
                 {r.status === "requested" && <AnswerMeet token={token} meetingId={r.id} />}
+                {pickTime(r)}
               </article>
             ))}
           </div>
@@ -135,6 +165,7 @@ export default async function MeetPage({ params }: { params: Promise<{ token: st
                   <StatusTag status={r.status} />
                 </div>
                 {r.note && <p className="tp-small" style={{ margin: 0 }}>Your note: &ldquo;{r.note}&rdquo;</p>}
+                {pickTime(r)}
               </article>
             ))}
           </div>

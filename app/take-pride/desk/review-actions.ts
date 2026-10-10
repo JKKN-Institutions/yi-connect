@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireTpDesk } from "@/lib/take-pride/auth";
 import { tpService } from "@/lib/take-pride/supabase";
+import { declineOpenMeetings } from "@/lib/take-pride/catalyst";
 import type { TpResult } from "@/lib/take-pride/types";
 
 /*
@@ -76,7 +77,10 @@ export async function reviewCancelPartner(partnerId: string, note: string, refun
     .select("id");
   if (error) return { success: false, error: "Could not cancel. Please try again." };
   if (!data?.length) return { success: false, error: "Review mode can only cancel a sample partner that is not already cancelled." };
-  revalidatePath("/take-pride/desk");
+  // Sample partner confirmed above; only meetings with SAMPLE delegates are cleared.
+  const cleared = await declineOpenMeetings(partnerId, { sampleOnly: true });
+  revalidatePath("/take-pride", "layout");
+  if (!cleared) return { success: false, error: "The sample partner is cancelled, but their meetings could not be cleared." };
   return { success: true, data: null };
 }
 

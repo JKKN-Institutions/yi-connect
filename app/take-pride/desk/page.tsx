@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { Denied, TopBar } from "../_ui";
 import { requireTpDesk } from "@/lib/take-pride/auth";
 import { TP_PARTNER_STATUS_LABEL, TP_REFUND_LABEL, inr } from "@/lib/take-pride/constants";
-import type { CatalystPartner } from "@/lib/take-pride/catalyst";
+import { memberMatchDetails, type CatalystPartner } from "@/lib/take-pride/catalyst";
 import { getDeskOverview, getSettings } from "@/lib/take-pride/data";
 import { CancelPartner, PartnerActions, PaymentInstructionsForm } from "./desk-client";
 import { NotInReview, ReviewBanner } from "../review/_banner";
@@ -46,6 +46,11 @@ export default async function DeskPage() {
   const confirmedValue = live.filter((p) => p.status === "confirmed").reduce((a, p) => a + p.amount_due_inr, 0);
   const waitingValue = live.filter((p) => p.status === "payment_submitted").reduce((a, p) => a + p.amount_due_inr, 0);
   const refundsDue = cancelled.filter((p) => p.refund_decision === "refund_due").length;
+  // Who each member-price sign-up matched. REAL organisers only: review mode
+  // never reads yi_directory, so no real person's name reaches a reviewer.
+  const matches = review
+    ? new Map<string, { name: string; hasRole: boolean }>()
+    : await memberMatchDetails(all.filter((p) => p.tier === "member" && p.member_person_id).map((p) => p.member_person_id as string));
   const partners = [...all].sort(
     (a, b) =>
       Number(!!a.cancelled_at) - Number(!!b.cancelled_at) ||
@@ -85,7 +90,7 @@ export default async function DeskPage() {
         <div className="tp-row">
           <h2 className="tp-h2">Catalyst Partners</h2>
           {!review && (
-            <a className="tp-btn ghost sm" href="/take-pride/desk/partners.csv" download>
+            <a className="tp-btn ghost sm" href="/take-pride/desk/catalyst-partners.csv" download>
               Download partners (CSV)
             </a>
           )}
@@ -110,6 +115,29 @@ export default async function DeskPage() {
                 {p.payment_reference ? ` · reference ${p.payment_reference}` : ""}
                 {p.reject_reason ? ` · not confirmed: ${p.reject_reason}` : ""}
               </span>
+              {!review && p.tier === "member" && (() => {
+                const m = p.member_person_id ? matches.get(p.member_person_id) : undefined;
+                if (!m) {
+                  return (
+                    <span className="tp-small" data-tp="member-match">
+                      <span className="tp-tag saffron">Check</span> Member price, but the matched Yi record was not found. Check before confirming.
+                    </span>
+                  );
+                }
+                return (
+                  <span className="tp-small" data-tp="member-match">
+                    Member check: matched by {p.member_match === "phone" ? "mobile number" : p.member_match === "email" ? "email" : "email or mobile"} to <b>{m.name}</b>
+                    {m.hasRole ? (
+                      " · holds a Yi role"
+                    ) : (
+                      <>
+                        {" "}
+                        <span className="tp-tag saffron">Check</span> no Yi role on record (may be a participant or an imported contact). Check before confirming.
+                      </>
+                    )}
+                  </span>
+                );
+              })()}
               {p.cancelled_at && (
                 <span className="tp-small" data-tp="cancel-info">
                   Cancelled {new Date(p.cancelled_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}

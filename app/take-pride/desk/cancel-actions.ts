@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireTpOrganiser } from "@/lib/take-pride/auth";
 import { tpService } from "@/lib/take-pride/supabase";
+import { declineOpenMeetings } from "@/lib/take-pride/catalyst";
 import type { TpResult } from "@/lib/take-pride/types";
 
 /*
@@ -10,6 +11,9 @@ import type { TpResult } from "@/lib/take-pride/types";
  * REAL organisers only: requireTpOrganiser() never lets a review session in.
  * Review mode uses reviewCancelPartner in ./review-actions.ts (sample only).
  * A cancelled partner frees the seat and loses meeting requests and scanning.
+ * In the same step every open meeting with them is declined and its time and
+ * table freed, so delegates stop seeing it. Pressing cancel again on an
+ * already-cancelled partner re-runs that clean-up (in case it failed once).
  */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -29,7 +33,9 @@ export async function deskCancelPartner(partnerId: string, note: string, refund:
     .is("cancelled_at", null)
     .select("id");
   if (error) return { success: false, error: "Could not cancel. Please try again." };
-  if (!data?.length) return { success: false, error: "This partner is already cancelled" };
+  const cleared = await declineOpenMeetings(partnerId, { sampleOnly: false });
   revalidatePath("/take-pride", "layout");
+  if (!cleared) return { success: false, error: "The partner is cancelled, but their meetings could not be cleared. Press cancel again." };
+  if (!data?.length) return { success: false, error: "This partner is already cancelled" };
   return { success: true, data: null };
 }

@@ -18,12 +18,19 @@
 --    cap is enforced by the app. Removing a member sets active = false.
 -- 4. tp_leads.scanned_by_team_id: which team member scanned the lead (null =
 --    the partner owner).
+-- 5. tp_partners.member_match: HOW the member check matched ('email' or
+--    'phone'), so an organiser can check the match on the desk before
+--    confirming a member-price payment.
+-- 6. tp_signup_attempts: one row per Catalyst sign-up attempt (a SHA-256 hash
+--    of the caller's IP, never the raw IP) so the public form can be rate
+--    limited per network and platform-wide.
 
 alter table yi_connect.tp_partners
   add column if not exists member_person_id uuid,
   add column if not exists cancelled_at timestamptz,
   add column if not exists cancel_note text check (cancel_note is null or char_length(cancel_note) <= 500),
-  add column if not exists refund_decision text check (refund_decision is null or refund_decision in ('refund_due', 'no_refund', 'credit'));
+  add column if not exists refund_decision text check (refund_decision is null or refund_decision in ('refund_due', 'no_refund', 'credit')),
+  add column if not exists member_match text check (member_match is null or member_match in ('email', 'phone'));
 
 create table if not exists yi_connect.tp_partner_team (
   id uuid primary key default gen_random_uuid(),
@@ -46,5 +53,18 @@ create index if not exists tp_leads_scanned_by_team_idx
 alter table yi_connect.tp_partner_team enable row level security;
 revoke all on yi_connect.tp_partner_team from anon, authenticated, public;
 grant all on yi_connect.tp_partner_team to service_role;
+
+create table if not exists yi_connect.tp_signup_attempts (
+  id uuid primary key default gen_random_uuid(),
+  ip_hash text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists tp_signup_attempts_created_idx on yi_connect.tp_signup_attempts (created_at);
+create index if not exists tp_signup_attempts_ip_idx on yi_connect.tp_signup_attempts (ip_hash, created_at);
+
+alter table yi_connect.tp_signup_attempts enable row level security;
+revoke all on yi_connect.tp_signup_attempts from anon, authenticated, public;
+grant all on yi_connect.tp_signup_attempts to service_role;
 
 notify pgrst, 'reload schema';

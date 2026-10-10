@@ -18,7 +18,14 @@ import {
   myFullBadge,
   recordScan,
 } from "@/lib/take-pride/connections";
-import { findYiMember, getCatalystPartner, resolveScanner, type CatalystPartner } from "@/lib/take-pride/catalyst";
+import {
+  SIGNUP_LIMIT_MESSAGE,
+  allowSignupAttempt,
+  findYiMember,
+  getCatalystPartner,
+  resolveScanner,
+  type CatalystPartner,
+} from "@/lib/take-pride/catalyst";
 import { CANCELLED_MESSAGE } from "@/lib/take-pride/constants";
 
 /*
@@ -53,6 +60,9 @@ export async function applyCatalyst(input: unknown): Promise<TpResult<{ token: s
   const parsed = ApplySchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Check the form" };
   const v = parsed.data;
+  // Rate limit FIRST: both the duplicate-email answer and the price tier say
+  // something about other people, so a script must not be able to ask fast.
+  if (!(await allowSignupAttempt())) return { success: false, error: SIGNUP_LIMIT_MESSAGE };
   const s = await getSettings();
   const db = tpService();
 
@@ -73,9 +83,9 @@ export async function applyCatalyst(input: unknown): Promise<TpResult<{ token: s
     };
   }
 
-  const memberPersonId = await findYiMember(v.email, v.phone);
-  const tier = memberPersonId ? "member" : "standard";
-  const fee = memberPersonId ? s.member_fee_inr : s.standard_fee_inr;
+  const match = await findYiMember(v.email, v.phone);
+  const tier = match ? "member" : "standard";
+  const fee = match ? s.member_fee_inr : s.standard_fee_inr;
 
   const { data, error } = await db
     .from("tp_partners")
@@ -83,7 +93,8 @@ export async function applyCatalyst(input: unknown): Promise<TpResult<{ token: s
       ...v,
       pitch: v.pitch || null,
       tier,
-      member_person_id: memberPersonId,
+      member_person_id: match?.personId ?? null,
+      member_match: match?.via ?? null,
       amount_due_inr: withGst(fee, s.gst_pct),
       status: "applied",
     })
@@ -191,6 +202,19 @@ export async function respondMeeting(delegateToken: string, meetingId: string, a
   const db = tpService();
   const { data: d } = await db.from("tp_delegates").select("id").eq("token", delegateToken).maybeSingle();
   if (!d) return { success: false, error: "This pass link is not valid" };
+  if (accept) {
+    // A partner cancelled (or not confirmed) since the request was sent cannot be accepted.
+    const { data: m } = await db
+      .from("tp_meetings")
+      .select("id, partner:tp_partners(status, cancelled_at)")
+      .eq("id", meetingId)
+      .eq("delegate_id", d.id)
+      .maybeSingle();
+    const partner = (m as unknown as { partner: { status: string; cancelled_at: string | null } | null } | null)?.partner;
+    if (!partner || partner.cancelled_at || partner.status !== "confirmed") {
+      return { success: false, error: "This partner is no longer taking meetings" };
+    }
+  }
   const { data, error } = await db
     .from("tp_meetings")
     // Answer once: only a pending request can be accepted or declined, and a

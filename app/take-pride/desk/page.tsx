@@ -73,6 +73,8 @@ export default async function DeskPage() {
         <Link href="/take-pride/desk/awards">Awards Night</Link>
         <Link href="/take-pride/desk/tables">Topic tables</Link>
         <Link href="/take-pride/awards">Hall screen</Link>
+        <Link href="/take-pride/desk/sales">Sales follow-ups</Link>
+        <Link href="/take-pride/desk/coach">Coach (after the event)</Link>
       </nav>
 
       <section className="tp-grid2">

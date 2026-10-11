@@ -142,8 +142,11 @@ export async function enqueuePartnerJobs(
     .select("id");
   if (iErr || !ins) return { ok: false, error: ERROR_MESSAGE, reason: "error" };
   const mine = new Set((ins as { id: string }[]).map((r) => r.id));
+  // These rows were inserted by THIS request a moment ago, so they are
+  // removed whatever their status: a drain that already claimed one gets a
+  // 404 on its POST and moves on, and the limit / one-per-person rules hold.
   const takeBack = async (ids: string[]) => {
-    if (ids.length) await db.from(TABLE).delete().in("id", ids).eq("status", "pending");
+    if (ids.length) await db.from(TABLE).delete().in("id", ids);
   };
 
   // 4a. Re-check the daily limit by arrival.

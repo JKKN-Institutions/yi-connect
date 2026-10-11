@@ -64,7 +64,7 @@ export async function buildPartnerJobGrounding(job: PartnerAiJob): Promise<Groun
   if (job.kind === "sales_chaser") {
     const { data, error } = await tpService()
       .from("tp_delegates")
-      .select("needs, zone, industry, chapter, role_title, partner_meetings_opt_in, directory_visible, is_sample")
+      .select("needs, zone, industry, role_title, partner_meetings_opt_in, directory_visible, is_sample")
       .eq("is_sample", p.is_sample)
       .limit(5000);
     if (error) return { ok: false, reason: "Delegates could not be read" };

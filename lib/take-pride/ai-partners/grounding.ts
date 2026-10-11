@@ -1,4 +1,4 @@
-import { TP_EVENT } from "../constants";
+import { TP_EVENT, TP_INDUSTRIES, TP_ZONES } from "../constants";
 import {
   BRIEF_AVOID_MAX,
   BRIEF_OPENING_MAX,
@@ -23,10 +23,14 @@ import {
  *   the same sample / real world, and only while the partner is confirmed
  *   and not cancelled
  * - a lead the partner scanned who is NOT listed and has no accepted
- *   meeting gives only the badge-card fields the partner already sees
+ *   meeting appears only as an id: no name, role, business, chapter or
+ *   industry. The routine writes the message without a name and the
+ *   partner adds it from their own lead list
  * - a sales chaser (unpaid applicant) carries NO delegate name, business
- *   name or id: only counts and up to 3 anonymised examples built from
- *   controlled lists (tags, industry, chapter, a fixed role word)
+ *   name, chapter or id: only counts and up to 3 anonymised examples. Every
+ *   delegate value in it comes from a fixed list (needs tags the applicant
+ *   offers, TP_INDUSTRIES or "Other", TP_ZONES or "Other", one role word).
+ *   Chapter is free text, so it never reaches a chaser
  */
 
 export type PartnerRow = {
@@ -130,17 +134,13 @@ function personFull(d: DelegateRow) {
   };
 }
 
-/** Badge-card fields only: what the partner already saw on the scanned badge. */
-function personCard(d: DelegateRow) {
-  return {
-    id: d.id,
-    full_name: d.full_name,
-    role_title: d.role_title,
-    business_name: d.business_name,
-    chapter: d.chapter,
-    industry: d.industry,
-  };
+/** A lead who is not listed and has no accepted meeting: the id only, never a name or business. */
+function personIdOnly(d: DelegateRow) {
+  return { id: d.id };
 }
+
+const NAMELESS_NOTE =
+  "This person is not listed in the directory, so only their id is given. Write the message without any name (greet with a plain 'Hello'); the partner adds the name from their own lead list. Do not guess a name, business or industry.";
 
 const EVENT = { name: TP_EVENT.name, theme: TP_EVENT.theme, dates: TP_EVENT.dates, city: TP_EVENT.city };
 
@@ -177,7 +177,8 @@ export function buildFollowupGrounding(p: PartnerRow, d: DelegateRow, rel: Relat
     grounding: {
       event: EVENT,
       partner: partnerView(p),
-      person: full ? personFull(d) : personCard(d),
+      person: full ? personFull(d) : personIdOnly(d),
+      person_note: full ? null : NAMELESS_NOTE,
       shared_needs: full ? arr(d.needs).filter((n) => offers.has(n)) : [],
       how_you_met: [rel.lead ? "you scanned them as a lead at the event" : null, rel.acceptedMeeting ? "they accepted a meeting with you" : null].filter(
         Boolean
@@ -218,6 +219,22 @@ export function roleWord(title: string | null): string {
 
 const article = (w: string) => (/^[aeiou]/i.test(w) ? "an" : "a");
 
+/**
+ * A delegate's industry as a fixed-list value. The importer keeps a CSV
+ * value it cannot recognise as the delegate's own words (it may hold a
+ * person's or a firm's name), so anything off the list becomes "Other".
+ */
+export function controlledIndustry(raw: string | null | undefined): string {
+  const t = (raw ?? "").trim().toLowerCase();
+  return TP_INDUSTRIES.find((i) => i.toLowerCase() === t) ?? "Other";
+}
+
+/** A delegate's zone as a fixed-list value, else "Other". */
+export function controlledZone(raw: string | null | undefined): string {
+  const t = (raw ?? "").trim().toLowerCase();
+  return TP_ZONES.find((z) => z.toLowerCase() === t) ?? "Other";
+}
+
 export type Audience = {
   world: "sample" | "real";
   total_delegates: number;
@@ -231,7 +248,7 @@ export type Audience = {
 
 type AudienceDelegate = Pick<
   DelegateRow,
-  "needs" | "zone" | "industry" | "chapter" | "role_title" | "partner_meetings_opt_in" | "directory_visible" | "is_sample"
+  "needs" | "zone" | "industry" | "role_title" | "partner_meetings_opt_in" | "directory_visible" | "is_sample"
 >;
 
 /**
@@ -258,19 +275,20 @@ export function audienceFor(
       world: p.is_sample ? "sample" : "real",
       total_delegates: world.length,
       matching_delegates: matching.length,
-      in_target_industries: matching.filter((d) => wants.has(d.industry)).length,
+      in_target_industries: matching.filter((d) => wants.has(controlledIndustry(d.industry))).length,
       by_offer: tally(matching.flatMap((d) => arr(d.needs).filter((n) => offers.has(n))), "tag"),
-      by_zone: tally(matching.map((d) => d.zone), "zone"),
-      by_industry: tally(matching.map((d) => d.industry), "industry"),
+      by_zone: tally(matching.map((d) => controlledZone(d.zone)), "zone"),
+      by_industry: tally(matching.map((d) => controlledIndustry(d.industry)), "industry"),
     },
     matching,
   };
 }
 
 /**
- * Up to 3 anonymised examples ("a founder in hospitality from Yi Coimbatore
+ * Up to 3 anonymised examples ("a founder in Hospitality from the South zone
  * who needs packaging"). Only delegates who are listed in the directory and
- * take partner meetings; one per chapter; built only from controlled values.
+ * take partner meetings; one per zone; built only from fixed-list values
+ * (an industry off the list is left out; chapter is never used).
  */
 export function anonymisedExamples(p: Pick<PartnerRow, "offers">, matching: AudienceDelegate[]): string[] {
   const offers = new Set(arr(p.offers));
@@ -281,14 +299,17 @@ export function anonymisedExamples(p: Pick<PartnerRow, "offers">, matching: Audi
     .sort((a, b) => arr(b.needs).filter((n) => offers.has(n)).length - arr(a.needs).filter((n) => offers.has(n)).length);
   for (const d of pool) {
     if (out.length >= 3) break;
-    if (seen.has(d.chapter)) continue;
-    seen.add(d.chapter);
+    const zone = controlledZone(d.zone);
+    if (zone === "Other" || seen.has(zone)) continue;
+    seen.add(zone);
     const role = roleWord(d.role_title);
+    const industry = controlledIndustry(d.industry);
     const needs = arr(d.needs)
       .filter((n) => offers.has(n))
       .slice(0, 2)
       .map((n) => n.toLowerCase());
-    out.push(`${article(role)} ${role} in ${d.industry} from ${d.chapter} who needs ${needs.join(" and ")}`);
+    const where = industry === "Other" ? "" : ` in ${industry}`;
+    out.push(`${article(role)} ${role}${where} from the ${zone} zone who needs ${needs.join(" and ")}`);
   }
   return out;
 }

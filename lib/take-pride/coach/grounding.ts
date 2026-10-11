@@ -75,7 +75,8 @@ export async function buildCoachGrounding(c: CoachCheckin): Promise<BuiltCoachGr
     metIds(me.id),
   ]);
   if (prev.error) throw new Error(prev.error.message);
-  const live = await livePeople(me, [...met.keys()]);
+  // Capped so the id list stays well inside one query string.
+  const live = await livePeople(me, [...met.keys()].slice(0, 200));
   const people = [...live.values()]
     .sort((a, b) => a.full_name.localeCompare(b.full_name))
     .slice(0, PEOPLE_CAP)

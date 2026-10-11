@@ -26,13 +26,17 @@ async function load(sample: boolean): Promise<{ delegates: DelegateRow[]; checki
   const delegates = (data ?? []) as DelegateRow[];
   if (!delegates.length) return { delegates, checkins: [] };
   // Filter by this world's delegate ids (no embedded filter), so a review session never reads a real row.
-  const { data: c, error: cErr } = await db
-    .from("tp_coach_checkins")
-    .select("delegate_id, step, mood, status")
-    .in("delegate_id", delegates.map((d) => d.id))
-    .neq("status", "open")
-    .limit(20000);
-  return { delegates, checkins: cErr ? null : ((c ?? []) as CheckinRow[]) };
+  // Chunked: 1,200+ ids in one query string would exceed the URL limit.
+  const ids = delegates.map((d) => d.id);
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += 200) chunks.push(ids.slice(i, i + 200));
+  const parts = await Promise.all(
+    chunks.map((part) =>
+      db.from("tp_coach_checkins").select("delegate_id, step, mood, status").in("delegate_id", part).neq("status", "open").limit(1000)
+    )
+  );
+  if (parts.some((p) => p.error)) return { delegates, checkins: null };
+  return { delegates, checkins: parts.flatMap((p) => (p.data ?? []) as CheckinRow[]) };
 }
 
 export default async function CoachDeskPage({ searchParams }: { searchParams: Promise<{ world?: string }> }) {

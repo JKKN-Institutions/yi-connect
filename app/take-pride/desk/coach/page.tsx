@@ -21,9 +21,20 @@ type CheckinRow = { delegate_id: string; step: number; mood: string | null; stat
 
 async function load(sample: boolean): Promise<{ delegates: DelegateRow[]; checkins: CheckinRow[] | null }> {
   const db = tpService();
-  const { data, error } = await db.from("tp_delegates").select("id, pledge").eq("is_sample", sample).limit(5000);
-  if (error) throw new Error(error.message);
-  const delegates = (data ?? []) as DelegateRow[];
+  // PostgREST returns at most 1000 rows per request, so page through (same as desk/delegates/_core.ts pageAll).
+  const PAGE = 1000;
+  const delegates: DelegateRow[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await db
+      .from("tp_delegates")
+      .select("id, pledge")
+      .eq("is_sample", sample)
+      .order("id")
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    delegates.push(...((data ?? []) as DelegateRow[]));
+    if (!data || data.length < PAGE) break;
+  }
   if (!delegates.length) return { delegates, checkins: [] };
   // Filter by this world's delegate ids (no embedded filter), so a review session never reads a real row.
   // Chunked: 1,200+ ids in one query string would exceed the URL limit.

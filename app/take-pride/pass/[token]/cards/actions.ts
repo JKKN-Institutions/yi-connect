@@ -17,6 +17,7 @@ import type { TpResult } from "@/lib/take-pride/types";
  */
 
 const BAD_LINK = "This pass link is not valid";
+const SAMPLE_OFF = "Card scanning is turned off on the sample pass.";
 
 function refresh(token: string) {
   revalidatePath(`/take-pride/pass/${token}/cards`);
@@ -26,6 +27,9 @@ function refresh(token: string) {
 export async function uploadCardPhoto(token: string, photo: unknown): Promise<TpResult<{ scanId: string }>> {
   const me = await getConnectMe(token);
   if (!me) return { success: false, error: BAD_LINK };
+  // The sample pass sits behind a SHARED review login: a real card scanned there would be
+  // visible to every reviewer. Scanning is off on sample passes (fail closed).
+  if (me.is_sample) return { success: false, error: SAMPLE_OFF };
   const p = checkCardPhoto(photo);
   if (!p.ok) return { success: false, error: p.error };
   const r = await enqueueScan(me.id, p.b64);

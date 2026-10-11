@@ -118,7 +118,11 @@ and return exactly what is printed on it. You NEVER guess and you NEVER invent.
   (two new tables, RLS on, zero policies, service role only). Until it is applied, the cards page
   shows "Card scanning is not available right now" and the drain returns `count: 0`.
 - **Privacy:** contacts are private to the delegate who scanned the card. They never appear in
-  anyone else's page, in the delegate directory, or in the delegate AI grounding.
+  anyone else's page, in the delegate directory, or in the delegate AI grounding. Scanning is
+  turned off on sample passes (page and server action both refuse), because the shared review
+  login opens one sample pass for every reviewer.
+- **Failed scans** stay listed as "Could not be read" for 24 hours after they failed
+  (`completed_at`), including scans that expired unread.
 - **Check the drain by hand:**
   `curl -s -H "X-Cron-Secret: $YIP_AI_ROUTINE_SECRET" https://yi-connect-app.vercel.app/take-pride/api/ai-cards | jq '{count, more_waiting, expired_unread}'`
   (the jq filter keeps the photos out of your terminal). Note a GET **claims** what it returns;

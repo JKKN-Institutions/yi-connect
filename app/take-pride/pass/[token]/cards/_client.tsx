@@ -21,8 +21,11 @@ function kb(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-/** `left` is null when today's count could not be read: scanning is then closed (fail closed). */
-export function ScanCard({ token, left }: { token: string; left: number | null }) {
+/**
+ * `left` is null when today's count could not be read: scanning is then closed (fail closed).
+ * `off` is a reason scanning is turned off for this pass (the shared sample pass); the server refuses too.
+ */
+export function ScanCard({ token, left, off = null }: { token: string; left: number | null; off?: string | null }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<"idle" | "shrinking" | "sending">("idle");
@@ -62,7 +65,7 @@ export function ScanCard({ token, left }: { token: string; left: number | null }
   }
 
   const busy = step !== "idle";
-  const closed = left === null || left <= 0;
+  const closed = off !== null || left === null || left <= 0;
   return (
     <div className="tp-stack" style={{ gap: 10 }} data-tp="scan-card">
       <input
@@ -86,7 +89,9 @@ export function ScanCard({ token, left }: { token: string; left: number | null }
         {step === "shrinking" ? "Preparing the photo…" : step === "sending" ? "Sending…" : "Scan a business card"}
       </button>
       <p className="tp-small" style={{ margin: 0 }} data-tp="card-left">
-        {left === null
+        {off !== null
+          ? off
+          : left === null
           ? "Card scanning is not available right now. Please try again later."
           : left > 0
           ? `Lay the card flat in good light and fill the frame. ${left} ${left === 1 ? "scan" : "scans"} left today.`

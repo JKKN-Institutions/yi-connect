@@ -98,14 +98,18 @@ export async function scansUsedToday(delegateId: string): Promise<number | null>
   return error || count === null ? null : count;
 }
 
-/** Scans still waiting, plus failed ones from the last day. Never the photo. A read error is an empty list. */
+/**
+ * Scans still waiting, plus scans that FAILED in the last day (by completed_at, so a scan
+ * expired after 24h unread still shows as "Could not be read"). Never the photo.
+ * A read error is an empty list.
+ */
 export async function listOpenScans(delegateId: string): Promise<CardScan[]> {
   const dayAgo = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   const { data, error } = await tpService()
     .from("tp_card_scans")
     .select(SCAN_COLS)
     .eq("delegate_id", delegateId)
-    .or(`status.in.(pending,generating),and(status.eq.failed,created_at.gte."${dayAgo}")`)
+    .or(`status.in.(pending,generating),and(status.eq.failed,completed_at.gte."${dayAgo}")`)
     .order("created_at", { ascending: false })
     .limit(40);
   if (error) return [];

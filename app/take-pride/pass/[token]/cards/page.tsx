@@ -62,7 +62,15 @@ export default async function CardsPage({ params }: { params: Promise<{ token: s
       </header>
 
       <section className="tp-card hi" aria-label="Scan a business card">
-        <ScanCard token={token} left={left} />
+        <ScanCard
+          token={token}
+          left={left}
+          off={
+            me.is_sample
+              ? "Scanning is turned off on this sample pass. The demo login is shared, so anyone using it would see the cards. Each real delegate scans on their own pass, where only they see them."
+              : null
+          }
+        />
       </section>
 
       {newestWaiting && (

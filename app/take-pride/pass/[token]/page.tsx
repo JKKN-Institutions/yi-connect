@@ -95,6 +95,7 @@ export default async function PassPage({ params }: { params: Promise<{ token: st
             { href: "people", label: "Delegate directory", hint: "Search everyone who chose to be listed", tp: "go-people" },
             { href: "schedule", label: "My schedule", hint: "Your meetings and sessions", tp: "go-schedule" },
             { href: "connect", label: "Scan to connect", hint: "Scan a badge to swap details", tp: "go-connect" },
+            { href: "cards", label: "Scan a business card", hint: "Save a card you were handed", tp: "go-cards" },
             { href: "tables", label: "Topic tables", hint: "Join a table on a topic you care about", tp: "go-tables" },
             { href: "profile", label: "Edit my profile", hint: "Needs, offers, pledge and directory listing", tp: "go-profile" },
           ].map((l) => (
@@ -128,6 +129,7 @@ export default async function PassPage({ params }: { params: Promise<{ token: st
             { href: "plan", label: "My summit plan", hint: "Tell us your goal, get sessions, people and tables", tp: "go-plan" },
             { href: "radar", label: "Opportunity radar", hint: "Who needs what you offer, and buy-together ideas", tp: "go-radar" },
             { href: "ask", label: "Ask the desk", hint: "Questions about the agenda and your schedule", tp: "go-ask" },
+            { href: "coach", label: "My 1% coach", hint: "Check in on your pledge after the summit", tp: "go-coach" },
           ].map((l) => (
             <Link
               key={l.href}

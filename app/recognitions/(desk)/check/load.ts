@@ -15,10 +15,11 @@ import {
   exclusionReason,
   fixDeadlineFor,
   isNlAdded,
-  SEAT_LABEL,
+  ACTOR_LABEL,
 } from "@/lib/recognitions/check-rules";
 import type { Category, Vertical } from "@/lib/recognitions/constants";
 import type { CycleRow, NominationStatus } from "@/lib/recognitions/types";
+import { rxService } from "@/lib/recognitions/supabase";
 import { formatWhen } from "../../_ui/primitives";
 
 /**
@@ -26,9 +27,11 @@ import { formatWhen } from "../../_ui/primitives";
  * regions they check, with who has passed it and what they may do now.
  * The buttons' verdicts come from decideSeat — the same function the server
  * actions use — so the page never offers a button the server would refuse.
+ * The Recognitions super admin sees every region's nominations.
  */
 
-export type CheckPass = { by: string; at: string | null } | null;
+/** `override`: the super admin filled this seat (their pass stood in for the checker). */
+export type CheckPass = { by: string; at: string | null; override: boolean } | null;
 
 export type CheckItem = {
   nominationId: string;
@@ -44,8 +47,8 @@ export type CheckItem = {
   rmPass: CheckPass;
   returned: { by: string; at: string | null; note: string } | null;
   excludedWhy: string | null;
-  /** Pass verdict: the label of the seat the viewer would fill, or why they can't. */
-  pass: { ok: true; label: string } | { ok: false; error: string };
+  /** Pass verdict: the label of the seat the viewer would fill, or why they can't. `override`: a super-admin pass. */
+  pass: { ok: true; label: string; override: boolean } | { ok: false; error: string };
   canReturn: boolean;
   returnBlocked: string | null;
   /**
@@ -91,7 +94,7 @@ export async function loadCheckItems(
     for (const n of await listNominationsForAward(award.id)) {
       if (n.status === "draft") continue;
       const seats = checkerSeats(viewer, n);
-      if (!seats.asRegionalChair && !seats.rmDuty) continue; // not this checker's region
+      if (!seats.asRegionalChair && !seats.rmDuty && !viewer.isSuperAdmin) continue; // not this checker's region
       const conflicted =
         personConflicts.has(n.chapter_id) ||
         (seats.rmDuty !== null && (dutyConflicts.get(seats.rmDuty.id)?.has(n.chapter_id) ?? true));
@@ -99,6 +102,7 @@ export async function loadCheckItems(
         personId: viewer.personId,
         asRegionalChair: seats.asRegionalChair,
         hasRmDuty: seats.rmDuty !== null,
+        asSuperAdmin: viewer.isSuperAdmin,
         conflicted,
         nomination: n,
         cycle,
@@ -118,7 +122,9 @@ export async function loadCheckItems(
         status,
         submittedAt: n.submitted_at,
         excludedWhy: exclusionReason(n, cycle),
-        pass: pass.ok ? { ok: true, label: SEAT_LABEL[pass.seat] } : { ok: false, error: pass.error },
+        pass: pass.ok
+          ? { ok: true, label: ACTOR_LABEL[pass.seat], override: pass.seat === "sa" }
+          : { ok: false, error: pass.error },
         canReturn: ret.ok,
         returnBlocked: ret.ok ? null : ret.error,
         dossier: {
@@ -144,16 +150,44 @@ export async function loadCheckItems(
     }
   }
 
-  const people = await getPeople(rows.flatMap((r) => [r.rcBy, r.rmBy, r.retBy, r.addBy]).filter((x): x is string => !!x));
+  const [people, overrides] = await Promise.all([
+    getPeople(rows.flatMap((r) => [r.rcBy, r.rmBy, r.retBy, r.addBy]).filter((x): x is string => !!x)),
+    superAdminPasses(rows.filter((r) => r.rcBy || r.rmBy).map((r) => r.nominationId)),
+  ]);
   const who = (id: string) => (id === viewer.personId ? "you" : people.get(id)?.full_name ?? "a checker");
+  // An override always ends at 'checked', which can never be resubmitted, so a
+  // logged override still describes the seats it filled.
+  const overridden = (nominationId: string, seat: "rc" | "rm") =>
+    (overrides.get(nominationId) ?? []).some((o) => o.filled.includes(seat));
 
   return rows
     .map(({ rcBy, rcAt, rmBy, rmAt, retBy, retAt, retNote, addBy, addAt, addReason, ...r }) => ({
       ...r,
       nlAdded: addReason !== null ? { by: addBy ? who(addBy) : "National Leadership", at: addAt, reason: addReason } : null,
-      rcPass: rcBy ? { by: who(rcBy), at: rcAt } : null,
-      rmPass: rmBy ? { by: who(rmBy), at: rmAt } : null,
+      rcPass: rcBy ? { by: who(rcBy), at: rcAt, override: overridden(r.nominationId, "rc") } : null,
+      rmPass: rmBy ? { by: who(rmBy), at: rmAt, override: overridden(r.nominationId, "rm") } : null,
       returned: retNote !== null ? { by: retBy ? who(retBy) : "a checker", at: retAt, note: retNote } : null,
     }))
     .sort((a, b) => a.awardTitle.localeCompare(b.awardTitle) || a.chapterName.localeCompare(b.chapterName));
+}
+
+/** The super admin's passes (audited as "sa", see actions/check.ts), by nomination. */
+async function superAdminPasses(nominationIds: string[]): Promise<Map<string, Array<{ filled: string[] }>>> {
+  const out = new Map<string, Array<{ filled: string[] }>>();
+  if (nominationIds.length === 0) return out;
+  const { data, error } = await rxService()
+    .from("recognition_audit_log")
+    .select("entity_id, detail")
+    .eq("action", "nomination_check_passed")
+    .eq("detail->>as", "sa")
+    .in("entity_id", nominationIds);
+  if (error) {
+    console.error(JSON.stringify({ tag: "recognitions_check_override_read_failed", error: error.message }));
+    return out;
+  }
+  for (const row of (data ?? []) as Array<{ entity_id: string; detail: { filled?: unknown } }>) {
+    const filled = Array.isArray(row.detail?.filled) ? (row.detail.filled as unknown[]).map(String) : [];
+    out.set(row.entity_id, [...(out.get(row.entity_id) ?? []), { filled }]);
+  }
+  return out;
 }

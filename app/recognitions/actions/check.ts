@@ -10,7 +10,7 @@ import {
   getCurrentCycle,
 } from "@/lib/recognitions/data";
 import { rxService } from "@/lib/recognitions/supabase";
-import { decideSeat, fixDeadlineFor, isNlAdded, SEAT_LABEL, type CheckSeat } from "@/lib/recognitions/check-rules";
+import { ACTOR_LABEL, decideSeat, fixDeadlineFor, isNlAdded, SEAT_LABEL, type CheckSeat } from "@/lib/recognitions/check-rules";
 import { isPast } from "@/lib/recognitions/phase";
 import { countWords } from "@/lib/recognitions/words";
 import { WORDS } from "@/lib/recognitions/constants";
@@ -23,6 +23,10 @@ import { formatWhen } from "../_ui/primitives";
  * completeness." BOTH the Regional Chair of the chapter's region AND a
  * Regional Mentor on the award for that region must pass a nomination
  * before it is scored; either may send it back with a note.
+ *
+ * The Recognitions super admin may pass or send back ANY nomination
+ * (Director, 2026-10-12): a super-admin pass fills every empty seat in one
+ * write, so it enters the race at once. Audited as "sa".
  *
  * The SERVER decides which seat the caller fills (decideSeat). The browser
  * only sends the nomination id (and the note). Every denial is a
@@ -38,6 +42,7 @@ type Ctx = {
   cycle: CycleRow;
   asRegionalChair: boolean;
   hasRmDuty: boolean;
+  asSuperAdmin: boolean;
   conflicted: boolean;
 };
 
@@ -82,6 +87,7 @@ async function loadContext(nominationId: string): Promise<{ ok: true; ctx: Ctx }
       cycle,
       asRegionalChair: seats.asRegionalChair,
       hasRmDuty: seats.rmDuty !== null,
+      asSuperAdmin: viewer.isSuperAdmin,
       conflicted,
     },
   };
@@ -93,6 +99,7 @@ function verdict(ctx: Ctx, action: "pass" | "return") {
     personId: ctx.personId,
     asRegionalChair: ctx.asRegionalChair,
     hasRmDuty: ctx.hasRmDuty,
+    asSuperAdmin: ctx.asSuperAdmin,
     conflicted: ctx.conflicted,
     nomination: ctx.nomination,
     cycle: ctx.cycle,
@@ -117,6 +124,7 @@ export async function passNomination(nominationId: string): Promise<ActionResult
   const ctx = loaded.ctx;
   const v = verdict(ctx, "pass");
   if (!v.ok) return { success: false, error: v.error };
+  if (v.seat === "sa") return superAdminPass(ctx);
 
   const mine = SEAT_COLUMNS[v.seat];
   const other = SEAT_COLUMNS[v.seat === "rc" ? "rm" : "rc"];
@@ -169,6 +177,54 @@ export async function passNomination(nominationId: string): Promise<ActionResult
     message: bothPassed
       ? "Passed. Both checkers have now passed it, so it goes forward to scoring."
       : `Passed as ${SEAT_LABEL[v.seat]}. It now needs the ${v.seat === "rc" ? "Regional Mentor" : "Regional Chair"} to pass it too.`,
+  };
+}
+
+/**
+ * The super admin's override: fill every EMPTY seat with the super admin and
+ * mark it passed, in ONE write (the table requires both seats filled once a
+ * nomination is 'checked'). A seat a real checker already passed is kept. The
+ * write only lands if the seats are still as read, so a checker acting at the
+ * same moment is never overwritten.
+ */
+async function superAdminPass(ctx: Ctx): Promise<ActionResult> {
+  const n = ctx.nomination;
+  const now = new Date().toISOString();
+  const filled: CheckSeat[] = [];
+  const patch: Record<string, string> = { status: "checked", updated_at: now };
+  for (const seat of ["rc", "rm"] as const) {
+    if (n[SEAT_COLUMNS[seat].by]) continue;
+    patch[SEAT_COLUMNS[seat].by] = ctx.personId;
+    patch[SEAT_COLUMNS[seat].at] = now;
+    filled.push(seat);
+  }
+
+  let q = rxService().from("recognition_nominations").update(patch).eq("id", n.id).eq("status", "submitted");
+  for (const seat of ["rc", "rm"] as const) {
+    const col = SEAT_COLUMNS[seat].by;
+    q = n[col] ? q.eq(col, n[col] as string) : q.is(col, null);
+  }
+  const { data, error } = await q.select("id");
+  if (error) return writeFailed("pass the nomination", error.message);
+  if ((data ?? []).length === 0) {
+    return { success: false, error: "Someone changed this nomination a moment ago. Reload the page to see where it stands." };
+  }
+
+  await audit({
+    cycleId: ctx.cycle.id,
+    awardId: ctx.award.id,
+    actorPersonId: ctx.personId,
+    action: "nomination_check_passed",
+    entity: "recognition_nominations",
+    entityId: n.id,
+    detail: { chapter_id: n.chapter_id, region: n.region, as: "sa", filled, both_passed: true },
+  });
+  revalidatePath("/recognitions", "layout");
+  return {
+    success: true,
+    message: `Passed by the ${ACTOR_LABEL.sa}${
+      filled.length === 2 ? " in place of both checkers" : filled.length === 1 ? ` in place of the ${SEAT_LABEL[filled[0]]}` : ""
+    }. It goes forward to scoring.`,
   };
 }
 

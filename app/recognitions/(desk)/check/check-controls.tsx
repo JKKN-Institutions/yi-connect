@@ -24,7 +24,7 @@ export function CheckControls({
 }: {
   nominationId: string;
   chapterName: string;
-  pass: { ok: true; label: string } | { ok: false; error: string };
+  pass: { ok: true; label: string; override: boolean } | { ok: false; error: string };
   canReturn: boolean;
   returnBlocked: string | null;
   /** True when the fix deadline has passed: a send-back now takes it out of the race. */
@@ -33,6 +33,7 @@ export function CheckControls({
   nlAdded?: boolean;
 }) {
   const fixer = nlAdded ? "National Leadership" : "the chapter";
+  const override = pass.ok && pass.override;
   const [dialog, setDialog] = useState<"pass" | "return" | null>(null);
   const [note, setNote] = useState("");
   const { pending, result, run } = useAction();
@@ -65,10 +66,18 @@ export function CheckControls({
         onClose={() => setDialog(null)}
         onConfirm={() => run(() => passNomination(nominationId), (r) => r.success && setDialog(null))}
       >
-        <p>
-          You confirm this nomination is eligible and complete. It is scored only once the Regional Chair AND a
-          Regional Mentor have both passed it.
-        </p>
+        {override ? (
+          <p>
+            You confirm this nomination is eligible and complete. As super admin, your pass stands in for every
+            checker who hasn&apos;t passed it yet, so it goes straight to scoring. The audit trail records it as your
+            override.
+          </p>
+        ) : (
+          <p>
+            You confirm this nomination is eligible and complete. It is scored only once the Regional Chair AND a
+            Regional Mentor have both passed it.
+          </p>
+        )}
         <ResultLine result={result} />
       </ConfirmDialog>
 

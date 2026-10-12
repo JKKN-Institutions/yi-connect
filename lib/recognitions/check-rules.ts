@@ -103,7 +103,16 @@ export type CheckSeat = "rc" | "rm";
 
 export const SEAT_LABEL: Record<CheckSeat, string> = { rc: "Regional Chair", rm: "Regional Mentor" };
 
-export type SeatVerdict = { ok: true; seat: CheckSeat } | { ok: false; error: string };
+/**
+ * Who a check action is taken as: one of the two seats, or the Recognitions
+ * super admin's override (Director, 2026-10-12: "Piyush can pass them", so a
+ * nomination never drops out only because a checker hasn't been named).
+ */
+export type CheckActor = CheckSeat | "sa";
+
+export const ACTOR_LABEL: Record<CheckActor, string> = { ...SEAT_LABEL, sa: "super admin" };
+
+export type SeatVerdict = { ok: true; seat: CheckActor } | { ok: false; error: string };
 
 /**
  * Which check seat this person fills for this nomination, or why they can't
@@ -114,12 +123,19 @@ export type SeatVerdict = { ok: true; seat: CheckSeat } | { ok: false; error: st
  *                    first). The same person can never fill both seats.
  *   action 'return'  any eligible checker may send it back while it awaits
  *                    checks, including one who already passed it.
+ *
+ * The super admin (asSuperAdmin, decided on the server) may act on ANY
+ * region's nomination. A seat they really hold comes first; otherwise the
+ * verdict is 'sa', and a pass as 'sa' fills every empty seat at once. The
+ * conflict, deadline and status rules still apply to them.
  */
 export function decideSeat(input: {
   action: "pass" | "return";
   personId: string;
   asRegionalChair: boolean;
   hasRmDuty: boolean;
+  /** The Recognitions super admin: may act on any nomination (the override). */
+  asSuperAdmin?: boolean;
   /** The person holds a directory role in the nominating chapter (or declared one on the RM duty). */
   conflicted: boolean;
   nomination: Pick<NominationRow, "status" | "rc_checked_by" | "rm_checked_by"> & { origin?: NominationOrigin | null };
@@ -130,7 +146,8 @@ export function decideSeat(input: {
 }): SeatVerdict {
   const { nomination: n, cycle } = input;
   const now = input.now ?? new Date();
-  if (!input.asRegionalChair && !input.hasRmDuty) {
+  const sa = input.asSuperAdmin === true;
+  if (!input.asRegionalChair && !input.hasRmDuty && !sa) {
     return {
       ok: false,
       error:
@@ -155,13 +172,17 @@ export function decideSeat(input: {
   if (n.status === "checked") return { ok: false, error: "Both checkers have already passed this nomination." };
   if (n.status !== "submitted") return { ok: false, error: "This nomination is out of the race." };
 
-  if (input.action === "return") return { ok: true, seat: input.asRegionalChair ? "rc" : "rm" };
+  if (input.action === "return") {
+    return { ok: true, seat: input.asRegionalChair ? "rc" : input.hasRmDuty ? "rm" : "sa" };
+  }
 
-  if (n.rc_checked_by === input.personId || n.rm_checked_by === input.personId) {
+  const passedOne = n.rc_checked_by === input.personId || n.rm_checked_by === input.personId;
+  if (!passedOne && input.asRegionalChair && !n.rc_checked_by) return { ok: true, seat: "rc" };
+  if (!passedOne && input.hasRmDuty && !n.rm_checked_by) return { ok: true, seat: "rm" };
+  if (sa) return { ok: true, seat: "sa" };
+  if (passedOne) {
     return { ok: false, error: "You have already passed this nomination. It now needs the other checker." };
   }
-  if (input.asRegionalChair && !n.rc_checked_by) return { ok: true, seat: "rc" };
-  if (input.hasRmDuty && !n.rm_checked_by) return { ok: true, seat: "rm" };
   return {
     ok: false,
     error: input.asRegionalChair

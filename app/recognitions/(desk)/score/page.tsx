@@ -8,7 +8,7 @@ import { dutyLayerLabel, nominationScoringWindow, scoringWindow } from "./score-
 import { isNlAdded } from "@/lib/recognitions/check-rules";
 import "./score.css";
 
-export const metadata = { title: "My scoring sheets · Yi Recognitions" };
+export const metadata = { title: "My scoring sheets" };
 
 export default async function MySheetsPage() {
   const viewer = await getRxViewer();

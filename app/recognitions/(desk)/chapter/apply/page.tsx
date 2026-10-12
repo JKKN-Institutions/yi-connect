@@ -181,10 +181,11 @@ export default async function ApplyPage({
         awards={awards.map((a) => ({ id: a.id, title: a.title, vertical: a.vertical, criteria: a.criteria }))}
         initial={nominations.map((n) => ({
           awardId: n.award_id,
-          // The wizard only knows "draft" and "filed (locked)". A sent-back one is fixed above.
+          // The wizard only knows "draft" and "filed". A sent-back one is fixed above, so it says so.
           status: n.status === "draft" ? ("draft" as const) : ("submitted" as const),
           submittedAt: n.submitted_at,
           form: toForm(n),
+          sentBack: canFix(n, cycle),
         }))}
       />
     </div>

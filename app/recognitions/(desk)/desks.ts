@@ -5,8 +5,9 @@ import type { DeskLink } from "./desk-nav";
 export function desksFor(v: RxViewer): DeskLink[] {
   const desks: DeskLink[] = [];
   if (v.chapters.length > 0) desks.push({ href: "/recognitions/chapter", label: "Chapter" });
-  // Regional Chairs and Regional Mentors check nominations before scoring (recognitions_02).
-  if (isChecker(v)) desks.push({ href: "/recognitions/check", label: "Check" });
+  // Regional Chairs and Regional Mentors check nominations before scoring (recognitions_02);
+  // the super admin can pass or send back any of them.
+  if (isChecker(v) || v.isSuperAdmin) desks.push({ href: "/recognitions/check", label: "Check" });
   if (v.duties.length > 0) desks.push({ href: "/recognitions/score", label: "Scoring" });
   if (v.duties.some((d) => d.layer === "nmt")) desks.push({ href: "/recognitions/moderate", label: "Stage 2" });
   if (v.isNationalLeadership || v.isSuperAdmin) desks.push({ href: "/recognitions/review", label: "Review" });

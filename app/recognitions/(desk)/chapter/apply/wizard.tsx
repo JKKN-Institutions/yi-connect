@@ -22,6 +22,8 @@ export type WizardInitial = {
   status: "draft" | "submitted";
   submittedAt: string | null;
   form: NominationForm;
+  /** A checker sent it back: it is fixed in the form above the wizard, not locked. */
+  sentBack?: boolean;
 };
 
 type Dialog = { kind: "deselect"; awardId: string } | { kind: "submit" } | null;
@@ -56,10 +58,11 @@ export function ApplyWizard({
     initial.filter((i) => i.status === "draft").map((i) => i.awardId)
   );
 
+  const sentBack = useMemo(() => new Set(initial.filter((i) => i.sentBack).map((i) => i.awardId)), [initial]);
   const awardById = useMemo(() => new Map(awards.map((a) => [a.id, a])), [awards]);
   // Steps follow the award order, not the click order.
   const chosen = awards.filter((a) => selected.includes(a.id) && saved[a.id]?.status !== "submitted");
-  const submittedAwards = awards.filter((a) => saved[a.id]?.status === "submitted");
+  const submittedAwards = awards.filter((a) => saved[a.id]?.status === "submitted" && !sentBack.has(a.id));
   const steps = ["Choose awards", ...chosen.map((a) => a.title), "Review & submit"];
   const lastStep = steps.length - 1;
   const current = Math.min(step, lastStep);
@@ -242,12 +245,16 @@ export function ApplyWizard({
                     color: "#fff",
                   }}
                 >
-                  {isSubmitted ? <IconLock size={14} /> : on ? <IconCheck size={14} /> : null}
+                  {isSubmitted && !sentBack.has(a.id) ? <IconLock size={14} /> : on && !isSubmitted ? <IconCheck size={14} /> : null}
                 </span>
                 <Ribbon vertical={a.vertical} />
                 <span style={{ flex: 1, minWidth: 0 }}>
                   <span className="rx-h3" style={{ display: "block" }}>{a.title}</span>
-                  {isSubmitted ? (
+                  {sentBack.has(a.id) ? (
+                    <span className="rx-small rx-mute">
+                      Sent back by a checker. Fix it in &ldquo;Sent back to you for a fix&rdquo; above and resubmit.
+                    </span>
+                  ) : isSubmitted ? (
                     <span className="rx-small rx-mute">
                       Submitted {formatWhen(saved[a.id]?.submittedAt)}. Locked.
                     </span>
@@ -255,7 +262,11 @@ export function ApplyWizard({
                     <span className="rx-small rx-mute">Draft saved</span>
                   ) : null}
                 </span>
-                {isSubmitted ? <Seal tone="laurel">Submitted</Seal> : null}
+                {sentBack.has(a.id) ? (
+                  <Seal tone="vermilion">Sent back</Seal>
+                ) : isSubmitted ? (
+                  <Seal tone="laurel">Submitted</Seal>
+                ) : null}
               </button>
             );
           })}

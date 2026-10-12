@@ -20,7 +20,9 @@ function PassLine({ seat, pass }: { seat: string; pass: CheckPass }) {
   return (
     <span className="rx-check-pass" data-done={pass ? "true" : "false"}>
       <strong>{seat}:</strong>{" "}
-      {pass ? `passed by ${pass.by}${pass.at ? ` · ${formatWhen(pass.at)}` : ""}` : "not yet"}
+      {pass
+        ? `passed by ${pass.by}${pass.override ? " as super admin" : ""}${pass.at ? ` · ${formatWhen(pass.at)}` : ""}`
+        : "not yet"}
     </span>
   );
 }

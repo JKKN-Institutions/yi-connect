@@ -19,7 +19,7 @@ import { CheckList } from "../../check/check-list";
 import { loadCheckItems } from "../../check/load";
 import "../score.css";
 
-export const metadata = { title: "Scoring sheet · Yi Recognitions" };
+export const metadata = { title: "Scoring sheet" };
 
 export default async function ScoringSheetPage({
   params,

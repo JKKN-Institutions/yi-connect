@@ -8,6 +8,10 @@ import { matchDelegates } from "@/lib/take-pride/match";
 import { choicesFor, computeSlots, dKey, loadBookings, pKey, whenWhere } from "@/lib/take-pride/slots";
 import type { TpMeeting } from "@/lib/take-pride/types";
 import { CopyLink, LeadCapture, PartnerPickTime, PaymentForm, RequestMeetingButton, TeamPanel } from "./partner-client";
+import { getPartnerAiView } from "@/lib/take-pride/ai-partners/views";
+import { waLink } from "@/lib/take-pride/ai-partners/schemas";
+import { AutoRefresh } from "../../../pass/[token]/plan/_client";
+import { BriefSlot, DraftFollowupsButton, DraftSlot } from "./ai-client";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Your Catalyst page" };
@@ -70,6 +74,24 @@ export default async function PartnerPage({
   const nameOf = new Map(delegates.map((d) => [d.id, d]));
   const base = `/take-pride/catalyst/p/${token}`;
   const slots = computeSlots(agenda);
+  // AI briefs and follow-up drafts: confirmed partners only. Unavailable
+  // (e.g. queue not migrated yet) simply hides every AI control.
+  const acceptedIds = new Set(accepted.map((m) => m.delegate_id));
+  const ai = confirmed
+    ? await getPartnerAiView(partner.id, {
+        matches: matches.slice(0, 40).map((m) => m.delegate.id),
+        accepted: acceptedIds,
+        leads: new Set(leads.map((l) => l.delegate?.id).filter((x): x is string => !!x)),
+      })
+    : null;
+  const aiOn = !!ai?.available;
+  const briefFor = (id: string) =>
+    aiOn && ai!.briefEligible.has(id) ? <BriefSlot token={token} delegateId={id} state={ai!.briefs.get(id) ?? { status: "none" }} /> : null;
+  const draftFor = (id: string) => {
+    if (!aiOn || !ai!.followupEligible.has(id)) return null;
+    const st = ai!.drafts.get(id) ?? { status: "none" as const };
+    return <DraftSlot state={st} href={st.status === "ready" ? waLink(st.message) : null} />;
+  };
   // Time + table for an accepted meeting (columns added by take_pride_04).
   const pickTime = (m: TpMeeting) => {
     if (!confirmed || m.status !== "accepted") return null;
@@ -136,6 +158,10 @@ export default async function PartnerPage({
         <CopyLink />
       </section>
 
+      {aiOn && ai!.waitingSince && (tab === "matches" || tab === "results") && (
+        <AutoRefresh key={ai!.waitingSince} since={ai!.waitingSince} label="Your AI briefs and follow-ups are being written, usually within a few minutes." />
+      )}
+
       <nav className="tp-tabs" aria-label="Sections">
         {TABS.map((t) => (
           <Link key={t.key} href={`${base}?tab=${t.key}`} aria-current={tab === t.key ? "page" : undefined} scroll={false}>
@@ -176,6 +202,7 @@ export default async function PartnerPage({
                     )}
                   </div>
                   {mt && pickTime(mt)}
+                  {briefFor(d.id)}
                 </div>
               );
             })}
@@ -235,6 +262,9 @@ export default async function PartnerPage({
               )}
             </div>
             {accepted.length + leads.length === 0 && <p className="tp-mute" style={{ margin: 0 }}>Accepted meetings and scanned leads appear here.</p>}
+            {aiOn && ai!.followupEligible.size > 0 && (
+              <DraftFollowupsButton token={token} missing={ai!.missingDrafts} remaining={ai!.followupLeft} />
+            )}
             <div className="tp-list">
               {accepted.map((m) => {
                 const d = nameOf.get(m.delegate_id);
@@ -245,11 +275,16 @@ export default async function PartnerPage({
                       <span className="tp-small">{d.business_name} · {d.chapter}</span>
                     </div>
                     {pickTime(m)}
+                    {briefFor(d.id)}
+                    {draftFor(d.id)}
                   </div>
                 ) : null;
               })}
               {leads.map((l) => (
-                <div key={l.id}><div className="tp-row"><b>{l.delegate.full_name}</b><span className="tp-tag">Lead</span></div><span className="tp-small">{l.delegate.business_name} · {l.delegate.chapter}{l.note ? ` · ${l.note}` : ""}</span></div>
+                <div key={l.id} className="tp-stack" style={{ gap: 6 }} data-tp="lead-row">
+                  <div><div className="tp-row"><b>{l.delegate.full_name}</b><span className="tp-tag">Lead</span></div><span className="tp-small">{l.delegate.business_name} · {l.delegate.chapter}{l.note ? ` · ${l.note}` : ""}</span></div>
+                  {!acceptedIds.has(l.delegate.id) && draftFor(l.delegate.id)}
+                </div>
               ))}
             </div>
           </div>

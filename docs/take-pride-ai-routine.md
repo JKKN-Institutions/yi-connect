@@ -173,6 +173,18 @@ Output:
 { "answer": "<=600 chars" }
 Answer only from the grounding. If the answer is not there, say so plainly and suggest the
 Take Pride help desk at the venue. Never guess a time, a venue or a person's details.
+
+=== THEN DRAIN THREE MORE QUEUES ===
+When the loop above reaches "count": 0, drain each of these the same way (same
+X-Cron-Secret header, GET until "count": 0), following the prompt in the doc named:
+1. https://yi-connect-app.vercel.app/take-pride/api/ai-partners
+   -> section 5.2 of docs/take-pride-ai-routine.md (partner briefs, follow-ups, chasers)
+2. https://yi-connect-app.vercel.app/take-pride/api/ai-cards
+   -> section 1 of docs/take-pride-ai-cards.md (read business-card photos)
+3. https://yi-connect-app.vercel.app/take-pride/api/ai-coach
+   -> section 1 of docs/take-pride-ai-coach.md (1% Shift coach notes)
+If an endpoint or its doc does not exist yet (HTTP 404, or the file is missing), skip it
+and go on to the next. Every rule in this prompt applies to all three.
 ````
 
 ---

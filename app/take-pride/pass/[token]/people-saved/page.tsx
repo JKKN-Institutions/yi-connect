@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { TopBar, SampleNote, Denied } from "../../../_ui";
 import { getConnectMe, getMyPeople, iHaveContact } from "@/lib/take-pride/connections";
+import { listCardContacts } from "@/lib/take-pride/cards/queue";
 import { PeopleList, ShareToggle } from "./_client";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,7 @@ export default async function MyPeoplePage({ params }: { params: Promise<{ token
   if (!me) {
     return <Denied title="Pass not found" text="This pass link is not valid. Ask the Take Pride desk for your link." />;
   }
-  const [people, hasContact] = await Promise.all([getMyPeople(me), iHaveContact(me.id)]);
+  const [people, hasContact, cards] = await Promise.all([getMyPeople(me), iHaveContact(me.id), listCardContacts(me.id, 5)]);
   const saveable = people.filter((p) => p.they_share === true).length;
 
   return (
@@ -52,6 +53,34 @@ export default async function MyPeoplePage({ params }: { params: Promise<{ token
           </p>
         ) : (
           <PeopleList token={token} people={people} iShare={me.share_contact} />
+        )}
+      </section>
+
+      <section className="tp-card" aria-labelledby="tp-cards" data-tp="cards-scanned">
+        <div className="tp-row">
+          <h2 className="tp-h2" id="tp-cards">Cards I scanned</h2>
+          <Link href={`/take-pride/pass/${token}/cards`} className="tp-btn ghost sm" data-tp="go-cards">
+            {cards.length ? "See all" : "Scan a card"}
+          </Link>
+        </div>
+        {cards.length === 0 ? (
+          <p className="tp-small" style={{ margin: 0 }}>
+            Got a business card? Take a photo of it and the name, company, phone and email are saved here, only for you.
+          </p>
+        ) : (
+          <div className="tp-list">
+            {cards.map((c) => (
+              <div key={c.id} data-tp="card-contact-row">
+                <b>{c.full_name || c.company || "Business card"}</b>
+                {c.full_name && c.company && <span className="tp-small"> · {c.company}</span>}
+                {c.phone && (
+                  <div>
+                    <a href={`tel:${c.phone.replace(/[^\d+]/g, "")}`} className="tp-num tp-small">{c.phone}</a>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         )}
       </section>
 

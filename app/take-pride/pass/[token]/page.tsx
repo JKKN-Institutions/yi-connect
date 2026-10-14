@@ -128,6 +128,7 @@ export default async function PassPage({ params }: { params: Promise<{ token: st
             { href: "plan", label: "My summit plan", hint: "Tell us your goal, get sessions, people and tables", tp: "go-plan" },
             { href: "radar", label: "Opportunity radar", hint: "Who needs what you offer, and buy-together ideas", tp: "go-radar" },
             { href: "ask", label: "Ask the desk", hint: "Questions about the agenda and your schedule", tp: "go-ask" },
+            { href: "coach", label: "My 1% coach", hint: "Check in on your pledge after the summit", tp: "go-coach" },
           ].map((l) => (
             <Link
               key={l.href}

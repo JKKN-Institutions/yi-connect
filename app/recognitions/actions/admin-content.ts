@@ -3,11 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { requireRxSuperAdmin } from "@/lib/recognitions/auth";
 import { rxService } from "@/lib/recognitions/supabase";
-import { audit, getAward, listChapters, listModerationVersions } from "@/lib/recognitions/data";
+import { audit, getAward, getCurrentCycle, listChapters, listModerationVersions } from "@/lib/recognitions/data";
 import { CATEGORIES, CATEGORY_LABEL, RANK_LABEL, WORDS, type Category } from "@/lib/recognitions/constants";
 import { countWords } from "@/lib/recognitions/words";
 import type { ActionResult } from "@/lib/recognitions/types";
-import { headerOf, loadHealthCardFile, matchRows } from "../(desk)/admin/_lib/health-card";
+import { headerOf, loadHealthCardFile, matchMeasureRows, matchRows } from "../(desk)/admin/_lib/health-card";
+import { HC_TABLE_KEYS, listHealthCardMeasures, measureLayer1, type HcTableKey } from "@/lib/recognitions/health-card";
 
 /**
  * Control room: Layer 1 (Health Card) scores and the super admin's polish of
@@ -156,6 +157,198 @@ export async function setManualLayer1(input: { awardId: string; chapterId: strin
   });
   done();
   return { success: true, message: `${chapter.name}: Layer 1 score set to ${score}.` };
+}
+
+// ---------------------------------------------------------------------------
+// Health Card per measure (recognitions_06). Scores are kept per cycle,
+// chapter and table (A or B), so one upload serves every award of the cycle
+// that uses that table. The single-score path above stays as the fallback.
+// ---------------------------------------------------------------------------
+
+type MeasurePreview = {
+  tableKey: HcTableKey;
+  measures: Array<{ key: string; label: string }>;
+  matched: Array<{ rowNo: number; chapterName: string; scores: Record<string, number>; layer1: number }>;
+  unmatched: Array<{ rowNo: number; cell: string }>;
+  skipped: Array<{ rowNo: number; chapterName: string; why: string }>;
+  problems: string[];
+  missingChapters: string[];
+};
+
+type MeasureInput = { fileId: string; tableKey: string; chapterCol: number; measureCols: Record<string, number> };
+
+async function buildMeasurePreview(input: MeasureInput) {
+  const tableKey = input.tableKey as HcTableKey;
+  if (!HC_TABLE_KEYS.includes(tableKey)) return { ok: false as const, error: "Choose table A or table B." };
+  const loaded = await loadHealthCardFile(input.fileId);
+  if (!loaded.ok) return { ok: false as const, error: loaded.error };
+  const award = await getAward(loaded.file.award_id);
+  if (!award) return { ok: false as const, error: "That file's award no longer exists." };
+  const measures = await listHealthCardMeasures(award.cycle_id, tableKey);
+  if (measures.length === 0)
+    return { ok: false as const, error: `Table ${tableKey} has no measures set up for this cycle. Ask for the Health Card measures to be seeded.` };
+
+  const width = headerOf(loaded.sheet).length;
+  const inRange = (n: unknown) => Number.isInteger(n) && (n as number) >= 0 && (n as number) < width;
+  const chapterCol = Number(input.chapterCol);
+  if (!inRange(chapterCol)) return { ok: false as const, error: "Choose the column with the chapter name." };
+  const cols = measures.map((m) => ({ key: m.key, label: m.label, col: Number(input.measureCols?.[m.key]) }));
+  const unset = cols.filter((c) => !inRange(c.col));
+  if (unset.length > 0) return { ok: false as const, error: `Choose a column for ${unset.map((c) => c.label).join(", ")}.` };
+  const used = [chapterCol, ...cols.map((c) => c.col)];
+  if (new Set(used).size !== used.length)
+    return { ok: false as const, error: "Each measure needs its own column, different from the chapter column." };
+
+  const chapters = await listChapters();
+  const match = matchMeasureRows(loaded.sheet, chapterCol, cols, chapters);
+  const inFile = new Set(match.matched.map((m) => m.chapterId));
+  return {
+    ok: true as const,
+    file: loaded.file,
+    award,
+    tableKey,
+    measures,
+    cols,
+    match,
+    missingChapters: chapters.filter((c) => !inFile.has(c.id)).map((c) => c.name),
+  };
+}
+
+export async function previewHealthCardMeasures(input: MeasureInput): Promise<ActionResult<MeasurePreview>> {
+  const gate = await requireRxSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
+  const p = await buildMeasurePreview(input);
+  if (!p.ok) return { success: false, error: p.error };
+  return {
+    success: true,
+    data: {
+      tableKey: p.tableKey,
+      measures: p.measures.map((m) => ({ key: m.key, label: m.label })),
+      matched: p.match.matched.map((m) => ({
+        rowNo: m.rowNo,
+        chapterName: m.chapterName,
+        scores: m.scores,
+        layer1: measureLayer1(p.measures, new Map(Object.entries(m.scores))) ?? 0,
+      })),
+      unmatched: p.match.unmatched,
+      skipped: p.match.skipped,
+      problems: p.match.problems,
+      missingChapters: p.missingChapters,
+    },
+  };
+}
+
+export async function applyHealthCardMeasures(input: MeasureInput): Promise<ActionResult> {
+  const gate = await requireRxSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
+  const p = await buildMeasurePreview(input);
+  if (!p.ok) return { success: false, error: p.error };
+  if (p.match.problems.length > 0)
+    return { success: false, error: `Fix these rows in the file first, then upload it again: ${p.match.problems.slice(0, 5).join(" ")}${p.match.problems.length > 5 ? ` …and ${p.match.problems.length - 5} more.` : ""}` };
+  if (p.match.matched.length === 0) return { success: false, error: "No row matched a chapter, so there is nothing to apply. Check the chapter column." };
+
+  const now = new Date().toISOString();
+  const rows = p.match.matched.flatMap((m) =>
+    p.measures.map((ms) => ({
+      cycle_id: p.award.cycle_id,
+      chapter_id: m.chapterId,
+      table_key: p.tableKey,
+      measure_key: ms.key,
+      score: m.scores[ms.key],
+      source_file_id: p.file.id,
+      updated_by: gate.viewer.personId,
+      updated_at: now,
+    }))
+  );
+  const { error } = await rxService()
+    .from("recognition_health_card_scores")
+    .upsert(rows, { onConflict: "cycle_id,chapter_id,table_key,measure_key" });
+  if (error) return { success: false, error: "Couldn't save the Health Card scores. Try again." };
+
+  await audit({
+    cycleId: p.award.cycle_id,
+    awardId: p.award.id,
+    actorPersonId: gate.viewer.personId,
+    action: "apply_health_card_measures",
+    entity: "health_card_file",
+    entityId: p.file.id,
+    detail: {
+      file: p.file.file_name,
+      table: p.tableKey,
+      chapter_column: input.chapterCol,
+      measure_columns: Object.fromEntries(p.cols.map((c) => [c.key, c.col])),
+      applied: p.match.matched.length,
+      unmatched: p.match.unmatched.length,
+      skipped: p.match.skipped.length,
+    },
+  });
+  done();
+  return {
+    success: true,
+    message: `Applied table ${p.tableKey} measure scores for ${p.match.matched.length} chapter${p.match.matched.length === 1 ? "" : "s"}. Every award of this cycle that uses table ${p.tableKey} now reads them.`,
+  };
+}
+
+const MEASURE_TEXT_MAX = 2000;
+
+export async function saveHealthCardMeasure(input: {
+  tableKey: string;
+  measureKey: string;
+  label: string;
+  definition: string;
+  indicators: string;
+  purpose: string;
+  impact: string;
+}): Promise<ActionResult> {
+  const gate = await requireRxSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
+  const tableKey = input.tableKey as HcTableKey;
+  if (!HC_TABLE_KEYS.includes(tableKey)) return { success: false, error: "Choose table A or table B." };
+  const cycle = await getCurrentCycle();
+  if (!cycle) return { success: false, error: "There is no current cycle." };
+  const measures = await listHealthCardMeasures(cycle.id, tableKey);
+  const measure = measures.find((m) => m.key === input.measureKey);
+  if (!measure) return { success: false, error: "That measure no longer exists. Reload the page." };
+
+  const label = String(input.label ?? "").trim();
+  if (label === "" || label.length > 80) return { success: false, error: "The measure name must be 1 to 80 characters." };
+  const text = {
+    definition: String(input.definition ?? "").trim(),
+    indicators: String(input.indicators ?? "").trim(),
+    purpose: String(input.purpose ?? "").trim(),
+    impact: String(input.impact ?? "").trim(),
+  };
+  for (const [k, v] of Object.entries(text))
+    if (v.length > MEASURE_TEXT_MAX) return { success: false, error: `The ${k} is over ${MEASURE_TEXT_MAX} characters. Shorten it.` };
+
+  const changed: Record<string, { from: string; to: string }> = {};
+  const before: Record<string, string> = {
+    label: measure.label,
+    definition: measure.definition,
+    indicators: measure.indicators,
+    purpose: measure.purpose,
+    impact: measure.impact,
+  };
+  const after: Record<string, string> = { label, ...text };
+  for (const k of Object.keys(after)) if (before[k] !== after[k]) changed[k] = { from: before[k], to: after[k] };
+  if (Object.keys(changed).length === 0) return { success: true, message: "Nothing changed." };
+
+  const { error } = await rxService()
+    .from("recognition_health_card_measures")
+    .update({ label, ...text, updated_by: gate.viewer.personId, updated_at: new Date().toISOString() })
+    .eq("cycle_id", cycle.id)
+    .eq("table_key", tableKey)
+    .eq("measure_key", measure.key);
+  if (error) return { success: false, error: "Couldn't save the measure. Try again." };
+  await audit({
+    cycleId: cycle.id,
+    actorPersonId: gate.viewer.personId,
+    action: "edit_health_card_measure",
+    entity: "health_card_measure",
+    detail: { table: tableKey, measure: measure.key, changed },
+  });
+  done();
+  return { success: true, message: `Table ${tableKey} · ${label} saved.` };
 }
 
 // ---------------------------------------------------------------------------

@@ -54,3 +54,13 @@
 .rx-deck-dot { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 
 .rx-sheet-duty + .rx-sheet-duty { margin-top: 16px; }
+
+/* Health Card on the sheet (recognitions_06): tap a measure for its meaning. */
+.rx-hc-measure > summary {
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  min-height: 24px;
+}
+.rx-hc-table td { vertical-align: top; }
+.rx-hc-table tfoot th { text-align: left; }

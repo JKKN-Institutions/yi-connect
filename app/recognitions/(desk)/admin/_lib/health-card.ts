@@ -168,3 +168,80 @@ export function matchRows(
   });
   return result;
 }
+
+// ---------------------------------------------------------------------------
+// Per-measure Health Card (recognitions_06): one chapter column plus one
+// column per measure of table A or B. Every measure cell of a chapter's row
+// must hold a 0-100 number; a row with only some filled is a problem, so a
+// partial set never reaches the database.
+// ---------------------------------------------------------------------------
+
+export type MeasureColumn = { key: string; label: string; col: number };
+
+export type MatchedMeasureRow = {
+  rowNo: number;
+  chapterId: string;
+  chapterName: string;
+  scores: Record<string, number>;
+};
+
+export type MeasureMatchResult = {
+  matched: MatchedMeasureRow[];
+  unmatched: Array<{ rowNo: number; cell: string }>;
+  skipped: Array<{ rowNo: number; chapterName: string; why: string }>;
+  /** Rows that block "Apply scores" until the file is fixed. */
+  problems: string[];
+};
+
+export function matchMeasureRows(
+  sheet: ParsedSheet,
+  chapterCol: number,
+  measures: MeasureColumn[],
+  chapters: ChapterRow[]
+): MeasureMatchResult {
+  const byName = new Map(chapters.map((c) => [normName(c.name), c]));
+  const result: MeasureMatchResult = { matched: [], unmatched: [], skipped: [], problems: [] };
+  const seen = new Map<string, number>();
+
+  sheet.rows.slice(1).forEach((row, i) => {
+    const rowNo = sheet.firstRowNo + 1 + i;
+    if (row.every((c) => String(c ?? "").trim() === "")) return;
+    const cell = String(row[chapterCol] ?? "").trim();
+    if (cell === "") return;
+    const chapter = byName.get(normName(cell)) ?? byName.get(normName(cell.replace(/^yi\s+/i, "")));
+    if (!chapter) {
+      result.unmatched.push({ rowNo, cell });
+      return;
+    }
+    const scores: Record<string, number> = {};
+    const blank: string[] = [];
+    const bad: string[] = [];
+    for (const m of measures) {
+      const v = readScore(row[m.col]);
+      if (v === null) blank.push(m.label);
+      else if (v === "bad") bad.push(`${m.label} "${String(row[m.col])}" is not a number`);
+      else if (v < 0 || v > 100) bad.push(`${m.label} ${v} is outside 0-100`);
+      // The matrix fixes this one: 4 stakeholder groups active = 100, 3 = 75, 2 = 50, 1 = 25.
+      else if (m.key === "activity_balance_index" && ![25, 50, 75, 100].includes(v))
+        bad.push(`${m.label} ${v} must be 25, 50, 75 or 100 (1, 2, 3 or 4 stakeholder groups active)`);
+      else scores[m.key] = Math.round(v * 100) / 100;
+    }
+    if (blank.length === measures.length) {
+      result.skipped.push({ rowNo, chapterName: chapter.name, why: "no scores in the measure columns" });
+      return;
+    }
+    if (bad.length > 0 || blank.length > 0) {
+      const parts = [...bad, ...(blank.length ? [`no score for ${blank.join(", ")}`] : [])];
+      result.problems.push(`Row ${rowNo} (${chapter.name}): ${parts.join("; ")}.`);
+      return;
+    }
+    const before = seen.get(chapter.id);
+    if (before !== undefined) {
+      result.problems.push(`Row ${rowNo} (${chapter.name}): this chapter is already on row ${before}.`);
+      return;
+    }
+    seen.set(chapter.id, rowNo);
+    result.matched.push({ rowNo, chapterId: chapter.id, chapterName: chapter.name, scores });
+  });
+  return result;
+}

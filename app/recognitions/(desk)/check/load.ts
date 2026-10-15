@@ -14,6 +14,7 @@ import {
   effectiveStatus,
   exclusionReason,
   fixDeadlineFor,
+  isEvaluatorAdded,
   isNlAdded,
   SEAT_LABEL,
 } from "@/lib/recognitions/check-rules";
@@ -91,6 +92,8 @@ export async function loadCheckItems(
   for (const award of awards) {
     for (const n of await listNominationsForAward(award.id)) {
       if (n.status === "draft") continue;
+      // recognitions_05: a chapter a Mentor or the NMT added skips the check step.
+      if (isEvaluatorAdded(n)) continue;
       const seats = checkerSeats(viewer, n);
       if (!seats.asRegionalChair && !seats.rmDuty) continue; // not this checker's region
       const conflicted =

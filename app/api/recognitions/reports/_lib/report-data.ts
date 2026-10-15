@@ -15,12 +15,14 @@ import {
 import { CATEGORIES, CATEGORY_LABEL, LAYER_LABEL, RANK_LABEL, verticalLabel, type Category } from "@/lib/recognitions/constants";
 import { computeMatrix, paramsTotal } from "@/lib/recognitions/scoring";
 import { PHASE_LABEL } from "@/lib/recognitions/phase";
-import { isNlAdded } from "@/lib/recognitions/check-rules";
+import { ADDED_BY_LABEL, isAddedForChapter } from "@/lib/recognitions/check-rules";
 import type { CycleRow } from "@/lib/recognitions/types";
 
 /**
- * Data for the two super-admin reports. Callers MUST pass
- * requireRxSuperAdmin first; nothing here checks permissions.
+ * Data for the super-admin reports. Callers MUST pass requireRxSuperAdmin
+ * first — except ceremonyReport, which the stage sheet (recognitions_05) also
+ * serves to National Leadership behind requireRxOversight. Nothing here
+ * checks permissions.
  */
 
 export type CeremonyPlace = {
@@ -32,6 +34,8 @@ export type CeremonyPlace = {
   region: string;
   keyAchievements: string[];
   citation: string;
+  /** The NMT leader's "Why Winner?" text for this place (top3.rationale). */
+  rationale: string;
   announcement: string;
 };
 
@@ -81,9 +85,11 @@ export async function ceremonyReport(includePending: boolean): Promise<CeremonyR
           ? [nom.justification.trim()]
           : (nom?.reasons ?? []).map((r) => r.trim()).filter((r) => r !== "");
         if (nom?.flagship_event?.trim()) achievements.push(`Flagship event: ${nom.flagship_event.trim()}`);
-        // A chapter National Leadership added (recognitions_03) has no form: its reason is the case.
-        if (nom && isNlAdded(nom) && nom.added_reason?.trim()) {
-          achievements.push(`Added by National Leadership: ${nom.added_reason.trim()}`);
+        // A chapter National Leadership (recognitions_03), a Mentor or the NMT
+        // (recognitions_05) added has no form: its reason is the case.
+        if (nom && isAddedForChapter(nom) && nom.origin !== "chapter" && nom.added_reason?.trim()) {
+          const by = ADDED_BY_LABEL[nom.origin];
+          achievements.push(`Added by ${by}: ${nom.added_reason.trim()}`);
         }
         places.push({
           category,
@@ -94,6 +100,7 @@ export async function ceremonyReport(includePending: boolean): Promise<CeremonyR
           region: nom?.region ?? "",
           keyAchievements: achievements,
           citation: effectiveText(edits, version.id, "citation", category, rank, entry.citation ?? ""),
+          rationale: entry.rationale ?? "",
           announcement: effectiveText(edits, version.id, "announcement", category, rank, nom?.announcement_draft ?? ""),
         });
       }

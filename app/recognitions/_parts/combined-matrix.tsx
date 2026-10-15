@@ -127,12 +127,14 @@ export function Dossier({ dossier }: { dossier: DossierView }) {
   if (dossier.nlAddedReason !== null) {
     return (
       <div className="rx-stack">
-        <div className="rx-eyebrow">Added by National Leadership</div>
+        <div className="rx-eyebrow">Added by {dossier.addedByLabel ?? "National Leadership"}</div>
         <p className="rx-p-quote">{dossier.nlAddedReason.trim() || "No reason recorded."}</p>
         <p className="rx-small rx-mute">
-          {CHECK_STEP_ENABLED
-            ? "This chapter did not nominate. National Leadership added it during its review; the Regional Chair and a Regional Mentor passed it before it was scored."
-            : "This chapter did not nominate. National Leadership added it during its review."}
+          {dossier.addedByLabel === null || dossier.addedByLabel === "National Leadership"
+            ? CHECK_STEP_ENABLED
+              ? "This chapter did not nominate. National Leadership added it during its review; the Regional Chair and a Regional Mentor passed it before it was scored."
+              : "This chapter did not nominate. National Leadership added it during its review."
+            : `This chapter did not apply. ${dossier.addedByLabel.replace(/^a|^an/, (m) => m.toUpperCase())} put it forward during scoring.`}
         </p>
       </div>
     );

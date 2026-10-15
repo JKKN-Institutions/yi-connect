@@ -196,7 +196,7 @@ export async function requireRxNationalLeadership(): Promise<Gate<null>> {
   if (!v) return { ok: false, error: NOT_SIGNED_IN };
   if (!v.isNationalLeadership) {
     log("gate", { gate: "national_leadership", verdict: "deny", person: v.personId });
-    return { ok: false, error: "Only National Leadership can approve or send an award back." };
+    return { ok: false, error: "Only National Leadership can approve or send a recognition back." };
   }
   return { ok: true, viewer: v, value: null };
 }
@@ -239,7 +239,7 @@ export async function requireRxNmtOnAward(awardId: string): Promise<Gate<RxDuty>
   const v = await getRxViewer();
   if (!v) return { ok: false, error: NOT_SIGNED_IN };
   const duty = v.duties.find((d) => d.award_id === awardId && d.layer === "nmt");
-  if (!duty) return { ok: false, error: "Only this award's NMT can open its Stage 2 room." };
+  if (!duty) return { ok: false, error: "Only this recognition's NMT can open its Stage 2 room." };
   return { ok: true, viewer: v, value: duty };
 }
 
@@ -251,7 +251,7 @@ export async function requireRxNmtLeader(awardId: string): Promise<Gate<RxDuty>>
   );
   if (!duty) {
     log("gate", { gate: "nmt_leader", verdict: "deny", person: v.personId, awardId });
-    return { ok: false, error: "Only this award's NMT leader can moderate it." };
+    return { ok: false, error: "Only this recognition's NMT leader can moderate it." };
   }
   return { ok: true, viewer: v, value: duty };
 }

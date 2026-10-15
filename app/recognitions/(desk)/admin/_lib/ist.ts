@@ -54,8 +54,8 @@ export function plainDbError(message: string | undefined, fallback: string): str
   const m = message ?? "";
   if (m.includes("recognition_cycles_one_current")) return "Another cycle is already current. Try again.";
   if (m.includes("recognition_cycles_weights_ck")) return "The three weights must be whole numbers that add up to 100.";
-  if (m.includes("recognition_evaluators_one_leader")) return "This award already has an NMT leader. Remove that leader first.";
-  if (m.includes("recognition_awards_cycle_id_vertical_key")) return "This cycle already has an award for that vertical.";
+  if (m.includes("recognition_evaluators_one_leader")) return "This recognition already has an NMT leader. Remove that leader first.";
+  if (m.includes("recognition_awards_cycle_id_vertical_key")) return "This cycle already has a recognition with that key.";
   if (m.includes("recognition_evaluators_region_ck")) return "A Regional Mentor needs a region; an NMT member must not have one.";
   if (m.includes("frozen") || m.includes("append-only")) return "That record is locked and can't be changed.";
   if (m.includes("duplicate key")) return `${fallback} It already exists.`;

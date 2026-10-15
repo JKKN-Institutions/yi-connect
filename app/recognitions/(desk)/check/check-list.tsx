@@ -67,7 +67,7 @@ function AddedReason({ a }: { a: NonNullable<CheckItem["nlAdded"]> }) {
       <p className="rx-mute" style={{ marginTop: 6 }}>
         Added by {a.by}
         {a.at ? ` · ${formatWhen(a.at)}` : ""}. The chapter did not nominate, so there is no nomination form to read:
-        check that the chapter is eligible for this award.
+        check that the chapter is eligible for this recognition.
       </p>
     </div>
   );
@@ -91,7 +91,7 @@ export function CheckList({ items, cycle }: { items: CheckItem[]; cycle: CycleRo
               <article key={i.nominationId} className="rx-plate rx-plate-tight rx-stack rx-check-card">
                 <div className="rx-spread">
                   <div className="rx-row" style={{ gap: 10, minWidth: 0 }}>
-                    <Ribbon vertical={i.vertical} size="lg" />
+                    <Ribbon vertical={i.vertical} kind={i.kind} size="lg" />
                     <div style={{ minWidth: 0 }}>
                       <h3 className="rx-h3" style={{ overflowWrap: "anywhere" }}>{i.chapterName}</h3>
                       <div className="rx-small rx-mute">{i.awardTitle}</div>

@@ -3,9 +3,9 @@
  * shadcn tokens; every class is prefixed rx- and scoped under .rx-root.
  *
  * Palette: laurel + gilt (the wreath and the medal), on a cool sage-white.
- * Type: Marcellus (engraved plaque caps) for award names and headings,
+ * Type: Marcellus (engraved plaque caps) for recognition names and headings,
  *       Figtree for reading, Spline Sans Mono for scores and dates.
- * Signature: every award wears its own medal-ribbon stripe.
+ * Signature: every recognition wears its own medal-ribbon stripe.
  */
 
 .rx-root {
@@ -30,6 +30,7 @@
   --rx-rose: #a8384a;
   --rx-sky: #7fb3c9;
   --rx-forest: #2e6b3a;
+  --rx-plum: #6b3f7a;
 
   --rx-radius: 6px;
   --rx-radius-lg: 10px;
@@ -144,6 +145,9 @@
   flex: none;
 }
 .rx-ribbon-lg { width: 56px; height: 18px; }
+/* The chapters a chapter competes with (recognitions_04). */
+.rx-rivals { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.rx-rivals li { padding: 2px 10px; border: 1px solid var(--rx-line); border-radius: 999px; background: var(--rx-paper); }
 .rx-ribbon-tall { width: 14px; height: auto; align-self: stretch; border-radius: 3px; }
 
 /* ------------------------------------------------------------ buttons */

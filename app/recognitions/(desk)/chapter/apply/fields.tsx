@@ -5,9 +5,9 @@ import { WordField } from "../../../_ui/client";
 import type { NominationForm } from "../shared";
 
 /**
- * Sections A-D of one nomination, editable. Shared by the apply wizard and
- * the "sent back" fix form (recognitions_02) so both write the same fields
- * with the same limits.
+ * Sections A-D of one nomination on the OLD form (before recognitions_04),
+ * editable. Used only by the "sent back" fix form (recognitions_02) for a
+ * nomination filed on that form.
  */
 export function NominationFields({
   idPrefix,
@@ -21,7 +21,7 @@ export function NominationFields({
   return (
     <>
       <fieldset className="rx-stack" style={{ border: 0, padding: 0, margin: 0 }}>
-        <legend className="rx-eyebrow">Section A · Five reasons we deserve this award</legend>
+        <legend className="rx-eyebrow">Section A · Five reasons we deserve this recognition</legend>
         {f.reasons.map((r, i) => (
           <WordField
             key={i}
@@ -48,7 +48,7 @@ export function NominationFields({
 
       <fieldset className="rx-stack" style={{ border: 0, padding: 0, margin: 0 }}>
         <legend className="rx-eyebrow">Section C · Hosted a national or regional event</legend>
-        <p className="rx-small">Did your chapter host a national or regional event related to this vertical?</p>
+        <p className="rx-small">Did your chapter host a national or regional event related to this recognition?</p>
         <div className="rx-row" role="radiogroup" aria-label="Hosted a national or regional event">
           {[
             { v: true, label: "Yes" },
@@ -101,10 +101,10 @@ export function NominationFields({
       </fieldset>
 
       <fieldset className="rx-stack" style={{ border: 0, padding: 0, margin: 0 }}>
-        <legend className="rx-eyebrow">Section D · Award announcement draft</legend>
+        <legend className="rx-eyebrow">Section D · Announcement draft</legend>
         <WordField
           label="Announcement"
-          help="If our chapter wins, this is how we would like the award to be announced."
+          help="If our chapter wins, this is how we would like it to be announced."
           value={f.announcement}
           limit={WORDS.announcementDraft}
           rows={6}

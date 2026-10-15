@@ -28,18 +28,18 @@ export default async function ReportsPage() {
       <PageHead eyebrow={`Control room · ${cycle.name}`} title="Reports" />
 
       <section className="rx-plate rx-plate-gilt rx-stack">
-        <h2 className="rx-h2">Awards ceremony report</h2>
+        <h2 className="rx-h2">Recognitions ceremony report</h2>
         <p className="rx-small">
-          For every approved award, in each category: rank, chapter, award, key achievements (the nomination&apos;s five reasons and flagship
+          For every approved recognition, in each category: rank, chapter, recognition, key achievements (the nomination&apos;s five reasons and flagship
           event), citation and announcement text — with your polish applied.
         </p>
         <p className="rx-small rx-mute">
-          {approved} of {states.length} awards approved{pending ? ` · ${pending} awaiting National Leadership` : ""}.
+          {approved} of {states.length} recognitions approved{pending ? ` · ${pending} awaiting National Leadership` : ""}.
         </p>
         <form method="get" action="/api/recognitions/reports/ceremony" className="rx-stack" style={{ gap: 12 }}>
           <label className="rx-row" style={{ gap: 10 }}>
             <input type="checkbox" name="include" value="pending" className="rx-ad-check" />
-            <span>Also include awards awaiting a decision (marked &ldquo;Not yet approved&rdquo;) — for a rehearsal copy</span>
+            <span>Also include recognitions awaiting a decision (marked &ldquo;Not yet approved&rdquo;) — for a rehearsal copy</span>
           </label>
           <div className="rx-row">
             <button type="submit" name="format" value="pdf" className="rx-btn rx-btn-gilt">
@@ -53,10 +53,10 @@ export default async function ReportsPage() {
       </section>
 
       <section className="rx-plate rx-stack">
-        <h2 className="rx-h2">Vertical-wise report</h2>
+        <h2 className="rx-h2">Recognition-wise report</h2>
         <p className="rx-small">
-          One sheet per award: the full combined matrix — Layer 1, every Regional Mentor&apos;s and NMT member&apos;s total with their name, the
-          counted layers, the combined total, the NMT leader&apos;s final score and rank, and the award&apos;s phase.
+          One sheet per recognition: the full combined matrix — Layer 1, every Regional Mentor&apos;s and NMT member&apos;s total with their name, the
+          counted layers, the combined total, the NMT leader&apos;s final score and rank, and the recognition&apos;s phase.
         </p>
         <div>
           <a className="rx-btn rx-btn-quiet" href="/api/recognitions/reports/verticals?format=xlsx">
@@ -66,7 +66,7 @@ export default async function ReportsPage() {
       </section>
 
       <section className="rx-stack">
-        <div className="rx-eyebrow">Where each award stands</div>
+        <div className="rx-eyebrow">Where each recognition stands</div>
         <div className="rx-ledger-wrap">
           <table className="rx-ledger">
             <tbody>
@@ -74,7 +74,7 @@ export default async function ReportsPage() {
                 <tr key={s.award.id}>
                   <td>
                     <span className="rx-row" style={{ gap: 8 }}>
-                      <Ribbon vertical={s.award.vertical} /> {s.award.title}
+                      <Ribbon vertical={s.award.vertical} kind={s.award.kind} /> {s.award.title}
                     </span>
                   </td>
                   <td style={{ textAlign: "right" }}>
@@ -84,7 +84,7 @@ export default async function ReportsPage() {
               ))}
               {states.length === 0 ? (
                 <tr>
-                  <td className="rx-mute">No active awards in this cycle.</td>
+                  <td className="rx-mute">No active recognitions in this cycle.</td>
                 </tr>
               ) : null}
             </tbody>

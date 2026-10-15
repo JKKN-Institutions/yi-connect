@@ -7,7 +7,7 @@ import {
   listScoresForDuty,
   nominationsForDuty,
 } from "@/lib/recognitions/data";
-import { CATEGORY_LABEL, PARAM_KEYS, type ParamKey } from "@/lib/recognitions/constants";
+import { CATEGORY_LABEL, CHECK_STEP_ENABLED, PARAM_KEYS, type ParamKey } from "@/lib/recognitions/constants";
 import { Ribbon } from "../../../_ui/ribbon";
 import { IconArrowLeft, IconArrowRight, IconDownload, IconEyeOff, IconLock } from "../../../_ui/icons";
 import { Deadline, NoAccess, Notice, PageHead, Seal, formatWhen } from "../../../_ui/primitives";
@@ -19,7 +19,17 @@ import { CheckList } from "../../check/check-list";
 import { loadCheckItems } from "../../check/load";
 import "../score.css";
 
-export const metadata = { title: "Scoring sheet · Yi Recognitions" };
+export const metadata = { title: "Scoring sheet" };
+
+/** True for a nomination filed on the older form (before recognitions_04): reasons etc., no "why". */
+function legacyNomination(n: { reasons: string[]; flagship_event: string; hosted_event: boolean; announcement_draft: string }): boolean {
+  return (
+    (n.reasons ?? []).some((r) => (r ?? "").trim() !== "") ||
+    (n.flagship_event ?? "").trim() !== "" ||
+    n.hosted_event ||
+    (n.announcement_draft ?? "").trim() !== ""
+  );
+}
 
 export default async function ScoringSheetPage({
   params,
@@ -39,7 +49,7 @@ export default async function ScoringSheetPage({
 
   const state = await getAwardState(duty.award_id);
   if (!state) {
-    return <NoAccess reason="This award no longer exists or is no longer active." />;
+    return <NoAccess reason="This recognition no longer exists or is no longer active." />;
   }
   const { award, cycle } = state;
   const win = scoringWindow(state.phase, cycle);
@@ -48,7 +58,8 @@ export default async function ScoringSheetPage({
   // the same Pass / Send back controls as the Check desk. Only nominations
   // both checkers passed reach the scoring sheet below.
   const awaiting =
-    duty.layer === "rm"
+    // The check step is not used in 2026 (CHECK_STEP_ENABLED): nothing waits for a check.
+    CHECK_STEP_ENABLED && duty.layer === "rm"
       ? (await loadCheckItems(gate.viewer, cycle, { awardId: award.id })).filter(
           (i) => i.status === "submitted" && i.region === duty.region
         )
@@ -68,7 +79,7 @@ export default async function ScoringSheetPage({
   const head = (
     <PageHead eyebrow="Stage 1 · blind scoring" title={award.title}>
       <div className="rx-row" style={{ gap: 10 }}>
-        <Ribbon vertical={award.vertical} size="lg" />
+        <Ribbon vertical={award.vertical} kind={award.kind} size="lg" />
         <Seal tone={duty.layer === "rm" ? "laurel" : "gilt"}>{dutyLayerLabel(duty)}</Seal>
         <Link href="/recognitions/score" className="rx-link rx-small">All my sheets</Link>
       </div>
@@ -112,8 +123,8 @@ export default async function ScoringSheetPage({
           <h2 className="rx-h2">No chapters on your sheet</h2>
           <p className="rx-mute">
             {duty.layer === "rm"
-              ? `No chapter in region ${duty.region ?? ""} has a nomination for this award that passed both checks and that you can score.`
-              : "No chapter has a nomination for this award that passed both checks and that you can score."}
+              ? `No chapter in region ${duty.region ?? ""} has a nomination for this recognition that you can score.`
+              : "No chapter has a nomination for this recognition that you can score."}
           </p>
         </div>
       </div>
@@ -200,7 +211,7 @@ export default async function ScoringSheetPage({
         {curWin.state === "closed" ? (
           <Notice>Scoring closed on {formatWhen(scoringDeadlineFor(cycle, current))}. Read-only mode.</Notice>
         ) : curWin.state === "over" ? (
-          <Notice>Stage 1 is over for this award. Read-only mode.</Notice>
+          <Notice>Stage 1 is over for this recognition. Read-only mode.</Notice>
         ) : submitted ? (
           <Notice tone="ok">
             <span className="rx-row" style={{ gap: 8 }}>
@@ -232,38 +243,53 @@ export default async function ScoringSheetPage({
                   and the National Health Card.
                 </p>
               </section>
+            ) : (current.justification ?? "").trim() !== "" || !legacyNomination(current) ? (
+              // recognitions_04: the nomination is the chapter's one "why".
+              <section className="rx-stack" style={{ gap: 8 }}>
+                <h3 className="rx-h3">Why they should get this recognition</h3>
+                <p className="rx-sheet-field" style={{ whiteSpace: "pre-line" }}>
+                  {(current.justification ?? "").trim() || <span className="rx-mute">Left blank</span>}
+                </p>
+              </section>
             ) : (
+              // Filed on the older form: show only the sections it has.
               <>
-                <section className="rx-stack" style={{ gap: 8 }}>
-                  <h3 className="rx-h3">Why they deserve it</h3>
-                  <ol className="rx-sheet-reasons">
-                    {current.reasons.map((r, i) => (
-                      <li key={i}>{r.trim() === "" ? <span className="rx-mute">Left blank</span> : r}</li>
-                    ))}
-                  </ol>
-                </section>
+                {current.reasons.some((r) => r.trim() !== "") ? (
+                  <section className="rx-stack" style={{ gap: 8 }}>
+                    <h3 className="rx-h3">Why they should get this recognition</h3>
+                    <ol className="rx-sheet-reasons">
+                      {current.reasons
+                        .filter((r) => r.trim() !== "")
+                        .map((r, i) => (
+                          <li key={i}>{r}</li>
+                        ))}
+                    </ol>
+                  </section>
+                ) : null}
 
-                <section className="rx-stack" style={{ gap: 6 }}>
-                  <h3 className="rx-h3">Flagship event</h3>
-                  <p className="rx-sheet-field">{current.flagship_event || <span className="rx-mute">Left blank</span>}</p>
-                </section>
+                {current.flagship_event ? (
+                  <section className="rx-stack" style={{ gap: 6 }}>
+                    <h3 className="rx-h3">Flagship event</h3>
+                    <p className="rx-sheet-field">{current.flagship_event}</p>
+                  </section>
+                ) : null}
 
-                <section className="rx-stack" style={{ gap: 6 }}>
-                  <h3 className="rx-h3">Hosted a national or regional event</h3>
-                  {current.hosted_event ? (
+                {current.hosted_event ? (
+                  <section className="rx-stack" style={{ gap: 6 }}>
+                    <h3 className="rx-h3">Hosted a national or regional event</h3>
                     <p className="rx-sheet-field">
                       Yes · {current.hosted_event_name || "Name not given"}
                       {current.hosted_event_type ? ` (${current.hosted_event_type === "national" ? "National" : "Regional"})` : ""}
                     </p>
-                  ) : (
-                    <p>No</p>
-                  )}
-                </section>
+                  </section>
+                ) : null}
 
-                <section className="rx-stack" style={{ gap: 6 }}>
-                  <h3 className="rx-h3">Their announcement draft</h3>
-                  <p className="rx-sheet-field">{current.announcement_draft || <span className="rx-mute">Left blank</span>}</p>
-                </section>
+                {current.announcement_draft ? (
+                  <section className="rx-stack" style={{ gap: 6 }}>
+                    <h3 className="rx-h3">Their announcement draft</h3>
+                    <p className="rx-sheet-field">{current.announcement_draft}</p>
+                  </section>
+                ) : null}
               </>
             )}
 
@@ -310,7 +336,7 @@ export default async function ScoringSheetPage({
             <section className="rx-stack" style={{ gap: 8 }}>
               <h3 className="rx-h3">National Health Card</h3>
               {files.length === 0 ? (
-                <p className="rx-small rx-mute">The National Health Card for this award hasn&apos;t been uploaded yet.</p>
+                <p className="rx-small rx-mute">The National Health Card for this recognition hasn&apos;t been uploaded yet.</p>
               ) : (
                 <ul className="rx-stack" style={{ gap: 6, listStyle: "none", padding: 0, margin: 0 }}>
                   {files.map((f) => (

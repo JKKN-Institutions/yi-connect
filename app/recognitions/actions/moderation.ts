@@ -28,7 +28,7 @@ const TABLE = "recognition_moderation_versions";
 
 function friendly(message: string | undefined, code?: string): string {
   if (code === "23505") {
-    return "Someone started a moderation version for this award at the same moment. Reload the page and try again.";
+    return "Someone started a moderation version for this recognition at the same moment. Reload the page and try again.";
   }
   if ((message ?? "").includes("frozen")) {
     return "This version has already been submitted, so it can no longer change. Reload the page to see it.";
@@ -45,7 +45,7 @@ function notOpen(state: AwardState): string | null {
     case "governance":
       return "This moderation is submitted and waiting for National Leadership. It can no longer change.";
     case "finalized":
-      return "National Leadership has approved this award. The ranking can no longer change.";
+      return "National Leadership has approved this recognition. The ranking can no longer change.";
     default:
       return null;
   }
@@ -67,12 +67,12 @@ async function persist(awardId: string, input: ModerationInput, submit: boolean)
   const personId = gate.viewer.personId;
 
   const state = await getAwardState(awardId);
-  if (!state) return { success: false, error: "This award no longer exists. Go back to Stage 2 and reload." };
+  if (!state) return { success: false, error: "This recognition no longer exists. Go back to Stage 2 and reload." };
 
   const blocked = notOpen(state) ?? windowClosed(state);
   if (blocked) return { success: false, error: blocked };
   if (state.checkedNominations.length === 0) {
-    return { success: false, error: "No nomination for this award has passed both checks, so there is nothing to rank." };
+    return { success: false, error: "No nomination for this recognition is in the race, so there is nothing to rank." };
   }
 
   const draft = state.latestVersion?.status === "draft" ? state.latestVersion : null;
@@ -188,9 +188,9 @@ export async function reopenModeration(awardId: string): Promise<ActionResult> {
   const personId = gate.viewer.personId;
 
   const state = await getAwardState(awardId);
-  if (!state) return { success: false, error: "This award no longer exists. Go back to Stage 2 and reload." };
+  if (!state) return { success: false, error: "This recognition no longer exists. Go back to Stage 2 and reload." };
   if (state.phase !== "reevaluation") {
-    return { success: false, error: "This award has not been sent back for re-evaluation, so there is nothing to reopen." };
+    return { success: false, error: "This recognition has not been sent back for re-evaluation, so there is nothing to reopen." };
   }
   const latest = state.latestVersion;
   if (latest?.status === "draft") {

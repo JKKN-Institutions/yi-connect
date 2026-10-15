@@ -25,17 +25,17 @@ const DEADLINES: Array<{ key: keyof Settings; label: string; help: string }> = [
   { key: "nominationDeadline", label: "Nomination deadline", help: "Chapters can't submit or edit after this." },
   {
     key: "fixDeadline",
-    label: "Fix deadline",
-    help: "A nomination a checker sent back can be fixed and resubmitted until this. Still sent back after it = out of the race.",
+    label: "Fix deadline (not used this year)",
+    help: "Only for the Regional Chair + Regional Mentor check step, which is not used this year. A nomination a checker sent back could be fixed and resubmitted until this.",
   },
   {
     key: "checkDeadline",
-    label: "Check deadline",
-    help: "Regional Chairs and Regional Mentors pass or send back nominations until this. Not passed by both = not scored.",
+    label: "Check deadline (not used this year)",
+    help: "Only for the Regional Chair + Regional Mentor check step, which is not used this year. Every submitted nomination is scored.",
   },
   { key: "stage1Deadline", label: "Stage 1 deadline", help: "RM and NMT scoring locks." },
   { key: "stage2Deadline", label: "Stage 2 deadline", help: "The NMT leader's final rankings lock." },
-  { key: "reevaluationDeadline", label: "Re-evaluation deadline", help: "Only used if National Leadership sends an award back." },
+  { key: "reevaluationDeadline", label: "Re-evaluation deadline", help: "Only used if National Leadership sends a recognition back." },
 ];
 
 export function CycleSettingsForm({ cycle }: { cycle: Settings }) {
@@ -154,7 +154,7 @@ export function CycleSettingsForm({ cycle }: { cycle: Settings }) {
 }
 
 export function CreateCycleForm({ defaultYear }: { defaultYear: number }) {
-  const [name, setName] = useState(`Take Pride ${defaultYear}`);
+  const [name, setName] = useState(`Yi Recognitions ${defaultYear}`);
   const [year, setYear] = useState(String(defaultYear));
   const [makeCurrent, setMakeCurrent] = useState(true);
   const { pending, result, run } = useAction();
@@ -207,7 +207,7 @@ export function MakeCurrentButton({ cycleId, name }: { cycleId: string; name: st
         onClose={() => setOpen(false)}
         onConfirm={() => run(() => makeCycleCurrent(cycleId), (r) => r.success && setOpen(false))}
       >
-        <p>Every desk switches to this cycle&apos;s awards and deadlines. The present cycle stays saved and can be made current again.</p>
+        <p>Every desk switches to this cycle&apos;s recognitions and deadlines. The present cycle stays saved and can be made current again.</p>
       </ConfirmDialog>
     </>
   );

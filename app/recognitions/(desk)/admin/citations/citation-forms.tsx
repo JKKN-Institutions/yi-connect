@@ -70,14 +70,14 @@ export function ScriptForm({ awardId, current }: { awardId: string; current: str
       }}
     >
       <div>
-        <label className="rx-label" htmlFor={`script-${awardId}`}>What the host reads for this award</label>
+        <label className="rx-label" htmlFor={`script-${awardId}`}>What the host reads for this recognition</label>
         <textarea
           id={`script-${awardId}`}
           className="rx-textarea"
           rows={10}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Introduce the award, then call each category's places in order."
+          placeholder="Introduce the recognition, then call each category's places in order."
         />
         <p className="rx-help">Included in the ceremony report.</p>
       </div>

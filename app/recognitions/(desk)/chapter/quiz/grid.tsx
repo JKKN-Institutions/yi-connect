@@ -2,12 +2,12 @@
 
 import { useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Category, Vertical } from "@/lib/recognitions/constants";
+import type { AwardKind, Category, Vertical } from "@/lib/recognitions/constants";
 import { ConfirmDialog, ResultLine } from "../../../_ui/client";
 import { Ribbon } from "../../../_ui/ribbon";
 import { submitPredictions } from "../../../actions/chapter";
 
-export type QuizAward = { id: string; title: string; vertical: Vertical };
+export type QuizAward = { id: string; title: string; vertical: Vertical; kind: AwardKind | null };
 export type QuizColumn = { category: Category; label: string; chapters: Array<{ id: string; name: string }> };
 
 export function PredictionGrid({
@@ -53,7 +53,7 @@ export function PredictionGrid({
       {awards.map((a) => (
         <article key={a.id} className="rx-plate rx-plate-tight rx-stack">
           <div className="rx-row" style={{ gap: 10 }}>
-            <Ribbon vertical={a.vertical} />
+            <Ribbon vertical={a.vertical} kind={a.kind} />
             <h2 className="rx-h3">{a.title}</h2>
           </div>
           <div className="rx-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>

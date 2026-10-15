@@ -13,9 +13,16 @@ import {
 } from "@/lib/recognitions/data";
 import { isPast } from "@/lib/recognitions/phase";
 import { canFix, isNlAdded } from "@/lib/recognitions/check-rules";
-import { CATEGORIES, type Category } from "@/lib/recognitions/constants";
+import { CATEGORIES, CHECK_STEP_ENABLED, type Category } from "@/lib/recognitions/constants";
 import type { ActionResult, AwardRow, ChapterRow, CycleRow, NominationRow } from "@/lib/recognitions/types";
-import { cleanForm, validateNomination, type NominationForm } from "../(desk)/chapter/shared";
+import {
+  cleanForm,
+  formFromRow,
+  isLegacyForm,
+  validateNomination,
+  whyOnly,
+  type NominationForm,
+} from "../(desk)/chapter/shared";
 import { formatWhen } from "../_ui/primitives";
 
 /**
@@ -69,7 +76,24 @@ function plainDbError(message: string, code?: string): string {
   return "The save didn't go through. Please try again; if it keeps failing, tell the Recognitions super admin.";
 }
 
-function rowValues(f: NominationForm) {
+/**
+ * The columns one nomination writes. A new nomination (recognitions_04)
+ * writes its "why" and the old sections as empty values, so the database
+ * checks hold. `legacy` is only for fixing a nomination filed on the old
+ * form: it keeps its old sections and no "why".
+ */
+function rowValues(f: NominationForm, legacy = false) {
+  if (!legacy) {
+    return {
+      justification: f.justification.trim(),
+      reasons: ["", "", "", "", ""],
+      flagship_event: "",
+      hosted_event: false,
+      hosted_event_name: null,
+      hosted_event_type: null,
+      announcement_draft: "",
+    };
+  }
   return {
     reasons: f.reasons.map((r) => r.trim()),
     flagship_event: f.flagship.trim(),
@@ -80,28 +104,30 @@ function rowValues(f: NominationForm) {
   };
 }
 
-/** Parse + check the payload against the cycle's active awards. */
+/** Parse + check the payload against the cycle's active recognitions. Only the "why" is kept. */
 function parseForms(
   ctx: Ctx,
   raw: unknown,
   forSubmit: boolean
 ): { ok: true; forms: NominationForm[] } | { ok: false; error: string } {
-  if (!Array.isArray(raw)) return { ok: false, error: "Nothing was sent. Choose at least one award." };
+  if (!Array.isArray(raw)) return { ok: false, error: "Nothing was sent. Tick at least one recognition." };
   const byId = new Map(ctx.awards.map((a) => [a.id, a]));
   const forms: NominationForm[] = [];
   const seen = new Set<string>();
   for (const item of raw) {
-    const f = cleanForm(item);
-    if (!f) return { ok: false, error: "One of the nominations was malformed. Reload the page and try again." };
+    const cleaned = cleanForm(item);
+    if (!cleaned) return { ok: false, error: "One of the nominations was malformed. Reload the page and try again." };
+    // A new nomination is its "why" and nothing else, whatever the browser sent.
+    const f = whyOnly(cleaned);
     const award = byId.get(f.awardId);
-    if (!award) return { ok: false, error: "One of the awards is not open this year. Reload the page and try again." };
+    if (!award) return { ok: false, error: "One of the recognitions is not open this year. Reload the page and try again." };
     if (seen.has(f.awardId)) continue;
     seen.add(f.awardId);
     const problems = validateNomination(f, { forSubmit });
     if (problems.length > 0) return { ok: false, error: `${award.title}: ${problems.join(" ")}` };
     forms.push(f);
   }
-  if (forms.length === 0) return { ok: false, error: "Choose at least one award." };
+  if (forms.length === 0) return { ok: false, error: "Tick at least one recognition." };
   return { ok: true, forms };
 }
 
@@ -178,7 +204,7 @@ async function writeAll(
   const done: string[] = [];
   for (const f of forms) {
     const res = await writeNomination(ctx, f, existing.get(f.awardId), submit);
-    const title = titles.get(f.awardId) ?? "Award";
+    const title = titles.get(f.awardId) ?? "Recognition";
     if (!res.ok) {
       if (done.length > 0) revalidatePath("/recognitions", "layout");
       const savedNote = done.length > 0 ? ` ${done.join(", ")} went through.` : "";
@@ -200,11 +226,11 @@ async function writeAll(
     success: true,
     message: submit
       ? `Submitted: ${done.join(", ")}. These nominations are now locked.`
-      : `Draft saved for ${done.length === 1 ? done[0] : `${done.length} awards`}.`,
+      : `Draft saved for ${done.length === 1 ? done[0] : `${done.length} recognitions`}.`,
   };
 }
 
-/** Save every selected, unsubmitted award as a draft. Partial is fine; over-limit is not. */
+/** Save every ticked, unsubmitted recognition as a draft. An empty "why" is fine; over the limit is not. */
 export async function saveNominationDrafts(chapterId: string, forms: unknown): Promise<ActionResult> {
   const c = await nominationContext(chapterId);
   if (!c.ok) return { success: false, error: c.error };
@@ -213,7 +239,7 @@ export async function saveNominationDrafts(chapterId: string, forms: unknown): P
   return writeAll(c.ctx, parsed.forms, false);
 }
 
-/** Submit every selected award. All are checked first; if any is incomplete, none is written. */
+/** Submit every ticked recognition. All are checked first; if any "why" is empty or too long, none is written. */
 export async function submitNominations(chapterId: string, forms: unknown): Promise<ActionResult> {
   const c = await nominationContext(chapterId);
   if (!c.ok) return { success: false, error: c.error };
@@ -222,13 +248,13 @@ export async function submitNominations(chapterId: string, forms: unknown): Prom
   return writeAll(c.ctx, parsed.forms, true);
 }
 
-/** Remove a draft when the award is deselected. A submitted nomination can't be removed. */
+/** Remove a draft when the recognition is unticked. A submitted nomination can't be removed. */
 export async function deleteNominationDraft(chapterId: string, awardId: string): Promise<ActionResult> {
   const c = await nominationContext(chapterId);
   if (!c.ok) return { success: false, error: c.error };
   const ctx = c.ctx;
   const award = ctx.awards.find((a) => a.id === awardId);
-  if (!award) return { success: false, error: "That award is not open this year." };
+  if (!award) return { success: false, error: "That recognition is not open this year." };
   const [existing] = await listNominationsForChapter(ctx.chapter.id, [awardId]);
   if (!existing) return { success: true, message: `${award.title} had no saved draft.` };
   if (existing.status !== "draft") {
@@ -271,7 +297,7 @@ export async function resubmitNomination(chapterId: string, form: unknown): Prom
   const f = cleanForm(form);
   if (!f) return { success: false, error: "The form arrived malformed. Reload the page and try again." };
   const award = (await listAwards(cycle.id)).find((a) => a.id === f.awardId);
-  if (!award) return { success: false, error: "That award is not open this year. Reload the page." };
+  if (!award) return { success: false, error: "That recognition is not open this year. Reload the page." };
 
   const [existing] = await listNominationsForChapter(gate.value.id, [award.id], { includeNlAdded: true });
   // A nomination National Leadership added is fixed by National Leadership,
@@ -287,7 +313,11 @@ export async function resubmitNomination(chapterId: string, form: unknown): Prom
       error: `The fix deadline passed on ${formatWhen(cycle.fix_deadline)}, so ${award.title} can no longer be resubmitted. It is out of the race.`,
     };
   }
-  const problems = validateNomination(f, { forSubmit: true });
+  // A nomination filed on the old form (before recognitions_04) is fixed on
+  // the old form; any other is its "why" only.
+  const legacy = isLegacyForm(formFromRow(existing));
+  const fixed = legacy ? f : whyOnly(f);
+  const problems = validateNomination(fixed, { forSubmit: true, legacy });
   if (problems.length > 0) return { success: false, error: `${award.title}: ${problems.join(" ")}` };
 
   const now = new Date().toISOString();
@@ -298,7 +328,7 @@ export async function resubmitNomination(chapterId: string, form: unknown): Prom
   const { data, error } = await rxService()
     .from("recognition_nominations")
     .update({
-      ...rowValues(f),
+      ...rowValues(fixed, legacy),
       status: "submitted",
       submitted_at: now,
       submitted_by: gate.viewer.personId,
@@ -328,7 +358,9 @@ export async function resubmitNomination(chapterId: string, form: unknown): Prom
   revalidatePath("/recognitions", "layout");
   return {
     success: true,
-    message: `${award.title} resubmitted. The Regional Chair and a Regional Mentor will check it again.`,
+    message: CHECK_STEP_ENABLED
+      ? `${award.title} resubmitted. The Regional Chair and a Regional Mentor will check it again.`
+      : `${award.title} resubmitted. It is locked again and goes forward to scoring.`,
   };
 }
 
@@ -358,7 +390,7 @@ export async function submitPredictions(chapterId: string, picks: unknown): Prom
     const { awardId, category, predictedChapterId } = p as Record<string, unknown>;
     if (typeof predictedChapterId !== "string" || predictedChapterId === "") continue; // empty cell
     if (typeof awardId !== "string" || !awardIds.has(awardId)) {
-      return { success: false, error: "One of the awards is not open this year. Reload the page and try again." };
+      return { success: false, error: "One of the recognitions is not open this year. Reload the page and try again." };
     }
     if (typeof category !== "string" || !(CATEGORIES as readonly string[]).includes(category)) {
       return { success: false, error: "One of the picks has an unknown category. Reload the page and try again." };

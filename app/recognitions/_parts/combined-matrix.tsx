@@ -1,4 +1,5 @@
 import "./parts.css";
+import { CHECK_STEP_ENABLED } from "@/lib/recognitions/constants";
 import type { DossierView, MatrixView, MatrixViewRow, RationaleView } from "./shared";
 
 export function fmt(n: number | null | undefined, dp = 2): string {
@@ -32,7 +33,7 @@ export function CombinedMatrix({ view }: { view: MatrixView }) {
         provisional rank.
       </p>
       {!anyRows ? (
-        <p className="rx-mute">No nomination for this award has passed both checks.</p>
+        <p className="rx-mute">No nomination for this recognition is in the race.</p>
       ) : null}
       {view.categories
         .filter((c) => c.rows.length > 0)
@@ -129,40 +130,61 @@ export function Dossier({ dossier }: { dossier: DossierView }) {
         <div className="rx-eyebrow">Added by National Leadership</div>
         <p className="rx-p-quote">{dossier.nlAddedReason.trim() || "No reason recorded."}</p>
         <p className="rx-small rx-mute">
-          This chapter did not nominate. National Leadership added it during its review; the Regional Chair and a
-          Regional Mentor passed it before it was scored.
+          {CHECK_STEP_ENABLED
+            ? "This chapter did not nominate. National Leadership added it during its review; the Regional Chair and a Regional Mentor passed it before it was scored."
+            : "This chapter did not nominate. National Leadership added it during its review."}
         </p>
       </div>
     );
   }
+  const why = dossier.justification.trim();
+  const legacy =
+    why === "" &&
+    (dossier.reasons.length > 0 || dossier.flagship.trim() !== "" || dossier.hostedEvent || dossier.announcement.trim() !== "");
+  if (!legacy) {
+    // recognitions_04: a nomination is the chapter's one "why".
+    return (
+      <div className="rx-stack">
+        <div className="rx-eyebrow">Why this chapter should get this recognition</div>
+        <p className="rx-p-quote">{why || "Not written."}</p>
+      </div>
+    );
+  }
+  // Filed on the older form: show only the sections it has.
   return (
     <div className="rx-stack">
-      <div>
-        <div className="rx-eyebrow">Why this chapter deserves the award</div>
-        {dossier.reasons.length === 0 ? (
-          <p className="rx-mute rx-small">No reasons written.</p>
-        ) : (
+      {dossier.reasons.length > 0 ? (
+        <div>
+          <div className="rx-eyebrow">Why this chapter should get this recognition</div>
           <ol className="rx-p-list">
             {dossier.reasons.map((r, i) => (
               <li key={i} className="rx-p-text">{r}</li>
             ))}
           </ol>
-        )}
-      </div>
-      <dl className="rx-p-dl">
-        <dt>Flagship event</dt>
-        <dd className="rx-p-text">{dossier.flagship.trim() || "Not given"}</dd>
-        <dt>Hosted event</dt>
-        <dd>
-          {dossier.hostedEvent
-            ? `${dossier.hostedName ?? "Unnamed event"}${dossier.hostedType ? ` (${dossier.hostedType})` : ""}`
-            : "None"}
-        </dd>
-      </dl>
-      <div>
-        <div className="rx-eyebrow">Announcement draft</div>
-        <p className="rx-p-quote">{dossier.announcement.trim() || "Not written."}</p>
-      </div>
+        </div>
+      ) : null}
+      {dossier.flagship.trim() || dossier.hostedEvent ? (
+        <dl className="rx-p-dl">
+          {dossier.flagship.trim() ? (
+            <>
+              <dt>Flagship event</dt>
+              <dd className="rx-p-text">{dossier.flagship}</dd>
+            </>
+          ) : null}
+          {dossier.hostedEvent ? (
+            <>
+              <dt>Hosted event</dt>
+              <dd>{`${dossier.hostedName ?? "Unnamed event"}${dossier.hostedType ? ` (${dossier.hostedType})` : ""}`}</dd>
+            </>
+          ) : null}
+        </dl>
+      ) : null}
+      {dossier.announcement.trim() ? (
+        <div>
+          <div className="rx-eyebrow">Announcement draft</div>
+          <p className="rx-p-quote">{dossier.announcement}</p>
+        </div>
+      ) : null}
     </div>
   );
 }

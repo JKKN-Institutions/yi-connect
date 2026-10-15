@@ -176,7 +176,7 @@ export function HealthCardDesk({
             </table>
           </div>
         ) : (
-          <p className="rx-mute rx-small">No Health Card uploaded for this award yet.</p>
+          <p className="rx-mute rx-small">No Health Card uploaded for this recognition yet.</p>
         )}
       </section>
 

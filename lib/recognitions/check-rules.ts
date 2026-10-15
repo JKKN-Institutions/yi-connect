@@ -20,8 +20,15 @@
  *
  * Exclusion is decided at READ time from the deadlines (no cron): the stored
  * status stays 'returned' / 'submitted', the effective status is 'excluded'.
+ *
+ * 2026 (Director, 2026-10-15): THE CHECK STEP IS NOT USED. With
+ * CHECK_STEP_ENABLED false a submitted nomination is in the race straight
+ * away and is never excluded for missing checks; only an old sent-back
+ * ('returned') one still drops out once its fix deadline passes. Hidden, not
+ * deleted: flip the flag to restore the two-checker rules below.
  */
 
+import { CHECK_STEP_ENABLED } from "./constants";
 import { isPast } from "./phase";
 import type { CycleRow, NominationOrigin, NominationRow, NominationStatus } from "./types";
 
@@ -54,19 +61,31 @@ export function effectiveStatus(n: Nom, cycle: Deadlines, now: Date = new Date()
   // Sent back and not fixed in time.
   if (n.status === "returned" && isPast(fixDeadlineFor(n, cycle), now)) return "excluded";
   // Filed but the two checks never both happened before checks closed.
-  if (n.status === "submitted" && isPast(checkDeadlineFor(n, cycle), now)) return "excluded";
+  // Only while the check step is in use: in 2026 a submitted one is in the race.
+  if (CHECK_STEP_ENABLED && n.status === "submitted" && isPast(checkDeadlineFor(n, cycle), now)) return "excluded";
   return n.status;
 }
 
-/** In the race = both checkers passed it. The ONLY gate for scoring, ranking and Stage 2. */
+/**
+ * In the race: the ONLY gate for scoring, ranking, moderation and reports.
+ * 2026: every submitted nomination ('checked' is kept for any row a checker
+ * passed before the step was dropped). With the check step on: only
+ * 'checked' (both checkers passed it).
+ */
 export function inRace(n: Pick<NominationRow, "status">): boolean {
-  return n.status === "checked";
+  if (n.status === "checked") return true;
+  return !CHECK_STEP_ENABLED && n.status === "submitted";
 }
 
-/** Still moving through the check step: it may yet enter the race. */
+/**
+ * Still on its way into the race: it may yet enter it, so it holds Stage 2
+ * shut. 2026: only an old sent-back nomination still inside its fix window.
+ * With the check step on: also one awaiting its checks.
+ */
 export function stillInCheck(n: Nom, cycle: Deadlines, now: Date = new Date()): boolean {
   const s = effectiveStatus(n, cycle, now);
-  return s === "submitted" || s === "returned";
+  if (s === "returned") return true;
+  return CHECK_STEP_ENABLED && s === "submitted";
 }
 
 /**
@@ -91,13 +110,21 @@ export function canFix(n: Nom, cycle: Deadlines, now: Date = new Date()): boolea
   return n.status === "returned" && !isPast(fixDeadlineFor(n, cycle), now);
 }
 
-export const NOMINATION_STATUS_LABEL: Record<NominationStatus, string> = {
-  draft: "Draft",
-  submitted: "Awaiting checks",
-  returned: "Sent back",
-  checked: "Passed checks",
-  excluded: "Out of the race",
-};
+export const NOMINATION_STATUS_LABEL: Record<NominationStatus, string> = CHECK_STEP_ENABLED
+  ? {
+      draft: "Draft",
+      submitted: "Awaiting checks",
+      returned: "Sent back",
+      checked: "Passed checks",
+      excluded: "Out of the race",
+    }
+  : {
+      draft: "Draft",
+      submitted: "Submitted",
+      returned: "Sent back",
+      checked: "Submitted",
+      excluded: "Out of the race",
+    };
 
 export type CheckSeat = "rc" | "rm";
 
@@ -134,7 +161,7 @@ export function decideSeat(input: {
     return {
       ok: false,
       error:
-        "You can only check nominations from a region you are Regional Chair of, or a region you are Regional Mentor for on this award.",
+        "You can only check nominations from a region you are Regional Chair of, or a region you are Regional Mentor for on this recognition.",
     };
   }
   if (input.conflicted) {

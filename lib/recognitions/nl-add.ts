@@ -32,14 +32,14 @@ const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
 export type AddWindow = { open: true } | { open: false; reason: string };
 
 export function addWindow(state: AwardState): AddWindow {
-  if (!state.award.is_active) return { open: false, reason: "This award is switched off." };
+  if (!state.award.is_active) return { open: false, reason: "This recognition is switched off." };
   if (state.phase === "finalized") {
-    return { open: false, reason: "National Leadership has already approved this award, so no chapter can be added." };
+    return { open: false, reason: "National Leadership has already approved this recognition, so no chapter can be added." };
   }
   if (state.phase !== "governance" && state.phase !== "reevaluation") {
     return {
       open: false,
-      reason: "A chapter can be added once this award reaches National Leadership review, until re-evaluation closes.",
+      reason: "A chapter can be added once this recognition reaches National Leadership review, until re-evaluation closes.",
     };
   }
   if (isPast(state.cycle.reevaluation_deadline)) {
@@ -93,7 +93,7 @@ export async function chapterAddRefusal(
   if (hit) return { ok: true, chapter: hit };
   const name = (await listChapters()).find((c) => c.id === chapterId)?.name;
   if (!name) return { ok: false, error: "That chapter is not an active Yi chapter. Reload the page and pick again." };
-  const why = skipped.find((s) => s.name === name)?.why ?? "It can't be added to this award right now.";
+  const why = skipped.find((s) => s.name === name)?.why ?? "It can't be added to this recognition right now.";
   return { ok: false, error: `${name} can't be added: ${why}` };
 }
 
@@ -109,7 +109,7 @@ function ineligibleReason(
   }
 ): string | null {
   if (ctx.nominated.has(c.id)) {
-    return "it already has a nomination for this award (a draft or a filed one), so there is nothing to add.";
+    return "it already has a nomination for this recognition (a draft or a filed one), so there is nothing to add.";
   }
   if (!ctx.categories.get(c.id)) {
     return "it has no category (Pioneers, Trailblazers or Sparks) this cycle. The Recognitions super admin sets it.";
@@ -128,8 +128,8 @@ function ineligibleReason(
         (layer === "nmt" || (norm(d.region) !== "" && norm(d.region) === norm(region))) &&
         !(ctx.dutyConflicts.get(d.id) ?? new Set([c.id])).has(c.id)
     );
-  if (!free("rm")) return `no Regional Mentor on this award for region ${region} can check and score it.`;
-  if (!free("nmt")) return "no NMT evaluator on this award can score it.";
+  if (!free("rm")) return `no Regional Mentor on this recognition for region ${region} can score it.`;
+  if (!free("nmt")) return "no NMT evaluator on this recognition can score it.";
   return null;
 }
 

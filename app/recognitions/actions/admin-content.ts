@@ -84,7 +84,7 @@ export async function applyHealthCard(input: { fileId: string; chapterCol: numbe
   if (p.match.matched.length === 0) return { success: false, error: "No row matched a chapter, so there is nothing to apply. Check the chapter column." };
 
   const award = await getAward(p.file.award_id);
-  if (!award) return { success: false, error: "That file's award no longer exists." };
+  if (!award) return { success: false, error: "That file's recognition no longer exists." };
   const now = new Date().toISOString();
   const { error } = await rxService()
     .from("recognition_layer1")
@@ -120,7 +120,7 @@ export async function setManualLayer1(input: { awardId: string; chapterId: strin
   const gate = await requireRxSuperAdmin();
   if (!gate.ok) return { success: false, error: gate.error };
   const award = await getAward(input.awardId);
-  if (!award) return { success: false, error: "That award no longer exists." };
+  if (!award) return { success: false, error: "That recognition no longer exists." };
   const chapter = (await listChapters()).find((c) => c.id === input.chapterId);
   if (!chapter) return { success: false, error: "Choose a chapter." };
   const text = String(input.score ?? "").trim();
@@ -175,14 +175,14 @@ export async function saveCitationEdit(input: {
   const gate = await requireRxSuperAdmin();
   if (!gate.ok) return { success: false, error: gate.error };
   const award = await getAward(input.awardId);
-  if (!award) return { success: false, error: "That award no longer exists." };
+  if (!award) return { success: false, error: "That recognition no longer exists." };
 
   const body = (input.body ?? "").trim();
   if (body === "") return { success: false, error: "The text is empty. Write the text, or leave it as it is." };
 
   const versions = await listModerationVersions(award.id);
   const version = versions.find((v) => v.status === "submitted") ?? null;
-  if (!version) return { success: false, error: "The NMT leader hasn't submitted a moderation for this award yet, so there is nothing to polish." };
+  if (!version) return { success: false, error: "The NMT leader hasn't submitted a moderation for this recognition yet, so there is nothing to polish." };
 
   let category: Category | null = null;
   let rank: number | null = null;

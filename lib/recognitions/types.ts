@@ -1,4 +1,4 @@
-import type { Category, Layer, Vertical } from "./constants";
+import type { AwardKind, Category, Layer, Vertical } from "./constants";
 
 /**
  * Row shapes for the yi_connect.recognition_* tables. Hand-written because
@@ -31,7 +31,10 @@ export type CycleRow = {
 export type AwardRow = {
   id: string;
   cycle_id: string;
+  /** Any slug matching SLUG_RE (recognitions_04). */
   vertical: Vertical;
+  /** recognitions_04. Null on rows from before it (and on impact/future). */
+  kind: AwardKind | null;
   title: string;
   criteria: string | null;
   sort_order: number;
@@ -72,6 +75,12 @@ export type NominationRow = {
   hosted_event_name: string | null;
   hosted_event_type: "national" | "regional" | null;
   announcement_draft: string;
+  /**
+   * recognitions_04: the chapter's "why" for this recognition, up to
+   * WORDS.justification words. Null on rows filed before it; those show
+   * their old sections (reasons, flagship event, ...) instead.
+   */
+  justification: string | null;
   submitted_at: string | null;
   rm_recommended_by: string | null;
   rm_recommended_at: string | null;
@@ -104,7 +113,8 @@ export type NominationOrigin = "chapter" | "nl_added";
 /**
  * Stored nomination status (recognitions_02):
  *   draft      the chapter is still writing it
- *   submitted  filed, awaiting the Regional Chair + Regional Mentor checks
+ *   submitted  filed. With the check step off (CHECK_STEP_ENABLED, 2026) it is
+ *              in the race; with it on, it awaits the two checks
  *   returned   sent back with a note; the chapter may fix it
  *   checked    both checkers passed it: in the race, scored
  *   excluded   out of the race

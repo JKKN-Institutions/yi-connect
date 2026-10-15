@@ -39,7 +39,7 @@ export default async function QuizPage({
         </Link>
       </div>
       <p className="rx-small">
-        For every award and category, pick the chapter you think will win. You may pick your own chapter.{" "}
+        For every recognition and category, pick the chapter you think will win. You may pick your own chapter.{" "}
         <strong>Not used in scoring.</strong>
       </p>
     </PageHead>
@@ -51,7 +51,7 @@ export default async function QuizPage({
       <div className="rx-stack-lg">
         {head}
         <div className="rx-plate rx-stack">
-          <h2 className="rx-h2">No awards cycle is open yet</h2>
+          <h2 className="rx-h2">No recognitions cycle is open yet</h2>
           <p className="rx-mute">The quiz opens with this year&apos;s nominations.</p>
         </div>
       </div>
@@ -78,7 +78,7 @@ export default async function QuizPage({
           {awards.map((a) => (
             <article key={a.id} className="rx-plate rx-plate-tight rx-stack">
               <div className="rx-row" style={{ gap: 10 }}>
-                <Ribbon vertical={a.vertical} />
+                <Ribbon vertical={a.vertical} kind={a.kind} />
                 <h2 className="rx-h3">{a.title}</h2>
               </div>
               <dl className="rx-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, margin: 0 }}>
@@ -106,7 +106,7 @@ export default async function QuizPage({
   if (!cycle.quiz_open) closed = "The prediction quiz is closed.";
   else if (win.state === "not_open") closed = "The quiz opens with nominations. The Recognitions super admin hasn't set the deadline yet.";
   else if (win.state === "closed") closed = `The quiz closed with nominations on ${formatWhen(win.deadline)}.`;
-  else if (awards.length === 0) closed = "No awards have been set up for this cycle yet.";
+  else if (awards.length === 0) closed = "No recognitions have been set up for this cycle yet.";
 
   if (closed) {
     return (
@@ -135,7 +135,7 @@ export default async function QuizPage({
       </div>
       <PredictionGrid
         chapterId={chapter.id}
-        awards={awards.map((a) => ({ id: a.id, title: a.title, vertical: a.vertical }))}
+        awards={awards.map((a) => ({ id: a.id, title: a.title, vertical: a.vertical, kind: a.kind }))}
         columns={columns}
       />
     </div>

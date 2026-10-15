@@ -31,7 +31,7 @@ async function loadContext(evaluatorId: string, nominationId: string): Promise<
   const duty = gate.value;
 
   const state = await getAwardState(duty.award_id);
-  if (!state) return { ok: false, error: "This award no longer exists. Go back to your sheets and reload." };
+  if (!state) return { ok: false, error: "This recognition no longer exists. Go back to your sheets and reload." };
 
   const nomination = state.nominations.find((n) => n.id === nominationId);
   // Per nomination: a chapter National Leadership added is scored during
@@ -49,7 +49,7 @@ async function loadContext(evaluatorId: string, nominationId: string): Promise<
     return { ok: false, error: `Scoring closed on ${formatWhen(scoringDeadlineFor(state.cycle, nomination ?? {}))}.` };
   }
   if (win.state === "over") {
-    return { ok: false, error: "Stage 1 is over for this award, so marks and flags can no longer change." };
+    return { ok: false, error: "Stage 1 is over for this recognition, so marks and flags can no longer change." };
   }
 
   // Fail closed: a duty with no conflict entry is treated as unable to see anything.

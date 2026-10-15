@@ -14,7 +14,7 @@
  * A missing layer counts as 0 and is flagged on the row, never hidden.
  */
 
-import { MAX_LAYER_TOTAL, PARAM_KEYS } from "./constants";
+import { CHECK_STEP_ENABLED, MAX_LAYER_TOTAL, PARAM_KEYS } from "./constants";
 import type { Category, Layer } from "./constants";
 import type { CycleRow, EvaluatorRow, NominationRow, ScoreParams, ScoreRow } from "./types";
 import { inRace, isNlAdded, stillInCheck } from "./check-rules";
@@ -69,7 +69,7 @@ export function computeMatrix(input: {
   const { cycle, nominations, layer1 } = input;
   const submitted = input.scores.filter((s) => s.status === "submitted");
 
-  // Only nominations both checkers passed are ranked (recognitions_02).
+  // Only nominations in the race are ranked (check-rules inRace: in 2026 every submitted one).
   const base = nominations
     .filter(inRace)
     .map((n) => {
@@ -137,7 +137,7 @@ export function computeMatrix(input: {
 
 /**
  * Can this evaluator duty see (and therefore score) this nomination?
- *   - only nominations BOTH checkers passed (status 'checked', recognitions_02)
+ *   - only nominations in the race (check-rules inRace; 2026: every submitted one)
  *   - never a chapter they are linked to (conflict rule, mail 3)
  *   - an RM only sees their own region; a blank region denies
  */
@@ -211,10 +211,18 @@ export function computeCompleteness(input: {
   const blockers: string[] = [];
   if (inCheck.length > 0) {
     blockers.push(
-      `${inCheck.length} nomination(s) are still being checked or fixed. They count once both checkers pass them, or drop out when the fix or check deadline passes.`
+      CHECK_STEP_ENABLED
+        ? `${inCheck.length} nomination(s) are still being checked or fixed. They count once both checkers pass them, or drop out when the fix or check deadline passes.`
+        : `${inCheck.length} nomination(s) were sent back and are still being fixed. They count once resubmitted, or drop out when the fix deadline passes.`
     );
   }
-  if (nominations.length === 0) blockers.push("No nomination for this award has passed both checks yet.");
+  if (nominations.length === 0) {
+    blockers.push(
+      CHECK_STEP_ENABLED
+        ? "No nomination for this recognition has passed both checks yet."
+        : "No chapter has submitted a nomination for this recognition."
+    );
+  }
   for (const layer of ["rm", "nmt"] as const) {
     const orphaned = nominations.filter(
       (n) =>

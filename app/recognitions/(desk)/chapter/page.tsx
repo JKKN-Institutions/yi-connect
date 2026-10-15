@@ -1,18 +1,17 @@
 import Link from "next/link";
 import {
-  chapterMap,
-  getChapterCategories,
   getCurrentCycle,
   listAwards,
   listNominationsForChapter,
   listPredictionsByChapter,
 } from "@/lib/recognitions/data";
-import { CATEGORIES, CATEGORY_LABEL, RANK_LABEL } from "@/lib/recognitions/constants";
+import { CATEGORIES, CATEGORY_LABEL, CHECK_STEP_ENABLED, RANK_LABEL, groupByKind } from "@/lib/recognitions/constants";
 import { Ribbon } from "../../_ui/ribbon";
 import { IconArrowRight } from "../../_ui/icons";
 import { Deadline, NoAccess, Notice, PageHead, Seal, formatWhen } from "../../_ui/primitives";
 import { ChapterSwitcher } from "./switcher";
-import { gateChapterPage, nominationWindow, previousWinners } from "./load";
+import { categoryAndRivals, gateChapterPage, nominationWindow, previousWinners } from "./load";
+import { CategoryPanel } from "./category-panel";
 import { withChapter } from "./shared";
 import { STATUS_TONE } from "./summary";
 import { NOMINATION_STATUS_LABEL, effectiveStatus, exclusionReason } from "@/lib/recognitions/check-rules";
@@ -37,20 +36,19 @@ export default async function ChapterDashboard({
           <ChapterSwitcher chapters={chapters} currentId={chapter.id} path="/recognitions/chapter" />
         </PageHead>
         <div className="rx-plate rx-stack">
-          <h2 className="rx-h2">No awards cycle is open yet</h2>
+          <h2 className="rx-h2">No recognitions cycle is open yet</h2>
           <p className="rx-mute">
-            When the Recognitions super admin opens this year&apos;s cycle, your chapter&apos;s category, the awards
-            and the deadline will appear here.
+            When the Recognitions super admin opens this year&apos;s cycle, your chapter&apos;s category, the
+            recognitions and the deadline will appear here.
           </p>
         </div>
       </div>
     );
   }
 
-  const [awards, categories, chapters_] = await Promise.all([
+  const [awards, { category, rivals }] = await Promise.all([
     listAwards(cycle.id),
-    getChapterCategories(cycle.id),
-    chapterMap(),
+    categoryAndRivals(cycle.id, chapter.id),
   ]);
   const awardIds = awards.map((a) => a.id);
   const [nominations, predictions, podiums] = await Promise.all([
@@ -59,15 +57,7 @@ export default async function ChapterDashboard({
     previousWinners(cycle),
   ]);
   const byAward = new Map(nominations.map((n) => [n.award_id, n]));
-  const category = categories.get(chapter.id) ?? null;
   const win = nominationWindow(cycle);
-  const fellows = category
-    ? [...categories.entries()]
-        .filter(([id, cat]) => cat === category && id !== chapter.id)
-        .map(([id]) => chapters_.get(id)?.name)
-        .filter((n): n is string => !!n)
-        .sort((a, b) => a.localeCompare(b))
-    : [];
   const drafts = nominations.filter((n) => n.status === "draft").length;
   const toFix = nominations.filter((n) => effectiveStatus(n, cycle) === "returned").length;
   const quizOpen = cycle.quiz_open && win.state === "open";
@@ -103,7 +93,12 @@ export default async function ChapterDashboard({
       ) : win.state === "not_open" ? (
         <Notice>Nominations haven&apos;t opened yet. The Recognitions super admin will set the deadline.</Notice>
       ) : win.state === "closed" ? (
-        <Notice>Nominations closed on {formatWhen(win.deadline)}. Only nominations the Regional Chair and a Regional Mentor both pass are scored.</Notice>
+        <Notice>
+          Nominations closed on {formatWhen(win.deadline)}.{" "}
+          {CHECK_STEP_ENABLED
+            ? "Only nominations the Regional Chair and a Regional Mentor both pass are scored."
+            : "Every nomination your chapter submitted goes to the evaluators for scoring."}
+        </Notice>
       ) : (
         <Notice>
           Drafts are not entered. Submit before the deadline.
@@ -114,7 +109,7 @@ export default async function ChapterDashboard({
       <div className="rx-row">
         {category && win.state === "open" ? (
           <Link href={link("/recognitions/chapter/apply")} className="rx-btn">
-            {nominations.length > 0 ? "Continue your nominations" : "Apply for awards"} <IconArrowRight size={16} />
+            {nominations.length > 0 ? "Continue your nominations" : "Apply for recognitions"} <IconArrowRight size={16} />
           </Link>
         ) : (
           <Link href={link("/recognitions/chapter/apply")} className="rx-btn rx-btn-quiet">
@@ -126,64 +121,66 @@ export default async function ChapterDashboard({
         </Link>
       </div>
 
-      <section className="rx-stack">
-        <div className="rx-eyebrow">Awards you can apply for</div>
-        {awards.length === 0 ? (
-          <p className="rx-mute">No awards have been set up for this cycle yet.</p>
-        ) : (
-          <div className="rx-stack" style={{ gap: 0 }}>
-            {awards.map((a) => {
-              const n = byAward.get(a.id);
-              const st = n ? effectiveStatus(n, cycle) : null;
-              return (
-                <article key={a.id} className="rx-plate rx-plate-tight rx-stack" style={{ marginTop: 10 }}>
-                  <div className="rx-spread">
-                    <div className="rx-row" style={{ gap: 10 }}>
-                      <Ribbon vertical={a.vertical} size="lg" />
-                      <h2 className="rx-h3">{a.title}</h2>
-                    </div>
-                    {st ? (
-                      <Seal tone={STATUS_TONE[st]}>{NOMINATION_STATUS_LABEL[st]}</Seal>
-                    ) : (
-                      <Seal tone="mute">Not applied</Seal>
-                    )}
-                  </div>
-                  {a.criteria ? <p className="rx-small" style={{ whiteSpace: "pre-line" }}>{a.criteria}</p> : null}
-                  {n && st === "returned" ? (
-                    <div className="rx-notice rx-notice-alert rx-small">
-                      <strong>Sent back for a fix.</strong> {n.return_note}
-                      <div style={{ marginTop: 6 }}>
-                        Fix and resubmit by {formatWhen(cycle.fix_deadline)}.{" "}
-                        <Link href={link("/recognitions/chapter/apply")} className="rx-link">Fix it now</Link>
-                      </div>
-                    </div>
-                  ) : n && st === "submitted" && n.submitted_at ? (
-                    <p className="rx-small rx-mute">
-                      Submitted {formatWhen(n.submitted_at)}. Waiting for the Regional Chair and a Regional Mentor to check it.
-                    </p>
-                  ) : n && st === "checked" ? (
-                    <p className="rx-small rx-mute">Passed both checks. It is in the race and is being scored.</p>
-                  ) : n && st === "excluded" ? (
-                    <p className="rx-small rx-mute">{exclusionReason(n, cycle)}</p>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </section>
+      <CategoryPanel category={category} rivals={rivals} />
 
       <section className="rx-stack">
-        <div className="rx-eyebrow">Fellow chapters in your category</div>
-        {!category ? (
-          <p className="rx-mute">You&apos;ll see them here once your chapter has a category.</p>
-        ) : fellows.length === 0 ? (
-          <p className="rx-mute">No other chapter is in {CATEGORY_LABEL[category]} yet.</p>
+        <div className="rx-eyebrow">Recognitions you can apply for</div>
+        {awards.length === 0 ? (
+          <p className="rx-mute">No recognitions have been set up for this cycle yet.</p>
         ) : (
-          <p className="rx-small">
-            <span className="rx-mute">{CATEGORY_LABEL[category]}: </span>
-            {fellows.join(" · ")}
-          </p>
+          groupByKind(awards).map((g) => (
+            <div key={g.kind ?? "other"} className="rx-stack" style={{ gap: 0 }}>
+              <div className="rx-label" style={{ marginTop: 6 }}>{g.label}</div>
+              {g.items.map((a) => {
+                const n = byAward.get(a.id);
+                const st = n ? effectiveStatus(n, cycle) : null;
+                const why = (n?.justification ?? "").trim();
+                return (
+                  <article key={a.id} className="rx-plate rx-plate-tight rx-stack" style={{ marginTop: 10 }}>
+                    <div className="rx-spread">
+                      <div className="rx-row" style={{ gap: 10, minWidth: 0 }}>
+                        <Ribbon vertical={a.vertical} kind={a.kind} size="lg" />
+                        <h2 className="rx-h3" style={{ overflowWrap: "anywhere" }}>{a.title}</h2>
+                      </div>
+                      {st ? (
+                        <Seal tone={STATUS_TONE[st]}>{NOMINATION_STATUS_LABEL[st]}</Seal>
+                      ) : (
+                        <Seal tone="mute">Not applied</Seal>
+                      )}
+                    </div>
+                    {a.criteria ? <p className="rx-small" style={{ whiteSpace: "pre-line" }}>{a.criteria}</p> : null}
+                    {n && why ? (
+                      <div className="rx-small">
+                        <div className="rx-label" style={{ marginBottom: 2 }}>
+                          {n.status === "draft" ? "Your draft answer" : "Why your chapter should get it"}
+                        </div>
+                        <p style={{ whiteSpace: "pre-line", overflowWrap: "anywhere" }}>{why}</p>
+                      </div>
+                    ) : null}
+                    {n && st === "returned" ? (
+                      <div className="rx-notice rx-notice-alert rx-small">
+                        <strong>Sent back for a fix.</strong> {n.return_note}
+                        <div style={{ marginTop: 6 }}>
+                          Fix and resubmit by {formatWhen(cycle.fix_deadline)}.{" "}
+                          <Link href={link("/recognitions/chapter/apply")} className="rx-link">Fix it now</Link>
+                        </div>
+                      </div>
+                    ) : n && (st === "submitted" || st === "checked") && n.submitted_at ? (
+                      <p className="rx-small rx-mute">
+                        {CHECK_STEP_ENABLED
+                          ? st === "checked"
+                            ? "Passed both checks. It is in the race and is being scored."
+                            : `Submitted ${formatWhen(n.submitted_at)}. Waiting for the Regional Chair and a Regional Mentor to check it.`
+                          : `Submitted ${formatWhen(n.submitted_at)}. Locked. It goes to the evaluators for scoring.`}
+                      </p>
+                    ) : n && st === "excluded" ? (
+                      <p className="rx-small rx-mute">{exclusionReason(n, cycle)}</p>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+          ))
         )}
       </section>
 
@@ -196,7 +193,7 @@ export default async function ChapterDashboard({
             {podiums.map((p) => (
               <article key={`${p.cycleName}-${p.awardTitle}`} className="rx-plate rx-plate-tight rx-stack">
                 <div className="rx-row" style={{ gap: 10 }}>
-                  <Ribbon vertical={p.vertical} />
+                  <Ribbon vertical={p.vertical} kind={p.kind} />
                   <div>
                     <div className="rx-h3">{p.awardTitle}</div>
                     <div className="rx-small rx-mute">{p.cycleName}</div>

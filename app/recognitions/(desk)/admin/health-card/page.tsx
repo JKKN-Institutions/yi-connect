@@ -18,10 +18,10 @@ export default async function HealthCardPage({ searchParams }: { searchParams: P
       <div className="rx-stack-lg">
         <PageHead eyebrow="Control room" title="National Health Card" />
         <div className="rx-plate rx-stack">
-          <p>{cycle ? "Add the awards first; each award has its own Health Card." : "Open a cycle first."}</p>
+          <p>{cycle ? "Add the recognitions first; each recognition has its own Health Card." : "Open a cycle first."}</p>
           <div>
             <Link className="rx-btn" href={cycle ? "/recognitions/admin/awards" : "/recognitions/admin/timeline"}>
-              {cycle ? "Go to Awards" : "Go to Timeline"}
+              {cycle ? "Go to Recognitions" : "Go to Timeline"}
             </Link>
           </div>
         </div>
@@ -45,12 +45,12 @@ export default async function HealthCardPage({ searchParams }: { searchParams: P
     <div className="rx-stack-lg">
       <PageHead eyebrow={`Control room · ${cycle.name}`} title="National Health Card">
         <p className="rx-mute">
-          Layer 1 ({cycle.weight_layer1}% of the total). Yi National keeps one Health Card per vertical. Upload it here; evaluators of this award can
+          Layer 1 ({cycle.weight_layer1}% of the total). Yi National keeps one Health Card per vertical. Upload it here; evaluators of this recognition can
           download the same file. Then pick the columns that hold the chapter name and the 0-100 score.
         </p>
       </PageHead>
 
-      <nav className="rx-ad-chips" aria-label="Awards">
+      <nav className="rx-ad-chips" aria-label="Recognitions">
         {awards.map((a) => (
           <Link
             key={a.id}
@@ -58,7 +58,7 @@ export default async function HealthCardPage({ searchParams }: { searchParams: P
             className="rx-ad-chip"
             aria-current={a.id === award.id ? "page" : undefined}
           >
-            <Ribbon vertical={a.vertical} /> {a.title}
+            <Ribbon vertical={a.vertical} kind={a.kind} /> {a.title}
           </Link>
         ))}
       </nav>

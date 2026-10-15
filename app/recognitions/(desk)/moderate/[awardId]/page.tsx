@@ -23,17 +23,17 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
   if (!gate.ok) return <NoAccess reason={gate.error} />;
 
   const state = await getAwardState(awardId);
-  if (!state) return <NoAccess reason="This award does not exist or was removed." contact={false} />;
+  if (!state) return <NoAccess reason="This recognition does not exist or was removed." contact={false} />;
   const { award, cycle, phase } = state;
 
   const head = (
     <>
       <Link href="/recognitions/moderate" className="rx-link rx-small rx-row" style={{ gap: 6 }}>
-        <IconArrowLeft size={14} /> All Stage 2 awards
+        <IconArrowLeft size={14} /> All Stage 2 recognitions
       </Link>
       <PageHead eyebrow={`${cycle.name} · Stage 2 room`} title={award.title}>
         <div className="rx-row">
-          <Ribbon vertical={award.vertical} size="lg" />
+          <Ribbon vertical={award.vertical} kind={award.kind} size="lg" />
           <PhaseSeal phase={phase} />
         </div>
       </PageHead>
@@ -121,7 +121,7 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
           <Notice>Version {latestSubmitted?.version} is submitted and waiting for National Leadership.</Notice>
         ) : null}
         {phase === "finalized" ? (
-          <Notice tone="ok">National Leadership approved version {latestSubmitted?.version}. This award is final.</Notice>
+          <Notice tone="ok">National Leadership approved version {latestSubmitted?.version}. This recognition is final.</Notice>
         ) : null}
       </div>
 
@@ -143,7 +143,7 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
               The top three in each category need a rationale and a citation.
             </p>
             {formCategories.length === 0 ? (
-              <p className="rx-mute">No nomination has passed both checks, so there is nothing to rank.</p>
+              <p className="rx-mute">No nomination is in the race, so there is nothing to rank.</p>
             ) : (
               <ModerationForm
                 awardId={award.id}

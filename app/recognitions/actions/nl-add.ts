@@ -8,7 +8,7 @@ import { addWindow, chapterAddRefusal } from "@/lib/recognitions/nl-add";
 import { canFix, fixDeadlineFor, isNlAdded } from "@/lib/recognitions/check-rules";
 import { rxService } from "@/lib/recognitions/supabase";
 import { countWords } from "@/lib/recognitions/words";
-import { WORDS } from "@/lib/recognitions/constants";
+import { CHECK_STEP_ENABLED, WORDS } from "@/lib/recognitions/constants";
 import type { ActionResult, NominationRow } from "@/lib/recognitions/types";
 import { formatWhen } from "../_ui/primitives";
 
@@ -62,7 +62,7 @@ export async function addChapterToAward(awardId: string, chapterId: string, reas
   }
 
   const state = await getAwardState(awardId);
-  if (!state) return { success: false, error: "This award no longer exists. Go back to Review and reload." };
+  if (!state) return { success: false, error: "This recognition no longer exists. Go back to Review and reload." };
   const win = addWindow(state);
   if (!win.open) return { success: false, error: win.reason };
 
@@ -109,9 +109,9 @@ export async function addChapterToAward(awardId: string, chapterId: string, reas
     .single();
   if (error || !data) {
     if (sentBack) revalidatePath("/recognitions", "layout");
-    const tail = sentBack ? " The award has already been sent back for re-evaluation, so adding again will just add the chapter." : "";
+    const tail = sentBack ? " The recognition has already been sent back for re-evaluation, so adding again will just add the chapter." : "";
     if (error?.code === "23505") {
-      return { success: false, error: `${chapter.name} already has a nomination for this award (it was added a moment ago).${tail}` };
+      return { success: false, error: `${chapter.name} already has a nomination for this recognition (it was added a moment ago).${tail}` };
     }
     console.error(JSON.stringify({ tag: "recognitions_nl_add_write_failed", what: "add", error: error?.message, code: error?.code }));
     return {
@@ -138,7 +138,11 @@ export async function addChapterToAward(awardId: string, chapterId: string, reas
   revalidatePath("/recognitions", "layout");
   return {
     success: true,
-    message: `${chapter.name} added.${sentBack ? " The award is now back with the NMT leader for re-evaluation." : ""} The Regional Chair and a Regional Mentor for ${chapter.region} must both pass it before it is scored, by ${formatWhen(state.cycle.reevaluation_deadline)}.`,
+    message: `${chapter.name} added.${sentBack ? " The recognition is now back with the NMT leader for re-evaluation." : ""} ${
+      CHECK_STEP_ENABLED
+        ? `The Regional Chair and a Regional Mentor for ${chapter.region} must both pass it before it is scored, by ${formatWhen(state.cycle.reevaluation_deadline)}.`
+        : "It goes straight to the evaluators for scoring."
+    }`,
   };
 }
 
@@ -163,7 +167,7 @@ async function fixContext(nominationId: string): Promise<{ ok: true; ctx: FixCtx
   }
   const [award, cycle] = await Promise.all([getAward(n.award_id), getCurrentCycle()]);
   if (!award || !award.is_active || !cycle || award.cycle_id !== cycle.id) {
-    return { ok: false, error: "That nomination is not part of this year's open awards." };
+    return { ok: false, error: "That nomination is not part of this year's open recognitions." };
   }
   if (n.status !== "returned") {
     return { ok: false, error: "This nomination is not waiting for a fix. Reload the page to see where it stands." };

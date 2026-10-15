@@ -1,11 +1,12 @@
 import { getRxViewer, isChecker } from "@/lib/recognitions/auth";
 import { getCurrentCycle } from "@/lib/recognitions/data";
 import { checksOpen } from "@/lib/recognitions/check-rules";
+import { CHECK_STEP_ENABLED } from "@/lib/recognitions/constants";
 import { Deadline, NoAccess, Notice, PageHead, Seal, formatWhen } from "../../_ui/primitives";
 import { CheckList } from "./check-list";
 import { loadCheckItems } from "./load";
 
-export const metadata = { title: "Check nominations · Yi Recognitions" };
+export const metadata = { title: "Check nominations" };
 
 /**
  * The Check desk (recognitions_02). Regional Chairs and Regional Mentors
@@ -15,6 +16,25 @@ export const metadata = { title: "Check nominations · Yi Recognitions" };
 export default async function CheckDeskPage() {
   const viewer = await getRxViewer();
   if (!viewer) return null; // the desk layout already rendered the no-access panel
+  // 2026 (Director, 2026-10-15): the check step is not used. Hidden, not
+  // deleted: an old link lands here and is told so, never redirected.
+  if (!CHECK_STEP_ENABLED) {
+    return (
+      <div className="rx-stack-lg">
+        <PageHead eyebrow="Before scoring" title="Check nominations" />
+        <div className="rx-plate rx-stack">
+          <h2 className="rx-h2">The check step is not used this year</h2>
+          <p>
+            Regional Chairs and Regional Mentors do not check nominations this year. Every nomination a chapter
+            submits goes straight to the evaluators for scoring, so there is nothing to do on this page.
+          </p>
+          <p className="rx-mute rx-small">
+            If you are also an evaluator, your nominations are on the Scoring desk.
+          </p>
+        </div>
+      </div>
+    );
+  }
   if (!isChecker(viewer)) {
     return (
       <NoAccess reason="The Check desk is for Regional Chairs and Regional Mentors. Your Yi account has neither role this year." />

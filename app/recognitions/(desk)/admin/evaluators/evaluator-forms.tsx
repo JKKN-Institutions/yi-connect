@@ -155,7 +155,7 @@ export function AssignEvaluatorForm({ awardId, hasLeader, chapters }: { awardId:
               <input type="checkbox" className="rx-ad-check" checked={leader} disabled={hasLeader} onChange={(e) => setLeader(e.target.checked)} />
               <span>
                 NMT leader (moderates Stage 2 and the re-evaluation)
-                {hasLeader ? <span className="rx-ad-mini"> — this award already has a leader</span> : null}
+                {hasLeader ? <span className="rx-ad-mini"> — this recognition already has a leader</span> : null}
               </span>
             </label>
           )}
@@ -213,7 +213,7 @@ export function DutyActions({
         onConfirm={() => run(() => removeEvaluator(evaluatorId), (r) => r.success && setRemoveOpen(false))}
       >
         <p>
-          They stop seeing this award. Any scores they already submitted stay on record and still count. Removing someone mid-scoring changes what
+          They stop seeing this recognition. Any scores they already submitted stay on record and still count. Removing someone mid-scoring changes what
           &ldquo;100% submitted&rdquo; means for Stage 2.
         </p>
       </ConfirmDialog>

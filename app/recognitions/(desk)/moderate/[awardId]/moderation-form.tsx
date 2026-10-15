@@ -182,7 +182,7 @@ export function ModerationForm({
                       onChange={(v) => setText(h.nominationId, "citation", v)}
                       limit={WORDS.top3Citation}
                       rows={6}
-                      help="Required. The award announcement text: what the chapter did and why it is being awarded."
+                      help="Required. The announcement text: what the chapter did and why it is being recognised."
                     />
                   </article>
                 );

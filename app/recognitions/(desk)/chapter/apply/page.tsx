@@ -1,32 +1,18 @@
 import Link from "next/link";
-import { getChapterCategories, getCurrentCycle, getPeople, listAwards, listNominationsForChapter } from "@/lib/recognitions/data";
+import { getCurrentCycle, getPeople, listAwards, listNominationsForChapter } from "@/lib/recognitions/data";
 import { canFix, effectiveStatus, exclusionReason } from "@/lib/recognitions/check-rules";
-import { CATEGORY_LABEL } from "@/lib/recognitions/constants";
-import type { NominationRow } from "@/lib/recognitions/types";
+import { CHECK_STEP_ENABLED, WORDS } from "@/lib/recognitions/constants";
 import { IconArrowLeft } from "../../../_ui/icons";
-import { Deadline, NoAccess, Notice, PageHead, Seal, formatWhen } from "../../../_ui/primitives";
+import { Deadline, NoAccess, Notice, PageHead, formatWhen } from "../../../_ui/primitives";
 import { ChapterSwitcher } from "../switcher";
-import { gateChapterPage, nominationWindow } from "../load";
-import { withChapter, type NominationForm } from "../shared";
+import { categoryAndRivals, gateChapterPage, nominationWindow } from "../load";
+import { formFromRow, isLegacyForm, withChapter } from "../shared";
 import { NominationSummary } from "../summary";
+import { ApplyInstructions, CategoryPanel } from "../category-panel";
 import { ApplyWizard } from "./wizard";
 import { FixReturnedForm } from "./fix-form";
 
-export const metadata = { title: "Apply for awards" };
-
-function toForm(n: NominationRow): NominationForm {
-  const reasons = [...(n.reasons ?? [])];
-  while (reasons.length < 5) reasons.push("");
-  return {
-    awardId: n.award_id,
-    reasons: reasons.slice(0, 5),
-    flagship: n.flagship_event ?? "",
-    hosted: n.hosted_event,
-    hostedName: n.hosted_event_name ?? "",
-    hostedType: n.hosted_event_type ?? "",
-    announcement: n.announcement_draft ?? "",
-  };
-}
+export const metadata = { title: "Apply for recognitions" };
 
 export default async function ApplyPage({
   searchParams,
@@ -39,7 +25,7 @@ export default async function ApplyPage({
   const back = withChapter("/recognitions/chapter", chapter.id, chapters.length);
 
   const head = (extra?: React.ReactNode) => (
-    <PageHead eyebrow={`${chapter.name} · Nominations`} title="Apply for awards">
+    <PageHead eyebrow={`${chapter.name} · Nominations`} title="Apply for recognitions">
       <ChapterSwitcher chapters={chapters} currentId={chapter.id} path="/recognitions/chapter/apply" />
       <div>
         <Link href={back} className="rx-link rx-small">
@@ -56,28 +42,35 @@ export default async function ApplyPage({
       <div className="rx-stack-lg">
         {head()}
         <div className="rx-plate rx-stack">
-          <h2 className="rx-h2">No awards cycle is open yet</h2>
+          <h2 className="rx-h2">No recognitions cycle is open yet</h2>
           <p className="rx-mute">You can apply once the Recognitions super admin opens this year&apos;s cycle.</p>
         </div>
       </div>
     );
   }
 
-  const [awards, categories] = await Promise.all([listAwards(cycle.id), getChapterCategories(cycle.id)]);
+  const [awards, { category, rivals }] = await Promise.all([
+    listAwards(cycle.id),
+    categoryAndRivals(cycle.id, chapter.id),
+  ]);
   const nominations = await listNominationsForChapter(chapter.id, awards.map((a) => a.id));
-  const category = categories.get(chapter.id) ?? null;
   const win = nominationWindow(cycle);
   const region = (chapter.region ?? "").trim();
 
-  const meta = (
-    <div className="rx-row" style={{ gap: 10 }}>
-      {category ? <Seal tone="gilt">{CATEGORY_LABEL[category]}</Seal> : <Seal tone="mute">No category yet</Seal>}
-      <Deadline label="Nominations close" iso={cycle.nomination_deadline} />
-    </div>
+  const meta = <Deadline label="Nominations close" iso={cycle.nomination_deadline} />;
+  const intro = (
+    <>
+      <ApplyInstructions
+        deadline={cycle.nomination_deadline ? formatWhen(cycle.nomination_deadline) : "the deadline"}
+        whyWords={WORDS.justification}
+      />
+      <CategoryPanel category={category} rivals={rivals} />
+    </>
   );
 
-  // Sent back by a checker and still inside the fix window (recognitions_02):
-  // editable here even after the nomination deadline, which is the point.
+  // Sent back by a checker before the check step was dropped, and still
+  // inside the fix window (recognitions_02): editable here even after the
+  // nomination deadline. No new send-backs happen in 2026.
   const fixable = nominations.filter((n) => canFix(n, cycle));
   const returners = await getPeople(fixable.map((n) => n.returned_by).filter((x): x is string => !!x));
   const fixForms =
@@ -87,12 +80,14 @@ export default async function ApplyPage({
         {fixable.map((n) => {
           const a = awards.find((x) => x.id === n.award_id);
           if (!a) return null;
+          const form = formFromRow(n);
           return (
             <FixReturnedForm
               key={n.id}
               chapterId={chapter.id}
-              award={{ id: a.id, title: a.title, vertical: a.vertical, criteria: a.criteria }}
-              initial={toForm(n)}
+              award={{ id: a.id, title: a.title, vertical: a.vertical, kind: a.kind, criteria: a.criteria }}
+              initial={form}
+              legacy={isLegacyForm(form)}
               note={n.return_note ?? ""}
               returnedBy={(n.returned_by && returners.get(n.returned_by)?.full_name) || "A checker"}
               returnedAt={n.returned_at}
@@ -103,7 +98,7 @@ export default async function ApplyPage({
       </section>
     );
 
-  // Whatever blocks the wizard, the chapter still sees what it has filed, read-only.
+  // Whatever blocks the form, the chapter still sees what it has filed, read-only.
   const filedList = nominations.filter((n) => !canFix(n, cycle));
   const readOnlyList =
     filedList.length === 0 ? null : (
@@ -114,18 +109,24 @@ export default async function ApplyPage({
           .map((a) => {
             const n = filedList.find((x) => x.award_id === a.id)!;
             const st = effectiveStatus(n, cycle);
+            const filedNote = CHECK_STEP_ENABLED
+              ? `Submitted ${formatWhen(n.submitted_at)}. Locked while the Regional Chair and a Regional Mentor check it.`
+              : `Submitted ${formatWhen(n.submitted_at)}. Locked. It goes to the evaluators for scoring.`;
             return (
               <NominationSummary
                 key={a.id}
                 title={a.title}
                 vertical={a.vertical}
-                form={toForm(n)}
+                kind={a.kind}
+                form={formFromRow(n)}
                 status={st}
                 note={
                   st === "submitted"
-                    ? `Submitted ${formatWhen(n.submitted_at)}. Locked while the Regional Chair and a Regional Mentor check it.`
+                    ? filedNote
                     : st === "checked"
-                      ? "Passed both checks. It is in the race and is being scored."
+                      ? CHECK_STEP_ENABLED
+                        ? "Passed both checks. It is in the race and is being scored."
+                        : filedNote
                       : st === "excluded"
                         ? (exclusionReason(n, cycle) ?? undefined)
                         : win.state === "closed"
@@ -156,13 +157,14 @@ export default async function ApplyPage({
   } else if (win.state === "closed") {
     blocker = <Notice>Nominations closed on {formatWhen(win.deadline)}.</Notice>;
   } else if (awards.length === 0) {
-    blocker = <Notice>No awards have been set up for this cycle yet.</Notice>;
+    blocker = <Notice>No recognitions have been set up for this cycle yet.</Notice>;
   }
 
   if (blocker || win.state !== "open") {
     return (
       <div className="rx-stack-lg">
         {head(meta)}
+        {intro}
         {blocker}
         {fixForms}
         {readOnlyList}
@@ -173,18 +175,19 @@ export default async function ApplyPage({
   return (
     <div className="rx-stack-lg">
       {head(meta)}
+      {intro}
       {fixForms}
       <ApplyWizard
         chapterId={chapter.id}
         chapterName={chapter.name}
         deadline={win.deadline}
-        awards={awards.map((a) => ({ id: a.id, title: a.title, vertical: a.vertical, criteria: a.criteria }))}
+        awards={awards.map((a) => ({ id: a.id, title: a.title, vertical: a.vertical, kind: a.kind, criteria: a.criteria }))}
         initial={nominations.map((n) => ({
           awardId: n.award_id,
-          // The wizard only knows "draft" and "filed (locked)". A sent-back one is fixed above.
+          // The form only knows "draft" and "filed (locked)". A sent-back one is fixed above.
           status: n.status === "draft" ? ("draft" as const) : ("submitted" as const),
           submittedAt: n.submitted_at,
-          form: toForm(n),
+          justification: n.justification ?? "",
         }))}
       />
     </div>

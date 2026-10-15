@@ -70,7 +70,7 @@ export function CeremonyPDF({ report, includePending }: { report: CeremonyReport
           <View style={s.railGilt} />
           <View style={s.railLaurel} />
         </View>
-        <Text style={s.eyebrow}>Take Pride · national chapter awards</Text>
+        <Text style={s.eyebrow}>Yi Recognitions · national chapter recognitions</Text>
         <Text style={s.title}>{title}</Text>
         <Text style={s.sub}>
           Generated {DATE_FMT.format(new Date())} IST ·{" "}
@@ -83,7 +83,7 @@ export function CeremonyPDF({ report, includePending }: { report: CeremonyReport
         ) : null}
 
         {report.awards.length === 0 ? (
-          <Text style={s.empty}>No award is ready for the ceremony yet.</Text>
+          <Text style={s.empty}>No recognition is ready for the ceremony yet.</Text>
         ) : null}
 
         {report.awards.map((a) => (

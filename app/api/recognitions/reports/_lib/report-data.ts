@@ -12,7 +12,7 @@ import {
   listScoresForAward,
   effectiveText,
 } from "@/lib/recognitions/data";
-import { CATEGORIES, CATEGORY_LABEL, LAYER_LABEL, RANK_LABEL, VERTICAL_LABEL, type Category } from "@/lib/recognitions/constants";
+import { CATEGORIES, CATEGORY_LABEL, LAYER_LABEL, RANK_LABEL, verticalLabel, type Category } from "@/lib/recognitions/constants";
 import { computeMatrix, paramsTotal } from "@/lib/recognitions/scoring";
 import { PHASE_LABEL } from "@/lib/recognitions/phase";
 import { isNlAdded } from "@/lib/recognitions/check-rules";
@@ -76,7 +76,10 @@ export async function ceremonyReport(includePending: boolean): Promise<CeremonyR
         if (!entry) continue;
         const nom = noms.get(entry.nomination_id);
         const chapter = nom ? chapters.get(nom.chapter_id) : undefined;
-        const achievements = (nom?.reasons ?? []).map((r) => r.trim()).filter((r) => r !== "");
+        // 2026 form: the chapter's one "why" (recognitions_04); older rows: the five reasons.
+        const achievements = nom?.justification?.trim()
+          ? [nom.justification.trim()]
+          : (nom?.reasons ?? []).map((r) => r.trim()).filter((r) => r !== "");
         if (nom?.flagship_event?.trim()) achievements.push(`Flagship event: ${nom.flagship_event.trim()}`);
         // A chapter National Leadership added (recognitions_03) has no form: its reason is the case.
         if (nom && isNlAdded(nom) && nom.added_reason?.trim()) {
@@ -100,7 +103,7 @@ export async function ceremonyReport(includePending: boolean): Promise<CeremonyR
       .sort((a, b) => Date.parse(b.edited_at) - Date.parse(a.edited_at))[0];
     out.awards.push({
       title: award.title,
-      verticalLabel: VERTICAL_LABEL[award.vertical],
+      verticalLabel: verticalLabel(award),
       approved,
       version: version.version,
       places,
@@ -162,8 +165,8 @@ export async function verticalReport(): Promise<{ cycle: CycleRow; sheets: Verti
     const finalBy = new Map((version?.rankings ?? []).map((r) => [r.nomination_id, r]));
 
     const aoa: VerticalSheet["aoa"] = [
-      ["Award", award.title],
-      ["Vertical", VERTICAL_LABEL[award.vertical]],
+      ["Recognition", award.title],
+      ["Vertical", verticalLabel(award)],
       ["Phase", PHASE_LABEL[state.phase]],
       ["Weights", `Layer 1 ${cycle.weight_layer1}% · Layer 2 ${cycle.weight_layer2}% · Layer 3 ${cycle.weight_layer3}%`],
       ["Layer 2 counted as", cycle.layer2_mode === "percentile" ? "Percentile within the region" : "Raw score out of 25"],

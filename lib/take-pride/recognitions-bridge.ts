@@ -486,7 +486,10 @@ export async function getChapterJourney(chapterText: string): Promise<Journey> {
     let stage: JourneyStage;
     let announced: JourneyItem["announced"] = null;
     if (status === "excluded") stage = "not_forward";
-    else if (status === "submitted" || status === "returned") stage = "nominated";
+    // The 2026 cycle has no check step (Director, 2026-10-15): a filed nomination
+    // moves on to scoring once nominations close.
+    else if (status === "returned" || (status === "submitted" && !isPast(cycle.nomination_deadline))) stage = "nominated";
+    else if (status === "submitted") stage = moderated.has(award.id) || award.stage2_unlocked_at ? "final_list" : "scoring";
     else if (moderated.has(award.id) || award.stage2_unlocked_at) stage = "final_list";
     else stage = checksClosed ? "scoring" : "checked";
 

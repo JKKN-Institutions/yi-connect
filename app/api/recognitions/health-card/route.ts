@@ -50,7 +50,7 @@ export async function POST(req: Request) {
 
   const awardId = String(body.awardId ?? "");
   const award = awardId ? await getAward(awardId) : null;
-  if (!award) return json(404, { error: "That award no longer exists. Reload the page." });
+  if (!award) return json(404, { error: "That recognition no longer exists. Reload the page." });
   const fileName = String(body.fileName ?? "").trim();
   const ext = extOf(fileName);
   if (!fileName || !(HEALTH_CARD_EXTS as readonly string[]).includes(ext)) return json(400, { error: TYPES_TEXT });

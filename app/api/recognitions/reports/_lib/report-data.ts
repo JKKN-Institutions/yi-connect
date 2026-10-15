@@ -211,7 +211,7 @@ export async function verticalReport(): Promise<{ cycle: CycleRow; sheets: Verti
         fin?.final_rank ?? null,
       ]);
     }
-    if (matrix.length === 0) aoa.push(["No nomination for this award passed both checks."]);
+    if (matrix.length === 0) aoa.push(["No chapter is in the race for this recognition."]);
     sheets.push({ title: award.title, aoa });
   }
   return { cycle, sheets };

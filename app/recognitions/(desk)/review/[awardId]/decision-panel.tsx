@@ -27,7 +27,7 @@ export function DecisionPanel({ awardId, version }: { awardId: string; version: 
     <div className="rx-plate rx-plate-gilt rx-stack">
       <h2 className="rx-h2">Your decision on version {version}</h2>
       <p className="rx-small rx-mute">
-        Approve to finalise the award, or send it back to the NMT leader with the reason. A send-back starts Stage 3:
+        Approve to finalise the recognition, or send it back to the NMT leader with the reason. A send-back starts Stage 3:
         the NMT leader reopens the moderation and submits a revised version.
       </p>
       <div className="rx-row">
@@ -42,13 +42,13 @@ export function DecisionPanel({ awardId, version }: { awardId: string; version: 
 
       <ConfirmDialog
         open={dialog === "approve"}
-        title="Approve this award?"
+        title="Approve this recognition?"
         confirmLabel="Approve"
         busy={pending}
         onConfirm={() => act("approve")}
         onClose={() => setDialog(null)}
       >
-        <p>This finalises the award. The ranking and podium of version {version} become the result.</p>
+        <p>This finalises the recognition. The ranking and podium of version {version} become the result.</p>
       </ConfirmDialog>
 
       <ConfirmDialog

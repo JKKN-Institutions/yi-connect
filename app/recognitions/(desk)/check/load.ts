@@ -17,7 +17,7 @@ import {
   isNlAdded,
   SEAT_LABEL,
 } from "@/lib/recognitions/check-rules";
-import type { Category, Vertical } from "@/lib/recognitions/constants";
+import type { AwardKind, Category, Vertical } from "@/lib/recognitions/constants";
 import type { CycleRow, NominationStatus } from "@/lib/recognitions/types";
 import { formatWhen } from "../../_ui/primitives";
 
@@ -35,6 +35,7 @@ export type CheckItem = {
   awardId: string;
   awardTitle: string;
   vertical: Vertical;
+  kind: AwardKind | null;
   chapterName: string;
   region: string;
   category: Category;
@@ -112,6 +113,7 @@ export async function loadCheckItems(
         awardId: award.id,
         awardTitle: award.title,
         vertical: award.vertical,
+        kind: award.kind,
         chapterName: chapters.get(n.chapter_id)?.name ?? "Unknown chapter",
         region: n.region,
         category: n.category,

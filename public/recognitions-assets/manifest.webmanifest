@@ -1,7 +1,7 @@
 {
   "name": "Yi Recognitions",
   "short_name": "Recognitions",
-  "description": "Take Pride: national chapter awards of Young Indians.",
+  "description": "Yi Recognitions: national chapter recognitions of Young Indians.",
   "start_url": "/recognitions",
   "scope": "/recognitions",
   "display": "standalone",

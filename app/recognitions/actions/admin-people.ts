@@ -45,9 +45,9 @@ export async function assignEvaluator(input: {
   if (!gate.ok) return { success: false, error: gate.error };
 
   const award = await getAward(input.awardId);
-  if (!award) return { success: false, error: "That award no longer exists." };
+  if (!award) return { success: false, error: "That recognition no longer exists." };
   const { data: cycleRow } = await rxService().from("recognition_cycles").select("id, yi_year").eq("id", award.cycle_id).maybeSingle();
-  if (!cycleRow) return { success: false, error: "That award's cycle no longer exists." };
+  if (!cycleRow) return { success: false, error: "That recognition's cycle no longer exists." };
   const cycle = cycleRow as { id: string; yi_year: number };
 
   if (input.layer !== "rm" && input.layer !== "nmt") return { success: false, error: "Choose Regional Mentor or NMT." };
@@ -98,7 +98,7 @@ export async function assignEvaluator(input: {
       .maybeSingle();
     const l = leader as { id: string; person_id: string } | null;
     if (l && l.person_id !== person.id)
-      return { success: false, error: "This award already has an NMT leader. Remove that leader's duty first." };
+      return { success: false, error: "This recognition already has an NMT leader. Remove that leader's duty first." };
   }
 
   const { data: existing } = await svc

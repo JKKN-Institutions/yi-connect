@@ -18,10 +18,10 @@ export default async function EvaluatorsPage({ searchParams }: { searchParams: P
       <div className="rx-stack-lg">
         <PageHead eyebrow="Control room" title="Evaluators" />
         <div className="rx-plate rx-stack">
-          <p>{cycle ? "Add the awards first; evaluators are assigned per award." : "Open a cycle first."}</p>
+          <p>{cycle ? "Add the recognitions first; evaluators are assigned per recognition." : "Open a cycle first."}</p>
           <div>
             <Link className="rx-btn" href={cycle ? "/recognitions/admin/awards" : "/recognitions/admin/timeline"}>
-              {cycle ? "Go to Awards" : "Go to Timeline"}
+              {cycle ? "Go to Recognitions" : "Go to Timeline"}
             </Link>
           </div>
         </div>
@@ -42,12 +42,12 @@ export default async function EvaluatorsPage({ searchParams }: { searchParams: P
     <div className="rx-stack-lg">
       <PageHead eyebrow={`Control room · ${cycle.name}`} title="Evaluators">
         <p className="rx-mute">
-          Regional Mentors score their own region&apos;s nominations; the NMT scores every nomination for the award. Nobody scores a chapter
+          Regional Mentors score their own region&apos;s nominations; the NMT scores every nomination for the recognition. Nobody scores a chapter
           they are linked to. People are found by their Yi directory email.
         </p>
       </PageHead>
 
-      <nav className="rx-ad-chips" aria-label="Awards">
+      <nav className="rx-ad-chips" aria-label="Recognitions">
         {awards.map((a) => (
           <Link
             key={a.id}
@@ -55,7 +55,7 @@ export default async function EvaluatorsPage({ searchParams }: { searchParams: P
             className="rx-ad-chip"
             aria-current={a.id === award.id ? "page" : undefined}
           >
-            <Ribbon vertical={a.vertical} /> {a.title}
+            <Ribbon vertical={a.vertical} kind={a.kind} /> {a.title}
           </Link>
         ))}
       </nav>

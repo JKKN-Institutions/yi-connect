@@ -35,7 +35,7 @@ export default async function SignInPage({
               <span className="rx-mark-rule" aria-hidden="true" style={{ height: 40 }} />
               <MedalMark size={48} />
             </div>
-            <div className="rx-eyebrow">Take Pride · National chapter awards</div>
+            <div className="rx-eyebrow">National chapter recognitions</div>
             <h1 className="rx-h1">Yi Recognitions</h1>
             <p className="rx-mute">Sign in with the email your Yi account is registered under.</p>
           </div>

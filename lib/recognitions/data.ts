@@ -356,7 +356,7 @@ export type AwardState = {
   award: AwardRow;
   cycle: CycleRow;
   nominations: NominationRow[];
-  /** Nominations both checkers passed: the only ones in the race (recognitions_02). */
+  /** Nominations in the race (check-rules inRace; 2026: every submitted one). The name is from recognitions_02. */
   checkedNominations: NominationRow[];
   duties: EvaluatorRow[];
   conflictsByDuty: Map<string, Set<string>>;

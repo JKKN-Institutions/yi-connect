@@ -30,7 +30,8 @@ const ACTION_WORD: Record<string, string> = {
 };
 
 function words(s: string) {
-  return s.replace(/_/g, " ");
+  // Stored names keep "award" (e.g. entity "award"); people read "recognition".
+  return s.replace(/_/g, " ").replace(/\bawards?\b/g, (m) => (m === "award" ? "recognition" : "recognitions"));
 }
 
 function detailText(d: Record<string, unknown>): string {
@@ -86,7 +87,7 @@ export default async function AuditPage() {
                   <td className="rx-small">{r.actor_person_id ? people.get(r.actor_person_id)?.full_name ?? "Unknown person" : "System"}</td>
                   <td className="rx-small">
                     {ACTION_WORD[r.action] ?? words(r.action)} {words(r.entity)}
-                    {r.award_id ? <div className="rx-ad-mini">{awardTitle.get(r.award_id) ?? "an award"}</div> : null}
+                    {r.award_id ? <div className="rx-ad-mini">{awardTitle.get(r.award_id) ?? "a recognition"}</div> : null}
                   </td>
                   <td className="rx-small rx-ad-pre" style={{ minWidth: 240 }}>{detailText(r.detail)}</td>
                 </tr>

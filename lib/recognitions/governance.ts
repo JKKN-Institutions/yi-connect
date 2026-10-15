@@ -25,10 +25,10 @@ export async function recordDecision(input: {
       ok: false,
       error:
         state.phase === "finalized"
-          ? "This award is already finalised."
+          ? "This recognition is already finalised."
           : state.phase === "reevaluation"
-            ? "This award has already been sent back. Wait for the NMT leader to submit a revised version."
-            : "There is no submitted moderation waiting for a decision on this award.",
+            ? "This recognition has already been sent back. Wait for the NMT leader to submit a revised version."
+            : "There is no submitted moderation waiting for a decision on this recognition.",
     };
   }
   const version = state.latestSubmittedVersion;

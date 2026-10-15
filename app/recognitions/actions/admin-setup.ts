@@ -4,12 +4,12 @@ import { revalidatePath } from "next/cache";
 import { requireRxSuperAdmin } from "@/lib/recognitions/auth";
 import { rxService } from "@/lib/recognitions/supabase";
 import { audit, getAward, getAwardState, getCurrentCycle, listAwards } from "@/lib/recognitions/data";
-import { VERTICALS, VERTICAL_LABEL, type Vertical } from "@/lib/recognitions/constants";
+import { KNOWN_RECOGNITIONS, SLUG_RE, isKind } from "@/lib/recognitions/constants";
 import type { ActionResult } from "@/lib/recognitions/types";
 import { istInputToIso, plainDbError } from "../(desk)/admin/_lib/ist";
 
 /**
- * Control room: cycles, timeline, weights, awards, and the Stage 2 escape
+ * Control room: cycles, timeline, weights, recognitions, and the Stage 2 escape
  * hatch. Every action passes requireRxSuperAdmin first.
  */
 
@@ -30,7 +30,7 @@ export async function createCycle(input: {
   if (!gate.ok) return { success: false, error: gate.error };
   const name = (input.name ?? "").trim();
   const year = Number(input.yiYear);
-  if (name === "") return { success: false, error: "Give the cycle a name, for example \"Take Pride 2026\"." };
+  if (name === "") return { success: false, error: "Give the cycle a name, for example \"Yi Recognitions 2026\"." };
   if (!Number.isInteger(year) || year < 2000 || year > 2100)
     return { success: false, error: "The Yi year must be a four-digit year." };
 
@@ -163,12 +163,16 @@ export async function updateCycleSettings(input: {
 }
 
 // ---------------------------------------------------------------------------
-// Awards
+// Recognitions (recognition_awards). recognitions_04: any key matching
+// SLUG_RE, a kind, and a title the super admin can change at any time.
 // ---------------------------------------------------------------------------
 
 export async function saveAward(input: {
   awardId?: string | null;
-  vertical: Vertical;
+  /** The new recognition's key. Ignored on an edit: a key never changes. */
+  vertical: string;
+  /** Required for a new recognition; may stay unset ("") on an older one. */
+  kind: string;
   title: string;
   criteria: string;
   sortOrder: number;
@@ -180,19 +184,23 @@ export async function saveAward(input: {
   if (!cycle) return { success: false, error: "Open a cycle on the Timeline page first." };
 
   const title = (input.title ?? "").trim();
-  if (title === "") return { success: false, error: "Give the award a title, for example \"Learning Excellence\"." };
+  if (title === "") return { success: false, error: "Give the recognition a title, for example \"Road Safety\"." };
+  if (title.length > 120) return { success: false, error: "Keep the title under 120 characters." };
   const sort = Number(input.sortOrder);
   if (!Number.isInteger(sort)) return { success: false, error: "Sort order must be a whole number." };
   const criteria = (input.criteria ?? "").trim() || null;
+  const rawKind = typeof input.kind === "string" ? input.kind : "";
+  if (rawKind !== "" && !isKind(rawKind)) return { success: false, error: "Choose what kind of recognition this is." };
+  const kind = rawKind === "" ? null : rawKind;
   const svc = rxService();
 
   if (input.awardId) {
     const award = await getAward(input.awardId);
-    if (!award || award.cycle_id !== cycle.id) return { success: false, error: "That award is not in the current cycle." };
-    // The vertical of an existing award never changes; add a new award instead.
-    const patch = { title, criteria, sort_order: sort, is_active: !!input.isActive, updated_at: new Date().toISOString() };
+    if (!award || award.cycle_id !== cycle.id) return { success: false, error: "That recognition is not in the current cycle." };
+    // The key of an existing recognition never changes; add a new one instead.
+    const patch = { title, kind, criteria, sort_order: sort, is_active: !!input.isActive, updated_at: new Date().toISOString() };
     const { error } = await svc.from("recognition_awards").update(patch).eq("id", award.id);
-    if (error) return { success: false, error: plainDbError(error.message, "Couldn't save the award.") };
+    if (error) return { success: false, error: plainDbError(error.message, "Couldn't save the recognition.") };
     await audit({
       cycleId: cycle.id,
       awardId: award.id,
@@ -200,29 +208,45 @@ export async function saveAward(input: {
       action: "update",
       entity: "award",
       entityId: award.id,
-      detail: { title, sort_order: sort, is_active: !!input.isActive, criteria_changed: (award.criteria ?? null) !== criteria },
+      detail: {
+        title,
+        kind,
+        sort_order: sort,
+        is_active: !!input.isActive,
+        title_from: award.title,
+        kind_from: award.kind,
+        criteria_changed: (award.criteria ?? null) !== criteria,
+      },
     });
     done();
     return { success: true, data: { id: award.id }, message: `Saved ${title}.` };
   }
 
-  if (!VERTICALS.includes(input.vertical)) return { success: false, error: "Choose a vertical." };
+  const slug = (input.vertical ?? "").trim();
+  if (!SLUG_RE.test(slug)) {
+    return {
+      success: false,
+      error: "The key must be 2 to 40 characters: small letters, digits and underscores, starting with a letter (for example road_safety).",
+    };
+  }
+  if (!kind) return { success: false, error: "Choose what kind of recognition this is." };
   const { data, error } = await svc
     .from("recognition_awards")
-    .insert({ cycle_id: cycle.id, vertical: input.vertical, title, criteria, sort_order: sort, is_active: !!input.isActive })
+    .insert({ cycle_id: cycle.id, vertical: slug, kind, title, criteria, sort_order: sort, is_active: !!input.isActive })
     .select("id")
     .single();
   if (error || !data) {
     if (error?.message?.includes("duplicate key"))
-      return { success: false, error: `This cycle already has a ${VERTICAL_LABEL[input.vertical]} award. Edit that one instead.` };
-    return { success: false, error: plainDbError(error?.message, "Couldn't add the award.") };
+      return { success: false, error: `This cycle already has a recognition with the key ${slug}. Edit that one instead.` };
+    return { success: false, error: plainDbError(error?.message, "Couldn't add the recognition.") };
   }
   const id = (data as { id: string }).id;
-  await audit({ cycleId: cycle.id, awardId: id, actorPersonId: gate.viewer.personId, action: "create", entity: "award", entityId: id, detail: { vertical: input.vertical, title } });
+  await audit({ cycleId: cycle.id, awardId: id, actorPersonId: gate.viewer.personId, action: "create", entity: "award", entityId: id, detail: { vertical: slug, kind, title } });
   done();
   return { success: true, data: { id }, message: `Added ${title}.` };
 }
 
+/** Add whichever of this year's known recognitions the cycle doesn't have yet. */
 export async function addAllAwards(): Promise<ActionResult> {
   const gate = await requireRxSuperAdmin();
   if (!gate.ok) return { success: false, error: gate.error };
@@ -230,23 +254,28 @@ export async function addAllAwards(): Promise<ActionResult> {
   if (!cycle) return { success: false, error: "Open a cycle on the Timeline page first." };
 
   const existing = new Set((await listAwards(cycle.id, true)).map((a) => a.vertical));
-  const missing = VERTICALS.filter((v) => !existing.has(v));
-  if (missing.length === 0) return { success: true, message: "All seven awards already exist." };
+  const current = KNOWN_RECOGNITIONS.filter((r) => r.current);
+  const missing = current.filter((r) => !existing.has(r.slug));
+  if (missing.length === 0) return { success: true, message: `All ${current.length} recognitions already exist.` };
 
-  const rows = missing.map((v) => ({
+  const rows = missing.map((r) => ({
     cycle_id: cycle.id,
-    vertical: v,
-    title: `${VERTICAL_LABEL[v]} Excellence`,
-    sort_order: VERTICALS.indexOf(v) + 1,
+    vertical: r.slug,
+    kind: r.kind,
+    title: r.title,
+    sort_order: current.indexOf(r) + 1,
     is_active: true,
   }));
   const { data, error } = await rxService().from("recognition_awards").insert(rows).select("id, vertical");
-  if (error) return { success: false, error: plainDbError(error.message, "Couldn't add the awards.") };
+  if (error) return { success: false, error: plainDbError(error.message, "Couldn't add the recognitions.") };
   for (const r of (data ?? []) as Array<{ id: string; vertical: string }>) {
     await audit({ cycleId: cycle.id, awardId: r.id, actorPersonId: gate.viewer.personId, action: "create", entity: "award", entityId: r.id, detail: { vertical: r.vertical, via: "add_all" } });
   }
   done();
-  return { success: true, message: `Added ${missing.length} award${missing.length === 1 ? "" : "s"}: ${missing.map((v) => VERTICAL_LABEL[v]).join(", ")}.` };
+  return {
+    success: true,
+    message: `Added ${missing.length} recognition${missing.length === 1 ? "" : "s"}: ${missing.map((r) => r.title).join(", ")}.`,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -265,10 +294,10 @@ export async function forceOpenStage2(input: { awardId: string; reason: string }
   if (reason.length < 10) return { success: false, error: "Write the reason in a sentence. It is kept on the record." };
 
   const state = await getAwardState(input.awardId);
-  if (!state) return { success: false, error: "That award no longer exists." };
+  if (!state) return { success: false, error: "That recognition no longer exists." };
   if (state.phase !== "stage1")
-    return { success: false, error: "Stage 2 can only be forced open while the award is in Stage 1 scoring." };
-  if (state.award.stage2_unlocked_at) return { success: true, message: "Stage 2 is already open for this award." };
+    return { success: false, error: "Stage 2 can only be forced open while the recognition is in Stage 1 scoring." };
+  if (state.award.stage2_unlocked_at) return { success: true, message: "Stage 2 is already open for this recognition." };
 
   const now = new Date().toISOString();
   const { error } = await rxService()

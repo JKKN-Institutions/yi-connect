@@ -37,7 +37,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ fileId: string
   // viewer.duties already holds only ACTIVE duties in the current cycle that the directory backs.
   const allowed =
     viewer.isSuperAdmin || viewer.isNationalLeadership || viewer.duties.some((d) => d.award_id === file.award_id);
-  if (!allowed) return json(403, "Only this award's evaluators, National Leadership and the Recognitions super admin can download its Health Card.");
+  if (!allowed) return json(403, "Only this recognition's evaluators, National Leadership and the Recognitions super admin can download its Health Card.");
 
   const { data: signed, error } = await svc.storage
     .from(HEALTH_CARD_BUCKET)

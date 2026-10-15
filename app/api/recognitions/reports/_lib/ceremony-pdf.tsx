@@ -56,7 +56,7 @@ const DATE_FMT = new Intl.DateTimeFormat("en-IN", {
 });
 
 export function CeremonyPDF({ report, includePending }: { report: CeremonyReport; includePending: boolean }) {
-  const title = `Yi Recognitions · Awards ceremony ${report.cycle.name}`;
+  const title = `Yi Recognitions · Recognitions ceremony ${report.cycle.name}`;
   return (
     <Document title={title} author="Yi Recognitions" creator="Yi Recognitions" producer="Yi Recognitions">
       <Page size="A4" style={s.page} wrap>
@@ -70,11 +70,11 @@ export function CeremonyPDF({ report, includePending }: { report: CeremonyReport
           <View style={s.railGilt} />
           <View style={s.railLaurel} />
         </View>
-        <Text style={s.eyebrow}>Take Pride · national chapter awards</Text>
+        <Text style={s.eyebrow}>Yi Recognitions · national chapter recognitions</Text>
         <Text style={s.title}>{title}</Text>
         <Text style={s.sub}>
           Generated {DATE_FMT.format(new Date())} IST ·{" "}
-          {includePending ? "Approved awards, plus awards awaiting National Leadership (marked)" : "Approved awards only"}
+          {includePending ? "Approved recognitions, plus recognitions awaiting National Leadership (marked)" : "Approved recognitions only"}
         </Text>
         {report.notIncluded.length > 0 ? (
           <Text style={s.sub}>
@@ -83,7 +83,7 @@ export function CeremonyPDF({ report, includePending }: { report: CeremonyReport
         ) : null}
 
         {report.awards.length === 0 ? (
-          <Text style={s.empty}>No award is ready for the ceremony yet.</Text>
+          <Text style={s.empty}>No recognition is ready for the ceremony yet.</Text>
         ) : null}
 
         {report.awards.map((a) => (

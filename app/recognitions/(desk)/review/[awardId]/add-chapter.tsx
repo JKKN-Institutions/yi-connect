@@ -60,11 +60,11 @@ export function AddChapterPanel({
         If a chapter has done great work for {awardTitle} but did not nominate, add it here with your reason. The
         chapter fills nothing and is not told. The Regional Chair and a Regional Mentor for its region still check it,
         then the Regional Mentors and the NMT score it, all by {closesAt}.
-        {sendsBack ? " Adding a chapter sends this award back to the NMT leader for re-evaluation." : ""}
+        {sendsBack ? " Adding a chapter sends this recognition back to the NMT leader for re-evaluation." : ""}
       </p>
 
       {options.length === 0 ? (
-        <p className="rx-mute">No chapter can be added to this award right now.</p>
+        <p className="rx-mute">No chapter can be added to this recognition right now.</p>
       ) : (
         <>
           <div>
@@ -82,7 +82,7 @@ export function AddChapterPanel({
                 </option>
               ))}
             </select>
-            <p className="rx-help">Only chapters that did not nominate for this award and can be checked and scored are listed.</p>
+            <p className="rx-help">Only chapters that did not nominate for this recognition and can be scored are listed.</p>
           </div>
           <WordField
             label="Why does this chapter deserve to be considered? (required)"
@@ -136,7 +136,7 @@ export function AddChapterPanel({
           <p className="rx-p-quote rx-small">{reason.trim()}</p>
           <p className="rx-small">
             {sendsBack
-              ? "This also sends the award back to the NMT leader for re-evaluation, with your reason as the note. "
+              ? "This also sends the recognition back to the NMT leader for re-evaluation, with your reason as the note. "
               : ""}
             It can&apos;t be undone: the addition stays on the record. If a checker sends it back, it comes back to you
             to edit the reason.

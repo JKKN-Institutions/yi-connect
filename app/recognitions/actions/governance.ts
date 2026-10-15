@@ -22,7 +22,7 @@ async function decide(awardId: string, decision: "approve" | "reevaluate", reaso
   const personId = gate.viewer.personId;
 
   const state = await getAwardState(awardId);
-  if (!state) return { success: false, error: "This award no longer exists. Go back to Review and reload." };
+  if (!state) return { success: false, error: "This recognition no longer exists. Go back to Review and reload." };
 
   const res = await recordDecision({ state, personId, decision, reason });
   if (!res.ok) return { success: false, error: res.error };

@@ -48,7 +48,7 @@ function waiting(state: AwardState, isLeader: boolean): { text: string; locked: 
       return { text: "National Leadership sent this back. The NMT leader is revising the ranking.", locked: false };
     }
     case "finalized":
-      return { text: "Approved by National Leadership. This award is final.", locked: false };
+      return { text: "Approved by National Leadership. This recognition is final.", locked: false };
   }
 }
 
@@ -57,7 +57,7 @@ export default async function ModerateList() {
   if (!viewer) return null; // the desk layout already shows the no-access panel
   const nmtDuties = viewer.duties.filter((d) => d.layer === "nmt");
   if (nmtDuties.length === 0) {
-    return <NoAccess reason="You are not on the National Management Team of any award this year." />;
+    return <NoAccess reason="You are not on the National Management Team of any recognition this year." />;
   }
   const cycle = await getCurrentCycle();
   const rows = (
@@ -70,8 +70,8 @@ export default async function ModerateList() {
     <div className="rx-stack-lg">
       <PageHead eyebrow={cycle?.name ?? "Stage 2"} title="Stage 2 · moderation">
         <p className="rx-mute">
-          The awards you moderate as part of the National Management Team. Each room opens once every Regional Mentor
-          and NMT score for that award is in.
+          The recognitions you moderate as part of the National Management Team. Each room opens once every Regional Mentor
+          and NMT score for that recognition is in.
         </p>
       </PageHead>
       <div className="rx-stack">
@@ -86,7 +86,7 @@ export default async function ModerateList() {
             >
               <div className="rx-spread">
                 <div className="rx-row" style={{ gap: 10 }}>
-                  <Ribbon vertical={state.award.vertical} size="lg" />
+                  <Ribbon vertical={state.award.vertical} kind={state.award.kind} size="lg" />
                   <h2 className="rx-h2">{state.award.title}</h2>
                 </div>
                 <div className="rx-row" style={{ gap: 8 }}>

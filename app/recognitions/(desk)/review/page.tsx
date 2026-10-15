@@ -22,7 +22,7 @@ function AwardLine({ state }: { state: AwardState }) {
     >
       <div className="rx-spread">
         <div className="rx-row" style={{ gap: 10 }}>
-          <Ribbon vertical={state.award.vertical} size="lg" />
+          <Ribbon vertical={state.award.vertical} kind={state.award.kind} size="lg" />
           <span className="rx-h2">{state.award.title}</span>
         </div>
         <div className="rx-row" style={{ gap: 8 }}>
@@ -31,7 +31,7 @@ function AwardLine({ state }: { state: AwardState }) {
         </div>
       </div>
       <p className="rx-small rx-mute" style={{ marginTop: 8 }}>
-        {state.checkedNominations.length} nomination{state.checkedNominations.length === 1 ? "" : "s"} in the race (passed both checks)
+        {state.checkedNominations.length} nomination{state.checkedNominations.length === 1 ? "" : "s"} in the race
         {v ? ` · version ${v.version} submitted ${formatWhen(v.submitted_at)}` : ""}
         {added.length > 0 ? ` · ${added.length} added by National Leadership` : ""}
       </p>
@@ -70,17 +70,17 @@ export default async function ReviewList() {
     <div className="rx-stack-lg">
       <PageHead eyebrow={cycle.name} title="Review">
         <p className="rx-mute">
-          Stage 1 and Stage 2 summaries for every award.{" "}
+          Stage 1 and Stage 2 summaries for every recognition.{" "}
           {decides
-            ? "Approve an award or send it back to the NMT leader for re-evaluation."
-            : "National Leadership approves an award or sends it back; you can read everything."}
+            ? "Approve a recognition or send it back to the NMT leader for re-evaluation."
+            : "National Leadership approves a recognition or sends it back; you can read everything."}
         </p>
       </PageHead>
 
       <section className="rx-stack">
         <div className="rx-eyebrow">{decides ? "Awaiting your decision" : "Awaiting National Leadership"}</div>
         {awaiting.length === 0 ? (
-          <p className="rx-mute rx-small">No award is waiting for a decision right now.</p>
+          <p className="rx-mute rx-small">No recognition is waiting for a decision right now.</p>
         ) : (
           <div className="rx-stack">
             {awaiting.map((s) => (
@@ -91,9 +91,9 @@ export default async function ReviewList() {
       </section>
 
       <section className="rx-stack">
-        <div className="rx-eyebrow">All awards</div>
+        <div className="rx-eyebrow">All recognitions</div>
         {rest.length === 0 && awaiting.length === 0 ? (
-          <p className="rx-mute rx-small">No awards are set up in this cycle yet.</p>
+          <p className="rx-mute rx-small">No recognitions are set up in this cycle yet.</p>
         ) : (
           <div className="rx-stack">
             {rest.map((s) => (

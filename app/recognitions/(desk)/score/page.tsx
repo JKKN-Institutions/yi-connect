@@ -8,7 +8,7 @@ import { dutyLayerLabel, nominationScoringWindow, scoringWindow } from "./score-
 import { isNlAdded } from "@/lib/recognitions/check-rules";
 import "./score.css";
 
-export const metadata = { title: "My scoring sheets · Yi Recognitions" };
+export const metadata = { title: "My scoring sheets" };
 
 export default async function MySheetsPage() {
   const viewer = await getRxViewer();
@@ -22,7 +22,7 @@ export default async function MySheetsPage() {
         <div className="rx-plate rx-stack">
           <h2 className="rx-h2">No scoring sheets yet</h2>
           <p className="rx-mute">
-            You haven&apos;t been assigned as a Regional Mentor or NMT evaluator for any award this year. When the
+            You haven&apos;t been assigned as a Regional Mentor or NMT evaluator for any recognition this year. When the
             Recognitions super admin adds you, your sheets appear here.
           </p>
         </div>
@@ -75,7 +75,7 @@ export default async function MySheetsPage() {
             <section key={duty.id} className="rx-plate rx-stack rx-sheet-duty">
               <div className="rx-spread">
                 <div className="rx-row" style={{ gap: 10 }}>
-                  <Ribbon vertical={award.vertical} size="lg" />
+                  <Ribbon vertical={award.vertical} kind={award.kind} size="lg" />
                   <h2 className="rx-h2">{award.title}</h2>
                 </div>
                 {state ? <PhaseSeal phase={state.phase} /> : null}
@@ -91,7 +91,7 @@ export default async function MySheetsPage() {
               </div>
 
               {!state ? (
-                <Notice tone="alert">This award could not be loaded. Reload the page; if it persists, tell the Recognitions super admin.</Notice>
+                <Notice tone="alert">This recognition could not be loaded. Reload the page; if it persists, tell the Recognitions super admin.</Notice>
               ) : win?.state === "notYet" ? (
                 <Notice>
                   {state.cycle.nomination_deadline
@@ -111,10 +111,10 @@ export default async function MySheetsPage() {
                       {formatWhen(state.cycle.reevaluation_deadline)}.
                     </Notice>
                   ) : win?.state === "over" ? (
-                    <Notice>Stage 1 is over for this award. Your sheet is read-only.</Notice>
+                    <Notice>Stage 1 is over for this recognition. Your sheet is read-only.</Notice>
                   ) : null}
                   {total === 0 ? (
-                    <p className="rx-mute rx-small">No nomination on your sheet has passed both checks yet. Only those reach scoring.</p>
+                    <p className="rx-mute rx-small">No nomination has reached your sheet yet.</p>
                   ) : null}
                   <div>
                     <Link href={`/recognitions/score/${duty.id}`} className="rx-btn">

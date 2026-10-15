@@ -21,7 +21,7 @@ function json(status: number, error: string) {
 
 /** Excel sheet names: max 31 chars, no []:*?/\ , unique. */
 function sheetName(title: string, used: Set<string>): string {
-  const base = title.replace(/[[\]:*?/\\]/g, " ").trim().slice(0, 28) || "Award";
+  const base = title.replace(/[[\]:*?/\\]/g, " ").trim().slice(0, 28) || "Recognition";
   let name = base;
   for (let i = 2; used.has(name.toLowerCase()); i++) name = `${base.slice(0, 26)} ${i}`;
   used.add(name.toLowerCase());
@@ -46,7 +46,7 @@ export async function GET(req: Request) {
     XLSX.utils.book_append_sheet(wb, ws, sheetName(sheet.title, used));
   }
   if (report.sheets.length === 0) {
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["This cycle has no active awards yet."]]), "Awards");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["This cycle has no active recognitions yet."]]), "Recognitions");
   }
   const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
   return new Response(new Uint8Array(buf), {

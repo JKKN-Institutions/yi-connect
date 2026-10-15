@@ -3,6 +3,7 @@ import "server-only";
 import { getRxViewer, requireRxChapter, type Gate } from "@/lib/recognitions/auth";
 import {
   chapterMap,
+  getChapterCategories,
   getCurrentCycle,
   latestDecisionFor,
   listAwards,
@@ -12,7 +13,7 @@ import {
   listNominationsForAward,
 } from "@/lib/recognitions/data";
 import { isPast } from "@/lib/recognitions/phase";
-import type { Category, Vertical } from "@/lib/recognitions/constants";
+import type { AwardKind, Category, Vertical } from "@/lib/recognitions/constants";
 import type { ChapterRow, CycleRow } from "@/lib/recognitions/types";
 import { pickChapterId } from "./shared";
 
@@ -43,6 +44,7 @@ export type PastPodium = {
   cycleName: string;
   awardTitle: string;
   vertical: Vertical;
+  kind: AwardKind | null;
   places: Array<{ category: Category; rank: 1 | 2 | 3; chapterName: string }>;
 };
 
@@ -75,11 +77,30 @@ export async function previousWinners(current: CycleRow): Promise<PastPodium[]> 
         .filter((p): p is { category: Category; rank: 1 | 2 | 3; chapterName: string } => p !== null)
         .sort((a, b) => a.rank - b.rank);
       if (places.length > 0) {
-        out.push({ cycleName: cycle.name, awardTitle: award.title, vertical: award.vertical, places });
+        out.push({ cycleName: cycle.name, awardTitle: award.title, vertical: award.vertical, kind: award.kind, places });
       }
     }
   }
   return out;
+}
+
+/**
+ * The chapter's category this cycle and the other ACTIVE chapters in it
+ * (recognition_chapter_categories joined to yi.chapters). Names only.
+ */
+export async function categoryAndRivals(
+  cycleId: string,
+  chapterId: string
+): Promise<{ category: Category | null; rivals: string[] }> {
+  const [categories, chapters] = await Promise.all([getChapterCategories(cycleId), chapterMap()]);
+  const category = categories.get(chapterId) ?? null;
+  if (!category) return { category: null, rivals: [] };
+  const rivals = [...categories.entries()]
+    .filter(([id, cat]) => cat === category && id !== chapterId)
+    .map(([id]) => chapters.get(id)?.name)
+    .filter((n): n is string => !!n)
+    .sort((a, b) => a.localeCompare(b));
+  return { category, rivals };
 }
 
 export { getCurrentCycle };

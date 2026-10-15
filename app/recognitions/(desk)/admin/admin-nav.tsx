@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 const SECTIONS: Array<{ href: string; label: string }> = [
   { href: "/recognitions/admin", label: "Overview" },
   { href: "/recognitions/admin/timeline", label: "Timeline" },
-  { href: "/recognitions/admin/awards", label: "Awards" },
+  { href: "/recognitions/admin/awards", label: "Recognitions" },
   { href: "/recognitions/admin/chapters", label: "Chapters" },
   { href: "/recognitions/admin/evaluators", label: "Evaluators" },
   { href: "/recognitions/admin/team", label: "Team" },

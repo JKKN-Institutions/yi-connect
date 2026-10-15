@@ -7,12 +7,13 @@ import { Deadline, NoAccess, PageHead } from "../_ui/primitives";
 import { desksFor } from "./desks";
 
 const DESK_COPY: Record<string, string> = {
-  "/recognitions/chapter": "Apply for awards, write your case and make your predictions.",
+  "/recognitions/chapter": "Apply for recognitions, say why your chapter should get each one, and make your predictions.",
+  // Only shown when the check step is on (CHECK_STEP_ENABLED). Not used in 2026.
   "/recognitions/check": "Pass each nomination from your region, or send it back with a note. Both checkers must pass it.",
-  "/recognitions/score":"Score the nominations assigned to you. Your marks stay private.",
+  "/recognitions/score": "Score the nominations assigned to you. Your marks stay private.",
   "/recognitions/moderate": "Once every score is in, review the combined matrix and the podium.",
   "/recognitions/review": "Read the Stage 1 and Stage 2 summaries and approve or send back.",
-  "/recognitions/admin": "Timelines, awards, evaluators, Health Card files, citations and reports.",
+  "/recognitions/admin": "Timelines, recognitions, evaluators, Health Card files, citations and reports.",
 };
 
 export default async function DesksHome() {
@@ -55,11 +56,11 @@ export default async function DesksHome() {
 
       {awards.length > 0 ? (
         <section className="rx-stack">
-          <div className="rx-eyebrow">This year&apos;s awards</div>
+          <div className="rx-eyebrow">This year&apos;s recognitions</div>
           <div className="rx-row" style={{ gap: 18 }}>
             {awards.map((a) => (
               <span key={a.id} className="rx-row rx-small" style={{ gap: 8 }}>
-                <Ribbon vertical={a.vertical} /> {a.title}
+                <Ribbon vertical={a.vertical} kind={a.kind} /> {a.title}
               </span>
             ))}
           </div>

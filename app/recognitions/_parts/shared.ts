@@ -29,6 +29,8 @@ import { isNlAdded } from "@/lib/recognitions/check-rules";
 export type EvalColumn = { evaluatorId: string; layer: Layer; label: string };
 
 export type DossierView = {
+  /** recognitions_04: the chapter's "why". Empty on a nomination filed on the old form. */
+  justification: string;
   reasons: string[];
   flagship: string;
   hostedEvent: boolean;
@@ -87,8 +89,9 @@ export function chapterName(chapters: Map<string, ChapterRow>, id: string): stri
   return chapters.get(id)?.name ?? "Unknown chapter";
 }
 
-function dossierOf(n: NominationRow): DossierView {
+export function dossierOf(n: NominationRow): DossierView {
   return {
+    justification: n.justification ?? "",
     reasons: (n.reasons ?? []).filter((r) => (r ?? "").trim() !== ""),
     flagship: n.flagship_event ?? "",
     hostedEvent: n.hosted_event,
@@ -390,7 +393,7 @@ export function validateModeration(
     if (!r || typeof r.nomination_id !== "string" || !byId.has(r.nomination_id) || given.has(r.nomination_id)) {
       return {
         ok: false,
-        error: "One of the rows is not a submitted nomination for this award. Reload the page and try again.",
+        error: "One of the rows is not a submitted nomination for this recognition. Reload the page and try again.",
       };
     }
     given.set(r.nomination_id, { final_score: r.final_score, final_rank: r.final_rank });

@@ -13,7 +13,7 @@ import { rxService } from "@/lib/recognitions/supabase";
 import { decideSeat, fixDeadlineFor, isNlAdded, SEAT_LABEL, type CheckSeat } from "@/lib/recognitions/check-rules";
 import { isPast } from "@/lib/recognitions/phase";
 import { countWords } from "@/lib/recognitions/words";
-import { WORDS } from "@/lib/recognitions/constants";
+import { CHECK_STEP_ENABLED, WORDS } from "@/lib/recognitions/constants";
 import type { ActionResult, AwardRow, CycleRow, NominationRow } from "@/lib/recognitions/types";
 import { formatWhen } from "../_ui/primitives";
 
@@ -42,6 +42,10 @@ type Ctx = {
 };
 
 async function loadContext(nominationId: string): Promise<{ ok: true; ctx: Ctx } | { ok: false; error: string }> {
+  // 2026: the check step is not used (Director, 2026-10-15). Hidden, not deleted.
+  if (!CHECK_STEP_ENABLED) {
+    return { ok: false, error: "The check step is not used this year. Submitted nominations go straight to scoring." };
+  }
   const viewer = await getRxViewer();
   if (!viewer) return { ok: false, error: "You are not signed in, or your account is not in the Yi directory." };
   if (typeof nominationId !== "string" || nominationId === "") {
@@ -62,7 +66,7 @@ async function loadContext(nominationId: string): Promise<{ ok: true; ctx: Ctx }
 
   const [award, cycle] = await Promise.all([getAward(nomination.award_id), getCurrentCycle()]);
   if (!award || !award.is_active || !cycle || award.cycle_id !== cycle.id) {
-    return { ok: false, error: "That nomination is not part of this year's open awards." };
+    return { ok: false, error: "That nomination is not part of this year's open recognitions." };
   }
 
   const seats = checkerSeats(viewer, nomination);

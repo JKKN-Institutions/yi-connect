@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { requireRxNationalLeadership, requireRxOversight } from "@/lib/recognitions/auth";
 import { effectiveText, getAwardState, getPeople, listAudit, listCitationEdits } from "@/lib/recognitions/data";
-import { CATEGORIES, CATEGORY_LABEL, LAYER2_PARAMS, LAYER3_PARAMS, LAYER_LABEL, PARAM_KEYS } from "@/lib/recognitions/constants";
+import { CATEGORIES, CATEGORY_LABEL, CHECK_STEP_ENABLED, LAYER2_PARAMS, LAYER3_PARAMS, LAYER_LABEL, PARAM_KEYS } from "@/lib/recognitions/constants";
 import { paramsTotal } from "@/lib/recognitions/scoring";
 import { Ribbon } from "@/app/recognitions/_ui/ribbon";
 import { IconArrowLeft } from "@/app/recognitions/_ui/icons";
@@ -11,13 +11,13 @@ import { CombinedMatrix, Dossier } from "@/app/recognitions/_parts/combined-matr
 import { PredictionsBoard } from "@/app/recognitions/_parts/predictions-board";
 import { RankingTable, VersionHistory } from "@/app/recognitions/_parts/ranking-view";
 import { loadStage2 } from "@/app/recognitions/_parts/load";
-import { buildRankingView, chapterName } from "@/app/recognitions/_parts/shared";
+import { buildRankingView, chapterName, dossierOf } from "@/app/recognitions/_parts/shared";
 import { DecisionPanel } from "./decision-panel";
 import { AddChapterPanel, AddedFixForm } from "./add-chapter";
 import { addableChapters, addWindow } from "@/lib/recognitions/nl-add";
 import { canFix, effectiveStatus, exclusionReason, fixDeadlineFor, isNlAdded, NOMINATION_STATUS_LABEL } from "@/lib/recognitions/check-rules";
 
-export const metadata: Metadata = { title: "Award review" };
+export const metadata: Metadata = { title: "Recognition review" };
 
 function detailText(detail: Record<string, unknown>): string {
   const parts = Object.entries(detail ?? {})
@@ -33,7 +33,7 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
   if (!gate.ok) return <NoAccess reason={gate.error} />;
 
   const state = await getAwardState(awardId);
-  if (!state) return <NoAccess reason="This award does not exist or was removed." contact={false} />;
+  if (!state) return <NoAccess reason="This recognition does not exist or was removed." contact={false} />;
   const { award, cycle, phase } = state;
 
   // Blind scoring beats oversight: someone who is BOTH leadership/admin and an
@@ -42,7 +42,7 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
   if (scoringStillBlind && gate.viewer.duties.some((d) => d.award_id === award.id)) {
     return (
       <NoAccess
-        reason="You are also an evaluator on this award. To keep scoring blind, its review opens once every mark is in and Stage 2 starts."
+        reason="You are also an evaluator on this recognition. To keep scoring blind, its review opens once every mark is in and Stage 2 starts."
         contact={false}
       />
     );
@@ -80,11 +80,11 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
     <div className="rx-stack-lg">
       <div className="rx-stack">
         <Link href="/recognitions/review" className="rx-link rx-small rx-row" style={{ gap: 6 }}>
-          <IconArrowLeft size={14} /> All awards
+          <IconArrowLeft size={14} /> All recognitions
         </Link>
         <PageHead eyebrow={`${cycle.name} · Review`} title={award.title}>
           <div className="rx-row">
-            <Ribbon vertical={award.vertical} size="lg" />
+            <Ribbon vertical={award.vertical} kind={award.kind} size="lg" />
             <PhaseSeal phase={phase} />
           </div>
         </PageHead>
@@ -103,7 +103,7 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
           <Notice tone="alert">Sent back for re-evaluation. The NMT leader is revising the moderation.</Notice>
         ) : null}
         {phase === "finalized" ? (
-          <Notice tone="ok">Approved on version {finalVersion?.version}. This award is final.</Notice>
+          <Notice tone="ok">Approved on version {finalVersion?.version}. This recognition is final.</Notice>
         ) : null}
       </div>
 
@@ -123,8 +123,9 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
         <section className="rx-stack" aria-labelledby="rx-nl-added">
           <h2 className="rx-h2" id="rx-nl-added">Chapters National Leadership added</h2>
           <p className="rx-small rx-mute">
-            Each one needs the Regional Chair and a Regional Mentor to pass it before it is scored. A send-back comes to
-            you: edit the reason and resubmit by {formatWhen(cycle.reevaluation_deadline)}.
+            {CHECK_STEP_ENABLED
+              ? `Each one needs the Regional Chair and a Regional Mentor to pass it before it is scored. A send-back comes to you: edit the reason and resubmit by ${formatWhen(cycle.reevaluation_deadline)}.`
+              : "Each one goes straight to the evaluators for scoring."}
           </p>
           {addedNoms.map((n) => {
             const st = effectiveStatus(n, cycle);
@@ -145,7 +146,7 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
                     by {nameOf(n.added_by)} · {formatWhen(n.added_at)}
                   </span>
                 </div>
-                {st === "submitted" || st === "checked" ? (
+                {CHECK_STEP_ENABLED && (st === "submitted" || st === "checked") ? (
                   <p className="rx-small rx-mute">
                     Regional Chair: {n.rc_checked_by ? `passed by ${nameOf(n.rc_checked_by)}` : "not yet"} · Regional
                     Mentor: {n.rm_checked_by ? `passed by ${nameOf(n.rm_checked_by)}` : "not yet"}
@@ -185,7 +186,7 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
           {LAYER3_PARAMS.map((p, i) => `P${i + 1} ${p.label}`).join(", ")}.
         </p>
         {state.checkedNominations.length === 0 ? (
-          <p className="rx-mute">No nomination for this award has passed both checks yet.</p>
+          <p className="rx-mute">No nomination for this recognition is in the race yet.</p>
         ) : (
           CATEGORIES.map((category) => {
             const noms = state.checkedNominations
@@ -279,17 +280,7 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
                               </span>
                             </summary>
                             <div className="rx-p-fold-body">
-                              <Dossier
-                                dossier={{
-                                  reasons: (n.reasons ?? []).filter((r) => (r ?? "").trim() !== ""),
-                                  flagship: n.flagship_event ?? "",
-                                  hostedEvent: n.hosted_event,
-                                  hostedName: n.hosted_event_name,
-                                  hostedType: n.hosted_event_type,
-                                  announcement: n.announcement_draft ?? "",
-                                  nlAddedReason: isNlAdded(n) ? n.added_reason ?? "" : null,
-                                }}
-                              />
+                              <Dossier dossier={dossierOf(n)} />
                             </div>
                           </details>
                         </div>
@@ -305,7 +296,7 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
         <div className="rx-stack">
           <h3 className="rx-h3">Audit trail</h3>
           {auditRows.length === 0 ? (
-            <p className="rx-small rx-mute">Nothing has been recorded for this award yet.</p>
+            <p className="rx-small rx-mute">Nothing has been recorded for this recognition yet.</p>
           ) : (
             <div className="rx-ledger-wrap">
               <table className="rx-ledger">

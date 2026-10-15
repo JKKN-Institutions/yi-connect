@@ -42,7 +42,7 @@ export default async function CitationsPage({ searchParams }: { searchParams: Pr
       <div className="rx-stack-lg">
         <PageHead eyebrow={`Control room · ${cycle.name}`} title="Citations" />
         <div className="rx-plate">
-          <p>No award has a submitted moderation yet. Once an NMT leader submits the top 3, the citations and announcement text appear here to polish.</p>
+          <p>No recognition has a submitted moderation yet. Once an NMT leader submits the top 3, the citations and announcement text appear here to polish.</p>
         </div>
       </div>
     );
@@ -68,7 +68,7 @@ export default async function CitationsPage({ searchParams }: { searchParams: Pr
         </p>
       </PageHead>
 
-      <nav className="rx-ad-chips" aria-label="Awards">
+      <nav className="rx-ad-chips" aria-label="Recognitions">
         {ready.map((s) => (
           <Link
             key={s.award.id}
@@ -76,7 +76,7 @@ export default async function CitationsPage({ searchParams }: { searchParams: Pr
             className="rx-ad-chip"
             aria-current={s.award.id === st.award.id ? "page" : undefined}
           >
-            <Ribbon vertical={s.award.vertical} /> {s.award.title}
+            <Ribbon vertical={s.award.vertical} kind={s.award.kind} /> {s.award.title}
           </Link>
         ))}
       </nav>
@@ -95,7 +95,7 @@ export default async function CitationsPage({ searchParams }: { searchParams: Pr
         {st.phase === "reevaluation" ? " A re-evaluation is under way; text polished now stays with this version only." : ""}
       </p>
       {st.phase === "reevaluation" ? (
-        <Notice>National Leadership sent this award back. If the NMT leader changes the podium, polish the new version once it is submitted.</Notice>
+        <Notice>National Leadership sent this recognition back. If the NMT leader changes the podium, polish the new version once it is submitted.</Notice>
       ) : null}
 
       <div className="rx-podium">

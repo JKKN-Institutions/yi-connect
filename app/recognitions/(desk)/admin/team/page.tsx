@@ -1,16 +1,18 @@
 import { requireRxSuperAdmin } from "@/lib/recognitions/auth";
 import { rxService } from "@/lib/recognitions/supabase";
 import { getCurrentCycle, getPeople, listChapters } from "@/lib/recognitions/data";
-import { REGIONS, RX_APP, RX_ROLES } from "@/lib/recognitions/constants";
+import { CHECK_STEP_ENABLED, REGIONS, RX_APP, RX_ROLES } from "@/lib/recognitions/constants";
 import { NoAccess, Notice, PageHead } from "../../../_ui/primitives";
 import { GrantRoleForm, RevokeRoleButton } from "./team-forms";
 
 export const metadata = { title: "Team" };
 
 const ROLE_COPY: Record<string, { label: string; what: string }> = {
-  [RX_ROLES.superAdmin]: { label: "Recognitions super admin", what: "Runs this control room: timelines, awards, evaluators, citations, reports." },
-  [RX_ROLES.nationalLeadership]: { label: "National Leadership", what: "Reads the Stage 1 and Stage 2 summaries; approves an award or sends it back." },
-  [RX_ROLES.regionalChair]: { label: "Regional Chair", what: "Checks one region's nominations with a Regional Mentor before they are scored: passes each one or sends it back with a note." },
+  [RX_ROLES.superAdmin]: { label: "Recognitions super admin", what: "Runs this control room: timelines, recognitions, evaluators, citations, reports." },
+  [RX_ROLES.nationalLeadership]: { label: "National Leadership", what: "Reads the Stage 1 and Stage 2 summaries; approves a recognition or sends it back." },
+  [RX_ROLES.regionalChair]: { label: "Regional Chair", what: CHECK_STEP_ENABLED
+      ? "Checks one region's nominations with a Regional Mentor before they are scored: passes each one or sends it back with a note."
+      : "Would check one region's nominations with a Regional Mentor. The check step is not used this year, so this role has nothing to do." },
   [RX_ROLES.chapterRep]: { label: "Chapter representative", what: "Files nominations and predictions for one chapter, alongside its chair." },
 };
 
@@ -43,7 +45,7 @@ export default async function TeamPage() {
 
       <Notice tone="ok">
         Chapter chairs and co-chairs need nothing here: the Yi directory already makes them their chapter&apos;s login. Regional Mentors and the
-        NMT are added on the Evaluators page, per award.
+        NMT are added on the Evaluators page, per recognition.
       </Notice>
 
       {error ? <Notice tone="alert">Couldn&apos;t read the current team from the Yi directory. Reload the page.</Notice> : null}

@@ -36,7 +36,7 @@ export async function GET(req: Request) {
 
   if (format === "xlsx") {
     const rows: Array<Array<string | number>> = [
-      ["Status", "Award", "Category", "Rank", "Place", "Chapter", "Region", "Key achievements", "Citation", "Announcement text"],
+      ["Status", "Recognition", "Category", "Rank", "Place", "Chapter", "Region", "Key achievements", "Citation", "Announcement text"],
     ];
     for (const a of report.awards) {
       for (const p of a.places) {
@@ -54,7 +54,7 @@ export async function GET(req: Request) {
         ]);
       }
     }
-    if (report.awards.length === 0) rows.push(["No award is ready for the ceremony yet."]);
+    if (report.awards.length === 0) rows.push(["No recognition is ready for the ceremony yet."]);
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(rows);
     ws["!cols"] = [16, 26, 14, 6, 18, 22, 9, 60, 60, 60].map((wch) => ({ wch }));
@@ -62,12 +62,12 @@ export async function GET(req: Request) {
 
     const scripts = report.awards.filter((a) => a.ceremonyScript);
     if (scripts.length > 0) {
-      const ss = XLSX.utils.aoa_to_sheet([["Award", "Ceremony script"], ...scripts.map((a) => [a.title, a.ceremonyScript ?? ""])]);
+      const ss = XLSX.utils.aoa_to_sheet([["Recognition", "Ceremony script"], ...scripts.map((a) => [a.title, a.ceremonyScript ?? ""])]);
       ss["!cols"] = [{ wch: 26 }, { wch: 100 }];
       XLSX.utils.book_append_sheet(wb, ss, "Ceremony scripts");
     }
     if (report.notIncluded.length > 0) {
-      const ns = XLSX.utils.aoa_to_sheet([["Award", "Not included because"], ...report.notIncluded.map((n) => [n.title, n.why])]);
+      const ns = XLSX.utils.aoa_to_sheet([["Recognition", "Not included because"], ...report.notIncluded.map((n) => [n.title, n.why])]);
       ns["!cols"] = [{ wch: 26 }, { wch: 40 }];
       XLSX.utils.book_append_sheet(wb, ns, "Not included");
     }

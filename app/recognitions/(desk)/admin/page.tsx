@@ -3,6 +3,7 @@ import { requireRxSuperAdmin } from "@/lib/recognitions/auth";
 import { getAwardState, getCurrentCycle, listAwards } from "@/lib/recognitions/data";
 import { PHASE_LABEL } from "@/lib/recognitions/phase";
 import { effectiveStatus } from "@/lib/recognitions/check-rules";
+import { CHECK_STEP_ENABLED } from "@/lib/recognitions/constants";
 import type { NominationStatus } from "@/lib/recognitions/types";
 import { Ribbon } from "../../_ui/ribbon";
 import { Deadline, NoAccess, Notice, PageHead, PhaseSeal, formatWhen } from "../../_ui/primitives";
@@ -37,7 +38,7 @@ export default async function ControlRoomOverview() {
       <div className="rx-stack-lg">
         <PageHead eyebrow="Control room" title="No cycle is open yet" />
         <div className="rx-plate rx-stack">
-          <p>Start by creating this year&apos;s cycle and setting its deadlines. Then add the awards, classify chapters and assign evaluators.</p>
+          <p>Start by creating this year&apos;s cycle and setting its deadlines. Then add the recognitions, classify chapters and assign evaluators.</p>
           <div>
             <Link href="/recognitions/admin/timeline" className="rx-btn">Create a cycle</Link>
           </div>
@@ -54,8 +55,12 @@ export default async function ControlRoomOverview() {
       <PageHead eyebrow="Control room" title={cycle.name}>
         <div className="rx-stack" style={{ gap: 4 }}>
           <Deadline label="Nominations close" iso={cycle.nomination_deadline} />
-          <Deadline label="Sent-back nominations must be fixed by" iso={cycle.fix_deadline} />
-          <Deadline label="Regional Chair + RM checks close" iso={cycle.check_deadline} />
+          {CHECK_STEP_ENABLED ? (
+            <>
+              <Deadline label="Sent-back nominations must be fixed by" iso={cycle.fix_deadline} />
+              <Deadline label="Regional Chair + RM checks close" iso={cycle.check_deadline} />
+            </>
+          ) : null}
           <Deadline label="Stage 1 scoring closes" iso={cycle.stage1_deadline} />
           <Deadline label="Stage 2 moderation closes" iso={cycle.stage2_deadline} />
           <Deadline label="Re-evaluation closes" iso={cycle.reevaluation_deadline} />
@@ -69,9 +74,9 @@ export default async function ControlRoomOverview() {
 
       {states.length === 0 ? (
         <div className="rx-plate rx-stack">
-          <p>This cycle has no active awards yet.</p>
+          <p>This cycle has no active recognitions yet.</p>
           <div>
-            <Link href="/recognitions/admin/awards" className="rx-btn">Add the awards</Link>
+            <Link href="/recognitions/admin/awards" className="rx-btn">Add the recognitions</Link>
           </div>
         </div>
       ) : null}
@@ -79,20 +84,30 @@ export default async function ControlRoomOverview() {
       <div className="rx-stack">
         {states.map((st) => {
           const { award, completeness: c } = st;
-          // Effective status: sent back past the fix deadline / unchecked past the check deadline = out.
+          // Effective status: sent back past the fix deadline (and, with the check step on, unchecked past the check deadline) = out.
           const count = (s: NominationStatus) => st.nominations.filter((n) => effectiveStatus(n, cycle) === s).length;
           const filed = st.nominations.length - count("draft");
           return (
             <section key={award.id} className="rx-plate rx-ad-award">
-              <Ribbon vertical={award.vertical} size="tall" />
+              <Ribbon vertical={award.vertical} kind={award.kind} size="tall" />
               <div className="rx-stack">
                 <div className="rx-spread">
                   <h2 className="rx-h2">{award.title}</h2>
                   <PhaseSeal phase={st.phase} />
                 </div>
                 <p className="rx-small rx-mute">
-                  {filed} nomination{filed === 1 ? "" : "s"} filed: {count("checked")} passed both checks ·{" "}
-                  {count("submitted")} awaiting checks · {count("returned")} sent back · {count("excluded")} out of the race
+                  {CHECK_STEP_ENABLED ? (
+                    <>
+                      {filed} nomination{filed === 1 ? "" : "s"} filed: {count("checked")} passed both checks ·{" "}
+                      {count("submitted")} awaiting checks · {count("returned")} sent back · {count("excluded")} out of the race
+                    </>
+                  ) : (
+                    <>
+                      {filed} nomination{filed === 1 ? "" : "s"} filed: {st.checkedNominations.length} in the race
+                      {count("returned") > 0 ? ` · ${count("returned")} sent back` : ""}
+                      {count("excluded") > 0 ? ` · ${count("excluded")} out of the race` : ""}
+                    </>
+                  )}
                   {count("draft") > 0 ? ` · ${count("draft")} still in draft` : ""} ·{" "}
                   {st.duties.filter((d) => d.layer === "rm").length} RM · {st.duties.filter((d) => d.layer === "nmt").length} NMT
                 </p>

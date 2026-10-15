@@ -6,28 +6,108 @@
  *   Latest_Evaluation_Matrix doc     Layer 2 / Layer 3 parameters, weights
  *
  * Mail 1 lists "Health" twice in the apply matrix; it is one vertical here.
+ * recognitions_04 (Director, 2026-10-15): 14 recognitions, any slug allowed.
  */
 
-export const VERTICALS = [
-  "membership",
-  "learning",
-  "impact",
-  "future",
-  "climate",
-  "rural",
-  "health",
-] as const;
-export type Vertical = (typeof VERTICALS)[number];
+/**
+ * The kinds of recognition (recognition_awards.kind, recognitions_04). They
+ * group the chapter's list and pick a ribbon for a recognition the app does
+ * not know by name.
+ */
+export const KINDS = ["project", "initiative", "stakeholder", "sports", "branding"] as const;
+export type AwardKind = (typeof KINDS)[number];
 
-export const VERTICAL_LABEL: Record<Vertical, string> = {
-  membership: "Membership",
-  learning: "Learning",
-  impact: "Impact",
-  future: "Future",
-  climate: "Climate",
-  rural: "Rural",
-  health: "Health",
+/** Group headings on the chapter's list (plural). */
+export const KIND_LABEL: Record<AwardKind, string> = {
+  project: "Projects",
+  initiative: "Initiatives",
+  stakeholder: "Stakeholders",
+  sports: "Sports",
+  branding: "Branding",
 };
+
+/** One recognition's kind (singular), for the control room. */
+export const KIND_SINGULAR: Record<AwardKind, string> = {
+  project: "Project",
+  initiative: "Initiative",
+  stakeholder: "Stakeholder",
+  sports: "Sports",
+  branding: "Branding",
+};
+
+export function isKind(v: unknown): v is AwardKind {
+  return typeof v === "string" && (KINDS as readonly string[]).includes(v);
+}
+
+/**
+ * Recognitions grouped by kind, in KINDS order, keeping each group's own
+ * order. Any without a kind (rows from before recognitions_04) come last
+ * under "Other recognitions". Empty groups are left out.
+ */
+export function groupByKind<T extends { kind: AwardKind | null }>(
+  items: T[]
+): Array<{ kind: AwardKind | null; label: string; items: T[] }> {
+  const groups: Array<{ kind: AwardKind | null; label: string; items: T[] }> = KINDS.map((k) => ({
+    kind: k,
+    label: KIND_LABEL[k],
+    items: items.filter((i) => i.kind === k),
+  }));
+  groups.push({ kind: null, label: "Other recognitions", items: items.filter((i) => !isKind(i.kind)) });
+  return groups.filter((g) => g.items.length > 0);
+}
+
+/**
+ * A recognition's key (recognition_awards.vertical). Any short slug: the
+ * super admin may add recognitions the app has never heard of
+ * (recognitions_04), so this is a string, not a fixed union.
+ */
+export type Vertical = string;
+
+/** Same rule as the database CHECK in recognitions_04. */
+export const SLUG_RE = /^[a-z][a-z0-9_]{1,39}$/;
+
+/**
+ * The recognitions the app knows by name. The 14 of 2026 (Director,
+ * 2026-10-15) in their default order, then the two retired keys so older
+ * cycles still read well. Titles are defaults only: the real title is the
+ * row's, and the super admin renames it in the control room.
+ */
+export const KNOWN_RECOGNITIONS: Array<{ slug: string; kind: AwardKind; title: string; current: boolean }> = [
+  { slug: "masoom", kind: "project", title: "Masoom", current: true },
+  { slug: "road_safety", kind: "project", title: "Road Safety", current: true },
+  { slug: "climate", kind: "project", title: "Climate Change", current: true },
+  { slug: "health", kind: "project", title: "Health", current: true },
+  { slug: "accessibility", kind: "project", title: "Accessibility", current: true },
+  { slug: "entrepreneurship", kind: "initiative", title: "Entrepreneurship", current: true },
+  { slug: "innovation", kind: "initiative", title: "Innovation", current: true },
+  { slug: "learning", kind: "initiative", title: "Learning", current: true },
+  { slug: "membership", kind: "stakeholder", title: "Membership", current: true },
+  { slug: "yuva", kind: "stakeholder", title: "Yuva", current: true },
+  { slug: "thalir", kind: "stakeholder", title: "Thalir", current: true },
+  { slug: "rural", kind: "stakeholder", title: "Rural Initiatives", current: true },
+  { slug: "sports", kind: "sports", title: "Sports", current: true },
+  { slug: "branding", kind: "branding", title: "Branding", current: true },
+  { slug: "impact", kind: "initiative", title: "Impact", current: false },
+  { slug: "future", kind: "initiative", title: "Future", current: false },
+];
+
+/** The current set of recognition keys, in default order. */
+export const VERTICALS: readonly string[] = KNOWN_RECOGNITIONS.filter((r) => r.current).map((r) => r.slug);
+
+/** Default names of the known keys. For any recognition use verticalLabel(), which falls back on the title. */
+export const VERTICAL_LABEL: Record<string, string> = Object.fromEntries(
+  KNOWN_RECOGNITIONS.map((r) => [r.slug, r.title])
+);
+
+/** The default kind of a known key, or null for one the app doesn't know. */
+export function knownKind(slug: string): AwardKind | null {
+  return KNOWN_RECOGNITIONS.find((r) => r.slug === slug)?.kind ?? null;
+}
+
+/** A recognition's short name: the known default, else its own title, else its key. */
+export function verticalLabel(a: { vertical: string; title?: string | null }): string {
+  return VERTICAL_LABEL[a.vertical] ?? (a.title?.trim() || a.vertical);
+}
 
 export const CATEGORIES = ["pioneers", "trailblazers", "sparks"] as const;
 export type Category = (typeof CATEGORIES)[number];
@@ -56,31 +136,32 @@ export type ParamKey = (typeof PARAM_KEYS)[number];
 
 export type ParamDef = { key: ParamKey; label: string; hint: string };
 
+// Hints are the Latest Evaluation Matrix's own definition and indicators, word for word (Director, 2026-10-15).
 export const LAYER2_PARAMS: ParamDef[] = [
   {
     key: "p1",
     label: "Planning & Execution",
-    hint: "Quality of planning, timely execution, resource use, consistency of delivery.",
+    hint: "Ability of the chapter to convert plans into well-executed initiatives. Indicators: quality of planning; timely execution; resource utilisation; consistency of delivery.",
   },
   {
     key: "p2",
     label: "CMP Achievement",
-    hint: "CMP targets achieved, timeliness, quality of execution, reporting discipline.",
+    hint: "Extent to which the chapter delivers against its committed CMP objectives. Indicators: CMP targets achieved; timeliness; quality of execution; reporting discipline.",
   },
   {
     key: "p3",
     label: "Innovation",
-    hint: "New ideas or approaches, problem-solving, relevance, meaningful differentiation.",
+    hint: "Ability to introduce meaningful new approaches, formats or solutions that create additional value. Indicators: new ideas/approaches; problem-solving; relevance; meaningful differentiation.",
   },
   {
     key: "p4",
     label: "Stakeholder Engagement",
-    hint: "Member, Yuva, Thalir and Rural engagement; quality of relationships; inclusivity.",
+    hint: "Effectiveness in engaging and creating value for the chapter’s stakeholders. Indicators: member engagement; Yuva/Thalir/RI engagement; quality of relationships; inclusivity.",
   },
   {
     key: "p5",
     label: "Response",
-    hint: "Timely responses to regional and national teams, adaptability, closing action points.",
+    hint: "Responsiveness of the chapter to organisational requirements, opportunities and feedback. Indicators: timeliness of responses; responsiveness to regional/national teams; adaptability; closure of action points.",
   },
 ];
 
@@ -88,29 +169,29 @@ export const LAYER3_PARAMS: ParamDef[] = [
   {
     key: "p1",
     label: "Innovation & 3A Alignment",
-    hint: "A non-CMP initiative that is genuinely new and serves Awareness, Action or Advocacy.",
+    hint: "Extent to which a non-CMP initiative demonstrates meaningful innovation while aligning with Yi’s 3 A’s – Awareness, Action & Advocacy. Indicators: novelty of approach; problem addressed; meaningful innovation; alignment with Awareness, Action or Advocacy; value created beyond routine CMP delivery.",
   },
   {
     key: "p2",
     label: "Scalability",
-    hint: "Could another chapter replicate it? Cost, transferability, documentation.",
+    hint: "Potential for the initiative or model to be replicated by other chapters or adapted at a larger scale. Indicators: ease of replication; cost/resource efficiency; transferability; documentation/process; potential for national adoption.",
   },
   {
     key: "p3",
     label: "National Alignment",
-    hint: "Does it advance Yi's national strategy and priorities?",
+    hint: "Extent to which the initiative advances Yi’s broader strategic priorities and vision. Indicators: alignment with Yi strategy; relevance to national priorities; contribution to organizational objectives; strategic relevance.",
   },
   {
     key: "p4",
     label: "Measurable Impact",
-    hint: "Real transformation and outcomes, not attendance.",
+    hint: "Extent to which the initiative creates demonstrable transformation rather than merely generating participation or attendance. Indicators: quantifiable outcomes; behavioural/social change; beneficiary outcomes; evidence of transformation; sustainability.",
   },
   {
     key: "p5",
-    // The 2026 deck calls this a bonus criterion (5 pts). How the bonus counts
-    // toward the NMT total is still open with Piyush, so the total stays /25.
-    label: "Storytelling & Documentation (bonus)",
-    hint: "Bonus, up to 5. Could this become a national case study? Narrative clarity, visuals, evidence, replicability.",
+    // A normal NMT measure out of 5, like p1-p4 (Director, 2026-10-15,
+    // from the Latest Evaluation Matrix). The NMT total is /25.
+    label: "Storytelling & Documentation",
+    hint: "Ability to capture and communicate the initiative as a compelling, evidence-backed case study. Indicators: quality of documentation; clear problem–solution–impact narrative; evidence/data; visual assets; replicability of the story.",
   },
 ];
 
@@ -122,7 +203,7 @@ export const PARAMS_FOR_LAYER: Record<Layer, ParamDef[]> = {
 export const MAX_PARAM = 5;
 export const MAX_LAYER_TOTAL = 25;
 
-/** Word limits, exactly as mail 1 states them. */
+/** Word limits: mail 1's, plus the 2026 "why" (recognitions_04). */
 export const WORDS = {
   nominationReason: 50,
   flagshipEvent: 50,
@@ -133,6 +214,8 @@ export const WORDS = {
   /** National Leadership's reason for adding a chapter that did not nominate (Director, 2026-10-10). */
   nlAddedReason: 100,
   nmtComments: 250,
+  /** The chapter's "Why should your chapter get this recognition?" (Director, 2026-10-15). */
+  justification: 100,
   top3Rationale: 300,
   top3Citation: 250,
 } as const;
@@ -155,3 +238,14 @@ export const RX_ROLES = {
   nmt: "nmt",
   nmtLeader: "nmt_leader",
 } as const;
+
+/** The database CHECK on recognition_nominations.justification (recognitions_04). */
+export const JUSTIFICATION_MAX_CHARS = 2000;
+
+/**
+ * The Regional Chair + Regional Mentor check step (recognitions_02). Not used
+ * in 2026 (Director, 2026-10-15): a submitted nomination goes straight into
+ * the race. Hidden, not deleted: set this back to true to bring the Check
+ * desk, its actions and its wording back.
+ */
+export const CHECK_STEP_ENABLED = false;

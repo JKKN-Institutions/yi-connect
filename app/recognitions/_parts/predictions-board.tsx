@@ -15,7 +15,7 @@ export function PredictionsBoard({ view }: { view: PredictionsView }) {
         towards any score.
       </p>
       {total === 0 ? (
-        <p className="rx-mute">No chapter has made a prediction for this award.</p>
+        <p className="rx-mute">No chapter has made a prediction for this recognition.</p>
       ) : (
         <div className="rx-grid">
           {view.map((c) => {
@@ -30,8 +30,8 @@ export function PredictionsBoard({ view }: { view: PredictionsView }) {
                 </div>
                 {c.offRace > 0 ? (
                   <p className="rx-small rx-mute">
-                    {c.offRace} pick{c.offRace === 1 ? " was" : "s were"} for a chapter not in this race (its nomination did
-                    not pass both checks), so {c.offRace === 1 ? "it is" : "they are"} not counted.
+                    {c.offRace} pick{c.offRace === 1 ? " was" : "s were"} for a chapter not in this race (it has no nomination
+                    in the race), so {c.offRace === 1 ? "it is" : "they are"} not counted.
                   </p>
                 ) : null}
                 {c.entries.length === 0 ? (

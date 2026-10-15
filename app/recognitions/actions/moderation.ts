@@ -11,6 +11,7 @@ import {
   type AwardState,
 } from "@/lib/recognitions/data";
 import { nlAddedBlockers } from "@/lib/recognitions/scoring";
+import { mentorRescoreOpen } from "@/lib/recognitions/sight";
 import { isPast } from "@/lib/recognitions/phase";
 import { rxService } from "@/lib/recognitions/supabase";
 import type { ActionResult } from "@/lib/recognitions/types";
@@ -79,6 +80,15 @@ async function persist(awardId: string, input: ModerationInput, submit: boolean)
   // In re-evaluation the new version must be opened on purpose (it records which send-back it answers).
   if (state.phase === "reevaluation" && !draft) {
     return { success: false, error: "Press \"Reopen moderation\" first. It starts a new version for the re-evaluation." };
+  }
+
+  // recognitions_05: while the Regional Mentors re-score after a send-back,
+  // the ranking may be drafted but not submitted.
+  if (submit && mentorRescoreOpen(state)) {
+    return {
+      success: false,
+      error: "Not yet: the Regional Mentors are re-scoring after your send-back. Save a draft meanwhile; submit once every Mentor has resubmitted.",
+    };
   }
 
   const chapters = await chapterMap();

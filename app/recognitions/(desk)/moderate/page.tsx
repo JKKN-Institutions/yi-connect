@@ -11,8 +11,11 @@ import { STAGE2_LOCKED } from "./copy";
 export const metadata: Metadata = { title: "Stage 2" };
 
 /** What this NMT member should know about the award right now. Never a count of others' progress. */
-function waiting(state: AwardState, isLeader: boolean): { text: string; locked: boolean } {
+function waiting(state: AwardState, isLeader: boolean, isMentor = false): { text: string; locked: boolean } {
   const { phase, cycle } = state;
+  if (isMentor && phase !== "setup" && phase !== "nominations" && phase !== "stage1") {
+    return { text: "Read-only: the round-1 leaderboard and every mark, for the joint call.", locked: false };
+  }
   switch (phase) {
     case "setup":
     case "nominations":
@@ -55,9 +58,12 @@ function waiting(state: AwardState, isLeader: boolean): { text: string; locked: 
 export default async function ModerateList() {
   const viewer = await getRxViewer();
   if (!viewer) return null; // the desk layout already shows the no-access panel
-  const nmtDuties = viewer.duties.filter((d) => d.layer === "nmt");
+  // recognitions_05: Regional Mentors open the room too (read-only). One row per recognition.
+  const nmtDuties = viewer.duties
+    .filter((d) => d.layer === "nmt" || !viewer.duties.some((x) => x.layer === "nmt" && x.award_id === d.award_id))
+    .filter((d, i, all) => all.findIndex((x) => x.award_id === d.award_id) === i);
   if (nmtDuties.length === 0) {
-    return <NoAccess reason="You are not on the National Management Team of any recognition this year." />;
+    return <NoAccess reason="You are not a Regional Mentor or on the National Management Team of any recognition this year." />;
   }
   const cycle = await getCurrentCycle();
   const rows = (
@@ -76,7 +82,7 @@ export default async function ModerateList() {
       </PageHead>
       <div className="rx-stack">
         {rows.map(({ duty, state }) => {
-          const w = waiting(state, duty.is_nmt_leader);
+          const w = waiting(state, duty.is_nmt_leader, duty.layer === "rm");
           return (
             <Link
               key={duty.id}
@@ -91,6 +97,7 @@ export default async function ModerateList() {
                 </div>
                 <div className="rx-row" style={{ gap: 8 }}>
                   {duty.is_nmt_leader ? <span className="rx-eyebrow">NMT leader</span> : null}
+                  {duty.layer === "rm" ? <span className="rx-eyebrow">Regional Mentor · read-only</span> : null}
                   <PhaseSeal phase={state.phase} />
                 </div>
               </div>

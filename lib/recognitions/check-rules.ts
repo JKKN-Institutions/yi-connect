@@ -32,19 +32,53 @@ import { CHECK_STEP_ENABLED } from "./constants";
 import { isPast } from "./phase";
 import type { CycleRow, NominationOrigin, NominationRow, NominationStatus } from "./types";
 
-type Deadlines = Pick<CycleRow, "fix_deadline" | "check_deadline" | "reevaluation_deadline">;
+type Deadlines = Pick<CycleRow, "fix_deadline" | "check_deadline" | "reevaluation_deadline"> &
+  Partial<Pick<CycleRow, "stage1_deadline">>;
 
 /**
  * A nomination as the check rules need it. `origin` is optional on purpose:
  * before migration 03 is applied the column does not exist at runtime, and a
  * missing origin means a chapter filed it.
  */
-type Nom = Pick<NominationRow, "status"> & { origin?: NominationOrigin | null };
+type Nom = Pick<NominationRow, "status"> & {
+  origin?: NominationOrigin | null;
+  /** recognitions_05: absent before migration 05 is applied. */
+  approved_at?: string | null;
+};
 
 /** True only for a nomination National Leadership added (recognitions_03). */
 export function isNlAdded(n: { origin?: NominationOrigin | null } | null | undefined): boolean {
   return n?.origin === "nl_added";
 }
+
+/**
+ * recognitions_05: a Regional Mentor ('rm_added') or an NMT member
+ * ('nmt_added') put forward a chapter that did not apply. Neither goes
+ * through the Regional Chair + RM check; an rm_added one needs an NMT
+ * member's approval before it is scored.
+ */
+export function isEvaluatorAdded(n: { origin?: NominationOrigin | null } | null | undefined): boolean {
+  return n?.origin === "rm_added" || n?.origin === "nmt_added";
+}
+
+/** Someone other than the chapter added it (NL, a Mentor or the NMT): it has a reason, not a form. */
+export function isAddedForChapter(n: { origin?: NominationOrigin | null } | null | undefined): boolean {
+  return isNlAdded(n) || isEvaluatorAdded(n);
+}
+
+/** A Regional Mentor's added chapter still waiting for an NMT member's approval (recognitions_05). */
+export function awaitingNmtApproval(
+  n: Pick<NominationRow, "status"> & { origin?: NominationOrigin | null; approved_at?: string | null }
+): boolean {
+  return n.origin === "rm_added" && n.status === "submitted" && !n.approved_at;
+}
+
+/** Who added it, for labels: "National Leadership", "a Regional Mentor", "the NMT". */
+export const ADDED_BY_LABEL: Record<Exclude<NominationOrigin, "chapter">, string> = {
+  nl_added: "National Leadership",
+  rm_added: "a Regional Mentor",
+  nmt_added: "an NMT member",
+};
 
 /** When this nomination's checks close: the check deadline, or re-evaluation's for an NL-added one. */
 export function checkDeadlineFor(n: Nom, cycle: Deadlines): string | null {
@@ -58,6 +92,11 @@ export function fixDeadlineFor(n: Nom, cycle: Deadlines): string | null {
 
 /** What the stored status means right now, with the deadlines applied. */
 export function effectiveStatus(n: Nom, cycle: Deadlines, now: Date = new Date()): NominationStatus {
+  // recognitions_05: a Mentor- or NMT-added chapter skips the check step. An
+  // rm_added one the NMT never approved drops out when scoring closes.
+  if (isEvaluatorAdded(n)) {
+    return awaitingNmtApproval(n) && isPast(cycle.stage1_deadline ?? null, now) ? "excluded" : n.status;
+  }
   // Sent back and not fixed in time.
   if (n.status === "returned" && isPast(fixDeadlineFor(n, cycle), now)) return "excluded";
   // Filed but the two checks never both happened before checks closed.
@@ -70,9 +109,13 @@ export function effectiveStatus(n: Nom, cycle: Deadlines, now: Date = new Date()
  * In the race: the ONLY gate for scoring, ranking, moderation and reports.
  * 2026: every submitted nomination ('checked' is kept for any row a checker
  * passed before the step was dropped). With the check step on: only
- * 'checked' (both checkers passed it).
+ * 'checked' (both checkers passed it). A Regional Mentor's added chapter is
+ * never in the race until an NMT member approves it (recognitions_05).
  */
-export function inRace(n: Pick<NominationRow, "status">): boolean {
+export function inRace(
+  n: Pick<NominationRow, "status"> & { origin?: NominationOrigin | null; approved_at?: string | null }
+): boolean {
+  if (awaitingNmtApproval(n)) return false;
   if (n.status === "checked") return true;
   return !CHECK_STEP_ENABLED && n.status === "submitted";
 }
@@ -164,6 +207,9 @@ export function decideSeat(input: {
         "You can only check nominations from a region you are Regional Chair of, or a region you are Regional Mentor for on this recognition.",
     };
   }
+  if (isEvaluatorAdded(n)) {
+    return { ok: false, error: "A Regional Mentor or the NMT added this chapter, so it isn't checked here." };
+  }
   if (input.conflicted) {
     return { ok: false, error: "You hold a role in this chapter, so you can't check its nomination. Another checker must." };
   }
@@ -200,6 +246,12 @@ export function decideSeat(input: {
 /** Plain-English reason a nomination is out of the race, or null if it isn't. */
 export function exclusionReason(n: Nom, cycle: Deadlines, now: Date = new Date()): string | null {
   if (effectiveStatus(n, cycle, now) !== "excluded") return null;
+  if (isEvaluatorAdded(n)) {
+    if (n.origin === "rm_added" && n.status === "excluded") {
+      return n.approved_at ? "The Recognitions super admin took it out of the race." : "An NMT member declined it.";
+    }
+    if (awaitingNmtApproval(n)) return "No NMT member approved it before scoring closed.";
+  }
   if (n.status === "returned") {
     return isNlAdded(n)
       ? "It was sent back and National Leadership did not resubmit it before re-evaluation closed."

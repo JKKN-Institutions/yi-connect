@@ -53,6 +53,17 @@ export default async function ReportsPage() {
       </section>
 
       <section className="rx-plate rx-stack">
+        <h2 className="rx-h2">Stage sheet</h2>
+        <p className="rx-small">
+          Every recognition and category with the final 1st, 2nd and 3rd chapters and the NMT&apos;s citation, laid out
+          to be read out on stage. Print it or download it as CSV. National Leadership can open it too.
+        </p>
+        <div>
+          <a className="rx-btn rx-btn-quiet" href="/recognitions/admin/stage-sheet">Open the stage sheet</a>
+        </div>
+      </section>
+
+      <section className="rx-plate rx-stack">
         <h2 className="rx-h2">Recognition-wise report</h2>
         <p className="rx-small">
           One sheet per recognition: the full combined matrix — Layer 1, every Regional Mentor&apos;s and NMT member&apos;s total with their name, the

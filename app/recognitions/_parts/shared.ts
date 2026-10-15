@@ -20,7 +20,7 @@ import type {
 } from "@/lib/recognitions/types";
 import { computeMatrix, paramsTotal } from "@/lib/recognitions/scoring";
 import { countWords } from "@/lib/recognitions/words";
-import { isNlAdded } from "@/lib/recognitions/check-rules";
+import { ADDED_BY_LABEL, isAddedForChapter } from "@/lib/recognitions/check-rules";
 
 // ---------------------------------------------------------------------------
 // Combined matrix
@@ -37,8 +37,14 @@ export type DossierView = {
   hostedName: string | null;
   hostedType: string | null;
   announcement: string;
-  /** National Leadership's reason when it added a chapter that did not nominate (recognitions_03), else null. */
+  /**
+   * The reason when someone else added a chapter that did not nominate:
+   * National Leadership (recognitions_03), a Regional Mentor or the NMT
+   * (recognitions_05). Null for a chapter's own nomination.
+   */
   nlAddedReason: string | null;
+  /** Who added it ("National Leadership", "a Regional Mentor", "an NMT member"), or null. */
+  addedByLabel: string | null;
 };
 
 export type RationaleView = {
@@ -98,7 +104,8 @@ export function dossierOf(n: NominationRow): DossierView {
     hostedName: n.hosted_event_name,
     hostedType: n.hosted_event_type,
     announcement: n.announcement_draft ?? "",
-    nlAddedReason: isNlAdded(n) ? n.added_reason ?? "" : null,
+    nlAddedReason: isAddedForChapter(n) ? n.added_reason ?? "" : null,
+    addedByLabel: n.origin && n.origin !== "chapter" ? ADDED_BY_LABEL[n.origin] : null,
   };
 }
 

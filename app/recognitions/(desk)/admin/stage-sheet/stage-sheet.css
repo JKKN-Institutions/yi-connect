@@ -1,0 +1,18 @@
+/* Stage sheet (recognitions_05): readable on a phone, clean on paper. */
+.rx-stage-award { break-inside: avoid-page; }
+.rx-stage-cat { break-inside: avoid; }
+.rx-stage-place { border-left: 4px solid var(--rx-gilt, #b8860b); padding: 8px 0 8px 14px; }
+.rx-stage-place[data-rank="2"] { border-left-color: var(--rx-mute, #888); }
+.rx-stage-place[data-rank="3"] { border-left-color: var(--rx-vermilion, #b5482f); }
+.rx-stage-chapter { font-size: 1.35rem; font-weight: 700; overflow-wrap: anywhere; }
+.rx-stage-citation { font-size: 1.1rem; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 0; }
+.rx-stage-why { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 0; }
+
+@media print {
+  .rx-top, .rx-rail, .rx-ad-nav, .rx-stage-tools, .rx-desks { display: none !important; }
+  .rx-main { padding: 0 !important; max-width: none !important; }
+  body { background: #fff !important; color: #000 !important; }
+  .rx-stage-award { page-break-before: always; }
+  .rx-stage-award:first-of-type { page-break-before: auto; }
+  .rx-stage-why { color: #444 !important; }
+}

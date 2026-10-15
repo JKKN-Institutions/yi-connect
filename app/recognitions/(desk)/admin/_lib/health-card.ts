@@ -221,6 +221,9 @@ export function matchMeasureRows(
       if (v === null) blank.push(m.label);
       else if (v === "bad") bad.push(`${m.label} "${String(row[m.col])}" is not a number`);
       else if (v < 0 || v > 100) bad.push(`${m.label} ${v} is outside 0-100`);
+      // The matrix fixes this one: 4 stakeholder groups active = 100, 3 = 75, 2 = 50, 1 = 25.
+      else if (m.key === "activity_balance_index" && ![25, 50, 75, 100].includes(v))
+        bad.push(`${m.label} ${v} must be 25, 50, 75 or 100 (1, 2, 3 or 4 stakeholder groups active)`);
       else scores[m.key] = Math.round(v * 100) / 100;
     }
     if (blank.length === measures.length) {

@@ -389,7 +389,7 @@ export function HealthCardDesk({
                   >
                     <p>
                       Each matched chapter&apos;s four table {tableKey} measure scores are replaced with the values in the file. They count for
-                      every award of this cycle that uses table {tableKey}, not only {awardTitle}, and they take the place of any single score.
+                      every recognition of this cycle that uses table {tableKey}, not only {awardTitle}, and they take the place of any single score.
                       Chapters not in the file keep what they have.
                     </p>
                   </ConfirmDialog>
@@ -602,7 +602,7 @@ function ManualScores({ awardId, chapters, scored }: { awardId: string; chapters
         <div>
           <h2 className="rx-h2">Layer 1 scores now</h2>
           <p className="rx-small rx-mute">
-            {scored} of {chapters.length} chapters have a Layer 1 score for this award. A missing score counts as 0 in the combined matrix and is
+            {scored} of {chapters.length} chapters have a Layer 1 score for this recognition. A missing score counts as 0 in the combined matrix and is
             flagged there. A score typed here is used only while the chapter has no measure scores.
           </p>
         </div>

@@ -136,31 +136,32 @@ export type ParamKey = (typeof PARAM_KEYS)[number];
 
 export type ParamDef = { key: ParamKey; label: string; hint: string };
 
+// Hints are the Latest Evaluation Matrix's own definition and indicators, word for word (Director, 2026-10-15).
 export const LAYER2_PARAMS: ParamDef[] = [
   {
     key: "p1",
     label: "Planning & Execution",
-    hint: "Quality of planning, timely execution, resource use, consistency of delivery.",
+    hint: "Ability of the chapter to convert plans into well-executed initiatives. Indicators: quality of planning; timely execution; resource utilisation; consistency of delivery.",
   },
   {
     key: "p2",
     label: "CMP Achievement",
-    hint: "CMP targets achieved, timeliness, quality of execution, reporting discipline.",
+    hint: "Extent to which the chapter delivers against its committed CMP objectives. Indicators: CMP targets achieved; timeliness; quality of execution; reporting discipline.",
   },
   {
     key: "p3",
     label: "Innovation",
-    hint: "New ideas or approaches, problem-solving, relevance, meaningful differentiation.",
+    hint: "Ability to introduce meaningful new approaches, formats or solutions that create additional value. Indicators: new ideas/approaches; problem-solving; relevance; meaningful differentiation.",
   },
   {
     key: "p4",
     label: "Stakeholder Engagement",
-    hint: "Member, Yuva, Thalir and Rural engagement; quality of relationships; inclusivity.",
+    hint: "Effectiveness in engaging and creating value for the chapter’s stakeholders. Indicators: member engagement; Yuva/Thalir/RI engagement; quality of relationships; inclusivity.",
   },
   {
     key: "p5",
     label: "Response",
-    hint: "Timely responses to regional and national teams, adaptability, closing action points.",
+    hint: "Responsiveness of the chapter to organisational requirements, opportunities and feedback. Indicators: timeliness of responses; responsiveness to regional/national teams; adaptability; closure of action points.",
   },
 ];
 
@@ -168,29 +169,29 @@ export const LAYER3_PARAMS: ParamDef[] = [
   {
     key: "p1",
     label: "Innovation & 3A Alignment",
-    hint: "A non-CMP initiative that is genuinely new and serves Awareness, Action or Advocacy.",
+    hint: "Extent to which a non-CMP initiative demonstrates meaningful innovation while aligning with Yi’s 3 A’s – Awareness, Action & Advocacy. Indicators: novelty of approach; problem addressed; meaningful innovation; alignment with Awareness, Action or Advocacy; value created beyond routine CMP delivery.",
   },
   {
     key: "p2",
     label: "Scalability",
-    hint: "Could another chapter replicate it? Cost, transferability, documentation.",
+    hint: "Potential for the initiative or model to be replicated by other chapters or adapted at a larger scale. Indicators: ease of replication; cost/resource efficiency; transferability; documentation/process; potential for national adoption.",
   },
   {
     key: "p3",
     label: "National Alignment",
-    hint: "Does it advance Yi's national strategy and priorities?",
+    hint: "Extent to which the initiative advances Yi’s broader strategic priorities and vision. Indicators: alignment with Yi strategy; relevance to national priorities; contribution to organizational objectives; strategic relevance.",
   },
   {
     key: "p4",
     label: "Measurable Impact",
-    hint: "Real transformation and outcomes, not attendance.",
+    hint: "Extent to which the initiative creates demonstrable transformation rather than merely generating participation or attendance. Indicators: quantifiable outcomes; behavioural/social change; beneficiary outcomes; evidence of transformation; sustainability.",
   },
   {
     key: "p5",
     // A normal NMT measure out of 5, like p1-p4 (Director, 2026-10-15,
     // from the Latest Evaluation Matrix). The NMT total is /25.
     label: "Storytelling & Documentation",
-    hint: "Ability to capture and communicate the initiative as a compelling, evidence-backed case study.",
+    hint: "Ability to capture and communicate the initiative as a compelling, evidence-backed case study. Indicators: quality of documentation; clear problem–solution–impact narrative; evidence/data; visual assets; replicability of the story.",
   },
 ];
 

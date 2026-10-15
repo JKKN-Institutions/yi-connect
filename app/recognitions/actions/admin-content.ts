@@ -285,7 +285,7 @@ export async function applyHealthCardMeasures(input: MeasureInput): Promise<Acti
   done();
   return {
     success: true,
-    message: `Applied table ${p.tableKey} measure scores for ${p.match.matched.length} chapter${p.match.matched.length === 1 ? "" : "s"}. Every award of this cycle that uses table ${p.tableKey} now reads them.`,
+    message: `Applied table ${p.tableKey} measure scores for ${p.match.matched.length} chapter${p.match.matched.length === 1 ? "" : "s"}. Every recognition of this cycle that uses table ${p.tableKey} now reads them.`,
   };
 }
 

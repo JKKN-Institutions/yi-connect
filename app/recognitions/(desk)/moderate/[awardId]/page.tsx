@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { requireRxNmtOnAward } from "@/lib/recognitions/auth";
-import { getAwardState, latestDecisionFor } from "@/lib/recognitions/data";
+import { requireRxEvaluatorOnAward } from "@/lib/recognitions/auth";
+import { getAwardState, getPeople, latestDecisionFor } from "@/lib/recognitions/data";
+import { mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
 import { isPast } from "@/lib/recognitions/phase";
 import { Ribbon } from "@/app/recognitions/_ui/ribbon";
 import { IconArrowLeft } from "@/app/recognitions/_ui/icons";
@@ -14,13 +15,16 @@ import { buildRankingView, prefillFromMatrix } from "@/app/recognitions/_parts/s
 import { STAGE2_LOCKED } from "../copy";
 import { ModerationForm, type FormCategory, type FormInitial } from "./moderation-form";
 import { ReopenButton } from "./reopen-button";
+import { MentorSendBackPanel, SendBackHistory } from "./mentor-sendback";
 
 export const metadata: Metadata = { title: "Stage 2 room" };
 
 export default async function Stage2Room({ params }: { params: Promise<{ awardId: string }> }) {
   const { awardId } = await params;
-  const gate = await requireRxNmtOnAward(awardId);
+  // recognitions_05: Regional Mentors open this room too, read-only.
+  const gate = await requireRxEvaluatorOnAward(awardId);
   if (!gate.ok) return <NoAccess reason={gate.error} />;
+  const nmtDuty = gate.value.find((d) => d.layer === "nmt") ?? null;
 
   const state = await getAwardState(awardId);
   if (!state) return <NoAccess reason="This recognition does not exist or was removed." contact={false} />;
@@ -40,18 +44,43 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
     </>
   );
 
-  // BLIND until Stage 2: no scores, matrix, predictions or progress before then.
-  if (phase === "setup" || phase === "nominations" || phase === "stage1") {
+  // BLIND until YOU submit (recognitions_05): no scores, matrix, predictions
+  // or progress until this person has submitted every sheet they hold for
+  // this recognition, or Stage 2 has opened (and their sheet isn't sent back).
+  const sight = scoreSight(state, gate.value);
+  const rescore = mentorRescoreOpen(state);
+  const latestSendBack = state.sendBacks[0] ?? null;
+  const sendBackNotice =
+    rescore && latestSendBack ? (
+      <Notice tone="alert">
+        <strong>The NMT leader sent this recognition back to the Regional Mentors:</strong>{" "}
+        <span className="rx-p-text">{latestSendBack.remark}</span>
+        <br />
+        <span className="rx-small rx-mute">
+          Sent {formatWhen(latestSendBack.sent_at)} · Mentor round {latestSendBack.round} open until{" "}
+          {formatWhen(cycle.stage2_deadline)}
+        </span>
+      </Notice>
+    ) : null;
+  if (!sight.sees) {
     return (
       <div className="rx-stack">
         {head}
-        <Notice>{STAGE2_LOCKED}</Notice>
+        {sendBackNotice}
+        <Notice>{phase === "setup" || phase === "nominations" ? STAGE2_LOCKED : sight.reason}</Notice>
+        <div>
+          <Link href="/recognitions/score" className="rx-link rx-small">Go to my scoring sheets</Link>
+        </div>
       </div>
     );
   }
 
   // The duty list is already filtered on the directory nmt_leader role, so this flag is authoritative.
-  const isLeader = gate.value.is_nmt_leader;
+  const isLeader = nmtDuty?.is_nmt_leader ?? false;
+  const beforeStage2 = phase === "setup" || phase === "nominations" || phase === "stage1";
+  const sendBackPeople = await getPeople(state.sendBacks.map((b) => b.sent_by));
+  const canSendBack =
+    isLeader && (phase === "stage1" || phase === "stage2") && !rescore && !isPast(cycle.stage2_deadline);
   const data = await loadStage2(state, { withNames: false });
   const latest = state.latestVersion;
   const latestSubmitted = state.latestSubmittedVersion;
@@ -106,6 +135,18 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
     <div className="rx-stack-lg">
       <div className="rx-stack">
         {head}
+        {!isLeader ? (
+          <Notice>
+            Read-only. You see every evaluator&apos;s marks for this recognition
+            {sight.why === "submitted" ? " because you have submitted your own sheet" : ""}. Nothing here can be changed.
+          </Notice>
+        ) : null}
+        {sendBackNotice}
+        {beforeStage2 ? (
+          <Notice>
+            Round 1 is still being scored: the leaderboard below shows only the marks submitted so far.
+          </Notice>
+        ) : null}
         {phase === "stage2" || phase === "reevaluation" ? (
           <Deadline label={phase === "reevaluation" ? "Re-evaluation closes" : "Stage 2 closes"} iso={deadline} />
         ) : null}
@@ -134,6 +175,8 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
         </h2>
         {!isLeader ? (
           <Notice>Only the NMT leader enters the final ranking.</Notice>
+        ) : beforeStage2 ? (
+          <Notice>The final ranking opens in Stage 2, once every Regional Mentor and NMT mark is in.</Notice>
         ) : canEdit ? (
           <>
             <p className="rx-small rx-mute">
@@ -174,6 +217,18 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
           <p className="rx-mute">The NMT leader hasn&apos;t submitted a ranking yet.</p>
         ) : null}
       </section>
+
+      {canSendBack ? <MentorSendBackPanel awardId={award.id} closesAt={formatWhen(cycle.stage2_deadline)} /> : null}
+      <SendBackHistory
+        items={state.sendBacks.map((b) => ({
+          id: b.id,
+          round: b.round,
+          remark: b.remark,
+          sentAt: formatWhen(b.sent_at),
+          sentBy: sendBackPeople.get(b.sent_by)?.full_name ?? "The NMT leader",
+          reopened: b.scores_reopened,
+        }))}
+      />
 
       <VersionHistory history={data.history} />
     </div>

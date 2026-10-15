@@ -54,3 +54,21 @@ export function dutyLayerLabel(duty: { layer: "rm" | "nmt"; region: string | nul
   if (duty.layer === "rm") return `Regional Mentor · region ${duty.region ?? ""}`;
   return duty.is_nmt_leader ? "NMT leader" : "NMT";
 }
+
+/**
+ * recognitions_05: after the NMT leader sends a recognition back to its
+ * Regional Mentors, a Mentor's sheet reopens even though Stage 1 has closed
+ * or Stage 2 has started. It stays open until the cycle's Stage 2 deadline.
+ * Every other duty and nomination follows nominationScoringWindow.
+ */
+export function dutyScoringWindow(
+  phase: Phase,
+  cycle: Pick<CycleRow, "stage1_deadline" | "stage2_deadline" | "reevaluation_deadline">,
+  nomination: { origin?: NominationOrigin | null },
+  duty: { layer: "rm" | "nmt" },
+  rescoreOpen: boolean
+): ScoringWindow {
+  const base = nominationScoringWindow(phase, cycle, nomination);
+  if (duty.layer !== "rm" || !rescoreOpen || base.state === "open") return base;
+  return isPast(cycle.stage2_deadline) ? { state: "closed" } : { state: "open" };
+}

@@ -75,6 +75,12 @@ export default async function ReviewList() {
             ? "Approve a recognition or send it back to the NMT leader for re-evaluation."
             : "National Leadership approves a recognition or sends it back; you can read everything."}
         </p>
+        <p className="rx-small">
+          <Link href="/recognitions/admin/stage-sheet" className="rx-link" data-testid="open-stage-sheet">
+            Open the stage sheet
+          </Link>{" "}
+          <span className="rx-mute">(final 1st, 2nd and 3rd of every recognition, to read out on stage)</span>
+        </p>
       </PageHead>
 
       <section className="rx-stack">

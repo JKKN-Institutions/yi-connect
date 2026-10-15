@@ -17,7 +17,7 @@
 import { CHECK_STEP_ENABLED, MAX_LAYER_TOTAL, PARAM_KEYS } from "./constants";
 import type { Category, Layer } from "./constants";
 import type { CycleRow, EvaluatorRow, NominationRow, ScoreParams, ScoreRow } from "./types";
-import { inRace, isNlAdded, stillInCheck } from "./check-rules";
+import { awaitingNmtApproval, inRace, isNlAdded, stillInCheck } from "./check-rules";
 
 const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
 
@@ -183,7 +183,8 @@ export type Completeness = {
  * while it may yet enter the race.
  */
 export function computeCompleteness(input: {
-  cycle: Pick<CycleRow, "fix_deadline" | "check_deadline" | "reevaluation_deadline">;
+  cycle: Pick<CycleRow, "fix_deadline" | "check_deadline" | "reevaluation_deadline"> &
+    Partial<Pick<CycleRow, "stage1_deadline">>;
   nominations: NominationRow[];
   duties: EvaluatorRow[];
   conflictsByDuty: Map<string, Set<string>>;
@@ -191,7 +192,10 @@ export function computeCompleteness(input: {
   now?: Date;
 }): Completeness {
   const nominations = input.nominations.filter(inRace);
-  const inCheck = input.nominations.filter((n) => stillInCheck(n, input.cycle, input.now));
+  const moving = input.nominations.filter((n) => stillInCheck(n, input.cycle, input.now));
+  // recognitions_05: a Regional Mentor's added chapter waiting for an NMT approval.
+  const awaitingApproval = moving.filter(awaitingNmtApproval);
+  const inCheck = moving.filter((n) => !awaitingNmtApproval(n));
   const duties = input.duties.filter((d) => d.is_active);
   const submittedKey = new Set(
     input.scores.filter((s) => s.status === "submitted").map((s) => `${s.evaluator_id}:${s.nomination_id}`)
@@ -221,6 +225,11 @@ export function computeCompleteness(input: {
       CHECK_STEP_ENABLED
         ? "No nomination for this recognition has passed both checks yet."
         : "No chapter has submitted a nomination for this recognition."
+    );
+  }
+  if (awaitingApproval.length > 0) {
+    blockers.push(
+      `${awaitingApproval.length} chapter(s) a Regional Mentor added are waiting for an NMT member to approve or decline them.`
     );
   }
   for (const layer of ["rm", "nmt"] as const) {

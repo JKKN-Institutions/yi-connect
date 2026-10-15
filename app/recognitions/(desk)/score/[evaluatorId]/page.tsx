@@ -11,10 +11,13 @@ import { CATEGORY_LABEL, CHECK_STEP_ENABLED, PARAM_KEYS, type ParamKey } from "@
 import { Ribbon } from "../../../_ui/ribbon";
 import { IconArrowLeft, IconArrowRight, IconDownload, IconEyeOff, IconLock } from "../../../_ui/icons";
 import { Deadline, NoAccess, Notice, PageHead, Seal, formatWhen } from "../../../_ui/primitives";
-import { dutyLayerLabel, nominationScoringWindow, scoringDeadlineFor, scoringWindow } from "../score-rules";
-import { isNlAdded } from "@/lib/recognitions/check-rules";
+import { dutyLayerLabel, dutyScoringWindow, scoringDeadlineFor, scoringWindow } from "../score-rules";
+import { ADDED_BY_LABEL, isAddedForChapter, isNlAdded } from "@/lib/recognitions/check-rules";
+import { mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
 import { ScoreSheet } from "./sheet";
 import { FlagToggle } from "./flags";
+import { HealthCardPanel } from "./health-card-panel";
+import { loadAwardHealthCard } from "@/lib/recognitions/health-card";
 import { CheckList } from "../../check/check-list";
 import { loadCheckItems } from "../../check/load";
 import "../score.css";
@@ -53,6 +56,10 @@ export default async function ScoringSheetPage({
   }
   const { award, cycle } = state;
   const win = scoringWindow(state.phase, cycle);
+  // recognitions_05: the NMT leader's send-back reopens a Mentor's sheet; blind until you submit.
+  const rescore = mentorRescoreOpen(state) && duty.layer === "rm";
+  const sight = scoreSight(state, gate.viewer.duties);
+  const latestSendBack = state.sendBacks[0] ?? null;
 
   // RM only: the nominations from this region still waiting for a check, with
   // the same Pass / Send back controls as the Check desk. Only nominations
@@ -84,12 +91,37 @@ export default async function ScoringSheetPage({
         <Link href="/recognitions/score" className="rx-link rx-small">All my sheets</Link>
       </div>
       <Deadline label="Stage 1 closes" iso={cycle.stage1_deadline} />
-      <div className="rx-notice">
-        <div className="rx-row" style={{ gap: 8, flexWrap: "nowrap", alignItems: "flex-start" }}>
-          <IconEyeOff size={18} />
-          <span>Your marks are private. Other evaluators can&apos;t see them and you can&apos;t see theirs.</span>
+      {sight.sees ? (
+        <Notice tone="ok">
+          {sight.why === "submitted"
+            ? "You have submitted every chapter on your sheet. "
+            : "Round 1 is in. "}
+          <Link href={`/recognitions/moderate/${award.id}`} className="rx-link" data-testid="see-all-marks">
+            See every evaluator&apos;s marks (read-only)
+          </Link>
+        </Notice>
+      ) : (
+        <div className="rx-notice">
+          <div className="rx-row" style={{ gap: 8, flexWrap: "nowrap", alignItems: "flex-start" }}>
+            <IconEyeOff size={18} />
+            <span>
+              Your marks are private. Other evaluators can&apos;t see them, and you see theirs only after you submit every
+              chapter on your sheet.
+            </span>
+          </div>
         </div>
-      </div>
+      )}
+      {rescore && latestSendBack ? (
+        <Notice tone="alert">
+          <strong>The NMT leader sent this recognition back to the Regional Mentors:</strong>{" "}
+          <span className="rx-p-text">{latestSendBack.remark}</span>
+          <br />
+          <span className="rx-small">
+            Your earlier marks are kept in the history and loaded below as a draft. Review and resubmit by{" "}
+            {formatWhen(cycle.stage2_deadline)}.
+          </span>
+        </Notice>
+      ) : null}
     </PageHead>
   );
 
@@ -142,11 +174,18 @@ export default async function ScoringSheetPage({
   const score = mine.get(current.id) ?? null;
   const submitted = score?.status === "submitted";
   // Per chapter: one National Leadership added is scored during re-evaluation (recognitions_03).
-  const curWin = nominationScoringWindow(state.phase, cycle, current);
+  const curWin = dutyScoringWindow(state.phase, cycle, current, duty, rescore);
   const open = curWin.state === "open";
   const added = isNlAdded(current);
+  // Any chapter someone else put forward (National Leadership, a Mentor or the NMT): a reason, not a form.
+  const addedFor = isAddedForChapter(current);
+  const addedBy = current.origin !== "chapter" && current.origin ? ADDED_BY_LABEL[current.origin] : null;
   const readOnly = !open || submitted;
   const files = await listHealthCardFiles(duty.award_id);
+  // Objective data, not another evaluator's mark: only the CURRENT chapter's
+  // Health Card is passed to the page, never the whole map.
+  const hc = await loadAwardHealthCard(award);
+  const hcCard = hc.byChapter.get(current.chapter_id) ?? null;
   const href = (id: string) => `/recognitions/score/${duty.id}?n=${id}`;
   const doneCount = visible.filter((n) => mine.get(n.id)?.status === "submitted").length;
 
@@ -209,7 +248,10 @@ export default async function ScoringSheetPage({
           </Notice>
         ) : null}
         {curWin.state === "closed" ? (
-          <Notice>Scoring closed on {formatWhen(scoringDeadlineFor(cycle, current))}. Read-only mode.</Notice>
+          <Notice>
+            Scoring closed on {formatWhen(rescore ? cycle.stage2_deadline : scoringDeadlineFor(cycle, current))}. Read-only
+            mode.
+          </Notice>
         ) : curWin.state === "over" ? (
           <Notice>Stage 1 is over for this recognition. Read-only mode.</Notice>
         ) : submitted ? (
@@ -230,13 +272,13 @@ export default async function ScoringSheetPage({
                 <Seal tone="mute">Region {current.region}</Seal>
                 <Seal tone="laurel">{CATEGORY_LABEL[current.category]}</Seal>
                 {duty.layer === "nmt" && current.rm_recommended_by ? <Seal tone="gilt">Recommended by RM</Seal> : null}
-                {added ? <Seal tone="gilt">Added by National Leadership</Seal> : null}
+                {addedFor && addedBy ? <Seal tone="gilt">Added by {addedBy}</Seal> : null}
               </div>
             </div>
 
-            {added ? (
+            {addedFor ? (
               <section className="rx-stack" style={{ gap: 8 }}>
-                <h3 className="rx-h3">Why National Leadership added this chapter</h3>
+                <h3 className="rx-h3">Why {addedBy ?? "someone"} added this chapter</h3>
                 <p className="rx-sheet-field">{current.added_reason || <span className="rx-mute">No reason recorded</span>}</p>
                 <p className="rx-small rx-mute">
                   This chapter did not nominate, so there is no nomination form. Score it on what you know of its work
@@ -335,6 +377,7 @@ export default async function ScoringSheetPage({
 
             <section className="rx-stack" style={{ gap: 8 }}>
               <h3 className="rx-h3">National Health Card</h3>
+              <HealthCardPanel tableKey={hc.tableKey} measures={hc.measures} card={hcCard} weightLayer1={cycle.weight_layer1} />
               {files.length === 0 ? (
                 <p className="rx-small rx-mute">The National Health Card for this recognition hasn&apos;t been uploaded yet.</p>
               ) : (

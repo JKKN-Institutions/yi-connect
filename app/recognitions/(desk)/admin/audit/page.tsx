@@ -17,6 +17,9 @@ const ACTION_WORD: Record<string, string> = {
   upload: "uploaded",
   apply_layer1: "applied Layer 1 scores from",
   set_layer1_manual: "typed a Layer 1 score for",
+  // recognitions_06: Health Card per measure.
+  apply_health_card_measures: "applied Health Card measure scores from",
+  edit_health_card_measure: "edited a Health Card measure:",
   force_open_stage2: "forced Stage 2 open on",
   edit: "edited",
   submit: "submitted",

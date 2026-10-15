@@ -385,10 +385,10 @@ export async function revealCheck(
   const cycle = await getCurrentCycle();
   if (!cycle) return { ok: false, error: "There is no current Recognitions cycle." };
   const award = (await listAwards(cycle.id)).find((a) => a.id === awardId);
-  if (!award) return { ok: false, error: "This award is not in the current Recognitions cycle." };
+  if (!award) return { ok: false, error: "This recognition is not in the current Recognitions cycle." };
   const ctx = newCtx();
   const approved = await approvedResult(ctx, award, cycle);
-  if (!approved) return { ok: false, error: "This award is not approved yet, so it cannot be revealed." };
+  if (!approved) return { ok: false, error: "This recognition is not approved yet, so it cannot be revealed." };
   if (!(await winnerOf(ctx, award.id, approved, category))) {
     return { ok: false, error: "The approved result has no winner in this category." };
   }

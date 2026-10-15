@@ -16,6 +16,8 @@ import { ADDED_BY_LABEL, isAddedForChapter, isNlAdded } from "@/lib/recognitions
 import { mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
 import { ScoreSheet } from "./sheet";
 import { FlagToggle } from "./flags";
+import { HealthCardPanel } from "./health-card-panel";
+import { loadAwardHealthCard } from "@/lib/recognitions/health-card";
 import { CheckList } from "../../check/check-list";
 import { loadCheckItems } from "../../check/load";
 import "../score.css";
@@ -180,6 +182,10 @@ export default async function ScoringSheetPage({
   const addedBy = current.origin !== "chapter" && current.origin ? ADDED_BY_LABEL[current.origin] : null;
   const readOnly = !open || submitted;
   const files = await listHealthCardFiles(duty.award_id);
+  // Objective data, not another evaluator's mark: only the CURRENT chapter's
+  // Health Card is passed to the page, never the whole map.
+  const hc = await loadAwardHealthCard(award);
+  const hcCard = hc.byChapter.get(current.chapter_id) ?? null;
   const href = (id: string) => `/recognitions/score/${duty.id}?n=${id}`;
   const doneCount = visible.filter((n) => mine.get(n.id)?.status === "submitted").length;
 
@@ -371,6 +377,7 @@ export default async function ScoringSheetPage({
 
             <section className="rx-stack" style={{ gap: 8 }}>
               <h3 className="rx-h3">National Health Card</h3>
+              <HealthCardPanel tableKey={hc.tableKey} measures={hc.measures} card={hcCard} weightLayer1={cycle.weight_layer1} />
               {files.length === 0 ? (
                 <p className="rx-small rx-mute">The National Health Card for this recognition hasn&apos;t been uploaded yet.</p>
               ) : (

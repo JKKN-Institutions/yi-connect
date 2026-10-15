@@ -20,6 +20,7 @@ import type { Category } from "./constants";
 import { computeCompleteness, dutySeesNomination, type Completeness } from "./scoring";
 import { computePhase, latestDecisionFor, type Phase } from "./phase";
 import { inRace, isAddedForChapter } from "./check-rules";
+import { layer1ForAward } from "./health-card";
 
 /**
  * Read layer for Yi Recognitions. NO function here checks permissions —
@@ -234,15 +235,15 @@ export async function listScoresForDuty(evaluatorId: string): Promise<ScoreRow[]
   return (data ?? []) as ScoreRow[];
 }
 
+/**
+ * chapter_id -> Layer 1 (0-100). Per-measure Health Card scores first
+ * (recognitions_06), the award's single recognition_layer1 score as the
+ * fallback. A chapter with neither is absent (= missing). See health-card.ts.
+ */
 export async function getLayer1(awardId: string): Promise<Map<string, number>> {
-  const { data, error } = await rxService()
-    .from("recognition_layer1")
-    .select("chapter_id, score")
-    .eq("award_id", awardId);
-  if (error) fail("read layer 1", error);
-  return new Map(
-    ((data ?? []) as Array<{ chapter_id: string; score: number | string }>).map((r) => [r.chapter_id, Number(r.score)])
-  );
+  const award = await getAward(awardId);
+  if (!award) return new Map();
+  return layer1ForAward(award);
 }
 
 export async function listHealthCardFiles(awardId: string) {

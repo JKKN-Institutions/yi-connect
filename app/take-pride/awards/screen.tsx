@@ -52,7 +52,7 @@ export function AwardsScreen({ initial }: { initial: Feed }) {
             TAKE<span>PRIDE</span>&rsquo;26
           </b>
         </span>
-        <span className="tp-aw-eyebrow">Awards Night</span>
+        <span className="tp-aw-eyebrow">Recognition Night</span>
       </header>
 
       {!latest ? (

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getRevealFeed } from "@/lib/take-pride/recognitions-bridge";
 
 /**
- * Public Awards Night feed for the hall screen. Returns ONLY what has been
+ * Public Recognition Night feed for the hall screen. Returns ONLY what has been
  * revealed (see getRevealFeed): award, category, winner chapter, citation.
  * Rehearsal reveals carry the placeholder winner. Nothing unrevealed, no ids
  * of chapters, no scores or ranks.

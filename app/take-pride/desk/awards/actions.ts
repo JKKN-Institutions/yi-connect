@@ -7,21 +7,21 @@ import { awardInCurrentCycle, invalidateRevealFeed, isCategory, isUuid, revealCh
 import type { TpResult } from "@/lib/take-pride/types";
 
 /*
- * Awards Night desk actions. Every one denies explicitly with
+ * Recognition Night desk actions. Every one denies explicitly with
  * { success:false, error }. Never a redirect.
  *
  * Real organisers only (requireTpOrganiser), rehearsal included: reveals
  * land in the shared tp_award_reveals table that the public hall screen
- * reads, so review mode (outside reviewers) gets no Awards Night actions.
+ * reads, so review mode (outside reviewers) gets no Recognition Night actions.
  */
 
 async function gate(): Promise<{ ok: true; personId: string } | { ok: false; error: string }> {
   const g = await requireTpOrganiser();
   if (!g.ok) {
-    if (await hasReviewSession()) return { ok: false, error: "Awards Night is not available in review mode." };
+    if (await hasReviewSession()) return { ok: false, error: "Recognition Night is not available in review mode." };
     return {
       ok: false,
-      error: g.reason === "signed_out" ? "Sign in with your Yi account first." : "Only the Take Pride team can run Awards Night.",
+      error: g.reason === "signed_out" ? "Sign in with your Yi account first." : "Only the Take Pride team can run Recognition Night.",
     };
   }
   return { ok: true, personId: g.personId };

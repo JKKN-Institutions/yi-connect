@@ -517,7 +517,7 @@ export async function getChapterJourney(chapterText: string): Promise<Journey> {
       { label: "Nominations close", at: cycle.nomination_deadline },
       { label: "Checks close", at: cycle.check_deadline },
       { label: "Scoring ends", at: cycle.stage1_deadline },
-      { label: "Results finalised (kept secret until Awards Night)", at: cycle.stage2_deadline },
+      { label: "Results finalised (kept secret until Recognition Night)", at: cycle.stage2_deadline },
     ],
     items,
   };

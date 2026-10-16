@@ -70,7 +70,7 @@ export default async function DeskPage() {
       <nav className="tp-tabs" aria-label="Desk sections">
         <Link href="/take-pride/desk/gate">Gate scanner</Link>
         <Link href="/take-pride/desk/delegates">Delegates</Link>
-        <Link href="/take-pride/desk/awards">Awards Night</Link>
+        <Link href="/take-pride/desk/awards">Recognition Night</Link>
         <Link href="/take-pride/desk/tables">Topic tables</Link>
         <Link href="/take-pride/awards">Hall screen</Link>
         <Link href="/take-pride/desk/sales">Sales follow-ups</Link>

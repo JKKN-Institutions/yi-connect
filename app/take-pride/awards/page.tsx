@@ -4,7 +4,7 @@ import { AwardsScreen } from "./screen";
 import "./awards.css";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Awards Night" };
+export const metadata: Metadata = { title: "Recognition Night" };
 
 export default async function AwardsNightPage() {
   let initial: { eventName: string | null; items: FeedItem[] } = { eventName: null, items: [] };

@@ -33,9 +33,14 @@
 --   gives them out FIRST, and no award is ever given on a zero. The top award
 --   uses the new eligibility 'member' (results.ts) so an official who did NOT
 --   win their own award cannot take it on a single 10-point sheet.
--- * King Maker and the 5 special recognitions are seeded INACTIVE (hand-pick by
---   the chair from Results) — the national agenda has no session that measures
---   coalition strategy. See the report for the scored alternative.
+-- * King Maker is seeded INACTIVE (hand-pick by the chair from Results): the
+--   national agenda has no session that measures coalition strategy. It stays
+--   that way until the group answers round-2 Q2/Q3 (Political Acumen sheet +
+--   chair weight). The 5 special recognitions are SCORED from marks (Swapnil,
+--   26 Oct); their bases await the group's OK (round-2 Q4).
+-- * Updated 26 Oct to the Tech Support Committee answers: Committee Reports out
+--   of Treasury/Opposition, Conduct = GB+QH+ZH, officials sheet as the
+--   Director's group message.
 --
 -- SAFETY: additive only. New rows scoped '{national}'; no existing row touched;
 -- ON CONFLICT DO NOTHING everywhere, so re-running never overwrites an edit made
@@ -105,15 +110,15 @@ VALUES
   -- to be marked on here and each official is marked out of 10.
   ('national_officials', 'Presiding Officer & House Officials (National)', NULL, 206,
    '[
-     {"key":"nof.sp_procedure","kind":"evaluation","label":"Command of Procedure","weight":1,"max_score":4,"roles":["speaker"],"parameters":"Rules, order of business, rulings on points of order"},
+     {"key":"nof.sp_command","kind":"evaluation","label":"Command of the House","weight":1,"max_score":4,"roles":["speaker"],"parameters":"Discipline, confidence, keeping sessions on time"},
      {"key":"nof.sp_impartiality","kind":"evaluation","label":"Impartiality","weight":1,"max_score":3,"roles":["speaker"],"parameters":"Fair recognition of both benches"},
-     {"key":"nof.sp_house_mgmt","kind":"evaluation","label":"Management of the House & Time","weight":1,"max_score":3,"roles":["speaker"],"parameters":"Discipline, confidence, keeping sessions on time"},
-     {"key":"nof.jr_accuracy","kind":"evaluation","label":"Accuracy & Coverage","weight":1,"max_score":4,"roles":["parliamentary_journalist"],"parameters":"Correct, complete reporting of proceedings"},
-     {"key":"nof.jr_insight","kind":"evaluation","label":"Insight & Analysis","weight":1,"max_score":3,"roles":["parliamentary_journalist"],"parameters":"Interpretation, balance, questions raised"},
-     {"key":"nof.jr_presentation","kind":"evaluation","label":"Presentation of Report","weight":1,"max_score":3,"roles":["parliamentary_journalist"],"parameters":"Engaging, clear final report / observation"},
-     {"key":"nof.ad_organisation","kind":"evaluation","label":"Organisation & Coordination","weight":1,"max_score":4,"roles":["parliamentary_administrator"],"parameters":"Running the order of business, coordination with the Chair"},
-     {"key":"nof.ad_documentation","kind":"evaluation","label":"Documentation","weight":1,"max_score":3,"roles":["parliamentary_administrator"],"parameters":"Records of bills, votes, questions"},
-     {"key":"nof.ad_impartiality","kind":"evaluation","label":"Impartiality & Procedure","weight":1,"max_score":3,"roles":["parliamentary_administrator"],"parameters":"Neutral, procedurally correct, observations to the House"}
+     {"key":"nof.sp_procedure","kind":"evaluation","label":"Procedure","weight":1,"max_score":3,"roles":["speaker"],"parameters":"Rules, order of business, rulings on points of order"},
+     {"key":"nof.jr_accuracy_insight","kind":"evaluation","label":"Accuracy & Insight","weight":1,"max_score":4,"roles":["parliamentary_journalist"],"parameters":"Correct reporting, interpretation, balance"},
+     {"key":"nof.jr_coverage","kind":"evaluation","label":"Coverage","weight":1,"max_score":3,"roles":["parliamentary_journalist"],"parameters":"Completeness across sessions"},
+     {"key":"nof.jr_presentation","kind":"evaluation","label":"Presentation","weight":1,"max_score":3,"roles":["parliamentary_journalist"],"parameters":"Engaging, clear final report / observation"},
+     {"key":"nof.ad_observations","kind":"evaluation","label":"Observations","weight":1,"max_score":4,"roles":["parliamentary_administrator"],"parameters":"Quality of observations to the House"},
+     {"key":"nof.ad_procedure_records","kind":"evaluation","label":"Procedure & Records","weight":1,"max_score":3,"roles":["parliamentary_administrator"],"parameters":"Order of business, records of bills, votes, questions"},
+     {"key":"nof.ad_presentation","kind":"evaluation","label":"Presentation","weight":1,"max_score":3,"roles":["parliamentary_administrator"],"parameters":"Clear, confident delivery"}
    ]'::jsonb, 30, 10, true, false, '{national}')
 ON CONFLICT (session_key, levels) DO NOTHING;
 
@@ -125,20 +130,22 @@ INSERT INTO yip.award_definitions
   (award_key, label, basis_description, default_recipients, is_team, is_active, display_order, eligibility, rank_mode, rank_keys, levels)
 VALUES
   ('best_parliamentarian','National Best Parliamentarian Award','Strongest overall parliamentarian across both days: Government Bills, Voice of the Nation, Question Hour, Private Members'' Bills, Committee Reports and Zero Hour. Members only: the Speaker and House officials are not eligible.',1,false,true,1,'member','overall_total','{}','{national}'),
-  ('best_speaker','Best Speaker of the House Award','Impartial, confident conduct of proceedings: command of procedure, impartiality, management of the House and time. Scored on the Presiding Officer sheet.',1,false,true,2,'speaker','family_sum','{nof.sp_procedure,nof.sp_impartiality,nof.sp_house_mgmt}','{national}'),
+  ('best_speaker','Best Speaker of the House Award','Impartial, confident conduct of proceedings: command of the House, impartiality and procedure. Scored on the Presiding Officer sheet.',1,false,true,2,'speaker','family_sum','{nof.sp_command,nof.sp_impartiality,nof.sp_procedure}','{national}'),
   ('leadership_excellence','National Parliamentary Leadership Award','Outstanding leadership by the PM, LoP, Ministers, Shadow Ministers, Party Leaders and Committee Chairs: half position held, half session scores.',1,false,true,3,'leadership','leadership_blend','{}','{national}'),
-  ('best_member_ruling','Best Treasury Bench Parliamentarian Award','The ruling-bench member who best presents and defends Government positions across Government Bills, Question Hour, Committee Reports and Zero Hour.',1,false,true,4,'ruling','family_sum','{ngb,nqh,ncr,nzh}','{national}'),
-  ('best_member_opposition','Best Opposition Parliamentarian Award','The opposition member who best holds the Government to account across Government Bills, Question Hour, Committee Reports and Zero Hour.',1,false,true,5,'opposition','family_sum','{ngb,nqh,ncr,nzh}','{national}'),
-  ('exemplary_decorum','Excellence in Parliamentary Conduct Award','Exemplary decorum, procedure and time discipline: the sum of every session''s Conduct criterion. Members with a disciplinary flag are not eligible.',1,false,true,6,'no_disciplinary','family_sum','{ngb.conduct,nvn.conduct,nqh.conduct,npb.conduct,ncr.conduct,nzh.conduct}','{national}'),
-  ('best_parliamentary_journalist','Best Parliamentary Journalist – National Finals','Accurate, insightful and engaging coverage of the proceedings. Scored on the House Officials sheet.',1,false,true,7,'all','family_sum','{nof.jr_accuracy,nof.jr_insight,nof.jr_presentation}','{national}'),
-  ('best_parliamentary_administrator','Best Parliamentary Administrator – National Finals','Organisation, documentation and impartial procedural coordination. Scored on the House Officials sheet.',1,false,true,8,'all','family_sum','{nof.ad_organisation,nof.ad_documentation,nof.ad_impartiality}','{national}'),
+  ('best_member_ruling','Best Treasury Bench Parliamentarian Award','The ruling-bench member who best presents and defends Government positions across Government Bills and Question Hour.',1,false,true,4,'ruling','family_sum','{ngb,nqh}','{national}'),
+  ('best_member_opposition','Best Opposition Parliamentarian Award','The opposition member who best holds the Government to account across Government Bills, Question Hour and Zero Hour.',1,false,true,5,'opposition','family_sum','{ngb,nqh,nzh}','{national}'),
+  ('exemplary_decorum','Excellence in Parliamentary Conduct Award','Exemplary decorum, procedure and time discipline: the sum of the Conduct marks in Government Bills, Question Hour and Zero Hour. Members with a disciplinary flag are not eligible.',1,false,true,6,'no_disciplinary','family_sum','{ngb.conduct,nqh.conduct,nzh.conduct}','{national}'),
+  ('best_parliamentary_journalist','Best Parliamentary Journalist – National Finals','Accurate, insightful and engaging coverage of the proceedings. Scored on the House Officials sheet.',1,false,true,7,'all','family_sum','{nof.jr_accuracy_insight,nof.jr_coverage,nof.jr_presentation}','{national}'),
+  ('best_parliamentary_administrator','Best Parliamentary Administrator – National Finals','Observations, procedure and records, and presentation. Scored on the House Officials sheet.',1,false,true,8,'all','family_sum','{nof.ad_observations,nof.ad_procedure_records,nof.ad_presentation}','{national}'),
   ('best_private_members_bill','Best Private Member''s Bill Award','Strongest Private Member''s Bill on relevance, originality, legislative quality, practicality and defence. Ranked on the Bill Quality + Presentation marks, so jurors must give those marks only to the member presenting the bill. One winner per award: co-authors cannot share it.',1,false,true,9,'all','family_sum','{npb.quality_defense,npb.presentation}','{national}'),
   ('political_strategist','King Maker Award (Political Strategist)','Coalition-building, floor strategy and vote mobilisation. No national session measures this, so it is chosen by hand: pin the winner from the event''s Results page.',1,false,false,10,'all','family_sum','{}','{national}'),
-  ('special_recognition_1','Special Recognition 1 – National Finals','Special recognition, chosen by hand. Rename in Admin > Awards and in lib/yip/awards.ts together.',1,false,false,11,'all','family_sum','{}','{national}'),
-  ('special_recognition_2','Special Recognition 2 – National Finals','Special recognition, chosen by hand. Rename in Admin > Awards and in lib/yip/awards.ts together.',1,false,false,12,'all','family_sum','{}','{national}'),
-  ('special_recognition_3','Special Recognition 3 – National Finals','Special recognition, chosen by hand. Rename in Admin > Awards and in lib/yip/awards.ts together.',1,false,false,13,'all','family_sum','{}','{national}'),
-  ('special_recognition_4','Special Recognition 4 – National Finals','Special recognition, chosen by hand. Rename in Admin > Awards and in lib/yip/awards.ts together.',1,false,false,14,'all','family_sum','{}','{national}'),
-  ('special_recognition_5','Special Recognition 5 – National Finals','Special recognition, chosen by hand. Rename in Admin > Awards and in lib/yip/awards.ts together.',1,false,false,15,'all','family_sum','{}','{national}')
+  -- Special recognitions: scored from marks (Swapnil, 26 Oct, option 4b). The
+  -- basis of each is the desk's proposal, awaiting the group's OK (round 2, Q4).
+  ('best_debater','Best Debater – National Finals','Strongest debating: questioning, critique and presentation in Government Bills and Private Members'' Bills.',1,false,true,11,'all','family_sum','{ngb.question_critic,ngb.presentation,npb.question_critic,npb.presentation}','{national}'),
+  ('best_zero_hour','Best Zero Hour – National Finals','Strongest Zero Hour interventions.',1,false,true,12,'all','family_sum','{nzh}','{national}'),
+  ('best_question_hour','Best Question Hour – National Finals','Strongest Question Hour performance, questions or ministerial answers.',1,false,true,13,'all','family_sum','{nqh}','{national}'),
+  ('best_minister','Best Minister – National Finals','Ministers and leaders: presenting bills, Question Hour answers and Zero Hour.',1,false,true,14,'leadership','family_sum','{ngb.quality_defense,nqh.ministerial,nzh}','{national}'),
+  ('outstanding_committee_member','Best Committee Member – National Finals','Strongest Committee Report presentation and debate.',1,false,true,15,'all','family_sum','{ncr}','{national}')
 ON CONFLICT (award_key, levels) DO NOTHING;
 
 -- ─── 3. Agenda preset "National Round 2026 (2-day)" (yip.agenda_presets) ────

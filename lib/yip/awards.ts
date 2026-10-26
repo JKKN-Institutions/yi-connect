@@ -60,7 +60,7 @@ export const REGIONAL_AWARD_LABELS = [
 ] as const;
 
 /** The NATIONAL ROUND 2026 awards (Maria, 2026-10-25): 10 awards + 5 special
- *  recognitions. Seeded level-scoped '{national}' by
+ *  recognitions (scored, per the Tech Support Committee, 26 Oct). Seeded level-scoped '{national}' by
  *  supabase/migrations/20261025171414_yip_national_round_2026_scoring.sql; labels verbatim. */
 export const NATIONAL_AWARD_LABELS = [
   "National Best Parliamentarian Award",
@@ -73,11 +73,11 @@ export const NATIONAL_AWARD_LABELS = [
   "Best Parliamentary Administrator – National Finals",
   "Best Private Member's Bill Award",
   "King Maker Award (Political Strategist)",
-  "Special Recognition 1 – National Finals",
-  "Special Recognition 2 – National Finals",
-  "Special Recognition 3 – National Finals",
-  "Special Recognition 4 – National Finals",
-  "Special Recognition 5 – National Finals",
+  "Best Debater – National Finals",
+  "Best Zero Hour – National Finals",
+  "Best Question Hour – National Finals",
+  "Best Minister – National Finals",
+  "Best Committee Member – National Finals",
 ] as const;
 
 export type AwardLabel =

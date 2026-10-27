@@ -9,15 +9,18 @@ import type {
   CycleRow,
   DecisionRow,
   EvaluatorRow,
+  MentorSendBackRow,
   ModerationVersionRow,
   NominationRow,
   PredictionRow,
+  ScoreHistoryRow,
   ScoreRow,
 } from "./types";
 import type { Category } from "./constants";
 import { computeCompleteness, dutySeesNomination, type Completeness } from "./scoring";
 import { computePhase, latestDecisionFor, type Phase } from "./phase";
-import { inRace, isNlAdded } from "./check-rules";
+import { inRace, isAddedForChapter } from "./check-rules";
+import { layer1ForAward } from "./health-card";
 
 /**
  * Read layer for Yi Recognitions. NO function here checks permissions —
@@ -136,7 +139,8 @@ export async function listNominationsForChapter(
     .in("award_id", awardIds);
   if (error) fail("list chapter nominations", error);
   const rows = (data ?? []) as NominationRow[];
-  return opts.includeNlAdded ? rows : rows.filter((n) => !isNlAdded(n));
+  // recognitions_05: a chapter a Regional Mentor or the NMT added is hidden the same way.
+  return opts.includeNlAdded ? rows : rows.filter((n) => !isAddedForChapter(n));
 }
 
 export async function listEvaluators(awardId: string, includeInactive = false): Promise<EvaluatorRow[]> {
@@ -231,15 +235,15 @@ export async function listScoresForDuty(evaluatorId: string): Promise<ScoreRow[]
   return (data ?? []) as ScoreRow[];
 }
 
+/**
+ * chapter_id -> Layer 1 (0-100). Per-measure Health Card scores first
+ * (recognitions_06), the award's single recognition_layer1 score as the
+ * fallback. A chapter with neither is absent (= missing). See health-card.ts.
+ */
 export async function getLayer1(awardId: string): Promise<Map<string, number>> {
-  const { data, error } = await rxService()
-    .from("recognition_layer1")
-    .select("chapter_id, score")
-    .eq("award_id", awardId);
-  if (error) fail("read layer 1", error);
-  return new Map(
-    ((data ?? []) as Array<{ chapter_id: string; score: number | string }>).map((r) => [r.chapter_id, Number(r.score)])
-  );
+  const award = await getAward(awardId);
+  if (!award) return new Map();
+  return layer1ForAward(award);
 }
 
 export async function listHealthCardFiles(awardId: string) {
@@ -306,6 +310,38 @@ export async function listPredictionsByChapter(chapterId: string, awardIds: stri
   return (data ?? []) as PredictionRow[];
 }
 
+/**
+ * True when PostgREST says the table is not there (a migration not yet
+ * applied): the caller then treats it as empty instead of failing the page.
+ */
+function missingTable(error: { code?: string; message: string } | null): boolean {
+  return !!error && (error.code === "42P01" || error.code === "PGRST205" || /does not exist|could not find the table/i.test(error.message));
+}
+
+/** recognitions_05: the NMT leader's send-backs to the Regional Mentors, newest first. */
+export async function listMentorSendBacks(awardId: string): Promise<MentorSendBackRow[]> {
+  const { data, error } = await rxService()
+    .from("recognition_mentor_sendbacks")
+    .select("id, award_id, round, remark, sent_by, sent_at, scores_reopened")
+    .eq("award_id", awardId)
+    .order("sent_at", { ascending: false });
+  if (missingTable(error)) return [];
+  if (error) fail("list mentor send-backs", error);
+  return (data ?? []) as MentorSendBackRow[];
+}
+
+/** recognitions_05: every Mentor score a send-back reopened, frozen as it was. Oversight only. */
+export async function listScoreHistory(awardId: string): Promise<ScoreHistoryRow[]> {
+  const { data, error } = await rxService()
+    .from("recognition_score_history")
+    .select("*")
+    .eq("award_id", awardId)
+    .order("archived_at", { ascending: false });
+  if (missingTable(error)) return [];
+  if (error) fail("list score history", error);
+  return (data ?? []) as ScoreHistoryRow[];
+}
+
 export type AuditRow = {
   id: string;
   award_id: string | null;
@@ -366,6 +402,8 @@ export type AwardState = {
   latestSubmittedVersion: ModerationVersionRow | null;
   decisions: DecisionRow[];
   phase: Phase;
+  /** recognitions_05: the NMT leader's send-backs to the Regional Mentors, newest first. */
+  sendBacks: MentorSendBackRow[];
 };
 
 /**
@@ -379,12 +417,13 @@ export async function getAwardState(awardId: string): Promise<AwardState | null>
   const cycle = await getCycle(award.cycle_id);
   if (!cycle) return null;
 
-  const [nominations, duties, versions, decisions, scores] = await Promise.all([
+  const [nominations, duties, versions, decisions, scores, sendBacks] = await Promise.all([
     listNominationsForAward(awardId),
     listEvaluators(awardId),
     listModerationVersions(awardId),
     listDecisions(awardId),
     listScoresForAward(awardId),
+    listMentorSendBacks(awardId),
   ]);
   const conflictsByDuty = await conflictsForDuties(duties);
   const completeness = computeCompleteness({ cycle, nominations, duties, conflictsByDuty, scores });
@@ -411,6 +450,7 @@ export async function getAwardState(awardId: string): Promise<AwardState | null>
     latestSubmittedVersion,
     decisions,
     phase,
+    sendBacks,
   };
 }
 

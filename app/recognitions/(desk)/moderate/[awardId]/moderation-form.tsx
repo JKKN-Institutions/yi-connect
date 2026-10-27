@@ -135,6 +135,14 @@ export function ModerationForm({
                           value={ranks[r.nominationId] ?? ""}
                           onChange={(e) => setRanks((s) => ({ ...s, [r.nominationId]: e.target.value }))}
                         />
+                        {/* Round-1 weighted total beside the rank picker, for the joint call (recognitions_05). */}
+                        <span
+                          className="rx-small rx-mute rx-num"
+                          style={{ display: "block", marginTop: 2, whiteSpace: "nowrap" }}
+                          title="Round-1 weighted total from the combined matrix"
+                        >
+                          R1 {r.computedTotal.toFixed(2)}
+                        </span>
                       </td>
                     </tr>
                   ))}

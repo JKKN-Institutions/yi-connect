@@ -13,6 +13,7 @@ const SECTIONS: Array<{ href: string; label: string }> = [
   { href: "/recognitions/admin/health-card", label: "Health Card" },
   { href: "/recognitions/admin/citations", label: "Citations" },
   { href: "/recognitions/admin/reports", label: "Reports" },
+  { href: "/recognitions/admin/stage-sheet", label: "Stage sheet" },
   { href: "/recognitions/admin/audit", label: "Audit" },
 ];
 

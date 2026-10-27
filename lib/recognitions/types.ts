@@ -106,9 +106,26 @@ export type NominationRow = {
   added_by: string | null;
   added_at: string | null;
   added_reason: string | null;
+  /**
+   * recognitions_05, rm_added only: the NMT member who approved a Regional
+   * Mentor's added chapter (it is not in the race until then), or who
+   * declined it with a reason (it is then out of the race; the row stays).
+   * Absent at runtime before migration 05: read through check-rules.ts.
+   */
+  approved_by: string | null;
+  approved_at: string | null;
+  declined_by: string | null;
+  declined_at: string | null;
+  decline_reason: string | null;
 };
 
-export type NominationOrigin = "chapter" | "nl_added";
+/**
+ * Who filed a nomination. 'chapter' = the chapter itself; the rest were
+ * added for a chapter that did not apply: 'nl_added' by National Leadership
+ * (recognitions_03), 'rm_added' by a Regional Mentor and 'nmt_added' by an
+ * NMT member (recognitions_05).
+ */
+export type NominationOrigin = "chapter" | "nl_added" | "rm_added" | "nmt_added";
 
 /**
  * Stored nomination status (recognitions_02):
@@ -134,6 +151,34 @@ export type ScoreRow = {
   additional_comments: string | null;
   status: "draft" | "submitted";
   submitted_at: string | null;
+};
+
+/** recognitions_05: one NMT-leader send-back to a recognition's Regional Mentors. Append-only. */
+export type MentorSendBackRow = {
+  id: string;
+  award_id: string;
+  round: number;
+  remark: string;
+  sent_by: string;
+  sent_at: string;
+  scores_reopened: number;
+};
+
+/** recognitions_05: a frozen copy of a Mentor score a send-back reopened. Append-only. */
+export type ScoreHistoryRow = {
+  id: string;
+  award_id: string;
+  sendback_id: string;
+  score_id: string;
+  nomination_id: string;
+  evaluator_id: string;
+  layer: Layer;
+  round: number;
+  params: ScoreParams;
+  reasons: string[];
+  additional_comments: string | null;
+  submitted_at: string | null;
+  archived_at: string;
 };
 
 export type Layer1Row = {

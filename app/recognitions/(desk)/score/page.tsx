@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { getRxViewer } from "@/lib/recognitions/auth";
-import { getAwardState, listScoresForDuty, nominationsForDuty, type AwardState } from "@/lib/recognitions/data";
+import { chapterMap, getAwardState, getPeople, listScoresForDuty, nominationsForDuty, type AwardState } from "@/lib/recognitions/data";
+import { mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
+import { addableForDuty, evaluatorAddWindow, pendingApprovalsFor } from "@/lib/recognitions/evaluator-add";
+import { AddChapterForDuty, PendingApprovals, type PendingItem } from "./evaluator-add";
 import { Ribbon } from "../../_ui/ribbon";
 import { IconArrowRight, IconEyeOff } from "../../_ui/icons";
 import { Deadline, Notice, PageHead, PhaseSeal, Seal, formatWhen } from "../../_ui/primitives";
 import { dutyLayerLabel, nominationScoringWindow, scoringWindow } from "./score-rules";
-import { isNlAdded } from "@/lib/recognitions/check-rules";
+import { effectiveStatus, isNlAdded } from "@/lib/recognitions/check-rules";
 import "./score.css";
 
 export const metadata = { title: "My scoring sheets" };
@@ -36,10 +39,12 @@ export default async function MySheetsPage() {
     if (!states.has(d.award_id)) states.set(d.award_id, await getAwardState(d.award_id));
   }
 
+  const chapters = await chapterMap();
+  const nameOfChapter = (id: string) => chapters.get(id)?.name ?? "Unknown chapter";
   const rows = await Promise.all(
     duties.map(async (duty) => {
       const state = states.get(duty.award_id) ?? null;
-      if (!state) return { duty, state, total: 0, submitted: 0, nlOpen: 0 };
+      if (!state) return { duty, state, total: 0, submitted: 0, nlOpen: 0, extra: null };
       // BLIND: progress comes only from this duty's own scores and the chapters it sees.
       const visible = nominationsForDuty(state, duty);
       const mine = await listScoresForDuty(duty.id);
@@ -54,7 +59,32 @@ export default async function MySheetsPage() {
           !submittedIds.has(n.id) &&
           nominationScoringWindow(state.phase, state.cycle, n).state === "open"
       ).length;
-      return { duty, state, total: visible.length, submitted: submittedIds.size, nlOpen };
+      // recognitions_05: blind until you submit, the Mentors' send-back, and chapters added by evaluators.
+      const sight = scoreSight(state, viewer.duties);
+      const rescore = mentorRescoreOpen(state);
+      const addWin = evaluatorAddWindow(state, formatWhen);
+      const addable = addWin.open ? await addableForDuty(state, duty) : null;
+      const pending = pendingApprovalsFor(state, duty);
+      const mineAdded = state.nominations.filter((n) => n.added_by === viewer.personId && (n.origin === "rm_added" || n.origin === "nmt_added"));
+      const people = await getPeople(pending.map((p) => p.nomination.added_by).filter((x): x is string => !!x));
+      const pendingItems: PendingItem[] = pending.map((p) => ({
+        nominationId: p.nomination.id,
+        chapterName: nameOfChapter(p.nomination.chapter_id),
+        region: p.nomination.region,
+        category: p.nomination.category,
+        addedBy: (p.nomination.added_by && people.get(p.nomination.added_by)?.full_name) || "A Regional Mentor",
+        addedAt: formatWhen(p.nomination.added_at),
+        reason: p.nomination.added_reason ?? "",
+        blocked: p.blocked,
+      }));
+      return {
+        duty,
+        state,
+        total: visible.length,
+        submitted: submittedIds.size,
+        nlOpen,
+        extra: { sight, rescore, addable, pendingItems, mineAdded },
+      };
     })
   );
 
@@ -63,12 +93,15 @@ export default async function MySheetsPage() {
       <PageHead eyebrow="Stage 1 · blind scoring" title="My scoring sheets">
         <div className="rx-row rx-small rx-mute" style={{ gap: 8 }}>
           <IconEyeOff size={16} />
-          <span>Your marks are private. Other evaluators can&apos;t see them and you can&apos;t see theirs.</span>
+          <span>
+            Your marks are private. Other evaluators can&apos;t see them, and you see theirs only after you submit every
+            chapter on your sheet.
+          </span>
         </div>
       </PageHead>
 
       <div>
-        {rows.map(({ duty, state, total, submitted, nlOpen }) => {
+        {rows.map(({ duty, state, total, submitted, nlOpen, extra }) => {
           const award = state?.award ?? duty.award;
           const win = state ? scoringWindow(state.phase, state.cycle) : null;
           return (
@@ -101,7 +134,16 @@ export default async function MySheetsPage() {
               ) : (
                 <>
                   <Deadline label="Stage 1 closes" iso={state.cycle.stage1_deadline} />
-                  {win?.state === "closed" ? (
+                  {extra?.rescore && duty.layer === "rm" && state.sendBacks[0] ? (
+                    <Notice tone="alert">
+                      <strong>The NMT leader sent this recognition back to the Regional Mentors:</strong>{" "}
+                      <span className="rx-p-text">{state.sendBacks[0].remark}</span>
+                      <br />
+                      <span className="rx-small">
+                        Your marks are open again as drafts. Review and resubmit by {formatWhen(state.cycle.stage2_deadline)}.
+                      </span>
+                    </Notice>
+                  ) : win?.state === "closed" ? (
                     <Notice>Scoring closed on {formatWhen(state.cycle.stage1_deadline)}. Your sheet is read-only.</Notice>
                   ) : null}
                   {nlOpen > 0 ? (
@@ -110,7 +152,7 @@ export default async function MySheetsPage() {
                       re-evaluation {nlOpen === 1 ? "is" : "are"} waiting for your marks. Score by{" "}
                       {formatWhen(state.cycle.reevaluation_deadline)}.
                     </Notice>
-                  ) : win?.state === "over" ? (
+                  ) : win?.state === "over" && !(extra?.rescore && duty.layer === "rm") ? (
                     <Notice>Stage 1 is over for this recognition. Your sheet is read-only.</Notice>
                   ) : null}
                   {total === 0 ? (
@@ -118,12 +160,63 @@ export default async function MySheetsPage() {
                   ) : null}
                   <div>
                     <Link href={`/recognitions/score/${duty.id}`} className="rx-btn">
-                      {(win?.state === "open" && submitted < total) || nlOpen > 0 ? "Open my sheet" : "View my sheet"}{" "}
+                      {(win?.state === "open" && submitted < total) || nlOpen > 0 || (extra?.rescore && duty.layer === "rm")
+                        ? "Open my sheet"
+                        : "View my sheet"}{" "}
                       <IconArrowRight size={16} />
                     </Link>
                   </div>
+                  {extra?.sight.sees ? (
+                    <div>
+                      <Link href={`/recognitions/moderate/${award.id}`} className="rx-link rx-small" data-testid={`see-all-${award.id}`}>
+                        {extra.sight.why === "submitted"
+                          ? "You've submitted your sheet: see every evaluator's marks (read-only)"
+                          : "Open the round-1 leaderboard (read-only)"}
+                      </Link>
+                    </div>
+                  ) : null}
                 </>
               )}
+              {state && extra ? (
+                <>
+                  {extra.pendingItems.length > 0 ? (
+                    <PendingApprovals evaluatorId={duty.id} items={extra.pendingItems} />
+                  ) : null}
+                  {extra.mineAdded.length > 0 ? (
+                    <div className="rx-stack" style={{ gap: 6 }}>
+                      <h3 className="rx-h3">Chapters you put forward</h3>
+                      <ul className="rx-small rx-stack" style={{ gap: 4, paddingLeft: 18, margin: 0 }}>
+                        {extra.mineAdded.map((n) => {
+                          const st = effectiveStatus(n, state.cycle);
+                          return (
+                            <li key={n.id} style={{ overflowWrap: "anywhere" }}>
+                              <strong>{nameOfChapter(n.chapter_id)}</strong>:{" "}
+                              {n.declined_at
+                                ? `declined by the NMT: ${n.decline_reason ?? ""}`
+                                : n.origin === "rm_added" && !n.approved_at
+                                  ? st === "excluded"
+                                    ? "not approved before scoring closed"
+                                    : "waiting for an NMT member's approval"
+                                  : "on the scoring sheets"}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {extra.addable ? (
+                    <AddChapterForDuty
+                      evaluatorId={duty.id}
+                      awardTitle={award.title}
+                      layer={duty.layer}
+                      region={duty.region}
+                      options={extra.addable.eligible}
+                      skipped={extra.addable.skipped}
+                      closesAt={formatWhen(state.cycle.stage1_deadline)}
+                    />
+                  ) : null}
+                </>
+              ) : null}
             </section>
           );
         })}

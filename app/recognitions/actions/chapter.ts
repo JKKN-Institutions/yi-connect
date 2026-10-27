@@ -12,7 +12,7 @@ import {
   listPredictionsByChapter,
 } from "@/lib/recognitions/data";
 import { isPast } from "@/lib/recognitions/phase";
-import { canFix, isNlAdded } from "@/lib/recognitions/check-rules";
+import { canFix, isAddedForChapter } from "@/lib/recognitions/check-rules";
 import { CATEGORIES, CHECK_STEP_ENABLED, type Category } from "@/lib/recognitions/constants";
 import type { ActionResult, AwardRow, ChapterRow, CycleRow, NominationRow } from "@/lib/recognitions/types";
 import {
@@ -303,7 +303,7 @@ export async function resubmitNomination(chapterId: string, form: unknown): Prom
   // A nomination National Leadership added is fixed by National Leadership,
   // never by the chapter (recognitions_03). Same answer as "none", so the
   // chapter learns nothing about the review.
-  if (!existing || isNlAdded(existing)) return { success: false, error: `Your chapter has no nomination for ${award.title}.` };
+  if (!existing || isAddedForChapter(existing)) return { success: false, error: `Your chapter has no nomination for ${award.title}.` };
   if (existing.status !== "returned") {
     return { success: false, error: `${award.title} is not waiting for a fix. Reload the page to see where it stands.` };
   }

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requireRxNationalLeadership, requireRxOversight } from "@/lib/recognitions/auth";
-import { effectiveText, getAwardState, getPeople, listAudit, listCitationEdits } from "@/lib/recognitions/data";
+import { effectiveText, getAwardState, getPeople, listAudit, listCitationEdits, listScoreHistory } from "@/lib/recognitions/data";
+import { scoreSight } from "@/lib/recognitions/sight";
 import { CATEGORIES, CATEGORY_LABEL, CHECK_STEP_ENABLED, LAYER2_PARAMS, LAYER3_PARAMS, LAYER_LABEL, PARAM_KEYS } from "@/lib/recognitions/constants";
 import { paramsTotal } from "@/lib/recognitions/scoring";
 import { Ribbon } from "@/app/recognitions/_ui/ribbon";
@@ -15,7 +16,16 @@ import { buildRankingView, chapterName, dossierOf } from "@/app/recognitions/_pa
 import { DecisionPanel } from "./decision-panel";
 import { AddChapterPanel, AddedFixForm } from "./add-chapter";
 import { addableChapters, addWindow } from "@/lib/recognitions/nl-add";
-import { canFix, effectiveStatus, exclusionReason, fixDeadlineFor, isNlAdded, NOMINATION_STATUS_LABEL } from "@/lib/recognitions/check-rules";
+import {
+  ADDED_BY_LABEL,
+  canFix,
+  effectiveStatus,
+  exclusionReason,
+  fixDeadlineFor,
+  isAddedForChapter,
+  isNlAdded,
+  NOMINATION_STATUS_LABEL,
+} from "@/lib/recognitions/check-rules";
 
 export const metadata: Metadata = { title: "Recognition review" };
 
@@ -37,22 +47,25 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
   const { award, cycle, phase } = state;
 
   // Blind scoring beats oversight: someone who is BOTH leadership/admin and an
-  // evaluator on this award must not see colleagues' marks while Stage 1 runs.
-  const scoringStillBlind = phase === "setup" || phase === "nominations" || phase === "stage1";
-  if (scoringStillBlind && gate.viewer.duties.some((d) => d.award_id === award.id)) {
+  // evaluator on this recognition must not see colleagues' marks until they
+  // have submitted their own sheet (recognitions_05: "blind until YOU submit").
+  const myDuties = gate.viewer.duties.filter((d) => d.award_id === award.id);
+  const evaluatorSight = myDuties.length > 0 ? scoreSight(state, myDuties) : null;
+  if (evaluatorSight && !evaluatorSight.sees) {
     return (
       <NoAccess
-        reason="You are also an evaluator on this recognition. To keep scoring blind, its review opens once every mark is in and Stage 2 starts."
+        reason={`You are also an evaluator on this recognition. To keep scoring blind, its review opens once you have submitted every chapter on your sheet. ${evaluatorSight.reason}`}
         contact={false}
       />
     );
   }
 
   const canDecide = phase === "governance" && (await requireRxNationalLeadership()).ok;
-  const [data, auditRows, edits] = await Promise.all([
+  const [data, auditRows, edits, history] = await Promise.all([
     loadStage2(state, { withNames: true }),
     listAudit({ awardId }),
     listCitationEdits(awardId),
+    listScoreHistory(awardId),
   ]);
   // Chapters National Leadership added (recognitions_03), and whether more can be added now.
   const addedNoms = state.nominations
@@ -247,6 +260,43 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
                               </table>
                             </div>
                           )}
+                          {history.some((h) => h.nomination_id === n.id) ? (
+                            <div className="rx-stack" style={{ gap: 6 }}>
+                              <div className="rx-small rx-mute">
+                                Earlier Mentor rounds (kept when the NMT leader sent the recognition back)
+                              </div>
+                              <div className="rx-ledger-wrap">
+                                <table className="rx-ledger" data-testid="score-history">
+                                  <thead>
+                                    <tr>
+                                      <th>Evaluator</th>
+                                      <th className="rx-num">Round</th>
+                                      {PARAM_KEYS.map((k, i) => (
+                                        <th key={k} className="rx-num">P{i + 1}</th>
+                                      ))}
+                                      <th className="rx-num">Total</th>
+                                      <th>Submitted</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {history
+                                      .filter((h) => h.nomination_id === n.id)
+                                      .map((h) => (
+                                        <tr key={h.id}>
+                                          <td>{data.evaluatorNames[h.evaluator_id] ?? "Unknown evaluator"}</td>
+                                          <td className="rx-num">{h.round}</td>
+                                          {PARAM_KEYS.map((k) => (
+                                            <td key={k} className="rx-num">{h.params[k] ?? "—"}</td>
+                                          ))}
+                                          <td className="rx-num">{paramsTotal(h.params)}</td>
+                                          <td className="rx-small">{formatWhen(h.submitted_at)}</td>
+                                        </tr>
+                                      ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          ) : null}
                           {scores.map((s) => {
                             const reasons = (s.reasons ?? []).filter((r) => (r ?? "").trim() !== "");
                             return (
@@ -276,7 +326,9 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
                           <details className="rx-p-fold">
                             <summary>
                               <span className="rx-small">
-                                {isNlAdded(n) ? "Why National Leadership added it" : "The chapter's nomination"}
+                                {isAddedForChapter(n)
+                                  ? `Why ${n.origin && n.origin !== "chapter" ? ADDED_BY_LABEL[n.origin] : "someone"} added it`
+                                  : "The chapter's nomination"}
                               </span>
                             </summary>
                             <div className="rx-p-fold-body">

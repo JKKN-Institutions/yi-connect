@@ -255,3 +255,19 @@ export async function requireRxNmtLeader(awardId: string): Promise<Gate<RxDuty>>
   }
   return { ok: true, viewer: v, value: duty };
 }
+
+/**
+ * recognitions_05: any evaluator duty on the recognition (Regional Mentor or
+ * NMT). Opens the Stage 2 room READ-ONLY; what it shows is decided by
+ * scoreSight (lib/recognitions/sight.ts): blind until you submit.
+ */
+export async function requireRxEvaluatorOnAward(awardId: string): Promise<Gate<RxDuty[]>> {
+  const v = await getRxViewer();
+  if (!v) return { ok: false, error: NOT_SIGNED_IN };
+  const duties = v.duties.filter((d) => d.award_id === awardId);
+  if (duties.length === 0) {
+    log("gate", { gate: "evaluator_on_award", verdict: "deny", person: v.personId, awardId });
+    return { ok: false, error: "Only this recognition's Regional Mentors and NMT can open its Stage 2 room." };
+  }
+  return { ok: true, viewer: v, value: duties };
+}

@@ -2,14 +2,41 @@
 
 import { useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { applyHealthCard, healthCardColumns, previewHealthCard, setManualLayer1 } from "../../../actions/admin-content";
+import {
+  applyHealthCard,
+  applyHealthCardMeasures,
+  healthCardColumns,
+  previewHealthCard,
+  previewHealthCardMeasures,
+  setManualLayer1,
+} from "../../../actions/admin-content";
 import { ConfirmDialog, ResultLine } from "../../../_ui/client";
 import { IconDownload, IconUpload } from "../../../_ui/icons";
 import { HEALTH_CARD_EXTS, HEALTH_CARD_MAX_BYTES, extOf } from "../_lib/ist";
 import { useAction } from "../_lib/use-action";
 
 type FileLite = { id: string; name: string; when: string; by: string };
-type ChapterScore = { id: string; name: string; region: string | null; score: number | null; source: "excel" | "manual" | null; when: string | null };
+type ChapterScore = {
+  id: string;
+  name: string;
+  region: string | null;
+  score: number | null;
+  source: "measures" | "excel" | "manual" | null;
+  /** Some measure scores but not all: Layer 1 is missing. */
+  incomplete: boolean;
+  when: string | null;
+};
+type TableKey = "A" | "B";
+type MeasureLite = { key: string; label: string };
+type MeasurePreview = {
+  tableKey: TableKey;
+  measures: MeasureLite[];
+  matched: Array<{ rowNo: number; chapterName: string; scores: Record<string, number>; layer1: number }>;
+  unmatched: Array<{ rowNo: number; cell: string }>;
+  skipped: Array<{ rowNo: number; chapterName: string; why: string }>;
+  problems: string[];
+  missingChapters: string[];
+};
 type Columns = { fileName: string; sheetName: string; columns: string[]; sample: string[][] };
 type Preview = {
   matched: Array<{ rowNo: number; chapterName: string; score: number }>;
@@ -40,14 +67,31 @@ function guess(columns: string[], words: string[]): number {
   return i;
 }
 
+const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** Measure key -> the column whose heading matches its name (or -1). */
+function guessMeasures(columns: string[], measures: MeasureLite[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const m of measures) {
+    const want = squash(m.label);
+    out[m.key] = columns.findIndex((c) => squash(c) === want);
+    if (out[m.key] < 0) out[m.key] = columns.findIndex((c) => squash(c).includes(want));
+  }
+  return out;
+}
+
 export function HealthCardDesk({
   awardId,
   awardTitle,
+  awardTable,
+  measures,
   files,
   chapters,
 }: {
   awardId: string;
   awardTitle: string;
+  awardTable: TableKey;
+  measures: Record<TableKey, MeasureLite[]>;
   files: FileLite[];
   chapters: ChapterScore[];
 }) {
@@ -60,19 +104,30 @@ export function HealthCardDesk({
   const [scoreCol, setScoreCol] = useState(-1);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [confirm, setConfirm] = useState(false);
+  const [mode, setMode] = useState<"measures" | "single">("measures");
+  const [tableKey, setTableKey] = useState<TableKey>(awardTable);
+  const [measureCols, setMeasureCols] = useState<Record<string, number>>({});
+  const [mPreview, setMPreview] = useState<MeasurePreview | null>(null);
+  const [mConfirm, setMConfirm] = useState(false);
   const colAct = useAction();
   const prevAct = useAction();
   const applyAct = useAction();
+  const mPrevAct = useAction();
+  const mApplyAct = useAction();
+  const tableMeasures = measures[tableKey];
+  const measureColsSet = tableMeasures.length > 0 && tableMeasures.every((m) => (measureCols[m.key] ?? -1) >= 0);
 
   function openFile(id: string) {
     setFileId(id);
     setCols(null);
     setPreview(null);
+    setMPreview(null);
     colAct.run(() => healthCardColumns(id), (r) => {
       if (r.success && r.data) {
         setCols(r.data);
         setChapterCol(guess(r.data.columns, ["chapter"]));
         setScoreCol(guess(r.data.columns, ["score", "total", "health"]));
+        setMeasureCols(guessMeasures(r.data.columns, measures[tableKey]));
         colAct.setResult(null);
       }
     });
@@ -190,16 +245,28 @@ export function HealthCardDesk({
               <p className="rx-small rx-mute">
                 {cols.fileName} · sheet &ldquo;{cols.sheetName}&rdquo; · {cols.columns.length} columns. No column names are assumed; check both choices.
               </p>
+              <fieldset className="rx-stack" style={{ gap: 6, border: 0, padding: 0, margin: 0 }}>
+                <legend className="rx-label">What does this file hold?</legend>
+                <label className="rx-row" style={{ gap: 8 }}>
+                  <input type="radio" name="hc-mode" checked={mode === "measures"} onChange={() => setMode("measures")} />
+                  Four measure scores per chapter (table A or B)
+                </label>
+                <label className="rx-row" style={{ gap: 8 }}>
+                  <input type="radio" name="hc-mode" checked={mode === "single"} onChange={() => setMode("single")} />
+                  One Layer 1 score per chapter for {awardTitle}
+                </label>
+              </fieldset>
               <div className="rx-ad-fields">
                 <div>
                   <label className="rx-label" htmlFor="hc-chapter">Column with the chapter name</label>
-                  <select id="hc-chapter" className="rx-select" value={chapterCol} onChange={(e) => { setChapterCol(Number(e.target.value)); setPreview(null); }}>
+                  <select id="hc-chapter" className="rx-select" value={chapterCol} onChange={(e) => { setChapterCol(Number(e.target.value)); setPreview(null); setMPreview(null); }}>
                     <option value={-1}>Choose a column</option>
                     {cols.columns.map((c, i) => (
                       <option key={i} value={i}>{c}</option>
                     ))}
                   </select>
                 </div>
+                {mode === "single" ? (
                 <div>
                   <label className="rx-label" htmlFor="hc-score">Column with the 0-100 score</label>
                   <select id="hc-score" className="rx-select" value={scoreCol} onChange={(e) => { setScoreCol(Number(e.target.value)); setPreview(null); }}>
@@ -209,7 +276,53 @@ export function HealthCardDesk({
                     ))}
                   </select>
                 </div>
+                ) : (
+                  <div>
+                    <label className="rx-label" htmlFor="hc-table">Health Card table</label>
+                    <select
+                      id="hc-table"
+                      className="rx-select"
+                      value={tableKey}
+                      onChange={(e) => {
+                        const t = e.target.value as TableKey;
+                        setTableKey(t);
+                        setMeasureCols(guessMeasures(cols.columns, measures[t]));
+                        setMPreview(null);
+                      }}
+                    >
+                      <option value="A">Table A · Projects &amp; Initiatives{awardTable === "A" ? " (this recognition)" : ""}</option>
+                      <option value="B">Table B · Stakeholders{awardTable === "B" ? " (this recognition)" : ""}</option>
+                    </select>
+                  </div>
+                )}
               </div>
+              {mode === "measures" ? (
+                tableMeasures.length === 0 ? (
+                  <p className="rx-notice rx-notice-alert">Table {tableKey} has no measures set up for this cycle.</p>
+                ) : (
+                  <div className="rx-ad-fields">
+                    {tableMeasures.map((m) => (
+                      <div key={m.key}>
+                        <label className="rx-label" htmlFor={`hc-m-${m.key}`}>Column with {m.label} (0-100)</label>
+                        <select
+                          id={`hc-m-${m.key}`}
+                          className="rx-select"
+                          value={measureCols[m.key] ?? -1}
+                          onChange={(e) => {
+                            setMeasureCols({ ...measureCols, [m.key]: Number(e.target.value) });
+                            setMPreview(null);
+                          }}
+                        >
+                          <option value={-1}>Choose a column</option>
+                          {cols.columns.map((c, i) => (
+                            <option key={i} value={i}>{c}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : null}
               {cols.sample.length > 0 ? (
                 <details className="rx-ad-details">
                   <summary>First rows of the sheet</summary>
@@ -227,6 +340,62 @@ export function HealthCardDesk({
                   </div>
                 </details>
               ) : null}
+              {mode === "measures" ? (
+                <>
+                  <div className="rx-row">
+                    <button
+                      type="button"
+                      className="rx-btn rx-btn-quiet"
+                      disabled={mPrevAct.pending || chapterCol < 0 || !measureColsSet}
+                      onClick={() =>
+                        mPrevAct.run(() => previewHealthCardMeasures({ fileId, tableKey, chapterCol, measureCols }), (r) => {
+                          if (r.success && r.data) {
+                            setMPreview(r.data);
+                            mPrevAct.setResult(null);
+                          }
+                        })
+                      }
+                    >
+                      {mPrevAct.pending ? "Checking…" : "Preview matches"}
+                    </button>
+                    {mPreview ? (
+                      <button
+                        type="button"
+                        className="rx-btn"
+                        disabled={mApplyAct.pending || mPreview.problems.length > 0 || mPreview.matched.length === 0}
+                        onClick={() => setMConfirm(true)}
+                      >
+                        Apply scores
+                      </button>
+                    ) : null}
+                  </div>
+                  <ResultLine result={mPrevAct.result} />
+                  <ResultLine result={mApplyAct.result} />
+                  {mPreview ? <MeasurePreviewView p={mPreview} /> : null}
+                  <ConfirmDialog
+                    open={mConfirm}
+                    title={`Apply table ${tableKey} scores for ${mPreview?.matched.length ?? 0} chapters?`}
+                    confirmLabel="Apply scores"
+                    busy={mApplyAct.pending}
+                    onClose={() => setMConfirm(false)}
+                    onConfirm={() =>
+                      mApplyAct.run(() => applyHealthCardMeasures({ fileId, tableKey, chapterCol, measureCols }), (r) => {
+                        if (r.success) {
+                          setMConfirm(false);
+                          setMPreview(null);
+                        }
+                      })
+                    }
+                  >
+                    <p>
+                      Each matched chapter&apos;s four table {tableKey} measure scores are replaced with the values in the file. They count for
+                      every recognition of this cycle that uses table {tableKey}, not only {awardTitle}, and they take the place of any single score.
+                      Chapters not in the file keep what they have.
+                    </p>
+                  </ConfirmDialog>
+                </>
+              ) : (
+              <>
               <div className="rx-row">
                 <button
                   type="button"
@@ -274,9 +443,11 @@ export function HealthCardDesk({
               >
                 <p>
                   Each matched chapter&apos;s Layer 1 score for {awardTitle} is replaced with the value in the file, including scores typed by hand.
-                  Chapters not in the file keep what they have.
+                  Chapters not in the file keep what they have. A chapter with measure scores keeps using those.
                 </p>
               </ConfirmDialog>
+              </>
+              )}
             </>
           ) : null}
         </section>
@@ -348,6 +519,73 @@ function PreviewView({ p }: { p: Preview }) {
   );
 }
 
+function MeasurePreviewView({ p }: { p: MeasurePreview }) {
+  return (
+    <div className="rx-stack">
+      {p.problems.length > 0 ? (
+        <div className="rx-notice rx-notice-alert" role="alert">
+          <strong>Fix these rows in the file and upload it again:</strong>
+          <ul style={{ margin: "6px 0 0 18px" }}>
+            {p.problems.map((x) => (
+              <li key={x}>{x}</li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <div className="rx-notice rx-notice-ok">
+          {p.matched.length} chapter{p.matched.length === 1 ? "" : "s"} matched and ready to apply to table {p.tableKey}.
+        </div>
+      )}
+      {p.unmatched.length > 0 ? (
+        <div className="rx-notice">
+          <strong>{p.unmatched.length} row{p.unmatched.length === 1 ? "" : "s"} didn&apos;t match an active chapter</strong> (skipped):{" "}
+          {p.unmatched.slice(0, 30).map((u) => `row ${u.rowNo} "${u.cell}"`).join(", ")}
+          {p.unmatched.length > 30 ? ` …and ${p.unmatched.length - 30} more` : ""}. Fix the spelling in the file and upload it again.
+        </div>
+      ) : null}
+      {p.skipped.length > 0 ? (
+        <p className="rx-small rx-mute">
+          Skipped, no scores: {p.skipped.map((s) => `${s.chapterName} (row ${s.rowNo})`).join(", ")}.
+        </p>
+      ) : null}
+      {p.missingChapters.length > 0 ? (
+        <details className="rx-ad-details">
+          <summary>{p.missingChapters.length} active chapters are not in this file</summary>
+          <p className="rx-small">{p.missingChapters.join(", ")}</p>
+        </details>
+      ) : null}
+      {p.matched.length > 0 ? (
+        <div className="rx-ledger-wrap">
+          <table className="rx-ledger">
+            <thead>
+              <tr>
+                <th className="rx-num">Row</th>
+                <th>Chapter</th>
+                {p.measures.map((m) => (
+                  <th key={m.key} className="rx-num">{m.label}</th>
+                ))}
+                <th className="rx-num">Layer 1</th>
+              </tr>
+            </thead>
+            <tbody>
+              {p.matched.map((m) => (
+                <tr key={m.rowNo}>
+                  <td className="rx-num">{m.rowNo}</td>
+                  <td>{m.chapterName}</td>
+                  {p.measures.map((ms) => (
+                    <td key={ms.key} className="rx-num">{m.scores[ms.key]}</td>
+                  ))}
+                  <td className="rx-num"><strong>{m.layer1}</strong></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ManualScores({ awardId, chapters, scored }: { awardId: string; chapters: ChapterScore[]; scored: number }) {
   const [chapterId, setChapterId] = useState("");
   const [score, setScore] = useState("");
@@ -364,7 +602,8 @@ function ManualScores({ awardId, chapters, scored }: { awardId: string; chapters
         <div>
           <h2 className="rx-h2">Layer 1 scores now</h2>
           <p className="rx-small rx-mute">
-            {scored} of {chapters.length} chapters have a score. A missing score counts as 0 in the combined matrix and is flagged there.
+            {scored} of {chapters.length} chapters have a Layer 1 score for this recognition. A missing score counts as 0 in the combined matrix and is
+            flagged there. A score typed here is used only while the chapter has no measure scores.
           </p>
         </div>
       </div>
@@ -421,7 +660,17 @@ function ManualScores({ awardId, chapters, scored }: { awardId: string; chapters
                 <td className="rx-num">{c.region ?? "—"}</td>
                 <td className="rx-num">{c.score === null ? "—" : c.score}</td>
                 <td className="rx-small">
-                  {c.source === "excel" ? "Health Card file" : c.source === "manual" ? "Typed by hand" : <span className="rx-mute">No score</span>}
+                  {c.source === "measures" ? (
+                    "Measure scores"
+                  ) : c.source === "excel" ? (
+                    "Health Card file"
+                  ) : c.source === "manual" ? (
+                    "Typed by hand"
+                  ) : c.incomplete ? (
+                    <span className="rx-mute">Some measure scores missing</span>
+                  ) : (
+                    <span className="rx-mute">No Health Card data</span>
+                  )}
                   {c.when ? <div className="rx-ad-mini">{c.when}</div> : null}
                 </td>
               </tr>

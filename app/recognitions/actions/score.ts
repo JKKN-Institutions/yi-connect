@@ -9,7 +9,8 @@ import { countWords } from "@/lib/recognitions/words";
 import { PARAM_KEYS, WORDS } from "@/lib/recognitions/constants";
 import type { ActionResult, NominationRow, ScoreParams, ScoreRow } from "@/lib/recognitions/types";
 import { formatWhen } from "@/app/recognitions/_ui/primitives";
-import { nominationScoringWindow, scoringDeadlineFor } from "@/app/recognitions/(desk)/score/score-rules";
+import { dutyScoringWindow, scoringDeadlineFor } from "@/app/recognitions/(desk)/score/score-rules";
+import { mentorRescoreOpen } from "@/lib/recognitions/sight";
 import type { FlagInput, SaveScoreInput } from "@/app/recognitions/(desk)/score/score-types";
 
 // Hard character caps so a single giant "word" can't slip past the word count.
@@ -36,7 +37,9 @@ async function loadContext(evaluatorId: string, nominationId: string): Promise<
   const nomination = state.nominations.find((n) => n.id === nominationId);
   // Per nomination: a chapter National Leadership added is scored during
   // re-evaluation (recognitions_03); everything else in Stage 1 only.
-  const win = nominationScoringWindow(state.phase, state.cycle, nomination ?? {});
+  // recognitions_05: a Mentor's sheet reopens after the NMT leader's send-back.
+  const rescore = mentorRescoreOpen(state);
+  const win = dutyScoringWindow(state.phase, state.cycle, nomination ?? {}, duty, rescore);
   if (win.state === "notYet") {
     return {
       ok: false,
@@ -46,7 +49,10 @@ async function loadContext(evaluatorId: string, nominationId: string): Promise<
     };
   }
   if (win.state === "closed") {
-    return { ok: false, error: `Scoring closed on ${formatWhen(scoringDeadlineFor(state.cycle, nomination ?? {}))}.` };
+    return {
+      ok: false,
+      error: `Scoring closed on ${formatWhen(rescore && duty.layer === "rm" ? state.cycle.stage2_deadline : scoringDeadlineFor(state.cycle, nomination ?? {}))}.`,
+    };
   }
   if (win.state === "over") {
     return { ok: false, error: "Stage 1 is over for this recognition, so marks and flags can no longer change." };

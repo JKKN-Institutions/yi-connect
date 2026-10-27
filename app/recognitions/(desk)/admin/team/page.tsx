@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireRxSuperAdmin } from "@/lib/recognitions/auth";
 import { rxService } from "@/lib/recognitions/supabase";
 import { getCurrentCycle, getPeople, listChapters } from "@/lib/recognitions/data";
@@ -10,10 +11,19 @@ export const metadata = { title: "Team" };
 const ROLE_COPY: Record<string, { label: string; what: string }> = {
   [RX_ROLES.superAdmin]: { label: "Recognitions super admin", what: "Runs this control room: timelines, recognitions, evaluators, citations, reports." },
   [RX_ROLES.nationalLeadership]: { label: "National Leadership", what: "Reads the Stage 1 and Stage 2 summaries; approves a recognition or sends it back." },
-  [RX_ROLES.regionalChair]: { label: "Regional Chair", what: CHECK_STEP_ENABLED
-      ? "Checks one region's nominations with a Regional Mentor before they are scored: passes each one or sends it back with a note."
-      : "Would check one region's nominations with a Regional Mentor. The check step is not used this year, so this role has nothing to do." },
-  [RX_ROLES.chapterRep]: { label: "Chapter representative", what: "Files nominations and predictions for one chapter, alongside its chair." },
+  // The Regional Chair has no part in 2026 (client, 2026-10-27): listed only when the check step is on.
+  ...(CHECK_STEP_ENABLED
+    ? {
+        [RX_ROLES.regionalChair]: {
+          label: "Regional Chair",
+          what: "Checks one region's nominations with a Regional Mentor before they are scored: passes each one or sends it back with a note.",
+        },
+      }
+    : {}),
+  [RX_ROLES.chapterRep]: {
+    label: "Chapter Chair",
+    what: "Files nominations and predictions for one chapter. Chapter chairs already in the Yi directory need nothing here; add someone only if the chair's login email differs.",
+  },
 };
 
 type Holder = { id: string; person_id: string; role: string; yi_chapter: string | null; yi_zone: string | null; yi_year: number };
@@ -44,8 +54,16 @@ export default async function TeamPage() {
       </PageHead>
 
       <Notice tone="ok">
-        Chapter chairs and co-chairs need nothing here: the Yi directory already makes them their chapter&apos;s login. Regional Mentors and the
-        NMT are added on the Evaluators page, per recognition.
+        <div className="rx-stack" style={{ gap: 8 }}>
+          <p style={{ margin: 0 }}>
+            The NMT and Regional Mentors (RM) are assigned per vertical on the Evaluators page, not here.
+          </p>
+          <div>
+            <Link href="/recognitions/admin/evaluators" className="rx-btn rx-btn-sm">
+              Assign NMT and RM
+            </Link>
+          </div>
+        </div>
       </Notice>
 
       {error ? <Notice tone="alert">Couldn&apos;t read the current team from the Yi directory. Reload the page.</Notice> : null}

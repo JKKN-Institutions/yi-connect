@@ -145,6 +145,20 @@
   flex: none;
 }
 .rx-ribbon-lg { width: 56px; height: 18px; }
+/* A vertical with its own logo shows it in place of the stripes (client, 2026-10-27). */
+.rx-ribbon-logo {
+  display: inline-block;
+  height: 40px;
+  width: auto;
+  max-width: 72px;
+  object-fit: contain;
+  padding: 3px;
+  background: #fff;
+  border: 1px solid var(--rx-line);
+  border-radius: 6px;
+  flex: none;
+}
+.rx-ribbon-logo-md { height: 32px; max-width: 60px; }
 /* The chapters a chapter competes with (recognitions_04). */
 .rx-rivals { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .rx-rivals li { padding: 2px 10px; border: 1px solid var(--rx-line); border-radius: 999px; background: var(--rx-paper); }

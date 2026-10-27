@@ -38,6 +38,13 @@ const LOGOS: Record<string, string> = {
   accessibility: "/recognitions-assets/verticals/accessibility.png",
   yuva: "/recognitions-assets/verticals/yuva.png",
   thalir: "/recognitions-assets/verticals/thalir.png",
+  masoom: "/recognitions-assets/verticals/masoom.png",
+  entrepreneurship: "/recognitions-assets/verticals/entrepreneurship.png",
+  innovation: "/recognitions-assets/verticals/innovation.png",
+  learning: "/recognitions-assets/verticals/learning.png",
+  membership: "/recognitions-assets/verticals/membership.png",
+  rural: "/recognitions-assets/verticals/rural.png",
+  sports: "/recognitions-assets/verticals/sports.png",
 };
 
 /** A recognition the app doesn't know by key wears its kind's ribbon. */

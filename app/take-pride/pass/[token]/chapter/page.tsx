@@ -17,8 +17,8 @@ const STAGE_TEXT: Record<JourneyItem["stage"], string> = {
   nominated: "Your chapter has sent its nomination. Regional checkers are looking at it.",
   checked: "The nomination passed its checks and is in the race.",
   scoring: "Evaluators are scoring every chapter in the race.",
-  final_list: "Scoring is done. The national team is finalising results, which stay secret until Awards Night.",
-  announced: "Winners have been announced on the Awards Night screen.",
+  final_list: "Scoring is done. The national team is finalising results, which stay secret until Recognition Night.",
+  announced: "Winners have been announced on the Recognition Night screen.",
   not_forward: "This nomination did not go forward to scoring this year.",
 };
 
@@ -138,7 +138,7 @@ export default async function ChapterJourneyPage({ params }: { params: Promise<{
                 </div>
               ))}
               <div className="tp-row">
-                <span>Awards Night</span>
+                <span>Recognition Night</span>
                 <b className="tp-num">{TP_EVENT.dates}</b>
               </div>
             </div>

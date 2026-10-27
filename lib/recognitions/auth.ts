@@ -55,6 +55,10 @@ export type RxViewer = {
    * role='regional_chair', yi_zone = region. A blank zone grants nothing.
    */
   regionalChairZones: string[];
+  /** Holds the nmt or nmt_leader directory role, with or without a duty row (the boards, 27 Oct). */
+  holdsNmtRole: boolean;
+  /** Zones of the person's active rm directory roles; a blank zone grants nothing (the boards, 27 Oct). */
+  rmRoleZones: string[];
 };
 
 function activeRx(me: PersonRoles, role: string) {
@@ -128,6 +132,16 @@ export const getRxViewer = cache(async (): Promise<RxViewer | null> => {
     ),
   ];
 
+  // ---- Board sight (the nomination and predictor boards, 27 Oct) -------
+  const holdsNmtRole = activeRx(me, RX_ROLES.nmt).length > 0 || activeRx(me, RX_ROLES.nmtLeader).length > 0;
+  const rmRoleZones = [
+    ...new Set(
+      activeRx(me, RX_ROLES.rm)
+        .map((a) => (a.yi_zone ?? "").trim().toUpperCase())
+        .filter((z) => z !== "")
+    ),
+  ];
+
   return {
     userId: me.user_id,
     personId: me.person_id,
@@ -137,6 +151,8 @@ export const getRxViewer = cache(async (): Promise<RxViewer | null> => {
     chapters,
     duties,
     regionalChairZones,
+    holdsNmtRole,
+    rmRoleZones,
   };
 });
 

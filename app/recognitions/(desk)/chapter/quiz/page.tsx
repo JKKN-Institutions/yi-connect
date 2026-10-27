@@ -6,7 +6,7 @@ import {
   listAwards,
   listPredictionsByChapter,
 } from "@/lib/recognitions/data";
-import { CATEGORY_LABEL, type Category } from "@/lib/recognitions/constants";
+import { CATEGORIES, CATEGORY_LABEL, type Category } from "@/lib/recognitions/constants";
 import { Ribbon } from "../../../_ui/ribbon";
 import { IconArrowLeft } from "../../../_ui/icons";
 import { NoAccess, Notice, PageHead, Seal, formatWhen } from "../../../_ui/primitives";
@@ -17,8 +17,8 @@ import { PredictionGrid } from "./grid";
 
 export const metadata = { title: "Predict the winners" };
 
-/** Column order exactly as the spec lists it. */
-const QUIZ_ORDER: Category[] = ["sparks", "trailblazers", "pioneers"];
+/** Column order: Pioneers, Trailblazers, Sparks (client, 2026-10-27), the same as CATEGORIES. */
+const QUIZ_ORDER: Category[] = [...CATEGORIES];
 
 export default async function QuizPage({
   searchParams,
@@ -133,6 +133,29 @@ export default async function QuizPage({
       <div className="rx-row">
         <Seal tone="gilt">Open until {formatWhen(win.state === "open" ? win.deadline : null)}</Seal>
       </div>
+      {/* Which chapters sit in each category, so a pick is an informed one (client, 2026-10-27). */}
+      <section className="rx-plate rx-plate-tight rx-stack" aria-label="Chapters in each category">
+        <div className="rx-eyebrow">Chapters in each category</div>
+        {columns.map((c) => (
+          <div key={c.category} className="rx-stack" style={{ gap: 6 }}>
+            <div className="rx-row" style={{ gap: 8 }}>
+              <span className="rx-h3">{c.label}</span>
+              <span className="rx-small rx-mute rx-num">
+                {c.chapters.length} {c.chapters.length === 1 ? "chapter" : "chapters"}
+              </span>
+            </div>
+            {c.chapters.length === 0 ? (
+              <p className="rx-small rx-mute">No chapters in this category yet.</p>
+            ) : (
+              <ul className="rx-rivals rx-small">
+                {c.chapters.map((ch) => (
+                  <li key={ch.id}>{ch.name}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+      </section>
       <PredictionGrid
         chapterId={chapter.id}
         awards={awards.map((a) => ({ id: a.id, title: a.title, vertical: a.vertical, kind: a.kind }))}

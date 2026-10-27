@@ -12,6 +12,8 @@ const DESK_COPY: Record<string, string> = {
   "/recognitions/check": "Pass each nomination from your region, or send it back with a note. Both checkers must pass it.",
   "/recognitions/score": "Score the nominations assigned to you. Your marks stay private.",
   "/recognitions/moderate": "Once every score is in, review the combined matrix and the podium.",
+  "/recognitions/board": "Every recognition against Pioneers, Trailblazers and Sparks: which chapters have filed, as they file.",
+  "/recognitions/predictor": "The same grid with the chapters' winner predictions: votes in brackets, the leader on top.",
   "/recognitions/review": "Read the Stage 1 and Stage 2 summaries and approve or send back.",
   "/recognitions/admin": "Timelines, recognitions, evaluators, Health Card files, citations and reports.",
 };

@@ -27,6 +27,19 @@ const STRIPES: Record<string, Stripes> = {
   branding: [["--rx-plum", 2], ["--rx-gilt", 1], ["--rx-plum", 1], ["--rx-gilt", 1], ["--rx-plum", 2]],
 };
 
+/**
+ * The verticals that have their own logo (client, 2026-10-27) show it in place
+ * of the stripes. Downscaled copies in public/recognitions-assets/verticals.
+ */
+const LOGOS: Record<string, string> = {
+  road_safety: "/recognitions-assets/verticals/road_safety.png",
+  climate: "/recognitions-assets/verticals/climate.png",
+  health: "/recognitions-assets/verticals/health.png",
+  accessibility: "/recognitions-assets/verticals/accessibility.png",
+  yuva: "/recognitions-assets/verticals/yuva.png",
+  thalir: "/recognitions-assets/verticals/thalir.png",
+};
+
 /** A recognition the app doesn't know by key wears its kind's ribbon. */
 const KIND_STRIPES: Record<AwardKind, Stripes> = {
   project: [["--rx-forest", 2], ["--rx-ivory", 1], ["--rx-forest", 2]],
@@ -68,6 +81,14 @@ export function Ribbon({
   size?: "md" | "lg" | "tall";
   className?: string;
 }) {
+  const logo = LOGOS[vertical];
+  // The tall ribbon is a stretched side band, not an emblem: it keeps its stripes.
+  if (logo && size !== "tall") {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- static asset; the recognitions host does not serve the image optimizer
+      <img src={logo} alt="" className={`rx-ribbon-logo${size === "lg" ? "" : " rx-ribbon-logo-md"} ${className}`} />
+    );
+  }
   const cls = size === "lg" ? "rx-ribbon rx-ribbon-lg" : size === "tall" ? "rx-ribbon rx-ribbon-tall" : "rx-ribbon";
   const gradient = ribbonGradient(vertical, kind);
   return (

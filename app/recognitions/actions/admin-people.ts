@@ -222,7 +222,7 @@ export async function grantTeamRole(input: {
   let chapterName: string | null = null;
   if (input.role === RX_ROLES.chapterRep) {
     const chapter = (await listChapters()).find((c) => c.id === input.chapterId);
-    if (!chapter) return { success: false, error: "A chapter representative needs a chapter. Choose one." };
+    if (!chapter) return { success: false, error: "A Chapter Chair needs a chapter. Choose one." };
     chapterName = chapter.name;
   }
 

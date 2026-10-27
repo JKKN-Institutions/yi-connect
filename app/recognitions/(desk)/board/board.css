@@ -1,0 +1,24 @@
+/* The nominations and predictor boards (27 Oct). */
+.rx-bd { border: 1px solid var(--rx-line); border-radius: var(--rx-radius-lg); background: var(--rx-plate); overflow: hidden; }
+.rx-bd-row { display: grid; grid-template-columns: minmax(150px, 1.1fr) repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--rx-line); }
+.rx-bd-row > * { padding: 10px 12px; min-width: 0; }
+.rx-bd-row > * + * { border-left: 1px solid var(--rx-line); }
+.rx-bd-head { border-top: 0; font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; }
+.rx-bd-award { display: flex; align-items: center; gap: 10px; }
+.rx-bd-lead { border-color: var(--rx-gilt) !important; background: var(--rx-gilt-wash) !important; font-weight: 600; }
+
+@media (max-width: 720px) {
+  .rx-bd { border: 0; background: none; display: flex; flex-direction: column; gap: 12px; }
+  .rx-bd-row.rx-bd-head { display: none; }
+  .rx-bd-row { display: block; border: 1px solid var(--rx-line); border-radius: var(--rx-radius-lg); background: var(--rx-plate); }
+  .rx-bd-row > * + * { border-left: 0; border-top: 1px dashed var(--rx-line); }
+  .rx-bd-cell::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--rx-mute);
+  }
+}

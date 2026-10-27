@@ -53,16 +53,32 @@ export function ApplyInstructions({ deadline, whyWords }: { deadline: string; wh
     <section className="rx-notice rx-stack" aria-label="How to apply" style={{ gap: 0 }}>
       <div className="rx-h3">How to apply</div>
       <ol className="rx-small" style={{ margin: "6px 0 0", paddingLeft: 20, listStyle: "decimal" }}>
-        <li>Tick each recognition your chapter wants to apply for. You can tick as many as you like.</li>
         <li>
-          For every one you tick, answer &ldquo;Why should your chapter get this recognition?&rdquo; in {whyWords} words
-          or fewer. This answer is compulsory.
+          <strong>Select Recognitions:</strong> The Chapter Chair may nominate the chapter for any number of recognitions
+          across verticals.
         </li>
-        <li>Save a draft whenever you like. A draft is not entered.</li>
         <li>
-          Submit before {deadline}. Once submitted, a nomination is locked: it can&apos;t be changed or withdrawn.
+          <strong>Mandatory Justification:</strong> Each nomination must include a justification answering &ldquo;Why
+          should your chapter receive this recognition?&rdquo; in {whyWords} words or fewer.
         </li>
-        <li>Evaluators then score your nominations against the other chapters in your category only.</li>
+        <li>
+          <strong>Save as Draft:</strong> Drafts can be saved anytime but are not considered submitted.
+        </li>
+        <li>
+          <strong>Submission Deadline:</strong> Submit by {deadline}. Late submissions will not be considered under any
+          circumstances.
+        </li>
+        <li>
+          <strong>Locked Submissions:</strong> Once submitted, nominations cannot be modified or withdrawn.
+        </li>
+        <li>
+          <strong>Category-Based Evaluation:</strong> Only self-nominated chapters will be evaluated against others in
+          their respective categories.
+        </li>
+        <li>
+          <strong>Final Decision:</strong> Decisions of the Recognitions &amp; Celebrations team are final and binding. No
+          disputes will be entertained.
+        </li>
       </ol>
     </section>
   );

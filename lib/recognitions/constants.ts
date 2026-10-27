@@ -23,7 +23,7 @@ export const KIND_LABEL: Record<AwardKind, string> = {
   initiative: "Initiatives",
   stakeholder: "Stakeholders",
   sports: "Sports",
-  branding: "Branding",
+  branding: "BCDE",
 };
 
 /** One recognition's kind (singular), for the control room. */
@@ -32,7 +32,7 @@ export const KIND_SINGULAR: Record<AwardKind, string> = {
   initiative: "Initiative",
   stakeholder: "Stakeholder",
   sports: "Sports",
-  branding: "Branding",
+  branding: "BCDE",
 };
 
 export function isKind(v: unknown): v is AwardKind {
@@ -86,7 +86,7 @@ export const KNOWN_RECOGNITIONS: Array<{ slug: string; kind: AwardKind; title: s
   { slug: "thalir", kind: "stakeholder", title: "Thalir", current: true },
   { slug: "rural", kind: "stakeholder", title: "Rural Initiatives", current: true },
   { slug: "sports", kind: "sports", title: "Sports", current: true },
-  { slug: "branding", kind: "branding", title: "Branding", current: true },
+  { slug: "branding", kind: "branding", title: "BCDE", current: true },
   { slug: "impact", kind: "initiative", title: "Impact", current: false },
   { slug: "future", kind: "initiative", title: "Future", current: false },
 ];

@@ -185,7 +185,7 @@ export default async function ChapterDashboard({
       </section>
 
       <section className="rx-stack">
-        <div className="rx-eyebrow">Previous Gold, Silver and Bronze</div>
+        <div className="rx-eyebrow">Previous finalists</div>
         {podiums.length === 0 ? (
           <p className="rx-mute">No previous recognitions recorded yet.</p>
         ) : (

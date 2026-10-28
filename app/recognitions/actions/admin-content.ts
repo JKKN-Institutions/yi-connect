@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireRxSuperAdmin } from "@/lib/recognitions/auth";
 import { rxService } from "@/lib/recognitions/supabase";
 import { audit, getAward, getCurrentCycle, listChapters, listModerationVersions } from "@/lib/recognitions/data";
-import { CATEGORIES, CATEGORY_LABEL, RANK_LABEL, WORDS, type Category } from "@/lib/recognitions/constants";
+import { CATEGORIES, CATEGORY_LABEL, WORDS, type Category } from "@/lib/recognitions/constants";
 import { countWords } from "@/lib/recognitions/words";
 import type { ActionResult } from "@/lib/recognitions/types";
 import { headerOf, loadHealthCardFile, matchMeasureRows, matchRows } from "../(desk)/admin/_lib/health-card";
@@ -387,7 +387,7 @@ export async function saveCitationEdit(input: {
     category = input.category;
     rank = Number(input.rank);
     if (!version.top3.some((t) => t.category === category && t.rank === rank))
-      return { success: false, error: `There is no ${RANK_LABEL[rank as 1 | 2 | 3]} in ${CATEGORY_LABEL[category]} in the latest moderation.` };
+      return { success: false, error: `That finalist is not in ${CATEGORY_LABEL[category]} in the latest moderation.` };
     // The same word limits the spec sets for these texts apply to the polished version.
     const limit = input.field === "citation" ? WORDS.top3Citation : WORDS.announcementDraft;
     const words = countWords(body);

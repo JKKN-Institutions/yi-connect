@@ -23,7 +23,7 @@ export const KIND_LABEL: Record<AwardKind, string> = {
   initiative: "Initiatives",
   stakeholder: "Stakeholders",
   sports: "Sports",
-  branding: "BCDE",
+  branding: "Branding & PR",
 };
 
 /** One recognition's kind (singular), for the control room. */
@@ -32,7 +32,7 @@ export const KIND_SINGULAR: Record<AwardKind, string> = {
   initiative: "Initiative",
   stakeholder: "Stakeholder",
   sports: "Sports",
-  branding: "BCDE",
+  branding: "Branding & PR",
 };
 
 export function isKind(v: unknown): v is AwardKind {
@@ -86,7 +86,7 @@ export const KNOWN_RECOGNITIONS: Array<{ slug: string; kind: AwardKind; title: s
   { slug: "thalir", kind: "stakeholder", title: "Thalir", current: true },
   { slug: "rural", kind: "stakeholder", title: "Rural Initiatives", current: true },
   { slug: "sports", kind: "sports", title: "Sports", current: true },
-  { slug: "branding", kind: "branding", title: "BCDE", current: true },
+  { slug: "branding", kind: "branding", title: "Branding & PR", current: true },
   { slug: "impact", kind: "initiative", title: "Impact", current: false },
   { slug: "future", kind: "initiative", title: "Future", current: false },
 ];
@@ -249,3 +249,11 @@ export const JUSTIFICATION_MAX_CHARS = 2000;
  * desk, its actions and its wording back.
  */
 export const CHECK_STEP_ENABLED = false;
+
+/**
+ * Piyush, 28 Oct 11:05: an evaluator's home chapter is recorded and flagged
+ * wherever their marks appear, but they still score it. False = home
+ * chapters never hide a nomination; true restores the old rule that an
+ * evaluator never scores a chapter they are linked to (mail 3).
+ */
+export const HOME_CHAPTER_BLOCKS_SCORING = false;

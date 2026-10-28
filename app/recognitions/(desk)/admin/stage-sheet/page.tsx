@@ -78,6 +78,7 @@ export default async function StageSheetPage({ searchParams }: { searchParams: P
                       {p.chapterName}
                       {p.region ? <span className="rx-small rx-mute"> · {p.region}</span> : null}
                     </div>
+                    {p.homeOf ? <div className="rx-small rx-home-note">Home chapter of {p.homeOf}</div> : null}
                     <p className="rx-stage-citation">{p.citation.trim() || "No citation written."}</p>
                     {p.rationale.trim() ? (
                       <p className="rx-small rx-mute rx-stage-why">

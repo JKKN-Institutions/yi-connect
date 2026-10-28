@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requireRxNationalLeadership, requireRxOversight } from "@/lib/recognitions/auth";
-import { effectiveText, getAwardState, getPeople, listAudit, listCitationEdits, listScoreHistory } from "@/lib/recognitions/data";
+import { effectiveText, getAwardState, getPeople, homeChapterNotes, listAudit, listCitationEdits, listScoreHistory } from "@/lib/recognitions/data";
 import { scoreSight } from "@/lib/recognitions/sight";
 import { CATEGORIES, CATEGORY_LABEL, CHECK_STEP_ENABLED, LAYER2_PARAMS, LAYER3_PARAMS, LAYER_LABEL, PARAM_KEYS } from "@/lib/recognitions/constants";
 import { paramsTotal } from "@/lib/recognitions/scoring";
@@ -44,6 +44,7 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
 
   const state = await getAwardState(awardId);
   if (!state) return <NoAccess reason="This recognition does not exist or was removed." contact={false} />;
+  const home = await homeChapterNotes(state);
   const { award, cycle, phase } = state;
 
   // Blind scoring beats oversight: someone who is BOTH leadership/admin and an
@@ -384,7 +385,7 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
       {/* ------------------------------------------------ Stage 2 summary */}
       <section className="rx-stack-lg" aria-labelledby="rx-s2">
         <h2 className="rx-h1" id="rx-s2" style={{ fontSize: "1.7rem" }}>Stage 2 summary</h2>
-        <CombinedMatrix view={data.matrix} />
+        <CombinedMatrix view={data.matrix} home={home} />
 
         <section className="rx-stack" aria-labelledby="rx-s2-final">
           <h2 className="rx-h2" id="rx-s2-final">Final rankings, top 3 rationales and citations</h2>
@@ -394,7 +395,7 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
                 Version {finalVersion.version}, submitted {formatWhen(finalVersion.submitted_at)}. Citations show the
                 super admin&apos;s polished text where there is one.
               </p>
-              <RankingTable view={finalView} />
+              <RankingTable view={finalView} home={home} />
             </>
           ) : (
             <p className="rx-mute">The NMT leader hasn&apos;t submitted a moderation yet.</p>

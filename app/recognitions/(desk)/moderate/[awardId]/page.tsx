@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requireRxEvaluatorOnAward } from "@/lib/recognitions/auth";
-import { getAwardState, getPeople, latestDecisionFor } from "@/lib/recognitions/data";
+import { getAwardState, getPeople, homeChapterNotes, latestDecisionFor } from "@/lib/recognitions/data";
 import { mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
 import { isPast } from "@/lib/recognitions/phase";
 import { Ribbon } from "@/app/recognitions/_ui/ribbon";
@@ -28,6 +28,7 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
 
   const state = await getAwardState(awardId);
   if (!state) return <NoAccess reason="This recognition does not exist or was removed." contact={false} />;
+  const home = await homeChapterNotes(state);
   const { award, cycle, phase } = state;
 
   const head = (
@@ -166,7 +167,7 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
         ) : null}
       </div>
 
-      <CombinedMatrix view={data.matrix} />
+      <CombinedMatrix view={data.matrix} home={home} />
       <PredictionsBoard view={data.predictions} />
 
       <section className="rx-stack" aria-labelledby="rx-final-ranking">
@@ -193,6 +194,7 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
                 categories={formCategories}
                 initial={initial}
                 mode={phase === "reevaluation" ? "reevaluation" : "stage2"}
+                home={home}
               />
             )}
           </>
@@ -210,7 +212,7 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
         {shownVersion && !canEdit ? (
           <div className="rx-stack">
             <div className="rx-eyebrow">Latest submitted · version {shownVersion.version}</div>
-            <RankingTable view={buildRankingView(shownVersion, state.nominations, data.chapters)} />
+            <RankingTable view={buildRankingView(shownVersion, state.nominations, data.chapters)} home={home} />
           </div>
         ) : null}
         {!shownVersion && !canEdit ? (

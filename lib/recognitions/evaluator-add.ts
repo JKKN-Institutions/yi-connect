@@ -51,6 +51,19 @@ export function nmtAddCloses(cycle: { nomination_deadline: string | null }): str
   return new Date(t + NMT_ADD_DAYS * 24 * 60 * 60 * 1000).toISOString();
 }
 
+/** When the NMT may add, in words: "after nominations close on …, until …". */
+function nmtAddSpan(cycle: AwardState["cycle"], when: (iso: string | null) => string): string {
+  const closes = nmtAddCloses(cycle);
+  return closes
+    ? `after nominations close on ${when(cycle.nomination_deadline)}, until ${when(closes)}`
+    : "for a few days after nominations close";
+}
+
+/** What a Regional Mentor or Regional Chair is told instead of an add button (Piyush, 28 Oct 2026). */
+export function askNmtToAddNote(cycle: AwardState["cycle"], when: (iso: string | null) => string): string {
+  return `Regional Mentors and Regional Chairs don't add chapters. If a deserving chapter is missing, tell the NMT of this recognition: they can add it ${nmtAddSpan(cycle, when)}.`;
+}
+
 /**
  * Adding a chapter: NMT only, from the nomination deadline until
  * nmtAddCloses (and never after scoring closes), even when every mark for
@@ -64,15 +77,8 @@ export function evaluatorAddWindow(
 ): AddWindow {
   if (!state.award.is_active) return { open: false, reason: "This recognition is switched off." };
   const closes = nmtAddCloses(state.cycle);
-  const span = closes
-    ? `after nominations close on ${when(state.cycle.nomination_deadline)}, until ${when(closes)}`
-    : "for a few days after nominations close";
-  if (layer !== "nmt") {
-    return {
-      open: false,
-      reason: `Regional Mentors and Regional Chairs don't add chapters. If a deserving chapter is missing, tell the NMT of this recognition: they can add it ${span}.`,
-    };
-  }
+  const span = nmtAddSpan(state.cycle, when);
+  if (layer !== "nmt") return { open: false, reason: askNmtToAddNote(state.cycle, when) };
   if (!closes) return { open: false, reason: "The nomination deadline isn't set yet, so no chapter can be added." };
   if (!isPast(state.cycle.nomination_deadline)) {
     return { open: false, reason: `You can add a missed chapter ${span}.` };

@@ -1,8 +1,23 @@
 import Link from "next/link";
 import { getRxViewer } from "@/lib/recognitions/auth";
-import { chapterMap, getAwardState, getPeople, listScoresForDuty, nominationsForDuty, type AwardState } from "@/lib/recognitions/data";
+import {
+  chapterMap,
+  getAwardState,
+  getCurrentCycle,
+  getPeople,
+  listScoresForDuty,
+  nominationsForDuty,
+  type AwardState,
+} from "@/lib/recognitions/data";
 import { mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
-import { addableForDuty, evaluatorAddWindow, nmtAddCloses, pendingApprovalsFor } from "@/lib/recognitions/evaluator-add";
+import {
+  addableForDuty,
+  askNmtToAddNote,
+  evaluatorAddWindow,
+  nmtAddCloses,
+  pendingApprovalsFor,
+} from "@/lib/recognitions/evaluator-add";
+import { isPast } from "@/lib/recognitions/phase";
 import { AddChapterForDuty, PendingApprovals, type PendingItem } from "./evaluator-add";
 import { Ribbon } from "../../_ui/ribbon";
 import { IconArrowRight, IconEyeOff } from "../../_ui/icons";
@@ -19,6 +34,9 @@ export default async function MySheetsPage() {
 
   const duties = viewer.duties;
   if (duties.length === 0) {
+    // A Regional Chair holds no scoring duty, but is told who adds a missed chapter while that still matters.
+    const cycle = viewer.regionalChairZones.length > 0 ? await getCurrentCycle() : null;
+    const rcNote = cycle && !isPast(nmtAddCloses(cycle)) ? askNmtToAddNote(cycle, formatWhen) : null;
     return (
       <div className="rx-stack-lg">
         <PageHead eyebrow="Stage 1 · blind scoring" title="My scoring sheets" />
@@ -28,6 +46,7 @@ export default async function MySheetsPage() {
             You haven&apos;t been assigned as a Regional Mentor or NMT evaluator for any recognition this year. When the
             Recognitions super admin adds you, your sheets appear here.
           </p>
+          {rcNote ? <p className="rx-small rx-mute">{rcNote}</p> : null}
         </div>
       </div>
     );

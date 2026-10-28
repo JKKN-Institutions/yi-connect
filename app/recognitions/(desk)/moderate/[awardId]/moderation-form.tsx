@@ -1,28 +1,36 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { RANK_LABEL, WORDS, type Category } from "@/lib/recognitions/constants";
+import { CATEGORIES, CATEGORY_LABEL, RANK_LABEL, WORDS, type Category } from "@/lib/recognitions/constants";
 import { ConfirmDialog, ResultLine, WordField } from "@/app/recognitions/_ui/client";
 import { saveModerationDraft, submitModeration } from "@/app/recognitions/actions/moderation";
-import type { ModerationInput } from "@/app/recognitions/_parts/shared";
+import { matrixRankLabel, rankMoved, type ModerationInput } from "@/app/recognitions/_parts/shared";
 import { HomeNote, type HomeNotes } from "@/app/recognitions/_parts/home-note";
+import { CategoryPanel } from "@/app/recognitions/_parts/category-tabs";
 
 export type FormRow = {
   nominationId: string;
   chapterName: string;
   region: string;
   computedTotal: number;
+  /** The combined matrix's rank; tied chapters share it. */
   computedRank: number;
+  /** How many chapters share computedRank (1 = no tie). Any order inside the tie is not a move. */
+  tieSize: number;
 };
 export type FormCategory = { category: Category; label: string; rows: FormRow[] };
 export type FormInitial = {
-  scores: Record<string, string>;
   ranks: Record<string, string>;
+  /** The NMT's reason per chapter (Piyush, 28 Oct 2026). */
+  reasons: Record<string, string>;
   texts: Record<string, { rationale: string; citation: string }>;
 };
 
 /**
- * The NMT leader's final ranking. Podium cards follow the FINAL ranks: a
+ * The NMT leader's final ranking, on the joint call with the Regional Mentors
+ * (Piyush, 28 Oct 2026): no re-scoring. Each chapter shows its weighted total
+ * and provisional rank; the leader sets the final rank and writes why. A
+ * reason is required wherever the rank moves. Podium cards follow the FINAL ranks: a
  * chapter gets a card the moment it alone holds rank 1, 2 or 3 in its
  * category. Texts belong to the chapter, so swapping two ranks carries
  * each chapter's text with it. The server re-derives the podium.
@@ -40,8 +48,8 @@ export function ModerationForm({
   mode: "stage2" | "reevaluation";
   home?: HomeNotes;
 }) {
-  const [scores, setScores] = useState(initial.scores);
   const [ranks, setRanks] = useState(initial.ranks);
+  const [reasons, setReasons] = useState(initial.reasons);
   const [texts, setTexts] = useState(initial.texts);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   const [confirm, setConfirm] = useState(false);
@@ -55,13 +63,11 @@ export function ModerationForm({
     const rankings: ModerationInput["rankings"] = [];
     for (const cat of categories) {
       for (const r of cat.rows) {
-        const s = (scores[r.nominationId] ?? "").trim();
         const k = (ranks[r.nominationId] ?? "").trim();
-        const score = s === "" ? null : Number(s);
         const rank = k === "" ? null : Number(k);
-        if (score !== null && !Number.isFinite(score)) return `Final score for ${r.chapterName} is not a number.`;
-        if (rank !== null && !Number.isFinite(rank)) return `Final rank for ${r.chapterName} is not a number.`;
-        rankings.push({ nomination_id: r.nominationId, final_score: score, final_rank: rank });
+        if (rank !== null && !Number.isFinite(rank)) return `${cat.label}: final rank for ${r.chapterName} is not a number.`;
+        // The score is the matrix's weighted total; the server sets it.
+        rankings.push({ nomination_id: r.nominationId, final_score: null, final_rank: rank, reason: reasons[r.nominationId] ?? "" });
       }
     }
     const textsOut = Object.entries(texts).map(([nomination_id, t]) => ({
@@ -89,47 +95,47 @@ export function ModerationForm({
 
   return (
     <div className="rx-stack-lg">
+      {CATEGORIES.filter((c) => !categories.some((x) => x.category === c)).map((c) => (
+        <CategoryPanel key={c} category={c} tabsOnly>
+          <p className="rx-mute">No {CATEGORY_LABEL[c]} chapter is in the race, so there is nothing to rank on this tab.</p>
+        </CategoryPanel>
+      ))}
       {categories.map((cat) => {
         const places = Math.min(3, cat.rows.length);
         return (
-          <section key={cat.category} className="rx-stack" aria-label={`${cat.label} final ranking`}>
+          <CategoryPanel key={cat.category} category={cat.category}>
+          <section className="rx-stack" aria-label={`${cat.label} final ranking`}>
             <h3 className="rx-h2">{cat.label}</h3>
-            <div className="rx-ledger-wrap">
-              <table className="rx-ledger">
-                <thead>
-                  <tr>
-                    <th>Chapter</th>
-                    <th>Region</th>
-                    <th className="rx-num">Weighted total</th>
-                    <th className="rx-num">Provisional rank</th>
-                    <th className="rx-num">Final score</th>
-                    <th className="rx-num">Final rank</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cat.rows.map((r) => (
-                    <tr key={r.nominationId}>
-                      <td>
-                        {r.chapterName}
+            <ol className="rx-rank-list">
+              {cat.rows.map((r) => {
+                const k = (ranks[r.nominationId] ?? "").trim();
+                const moved = k !== "" && Number.isFinite(Number(k)) && rankMoved(Number(k), r.computedRank, r.tieSize);
+                return (
+                  <li key={r.nominationId} className="rx-rank-card" data-moved={moved ? "true" : undefined}>
+                    <div className="rx-rank-head">
+                      <div style={{ minWidth: 0 }}>
+                        <strong style={{ overflowWrap: "anywhere" }}>{r.chapterName}</strong>
+                        <span className="rx-small rx-mute"> · {r.region}</span>
                         <HomeNote names={home?.[r.chapterName]} />
-                      </td>
-                      <td>{r.region}</td>
-                      <td className="rx-num">{r.computedTotal.toFixed(2)}</td>
-                      <td className="rx-num">{r.computedRank}</td>
-                      <td className="rx-num">
-                        <input
-                          className="rx-input rx-p-num-input"
-                          type="number"
-                          inputMode="decimal"
-                          min={0}
-                          max={100}
-                          step={0.01}
-                          aria-label={`Final score for ${r.chapterName}`}
-                          value={scores[r.nominationId] ?? ""}
-                          onChange={(e) => setScores((s) => ({ ...s, [r.nominationId]: e.target.value }))}
-                        />
-                      </td>
-                      <td className="rx-num">
+                      </div>
+                      {moved ? (
+                        <span className="rx-small rx-rank-move">
+                          Rank {matrixRankLabel(r.computedRank, r.tieSize)} to {k}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="rx-rank-figs">
+                      <div className="rx-rank-fig">
+                        <span>Weighted total</span>
+                        <span className="rx-num">{r.computedTotal.toFixed(2)}</span>
+                      </div>
+                      <div className="rx-rank-fig">
+                        <span>Provisional rank</span>
+                        <span className="rx-num">{matrixRankLabel(r.computedRank, r.tieSize)}</span>
+                        {r.tieSize > 1 ? <span className="rx-small rx-mute">tied</span> : null}
+                      </div>
+                      <label className="rx-rank-fig">
+                        <span>Final rank</span>
                         <input
                           className="rx-input rx-p-num-input"
                           type="number"
@@ -141,22 +147,24 @@ export function ModerationForm({
                           value={ranks[r.nominationId] ?? ""}
                           onChange={(e) => setRanks((s) => ({ ...s, [r.nominationId]: e.target.value }))}
                         />
-                        {/* Round-1 weighted total beside the rank picker, for the joint call (recognitions_05). */}
-                        <span
-                          className="rx-small rx-mute rx-num"
-                          style={{ display: "block", marginTop: 2, whiteSpace: "nowrap" }}
-                          title="Round-1 weighted total from the combined matrix"
-                        >
-                          R1 {r.computedTotal.toFixed(2)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </label>
+                    </div>
+                    <WordField
+                      label={`Why this rank for ${r.chapterName}?`}
+                      value={reasons[r.nominationId] ?? ""}
+                      onChange={(v) => setReasons((s) => ({ ...s, [r.nominationId]: v }))}
+                      limit={WORDS.rankReason}
+                      rows={3}
+                      help={moved ? "Required: the rank changed from the provisional rank." : "Optional while the rank stays as it is."}
+                    />
+                  </li>
+                );
+              })}
+            </ol>
             <p className="rx-small rx-mute">
-              Final score 0 to 100 (two decimals). Final rank 1 to {cat.rows.length}, each rank used once.
+              Final rank 1 to {cat.rows.length}, each rank used once. Scores are not entered again: the weighted total
+              stands. Chapters tied on the weighted total (shown as =) can be put in any order among themselves without a
+              reason.
             </p>
             <div className="rx-podium">
               {Array.from({ length: places }, (_, i) => (i + 1) as 1 | 2 | 3).map((place) => {
@@ -204,6 +212,7 @@ export function ModerationForm({
               })}
             </div>
           </section>
+          </CategoryPanel>
         );
       })}
 
@@ -229,7 +238,7 @@ export function ModerationForm({
         onClose={() => setConfirm(false)}
       >
         <p>
-          The final scores, ranks and podium texts go to National Leadership for approval. Once submitted this version
+          The final ranks, the reasons and the finalists&apos; texts go to National Leadership for approval. Once submitted this version
           cannot be edited; if National Leadership sends it back, you will start a new version.
         </p>
       </ConfirmDialog>

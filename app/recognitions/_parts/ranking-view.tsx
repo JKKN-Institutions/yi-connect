@@ -22,8 +22,8 @@ export function RankingTable({ view, home }: { view: RankingView; home?: HomeNot
             <table className="rx-ledger">
               <thead>
                 <tr>
-                  <th className="rx-num">Rank before Stage 2</th>
-                  <th className="rx-num">Final rank</th>
+                  <th className="rx-num rx-th-wrap">Final rank</th>
+                  <th className="rx-num rx-th-wrap">Before Stage 2</th>
                   <th>Chapter and reason</th>
                   <th>Region</th>
                   <th className="rx-num">Weighted total</th>
@@ -32,16 +32,16 @@ export function RankingTable({ view, home }: { view: RankingView; home?: HomeNot
               <tbody>
                 {cat.entries.map((e) => (
                   <tr key={e.nominationId}>
-                    <td className="rx-num rx-mute">{e.computedRank ?? "—"}</td>
                     <td className="rx-num">
                       <strong>{e.finalRank ?? "—"}</strong>
                       {e.computedRank !== null && e.finalRank !== null && e.computedRank !== e.finalRank ? (
                         <span className="rx-small rx-rank-move" style={{ display: "block", whiteSpace: "nowrap" }}>
-                          {e.finalRank < e.computedRank ? "Moved up" : "Moved down"}
+                          {e.finalRank < e.computedRank ? "Up" : "Down"}
                         </span>
                       ) : null}
                     </td>
-                    <td style={{ minWidth: "14em" }}>
+                    <td className="rx-num rx-mute">{e.computedRank ?? "—"}</td>
+                    <td style={{ minWidth: "13em" }}>
                       {e.chapterName}
                       <HomeNote names={home?.[e.chapterName]} />
                       {e.reason ? (

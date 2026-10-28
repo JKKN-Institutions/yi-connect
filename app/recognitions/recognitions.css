@@ -434,3 +434,4 @@
 .rx-rank-fig > span:first-child { font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--rx-mute); }
 .rx-rank-move { color: var(--rx-gilt-deep); font-weight: 600; }
 .rx-cat-tab[aria-disabled="true"] { opacity: 0.5; cursor: default; }
+.rx-ledger th.rx-th-wrap { white-space: normal; min-width: 4.5em; }

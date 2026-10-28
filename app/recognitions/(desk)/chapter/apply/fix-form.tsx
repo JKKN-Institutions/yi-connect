@@ -62,7 +62,7 @@ export function FixReturnedForm({
           <p className="rx-p-quote" style={{ marginTop: 6, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{note}</p>
           <p className="rx-small" style={{ marginTop: 6, fontWeight: 600 }}>
             {fixDeadline
-              ? `Fix and resubmit by ${formatWhen(fixDeadline)}. If it is still sent back after that, it is out of the race.`
+              ? `Fix and resubmit by ${formatWhen(fixDeadline)}. If it is still sent back after that, it is not considered this year.`
               : CHECK_STEP_ENABLED
                 ? "Fix and resubmit it. It is not scored until both checkers pass it."
                 : "Fix and resubmit it. It is not scored until you do."}

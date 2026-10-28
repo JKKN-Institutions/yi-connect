@@ -13,7 +13,7 @@ export function CategoryPanel({ category, rivals }: { category: Category | null;
         <div className="rx-eyebrow">Your category</div>
         <p className="rx-small">
           Your chapter hasn&apos;t been placed in a category yet. The Recognitions super admin does this. Once it is
-          done, you&apos;ll see here the chapters you compete with.
+          done, you&apos;ll see here the chapters you are evaluated alongside.
         </p>
       </section>
     );
@@ -30,7 +30,7 @@ export function CategoryPanel({ category, rivals }: { category: Category | null;
       ) : (
         <>
           <p className="rx-small">
-            You compete only with these {rivals.length === 1 ? "chapter" : `${rivals.length} chapters`}:
+            You are evaluated alongside these {rivals.length === 1 ? "chapter" : `${rivals.length} chapters`}:
           </p>
           <ul className="rx-rivals rx-small">
             {rivals.map((name) => (
@@ -40,8 +40,8 @@ export function CategoryPanel({ category, rivals }: { category: Category | null;
         </>
       )}
       <p className="rx-small rx-mute">
-        Chapters in {others.join(" and ")} are a separate race. You do not compete with them: each category gets its
-        own winner, runner-up and second runner-up for every recognition.
+        Chapters in {others.join(" and ")} are evaluated separately. Each category gets its own Gold, Silver and
+        Bronze for every recognition.
       </p>
     </section>
   );

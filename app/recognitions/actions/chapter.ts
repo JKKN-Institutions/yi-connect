@@ -310,7 +310,7 @@ export async function resubmitNomination(chapterId: string, form: unknown): Prom
   if (!canFix(existing, cycle)) {
     return {
       success: false,
-      error: `The fix deadline passed on ${formatWhen(cycle.fix_deadline)}, so ${award.title} can no longer be resubmitted. It is out of the race.`,
+      error: `The fix deadline passed on ${formatWhen(cycle.fix_deadline)}, so ${award.title} can no longer be resubmitted. It is not considered this year.`,
     };
   }
   // A nomination filed on the old form (before recognitions_04) is fixed on

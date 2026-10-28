@@ -262,6 +262,10 @@ export type RankingView = Array<{
     region: string;
     finalScore: number | null;
     finalRank: number | null;
+    /** Rank before Stage 2 (the combined matrix), or null when unknown. */
+    computedRank: number | null;
+    /** The NMT's reason for the final rank; empty when none was written. */
+    reason: string;
   }>;
   podium: Array<{ rank: 1 | 2 | 3; placeLabel: string; chapterName: string; rationale: string; citation: string }>;
 }>;
@@ -270,7 +274,9 @@ export function buildRankingView(
   version: Pick<ModerationVersionRow, "rankings" | "top3">,
   nominations: NominationRow[],
   chapters: Map<string, ChapterRow>,
-  citationFor?: (category: Category, rank: number, fallback: string) => string
+  citationFor?: (category: Category, rank: number, fallback: string) => string,
+  /** Provisional ranks from today's matrix, for versions saved before the rank was stored. */
+  provisional?: Record<string, { rank: number }>
 ): RankingView {
   const nomById = new Map(nominations.map((n) => [n.id, n]));
   const rankings = Array.isArray(version.rankings) ? version.rankings : [];
@@ -285,6 +291,8 @@ export function buildRankingView(
         region: n!.region,
         finalScore: r.final_score,
         finalRank: r.final_rank,
+        computedRank: r.computed_rank ?? provisional?.[r.nomination_id]?.rank ?? null,
+        reason: (r.reason ?? "").trim(),
       }))
       .sort((a, b) => (a.finalRank ?? 999) - (b.finalRank ?? 999) || a.chapterName.localeCompare(b.chapterName));
     const podium = top3
@@ -362,7 +370,12 @@ export function buildHistoryView(input: {
 // ---------------------------------------------------------------------------
 
 export type ModerationInput = {
-  rankings: Array<{ nomination_id: string; final_score: number | null; final_rank: number | null }>;
+  /**
+   * final_score is ignored since 28 Oct (Piyush: the NMT does not re-score);
+   * the server takes the combined matrix's weighted total. `reason` is the
+   * NMT's justification for the chapter's rank.
+   */
+  rankings: Array<{ nomination_id: string; final_score: number | null; final_rank: number | null; reason?: string }>;
   /** Podium texts keyed by nomination. Which place they land on is derived from final ranks. */
   texts: Array<{ nomination_id: string; rationale: string; citation: string }>;
 };
@@ -370,6 +383,7 @@ export type ModerationInput = {
 /** Hard character caps so one giant "word" can't slip past the word count. */
 const MAX_RATIONALE_CHARS = 4000;
 const MAX_CITATION_CHARS = 3500;
+const MAX_RANK_REASON_CHARS = 1500;
 
 export type ValidatedModeration =
   | { ok: true; rankings: RankingEntry[]; top3: Top3Entry[] }
@@ -378,14 +392,20 @@ export type ValidatedModeration =
 /**
  * strict=false (Save draft): numbers that are filled in must be valid and
  * texts must fit their limits, but blanks are allowed.
- * strict=true (Submit): every nomination needs a score and a unique rank
- * covering 1..n in its category, and every podium place needs both texts.
+ * strict=true (Submit): every nomination needs a unique rank covering 1..n in
+ * its category, a reason wherever the rank differs from the provisional rank,
+ * and every podium place needs both texts.
+ *
+ * `provisional` is the combined matrix (prefillFromMatrix): the final score is
+ * always its weighted total (Piyush, 28 Oct 2026: the NMT re-ranks, it does
+ * not re-score), and its rank is stored as the "before Stage 2" rank.
  */
 export function validateModeration(
   input: ModerationInput,
   submittedNominations: NominationRow[],
   chapters: Map<string, ChapterRow>,
-  strict: boolean
+  strict: boolean,
+  provisional: Record<string, { score: number; rank: number }>
 ): ValidatedModeration {
   if (!input || !Array.isArray(input.rankings) || !Array.isArray(input.texts)) {
     return { ok: false, error: "The ranking form arrived empty. Reload the page and try again." };
@@ -395,7 +415,7 @@ export function validateModeration(
   const perCategory = new Map<Category, number>();
   for (const n of submittedNominations) perCategory.set(n.category, (perCategory.get(n.category) ?? 0) + 1);
 
-  const given = new Map<string, { final_score: number | null; final_rank: number | null }>();
+  const given = new Map<string, { final_rank: number | null; reason: string }>();
   for (const r of input.rankings) {
     if (!r || typeof r.nomination_id !== "string" || !byId.has(r.nomination_id) || given.has(r.nomination_id)) {
       return {
@@ -403,22 +423,16 @@ export function validateModeration(
         error: "One of the rows is not a submitted nomination for this recognition. Reload the page and try again.",
       };
     }
-    given.set(r.nomination_id, { final_score: r.final_score, final_rank: r.final_rank });
+    given.set(r.nomination_id, { final_rank: r.final_rank, reason: String(r.reason ?? "").trim() });
   }
 
   const rankings: RankingEntry[] = [];
   for (const n of submittedNominations) {
-    const g = given.get(n.id) ?? { final_score: null, final_rank: null };
-    let score: number | null = null;
-    if (g.final_score !== null && g.final_score !== undefined) {
-      const s = Number(g.final_score);
-      if (!Number.isFinite(s) || s < 0 || s > 100) {
-        return { ok: false, error: `Final score for ${nameOf(n)} must be a number from 0 to 100.` };
-      }
-      score = Math.round(s * 100) / 100;
-    }
+    const g = given.get(n.id) ?? { final_rank: null, reason: "" };
+    const prov = provisional[n.id] ?? null;
+    const score = prov ? Math.round(prov.score * 100) / 100 : null;
     let rank: number | null = null;
-    if (g.final_rank !== null && g.final_rank !== undefined) {
+    if (g.final_rank !== null && g.final_rank !== undefined && String(g.final_rank) !== "") {
       const k = Number(g.final_rank);
       const max = perCategory.get(n.category) ?? 0;
       if (!Number.isInteger(k) || k < 1 || k > max) {
@@ -429,9 +443,26 @@ export function validateModeration(
       }
       rank = k;
     }
-    if (strict && score === null) return { ok: false, error: `Enter a final score for ${nameOf(n)}.` };
+    const words = countWords(g.reason);
+    if (words > WORDS.rankReason || g.reason.length > MAX_RANK_REASON_CHARS) {
+      return {
+        ok: false,
+        error: `The reason for ${nameOf(n)}'s rank is ${words} words. Cut it to ${WORDS.rankReason} or fewer.`,
+      };
+    }
+    if (strict && score === null) {
+      return { ok: false, error: `${nameOf(n)} has no combined total yet, so it can't be ranked. Reload the page.` };
+    }
     if (strict && rank === null) return { ok: false, error: `Enter a final rank for ${nameOf(n)}.` };
-    rankings.push({ nomination_id: n.id, final_score: score, final_rank: rank });
+    if (strict && prov && rank !== prov.rank && g.reason === "") {
+      return {
+        ok: false,
+        error: `${nameOf(n)} moves from rank ${prov.rank} to ${rank}. Write the reason for the change.`,
+      };
+    }
+    const entry: RankingEntry = { nomination_id: n.id, final_score: score, final_rank: rank, computed_rank: prov?.rank ?? null };
+    if (g.reason !== "") entry.reason = g.reason;
+    rankings.push(entry);
   }
 
   if (strict) {

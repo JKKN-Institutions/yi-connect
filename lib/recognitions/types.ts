@@ -193,6 +193,10 @@ export type RankingEntry = {
   nomination_id: string;
   final_score: number | null;
   final_rank: number | null;
+  /** Stage 2: the NMT's reason for this chapter's rank (Piyush, 28 Oct 2026). Absent on older versions. */
+  reason?: string;
+  /** The provisional rank from the combined matrix when this version was saved. Absent on older versions. */
+  computed_rank?: number | null;
 };
 
 export type Top3Entry = {

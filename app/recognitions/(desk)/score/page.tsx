@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getRxViewer } from "@/lib/recognitions/auth";
 import { chapterMap, getAwardState, getPeople, listScoresForDuty, nominationsForDuty, type AwardState } from "@/lib/recognitions/data";
 import { mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
-import { addableForDuty, evaluatorAddWindow, pendingApprovalsFor } from "@/lib/recognitions/evaluator-add";
+import { addableForDuty, evaluatorAddWindow, nmtAddCloses, pendingApprovalsFor } from "@/lib/recognitions/evaluator-add";
 import { AddChapterForDuty, PendingApprovals, type PendingItem } from "./evaluator-add";
 import { Ribbon } from "../../_ui/ribbon";
 import { IconArrowRight, IconEyeOff } from "../../_ui/icons";
@@ -62,8 +62,11 @@ export default async function MySheetsPage() {
       // recognitions_05: blind until you submit, the Mentors' send-back, and chapters added by evaluators.
       const sight = scoreSight(state, viewer.duties);
       const rescore = mentorRescoreOpen(state);
-      const addWin = evaluatorAddWindow(state, formatWhen);
+      const addWin = evaluatorAddWindow(state, formatWhen, duty.layer);
       const addable = addWin.open ? await addableForDuty(state, duty) : null;
+      // Who can add a missed chapter, and when (Piyush 28 Oct): said plainly while it still matters.
+      const addNote =
+        !addWin.open && (state.phase === "nominations" || state.phase === "stage1") ? addWin.reason : null;
       const pending = pendingApprovalsFor(state, duty);
       const mineAdded = state.nominations.filter((n) => n.added_by === viewer.personId && (n.origin === "rm_added" || n.origin === "nmt_added"));
       const people = await getPeople(pending.map((p) => p.nomination.added_by).filter((x): x is string => !!x));
@@ -83,7 +86,7 @@ export default async function MySheetsPage() {
         total: visible.length,
         submitted: submittedIds.size,
         nlOpen,
-        extra: { sight, rescore, addable, pendingItems, mineAdded },
+        extra: { sight, rescore, addable, addNote, pendingItems, mineAdded },
       };
     })
   );
@@ -212,8 +215,10 @@ export default async function MySheetsPage() {
                       region={duty.region}
                       options={extra.addable.eligible}
                       skipped={extra.addable.skipped}
-                      closesAt={formatWhen(state.cycle.stage1_deadline)}
+                      closesAt={formatWhen(nmtAddCloses(state.cycle))}
                     />
+                  ) : extra.addNote ? (
+                    <p className="rx-small rx-mute">{extra.addNote}</p>
                   ) : null}
                 </>
               ) : null}

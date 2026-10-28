@@ -378,3 +378,59 @@
 /* Home chapter of an evaluator (28 Oct). */
 .rx-home-note { color: var(--rx-plum); font-weight: 600; }
 .rx-ledger .rx-home-note { min-width: 11em; }
+
+/* Pioneers / Trailblazers / Sparks tabs on the evaluation screens (Piyush, 28 Oct). */
+.rx-cat-tabs {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 5;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--rx-line);
+  border-radius: var(--rx-radius-lg);
+  background: var(--rx-paper);
+}
+.rx-cat-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--rx-radius);
+  background: transparent;
+  color: var(--rx-mute);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.rx-cat-tab[aria-selected="true"], .rx-cat-tab[aria-current="page"] {
+  background: var(--rx-plate);
+  color: var(--rx-laurel-deep);
+  box-shadow: inset 0 -2px 0 var(--rx-gilt);
+}
+.rx-cat-tab:focus-visible { outline: 2px solid var(--rx-laurel); outline-offset: 1px; }
+.rx-cat-tab-n {
+  font-size: 0.78rem;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--rx-laurel-wash);
+  color: var(--rx-laurel-deep);
+}
+@media (max-width: 380px) { .rx-cat-tab { font-size: 0.86rem; padding: 6px 4px; } }
+
+/* Stage 2: one card per chapter, rank plus the reason for it (Piyush, 28 Oct). */
+.rx-rank-list { display: flex; flex-direction: column; gap: 10px; list-style: none; margin: 0; padding: 0; }
+.rx-rank-card { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--rx-line); border-radius: var(--rx-radius-lg); background: var(--rx-plate); min-width: 0; }
+.rx-rank-card[data-moved="true"] { border-color: var(--rx-gilt); }
+.rx-rank-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; min-width: 0; }
+.rx-rank-figs { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 16px; }
+.rx-rank-fig { display: flex; flex-direction: column; gap: 2px; }
+.rx-rank-fig > span:first-child { font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--rx-mute); }
+.rx-rank-move { color: var(--rx-gilt-deep); font-weight: 600; }
+.rx-cat-tab[aria-disabled="true"] { opacity: 0.5; cursor: default; }

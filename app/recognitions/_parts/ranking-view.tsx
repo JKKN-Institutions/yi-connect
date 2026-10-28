@@ -3,32 +3,52 @@ import { Seal, formatWhen } from "../_ui/primitives";
 import { fmt } from "./combined-matrix";
 import type { HistoryView, RankingView } from "./shared";
 import { HomeNote, type HomeNotes } from "./home-note";
+import { CategoryPanel } from "./category-tabs";
 
-/** One moderation version's final ranking and podium, read-only. */
+/**
+ * One moderation version's final ranking and podium, read-only. Shows the
+ * rank before Stage 2 beside the final rank, and the NMT's reason
+ * (Piyush, 28 Oct 2026).
+ */
 export function RankingTable({ view, home }: { view: RankingView; home?: HomeNotes }) {
   if (view.length === 0) return <p className="rx-mute rx-small">No ranking entered in this version.</p>;
   return (
     <div className="rx-stack">
       {view.map((cat) => (
-        <div key={cat.category} className="rx-stack">
+        <CategoryPanel key={cat.category} category={cat.category}>
+        <div className="rx-stack">
           <h3 className="rx-h3">{cat.label}</h3>
           <div className="rx-ledger-wrap">
             <table className="rx-ledger">
               <thead>
                 <tr>
+                  <th className="rx-num">Rank before Stage 2</th>
                   <th className="rx-num">Final rank</th>
-                  <th>Chapter</th>
+                  <th>Chapter and reason</th>
                   <th>Region</th>
-                  <th className="rx-num">Final score</th>
+                  <th className="rx-num">Weighted total</th>
                 </tr>
               </thead>
               <tbody>
                 {cat.entries.map((e) => (
                   <tr key={e.nominationId}>
-                    <td className="rx-num">{e.finalRank ?? "—"}</td>
-                    <td>
+                    <td className="rx-num rx-mute">{e.computedRank ?? "—"}</td>
+                    <td className="rx-num">
+                      <strong>{e.finalRank ?? "—"}</strong>
+                      {e.computedRank !== null && e.finalRank !== null && e.computedRank !== e.finalRank ? (
+                        <span className="rx-small rx-rank-move" style={{ display: "block", whiteSpace: "nowrap" }}>
+                          {e.finalRank < e.computedRank ? "Moved up" : "Moved down"}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td style={{ minWidth: "14em" }}>
                       {e.chapterName}
                       <HomeNote names={home?.[e.chapterName]} />
+                      {e.reason ? (
+                        <p className="rx-small rx-p-text" style={{ margin: "4px 0 0" }}>{e.reason}</p>
+                      ) : (
+                        <div className="rx-small rx-mute">No reason written</div>
+                      )}
                     </td>
                     <td>{e.region}</td>
                     <td className="rx-num">{fmt(e.finalScore)}</td>
@@ -59,6 +79,7 @@ export function RankingTable({ view, home }: { view: RankingView; home?: HomeNot
             </div>
           ) : null}
         </div>
+        </CategoryPanel>
       ))}
     </div>
   );

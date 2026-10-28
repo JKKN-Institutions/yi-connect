@@ -7,8 +7,13 @@ import { WORDS, type Category } from "./constants";
 import type { ChapterRow, EvaluatorRow, NominationRow } from "./types";
 
 /**
- * Regional Mentors and the NMT put forward a chapter that did not apply
- * (recognitions_05). Piyush, 15 Oct 2026:
+ * The NMT puts forward a chapter that did not apply. Piyush, 28 Oct 2026,
+ * replaces the 15 Oct window below: only the NMT adds, and only in the
+ * NMT_ADD_DAYS days after nominations close (8 to 10 Nov 2026). Regional
+ * Mentors and Regional Chairs tell the NMT instead. A Mentor's addition from
+ * before this change still waits for, and can get, an NMT approval.
+ *
+ * Earlier rule (recognitions_05, Piyush 15 Oct 2026):
  *   - A Regional Mentor (an active RM duty on the recognition) may add any
  *     chapter of THEIR OWN region that has no nomination for it, with a
  *     written reason. An NMT member of that recognition must approve it
@@ -35,14 +40,57 @@ const sameRegion = (a: string | null | undefined, b: string | null | undefined) 
 
 export type AddWindow = { open: true } | { open: false; reason: string };
 
-/** Adding (and approving) runs from now until scoring closes. */
-export function evaluatorAddWindow(state: AwardState, when: (iso: string | null) => string): AddWindow {
+/** Days after the nomination deadline in which the NMT may add a missed chapter (Piyush, 28 Oct 2026). */
+export const NMT_ADD_DAYS = 3;
+
+/** When the NMT's add window closes: the nomination deadline plus NMT_ADD_DAYS. Null without a deadline. */
+export function nmtAddCloses(cycle: { nomination_deadline: string | null }): string | null {
+  if (!cycle.nomination_deadline) return null;
+  const t = Date.parse(cycle.nomination_deadline);
+  if (!Number.isFinite(t)) return null;
+  return new Date(t + NMT_ADD_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
+
+/**
+ * Adding a chapter: NMT only, from the nomination deadline until
+ * nmtAddCloses (and never after scoring closes). A Regional Mentor is
+ * always refused with who to tell instead.
+ */
+export function evaluatorAddWindow(
+  state: AwardState,
+  when: (iso: string | null) => string,
+  layer: "rm" | "nmt"
+): AddWindow {
+  if (!state.award.is_active) return { open: false, reason: "This recognition is switched off." };
+  const closes = nmtAddCloses(state.cycle);
+  const span = closes
+    ? `after nominations close on ${when(state.cycle.nomination_deadline)}, until ${when(closes)}`
+    : "for a few days after nominations close";
+  if (layer !== "nmt") {
+    return {
+      open: false,
+      reason: `Regional Mentors and Regional Chairs don't add chapters. If a deserving chapter is missing, tell the NMT of this recognition: they can add it ${span}.`,
+    };
+  }
+  if (!closes) return { open: false, reason: "The nomination deadline isn't set yet, so no chapter can be added." };
+  if (!isPast(state.cycle.nomination_deadline)) {
+    return { open: false, reason: `You can add a missed chapter ${span}.` };
+  }
+  if (isPast(closes) || isPast(state.cycle.stage1_deadline)) {
+    return { open: false, reason: `The window to add a missed chapter closed on ${when(closes)}.` };
+  }
+  if (state.phase !== "stage1") return { open: false, reason: "Chapters can be added only while Stage 1 scoring runs." };
+  return { open: true };
+}
+
+/** Approving or declining a Mentor's earlier addition: until scoring closes, as before. */
+export function approvalWindow(state: AwardState, when: (iso: string | null) => string): AddWindow {
   if (!state.award.is_active) return { open: false, reason: "This recognition is switched off." };
   if (state.phase !== "nominations" && state.phase !== "stage1") {
-    return { open: false, reason: "Chapters can be added only until scoring ends." };
+    return { open: false, reason: "Added chapters can be decided only until scoring ends." };
   }
   if (isPast(state.cycle.stage1_deadline)) {
-    return { open: false, reason: `Scoring closed on ${when(state.cycle.stage1_deadline)}, so no chapter can be added.` };
+    return { open: false, reason: `Scoring closed on ${when(state.cycle.stage1_deadline)}.` };
   }
   return { open: true };
 }

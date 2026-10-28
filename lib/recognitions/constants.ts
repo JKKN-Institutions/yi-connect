@@ -218,6 +218,8 @@ export const WORDS = {
   justification: 100,
   top3Rationale: 300,
   top3Citation: 250,
+  /** Stage 2: the NMT's reason for a chapter's final rank (Piyush, 28 Oct 2026). */
+  rankReason: 100,
 } as const;
 
 export const RANK_LABEL: Record<1 | 2 | 3, string> = {

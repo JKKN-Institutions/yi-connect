@@ -53,8 +53,9 @@ export function nmtAddCloses(cycle: { nomination_deadline: string | null }): str
 
 /**
  * Adding a chapter: NMT only, from the nomination deadline until
- * nmtAddCloses (and never after scoring closes). A Regional Mentor is
- * always refused with who to tell instead.
+ * nmtAddCloses (and never after scoring closes), even when every mark for
+ * the recognition is already in. A Regional Mentor is always refused with
+ * who to tell instead.
  */
 export function evaluatorAddWindow(
   state: AwardState,
@@ -79,7 +80,14 @@ export function evaluatorAddWindow(
   if (isPast(closes) || isPast(state.cycle.stage1_deadline)) {
     return { open: false, reason: `The window to add a missed chapter closed on ${when(closes)}.` };
   }
-  if (state.phase !== "stage1") return { open: false, reason: "Chapters can be added only while Stage 1 scoring runs." };
+  // The dates above are the real limit. Stage 1 may already be complete for this
+  // recognition (every mark in): an add reopens it, because the new chapter is
+  // unscored. Not once the NMT leader has force-unlocked Stage 2 (the new
+  // chapter could never be scored) or started a moderation.
+  const stage1Done = state.phase === "stage2" && !state.latestVersion && !state.award.stage2_unlocked_at;
+  if (state.phase !== "stage1" && !stage1Done) {
+    return { open: false, reason: "Chapters can no longer be added: Stage 2 moderation has started for this recognition." };
+  }
   return { open: true };
 }
 

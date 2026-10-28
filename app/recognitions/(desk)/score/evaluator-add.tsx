@@ -67,7 +67,7 @@ export function AddChapterForDuty({
         <p className="rx-small rx-mute">
           {layer === "rm"
             ? `Put forward a chapter of region ${region ?? ""} that has done great work for ${awardTitle} but did not apply. An NMT member of this recognition must approve it before it is scored.`
-            : `Put forward any chapter that has done great work for ${awardTitle} but did not apply. It goes straight onto the scoring sheets.`}{" "}
+            : `Put forward any chapter that has done great work for ${awardTitle} but did not apply. It goes straight onto the scoring sheets. Regional Mentors and Regional Chairs tell you about chapters they think are missing.`}{" "}
           Open until {closesAt}.
         </p>
         {options.length === 0 ? (

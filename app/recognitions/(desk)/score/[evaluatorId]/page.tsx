@@ -7,7 +7,7 @@ import {
   listScoresForDuty,
   nominationsForDuty,
 } from "@/lib/recognitions/data";
-import { CATEGORY_LABEL, CHECK_STEP_ENABLED, PARAM_KEYS, type ParamKey } from "@/lib/recognitions/constants";
+import { CATEGORIES, CATEGORY_LABEL, CHECK_STEP_ENABLED, PARAM_KEYS, type ParamKey } from "@/lib/recognitions/constants";
 import { Ribbon } from "../../../_ui/ribbon";
 import { IconArrowLeft, IconArrowRight, IconDownload, IconEyeOff, IconLock } from "../../../_ui/icons";
 import { Deadline, NoAccess, Notice, PageHead, Seal, formatWhen } from "../../../_ui/primitives";
@@ -168,9 +168,17 @@ export default async function ScoringSheetPage({
   const firstOpen = visible.find((n) => mine.get(n.id)?.status !== "submitted");
   // An unknown or hidden ?n= falls back silently; it never reveals another chapter.
   const current = visible.find((n) => n.id === wanted) ?? firstOpen ?? visible[0];
-  const index = visible.findIndex((n) => n.id === current.id);
-  const prev = index > 0 ? visible[index - 1] : null;
-  const next = index < visible.length - 1 ? visible[index + 1] : null;
+  // Pioneers / Trailblazers / Sparks as tabs (Piyush, 28 Oct 2026): the strip
+  // and Previous / Next stay inside the current chapter's category.
+  const inCat = visible.filter((n) => n.category === current.category);
+  const index = inCat.findIndex((n) => n.id === current.id);
+  const prev = index > 0 ? inCat[index - 1] : null;
+  const next = index < inCat.length - 1 ? inCat[index + 1] : null;
+  const tabs = CATEGORIES.map((c) => {
+    const mineInCat = visible.filter((n) => n.category === c);
+    const target = mineInCat.find((n) => mine.get(n.id)?.status !== "submitted") ?? mineInCat[0] ?? null;
+    return { category: c, count: mineInCat.length, target };
+  });
   const score = mine.get(current.id) ?? null;
   const submitted = score?.status === "submitted";
   // Per chapter: one National Leadership added is scored during re-evaluation (recognitions_03).
@@ -187,7 +195,7 @@ export default async function ScoringSheetPage({
   const hc = await loadAwardHealthCard(award);
   const hcCard = hc.byChapter.get(current.chapter_id) ?? null;
   const href = (id: string) => `/recognitions/score/${duty.id}?n=${id}`;
-  const doneCount = visible.filter((n) => mine.get(n.id)?.status === "submitted").length;
+  const doneCount = inCat.filter((n) => mine.get(n.id)?.status === "submitted").length;
 
   const initialParams: Partial<Record<ParamKey, number>> = {};
   for (const k of PARAM_KEYS) {
@@ -202,14 +210,34 @@ export default async function ScoringSheetPage({
 
       <div className="rx-stack-lg">
         {/* Deck strip: jump between the chapters on this sheet. */}
+        <nav className="rx-cat-tabs" aria-label="Chapter categories">
+          {tabs.map((t) =>
+            t.target ? (
+              <Link
+                key={t.category}
+                href={href(t.target.id)}
+                className="rx-cat-tab"
+                aria-current={t.category === current.category ? "page" : undefined}
+              >
+                {CATEGORY_LABEL[t.category]}
+                <span className="rx-cat-tab-n rx-num">{t.count}</span>
+              </Link>
+            ) : (
+              <span key={t.category} className="rx-cat-tab" aria-disabled="true" title={`No ${CATEGORY_LABEL[t.category]} chapter on your sheet`}>
+                {CATEGORY_LABEL[t.category]}
+                <span className="rx-cat-tab-n rx-num">0</span>
+              </span>
+            )
+          )}
+        </nav>
         <nav className="rx-stack" style={{ gap: 8 }} aria-label="Chapters on your sheet">
           <div className="rx-spread">
             <span className="rx-eyebrow">
-              Chapter {index + 1} of {visible.length} · {doneCount} submitted
+              {CATEGORY_LABEL[current.category]} · chapter {index + 1} of {inCat.length} · {doneCount} submitted
             </span>
           </div>
           <div className="rx-deck-strip">
-            {visible.map((n, i) => {
+            {inCat.map((n, i) => {
               const s = mine.get(n.id);
               const st = s?.status === "submitted" ? "submitted" : s ? "draft" : "none";
               return (

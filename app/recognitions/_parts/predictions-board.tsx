@@ -1,5 +1,6 @@
 import "./parts.css";
 import type { PredictionsView } from "./shared";
+import { CategoryPanel } from "./category-tabs";
 
 /**
  * Chapter sentiment & predictions (Phase 1B quiz). Not used in scoring.
@@ -21,7 +22,8 @@ export function PredictionsBoard({ view }: { view: PredictionsView }) {
           {view.map((c) => {
             const top = c.entries[0]?.votes ?? 0;
             return (
-              <div key={c.category} className="rx-plate rx-plate-tight rx-stack">
+              <CategoryPanel key={c.category} category={c.category}>
+              <div className="rx-plate rx-plate-tight rx-stack">
                 <div className="rx-spread">
                   <h3 className="rx-h3">{c.label}</h3>
                   <span className="rx-small rx-mute rx-num">
@@ -54,6 +56,7 @@ export function PredictionsBoard({ view }: { view: PredictionsView }) {
                   </ol>
                 )}
               </div>
+              </CategoryPanel>
             );
           })}
         </div>

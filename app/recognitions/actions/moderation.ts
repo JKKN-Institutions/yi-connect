@@ -16,7 +16,8 @@ import { isPast } from "@/lib/recognitions/phase";
 import { rxService } from "@/lib/recognitions/supabase";
 import type { ActionResult } from "@/lib/recognitions/types";
 import { formatWhen } from "@/app/recognitions/_ui/primitives";
-import { validateModeration, type ModerationInput } from "@/app/recognitions/_parts/shared";
+import { prefillFromMatrix, validateModeration, type ModerationInput } from "@/app/recognitions/_parts/shared";
+import { loadStage2 } from "@/app/recognitions/_parts/load";
 
 /**
  * Stage 2 moderation and Stage 3 re-evaluation (mail 1, Phases 3 and 5).
@@ -109,7 +110,9 @@ async function persist(awardId: string, input: ModerationInput, submit: boolean)
     }
   }
 
-  const checked = validateModeration(input, state.checkedNominations, chapters, submit);
+  // The combined matrix decides the final score and the "before Stage 2" rank (Piyush, 28 Oct 2026).
+  const provisional = prefillFromMatrix((await loadStage2(state, { withNames: false })).matrix);
+  const checked = validateModeration(input, state.checkedNominations, chapters, submit, provisional);
   if (!checked.ok) return { success: false, error: checked.error };
 
   const svc = rxService();

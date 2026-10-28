@@ -1,34 +1,62 @@
 import "./parts.css";
 import { Seal, formatWhen } from "../_ui/primitives";
 import { fmt } from "./combined-matrix";
-import type { HistoryView, RankingView } from "./shared";
+import { matrixRankLabel, rankMoved, type HistoryView, type RankingView } from "./shared";
 import { HomeNote, type HomeNotes } from "./home-note";
+import { CategoryPanel } from "./category-tabs";
+import { CATEGORIES, CATEGORY_LABEL } from "@/lib/recognitions/constants";
 
-/** One moderation version's final ranking and podium, read-only. */
+/**
+ * One moderation version's final ranking and podium, read-only. Shows the
+ * rank before Stage 2 beside the final rank, and the NMT's reason
+ * (Piyush, 28 Oct 2026).
+ */
 export function RankingTable({ view, home }: { view: RankingView; home?: HomeNotes }) {
   if (view.length === 0) return <p className="rx-mute rx-small">No ranking entered in this version.</p>;
   return (
     <div className="rx-stack">
+      {CATEGORIES.filter((c) => !view.some((v) => v.category === c)).map((c) => (
+        <CategoryPanel key={c} category={c} tabsOnly>
+          <p className="rx-mute rx-small">No {CATEGORY_LABEL[c]} chapter was ranked in this version.</p>
+        </CategoryPanel>
+      ))}
       {view.map((cat) => (
-        <div key={cat.category} className="rx-stack">
+        <CategoryPanel key={cat.category} category={cat.category}>
+        <div className="rx-stack">
           <h3 className="rx-h3">{cat.label}</h3>
           <div className="rx-ledger-wrap">
             <table className="rx-ledger">
               <thead>
                 <tr>
-                  <th className="rx-num">Final rank</th>
-                  <th>Chapter</th>
+                  <th className="rx-num rx-th-wrap">Final rank</th>
+                  <th className="rx-num rx-th-wrap">Before Stage 2</th>
+                  <th>Chapter and reason</th>
                   <th>Region</th>
-                  <th className="rx-num">Final score</th>
+                  <th className="rx-num">Weighted total</th>
                 </tr>
               </thead>
               <tbody>
                 {cat.entries.map((e) => (
                   <tr key={e.nominationId}>
-                    <td className="rx-num">{e.finalRank ?? "—"}</td>
-                    <td>
+                    <td className="rx-num">
+                      <strong>{e.finalRank ?? "—"}</strong>
+                      {e.computedRank !== null && e.finalRank !== null && rankMoved(e.finalRank, e.computedRank, e.computedTie) ? (
+                        <span className="rx-small rx-rank-move" style={{ display: "block", whiteSpace: "nowrap" }}>
+                          {e.finalRank < e.computedRank ? "Up" : "Down"}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="rx-num rx-mute">
+                      {e.computedRank === null ? "—" : matrixRankLabel(e.computedRank, e.computedTie)}
+                    </td>
+                    <td style={{ minWidth: "13em" }}>
                       {e.chapterName}
                       <HomeNote names={home?.[e.chapterName]} />
+                      {e.reason ? (
+                        <p className="rx-small rx-p-text" style={{ margin: "4px 0 0" }}>{e.reason}</p>
+                      ) : (
+                        <div className="rx-small rx-mute">No reason written</div>
+                      )}
                     </td>
                     <td>{e.region}</td>
                     <td className="rx-num">{fmt(e.finalScore)}</td>
@@ -59,6 +87,7 @@ export function RankingTable({ view, home }: { view: RankingView; home?: HomeNot
             </div>
           ) : null}
         </div>
+        </CategoryPanel>
       ))}
     </div>
   );

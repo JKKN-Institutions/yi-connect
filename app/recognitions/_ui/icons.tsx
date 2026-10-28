@@ -25,24 +25,22 @@ function Svg({ size = 18, className, title, children }: P & { children: React.Re
   );
 }
 
-/** The Young Indians mark (from the official logo), shown beside the medal. */
-export function YiMark({ height = 26 }: { height?: number }) {
-  return (
-    // eslint-disable-next-line @next/next/no-img-element -- static asset; the recognitions host does not serve the image optimizer
-    <img src="/recognitions-assets/yi-mark.png" alt="Young Indians" height={height} width={Math.round((height * 147) / 160)} style={{ display: "block" }} />
-  );
-}
+/**
+ * The header's logo row, in Piyush's order (28 Oct): Yi, One Bharat, Take Pride, CII.
+ * Only the Yi file is in hand; add each of the other three here once it is shared.
+ */
+const PARTNER_LOGOS: Array<{ src: string; alt: string; ratio: number }> = [
+  { src: "/recognitions-assets/yi-mark.png", alt: "Young Indians", ratio: 147 / 160 },
+];
 
-/** The mark: a medal on a split ribbon. */
-export function MedalMark({ size = 26 }: { size?: number }) {
+export function PartnerMarks({ height = 26 }: { height?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-      <path d="M9 2h6l3 9h-6z" fill="#1f5a43" />
-      <path d="M23 2h-6l-3 9h6z" fill="#12372a" />
-      <circle cx="16" cy="20" r="9" fill="#b4862f" />
-      <circle cx="16" cy="20" r="6.2" fill="none" stroke="#f6f1e4" strokeWidth="1.2" />
-      <path d="M16 15.8l1.3 2.7 2.9.4-2.1 2 .5 2.9-2.6-1.4-2.6 1.4.5-2.9-2.1-2 2.9-.4z" fill="#f6f1e4" />
-    </svg>
+    <span className="rx-partners">
+      {PARTNER_LOGOS.map((l) => (
+        // eslint-disable-next-line @next/next/no-img-element -- static asset; the recognitions host does not serve the image optimizer
+        <img key={l.src} src={l.src} alt={l.alt} height={height} width={Math.round(height * l.ratio)} style={{ display: "block" }} />
+      ))}
+    </span>
   );
 }
 

@@ -17,6 +17,8 @@ import { mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
 import { ScoreSheet } from "./sheet";
 import { FlagToggle } from "./flags";
 import { HealthCardPanel } from "./health-card-panel";
+import { ConflictPanel, type ConflictRow } from "./conflicts";
+import { dutySeesNomination } from "@/lib/recognitions/scoring";
 import { loadAwardHealthCard } from "@/lib/recognitions/health-card";
 import { CheckList } from "../../check/check-list";
 import { loadCheckItems } from "../../check/load";
@@ -60,6 +62,28 @@ export default async function ScoringSheetPage({
   const rescore = mentorRescoreOpen(state) && duty.layer === "rm";
   const sight = scoreSight(state, gate.viewer.duties);
   const latestSendBack = state.sendBacks[0] ?? null;
+
+  const chapters = await chapterMap();
+  const nameOf = (id: string) => chapters.get(id)?.name ?? "Unnamed chapter";
+  // BLIND: this duty's own scores only.
+  const myScores = await listScoresForDuty(duty.id);
+
+  // Self-declared conflicts (Piyush, 28 Oct): every chapter this duty would score before the conflict rule.
+  const declared = new Set(duty.conflict_chapter_ids ?? []);
+  const blocked = state.conflictsByDuty.get(duty.id) ?? new Set<string>();
+  const scoredChapters = new Set(
+    myScores.filter((s) => s.status === "submitted").map((s) => state.nominations.find((n) => n.id === s.nomination_id)?.chapter_id)
+  );
+  const conflictRows: ConflictRow[] = [
+    ...new Set(state.nominations.filter((n) => dutySeesNomination(duty, n, new Set())).map((n) => n.chapter_id)),
+  ]
+    .map((id) => ({
+      chapterId: id,
+      name: nameOf(id),
+      locked: declared.has(id) ? "declared" : blocked.has(id) ? "role" : scoredChapters.has(id) ? "scored" : null,
+    }) satisfies ConflictRow)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const conflictPanel = <ConflictPanel evaluatorId={duty.id} rows={conflictRows} />;
 
   // RM only: the nominations from this region still waiting for a check, with
   // the same Pass / Send back controls as the Check desk. Only nominations
@@ -130,6 +154,7 @@ export default async function ScoringSheetPage({
       <div>
         {head}
         {checkPanel}
+        {conflictPanel}
         <Notice>
           {cycle.nomination_deadline
             ? `Scoring opens when nominations close on ${formatWhen(cycle.nomination_deadline)}.`
@@ -140,8 +165,6 @@ export default async function ScoringSheetPage({
   }
 
   // Only the chapters this duty may see (region + conflict rule), alphabetical.
-  const chapters = await chapterMap();
-  const nameOf = (id: string) => chapters.get(id)?.name ?? "Unnamed chapter";
   const visible = nominationsForDuty(state, duty).sort((a, b) =>
     nameOf(a.chapter_id).localeCompare(nameOf(b.chapter_id))
   );
@@ -151,6 +174,7 @@ export default async function ScoringSheetPage({
       <div>
         {head}
         {checkPanel}
+        {conflictPanel}
         <div className="rx-plate rx-stack">
           <h2 className="rx-h2">No chapters on your sheet</h2>
           <p className="rx-mute">
@@ -163,8 +187,7 @@ export default async function ScoringSheetPage({
     );
   }
 
-  // BLIND: this duty's own scores only.
-  const mine = new Map((await listScoresForDuty(duty.id)).map((s) => [s.nomination_id, s]));
+  const mine = new Map(myScores.map((s) => [s.nomination_id, s]));
   const firstOpen = visible.find((n) => mine.get(n.id)?.status !== "submitted");
   // An unknown or hidden ?n= falls back silently; it never reveals another chapter.
   const current = visible.find((n) => n.id === wanted) ?? firstOpen ?? visible[0];
@@ -199,6 +222,7 @@ export default async function ScoringSheetPage({
     <div>
       {head}
       {checkPanel}
+      {conflictPanel}
 
       <div className="rx-stack-lg">
         {/* Deck strip: jump between the chapters on this sheet. */}

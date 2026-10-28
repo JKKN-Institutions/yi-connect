@@ -2,6 +2,7 @@ import "./parts.css";
 import { CHECK_STEP_ENABLED } from "@/lib/recognitions/constants";
 import type { DossierView, MatrixView, MatrixViewRow, RationaleView } from "./shared";
 import { HomeNote, type HomeNotes } from "./home-note";
+import { CategoryPanel } from "./category-tabs";
 
 export function fmt(n: number | null | undefined, dp = 2): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return "—";
@@ -37,9 +38,14 @@ export function CombinedMatrix({ view, home }: { view: MatrixView; home?: HomeNo
         <p className="rx-mute">No nomination for this recognition is in the race.</p>
       ) : null}
       {view.categories
-        .filter((c) => c.rows.length > 0)
-        .map((cat) => (
-          <div key={cat.category} className="rx-stack">
+        .map((cat) =>
+          cat.rows.length === 0 ? (
+            <CategoryPanel key={cat.category} category={cat.category} tabsOnly>
+              <p className="rx-mute">No {cat.label} chapter is in the race for this recognition.</p>
+            </CategoryPanel>
+          ) : (
+          <CategoryPanel key={cat.category} category={cat.category}>
+          <div className="rx-stack">
             <h3 className="rx-h3">
               {cat.label} <span className="rx-mute rx-small">· {cat.rows.length} nomination{cat.rows.length === 1 ? "" : "s"}</span>
             </h3>
@@ -104,7 +110,9 @@ export function CombinedMatrix({ view, home }: { view: MatrixView; home?: HomeNo
               ))}
             </div>
           </div>
-        ))}
+          </CategoryPanel>
+          )
+        )}
     </section>
   );
 }

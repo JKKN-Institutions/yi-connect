@@ -7,6 +7,7 @@ import {
   ADD_REASON_CHARS,
   ADD_REASON_WORDS,
   chapterAddVerdict,
+  approvalWindow,
   evaluatorAddWindow,
   pendingApprovalsFor,
 } from "@/lib/recognitions/evaluator-add";
@@ -16,8 +17,9 @@ import type { ActionResult } from "@/lib/recognitions/types";
 import { formatWhen } from "../_ui/primitives";
 
 /**
- * Regional Mentors and the NMT put forward a chapter that did not apply
- * (recognitions_05, Piyush 15 Oct 2026). A Mentor's addition waits for an
+ * The NMT puts forward a chapter that did not apply, in the days after
+ * nominations close (Piyush 28 Oct 2026; Mentors no longer add). Earlier
+ * rule, recognitions_05 (Piyush 15 Oct 2026): A Mentor's addition waits for an
  * NMT member's approval; an NMT member's goes straight into the race. An
  * NMT member may decline a Mentor's addition with a reason; the row and its
  * history stay. Every write is audited; every denial is { success:false }.
@@ -41,14 +43,15 @@ function writeFailed(what: string, message: string | undefined, code?: string): 
   return { success: false, error: `Couldn't ${what} just now. Try again; if it keeps failing, tell the Recognitions super admin.` };
 }
 
-async function load(evaluatorId: string): Promise<
+async function load(evaluatorId: string, purpose: "add" | "decide"): Promise<
   { ok: true; duty: RxDuty; personId: string; state: AwardState } | { ok: false; error: string }
 > {
   const gate = await requireRxDuty(typeof evaluatorId === "string" ? evaluatorId : "");
   if (!gate.ok) return { ok: false, error: gate.error };
   const state = await getAwardState(gate.value.award_id);
   if (!state) return { ok: false, error: "This recognition no longer exists. Reload the page." };
-  const win = evaluatorAddWindow(state, formatWhen);
+  const win =
+    purpose === "add" ? evaluatorAddWindow(state, formatWhen, gate.value.layer) : approvalWindow(state, formatWhen);
   if (!win.open) return { ok: false, error: win.reason };
   return { ok: true, duty: gate.value, personId: gate.viewer.personId, state };
 }
@@ -58,7 +61,7 @@ export async function addChapterAsEvaluator(evaluatorId: string, chapterId: stri
   const r = cleanText(reason, "why this chapter deserves to be considered");
   if (!r.ok) return { success: false, error: r.error };
   if (typeof chapterId !== "string" || chapterId === "") return { success: false, error: "Pick a chapter first." };
-  const loaded = await load(evaluatorId);
+  const loaded = await load(evaluatorId, "add");
   if (!loaded.ok) return { success: false, error: loaded.error };
   const { duty, personId, state } = loaded;
 
@@ -115,7 +118,7 @@ export async function addChapterAsEvaluator(evaluatorId: string, chapterId: stri
 
 /** Shared checks for an NMT member deciding on a Mentor's added chapter. */
 async function decisionContext(evaluatorId: string, nominationId: string) {
-  const loaded = await load(evaluatorId);
+  const loaded = await load(evaluatorId, "decide");
   if (!loaded.ok) return loaded;
   const { duty, state } = loaded;
   if (duty.layer !== "nmt") {

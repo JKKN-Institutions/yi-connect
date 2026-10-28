@@ -12,7 +12,8 @@ import { CombinedMatrix, Dossier } from "@/app/recognitions/_parts/combined-matr
 import { PredictionsBoard } from "@/app/recognitions/_parts/predictions-board";
 import { RankingTable, VersionHistory } from "@/app/recognitions/_parts/ranking-view";
 import { loadStage2 } from "@/app/recognitions/_parts/load";
-import { buildRankingView, chapterName, dossierOf } from "@/app/recognitions/_parts/shared";
+import { buildRankingView, chapterName, dossierOf, prefillFromMatrix } from "@/app/recognitions/_parts/shared";
+import { CategoryPanel, CategoryTabs } from "@/app/recognitions/_parts/category-tabs";
 import { DecisionPanel } from "./decision-panel";
 import { AddChapterPanel, AddedFixForm } from "./add-chapter";
 import { addableChapters, addWindow } from "@/lib/recognitions/nl-add";
@@ -85,10 +86,17 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
 
   const finalVersion = state.latestSubmittedVersion;
   const finalView = finalVersion
-    ? buildRankingView(finalVersion, state.nominations, data.chapters, (category, rank, fallback) =>
-        effectiveText(edits, finalVersion.id, "citation", category, rank, fallback)
+    ? buildRankingView(
+        finalVersion,
+        state.nominations,
+        data.chapters,
+        (category, rank, fallback) => effectiveText(edits, finalVersion.id, "citation", category, rank, fallback),
+        prefillFromMatrix(data.matrix)
       )
     : [];
+  const counts = Object.fromEntries(
+    CATEGORIES.map((c) => [c, state.checkedNominations.filter((n) => n.category === c).length])
+  );
 
   return (
     <div className="rx-stack-lg">
@@ -191,6 +199,8 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
         </section>
       ) : null}
 
+      {/* Pioneers / Trailblazers / Sparks tabs over both summaries (Piyush, 28 Oct 2026). */}
+      <CategoryTabs counts={counts}>
       {/* ------------------------------------------------ Stage 1 summary */}
       <section className="rx-stack" aria-labelledby="rx-s1">
         <h2 className="rx-h1" id="rx-s1" style={{ fontSize: "1.7rem" }}>Stage 1 summary</h2>
@@ -206,9 +216,16 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
             const noms = state.checkedNominations
               .filter((n) => n.category === category)
               .sort((a, b) => chapterName(data.chapters, a.chapter_id).localeCompare(chapterName(data.chapters, b.chapter_id)));
-            if (noms.length === 0) return null;
+            if (noms.length === 0) {
+              return (
+                <CategoryPanel key={category} category={category} tabsOnly>
+                  <p className="rx-mute">No {CATEGORY_LABEL[category]} chapter is in the race for this recognition.</p>
+                </CategoryPanel>
+              );
+            }
             return (
-              <div key={category} className="rx-stack">
+              <CategoryPanel key={category} category={category}>
+              <div className="rx-stack">
                 <h3 className="rx-h3">{CATEGORY_LABEL[category]}</h3>
                 <div>
                   {noms.map((n) => {
@@ -342,6 +359,7 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
                   })}
                 </div>
               </div>
+              </CategoryPanel>
             );
           })
         )}
@@ -388,12 +406,13 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
         <CombinedMatrix view={data.matrix} home={home} />
 
         <section className="rx-stack" aria-labelledby="rx-s2-final">
-          <h2 className="rx-h2" id="rx-s2-final">Final rankings, top 3 rationales and citations</h2>
+          <h2 className="rx-h2" id="rx-s2-final">Final ranking: before and after Stage 2, with the NMT&apos;s reasons</h2>
           {finalVersion ? (
             <>
               <p className="rx-small rx-mute">
-                Version {finalVersion.version}, submitted {formatWhen(finalVersion.submitted_at)}. Citations show the
-                super admin&apos;s polished text where there is one.
+                Version {finalVersion.version}, submitted {formatWhen(finalVersion.submitted_at)}. &quot;Rank before Stage
+                2&quot; is the combined matrix; the final rank is the NMT&apos;s, after the call with the Regional Mentors.
+                Citations show the super admin&apos;s polished text where there is one.
               </p>
               <RankingTable view={finalView} home={home} />
             </>
@@ -405,6 +424,7 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
         <PredictionsBoard view={data.predictions} />
         <VersionHistory history={data.history} />
       </section>
+      </CategoryTabs>
     </div>
   );
 }

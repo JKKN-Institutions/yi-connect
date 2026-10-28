@@ -12,6 +12,7 @@ import { PredictionsBoard } from "@/app/recognitions/_parts/predictions-board";
 import { RankingTable, VersionHistory } from "@/app/recognitions/_parts/ranking-view";
 import { loadStage2 } from "@/app/recognitions/_parts/load";
 import { buildRankingView, prefillFromMatrix } from "@/app/recognitions/_parts/shared";
+import { CategoryTabs } from "@/app/recognitions/_parts/category-tabs";
 import { STAGE2_LOCKED } from "../copy";
 import { ModerationForm, type FormCategory, type FormInitial } from "./moderation-form";
 import { ReopenButton } from "./reopen-button";
@@ -96,9 +97,9 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
 
   // Form data: rows from the matrix, prefilled from the open draft or the computed totals.
   let formCategories: FormCategory[] = [];
-  const initial: FormInitial = { scores: {}, ranks: {}, texts: {} };
+  const initial: FormInitial = { ranks: {}, reasons: {}, texts: {} };
+  const prefill = prefillFromMatrix(data.matrix);
   if (canEdit) {
-    const prefill = prefillFromMatrix(data.matrix);
     formCategories = data.matrix.categories
       .filter((c) => c.rows.length > 0)
       .map((c) => ({
@@ -109,7 +110,9 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
           chapterName: r.chapterName,
           region: r.region,
           computedTotal: r.total,
-          computedRank: r.rank,
+          // The matrix rank (ties share it) and how many chapters share it.
+          computedRank: prefill[r.nominationId]?.matrixRank ?? r.rank,
+          tieSize: prefill[r.nominationId]?.tieSize ?? 1,
         })),
       }));
     const draft = draftOpen ? latest : null;
@@ -117,11 +120,11 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
       for (const r of c.rows) {
         const saved = draft?.rankings.find((x) => x.nomination_id === r.nominationId);
         if (draft) {
-          initial.scores[r.nominationId] = saved?.final_score != null ? String(saved.final_score) : "";
           initial.ranks[r.nominationId] = saved?.final_rank != null ? String(saved.final_rank) : "";
+          initial.reasons[r.nominationId] = saved?.reason ?? "";
         } else {
-          initial.scores[r.nominationId] = prefill[r.nominationId]?.score.toFixed(2) ?? "";
           initial.ranks[r.nominationId] = prefill[r.nominationId] ? String(prefill[r.nominationId].rank) : "";
+          initial.reasons[r.nominationId] = "";
         }
       }
     }
@@ -167,6 +170,7 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
         ) : null}
       </div>
 
+      <CategoryTabs counts={Object.fromEntries(data.matrix.categories.map((c) => [c.category, c.rows.length]))}>
       <CombinedMatrix view={data.matrix} home={home} />
       <PredictionsBoard view={data.predictions} />
 
@@ -183,8 +187,8 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
             <p className="rx-small rx-mute">
               {draftOpen
                 ? `You are editing draft version ${latest!.version}.`
-                : "Scores and ranks are prefilled from the combined matrix. Change them after the team meeting."}{" "}
-              The top three in each category need a rationale and a citation.
+                : "Ranks are prefilled from the combined matrix. Change them on the call with the Regional Mentors, and say why for every chapter that moves."}{" "}
+              The 3 finalists in each category also need a rationale and a citation.
             </p>
             {formCategories.length === 0 ? (
               <p className="rx-mute">No nomination is in the race, so there is nothing to rank.</p>
@@ -212,13 +216,17 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
         {shownVersion && !canEdit ? (
           <div className="rx-stack">
             <div className="rx-eyebrow">Latest submitted · version {shownVersion.version}</div>
-            <RankingTable view={buildRankingView(shownVersion, state.nominations, data.chapters)} home={home} />
+            <RankingTable
+              view={buildRankingView(shownVersion, state.nominations, data.chapters, undefined, prefill)}
+              home={home}
+            />
           </div>
         ) : null}
         {!shownVersion && !canEdit ? (
           <p className="rx-mute">The NMT leader hasn&apos;t submitted a ranking yet.</p>
         ) : null}
       </section>
+      </CategoryTabs>
 
       {canSendBack ? <MentorSendBackPanel awardId={award.id} closesAt={formatWhen(cycle.stage2_deadline)} /> : null}
       <SendBackHistory

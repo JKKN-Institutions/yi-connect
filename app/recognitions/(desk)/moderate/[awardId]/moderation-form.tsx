@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { RANK_LABEL, WORDS, type Category } from "@/lib/recognitions/constants";
+import { CATEGORIES, CATEGORY_LABEL, RANK_LABEL, WORDS, type Category } from "@/lib/recognitions/constants";
 import { ConfirmDialog, ResultLine, WordField } from "@/app/recognitions/_ui/client";
 import { saveModerationDraft, submitModeration } from "@/app/recognitions/actions/moderation";
 import { matrixRankLabel, rankMoved, type ModerationInput } from "@/app/recognitions/_parts/shared";
@@ -95,6 +95,11 @@ export function ModerationForm({
 
   return (
     <div className="rx-stack-lg">
+      {CATEGORIES.filter((c) => !categories.some((x) => x.category === c)).map((c) => (
+        <CategoryPanel key={c} category={c} tabsOnly>
+          <p className="rx-mute">No {CATEGORY_LABEL[c]} chapter is in the race, so there is nothing to rank on this tab.</p>
+        </CategoryPanel>
+      ))}
       {categories.map((cat) => {
         const places = Math.min(3, cat.rows.length);
         return (

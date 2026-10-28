@@ -4,6 +4,7 @@ import { fmt } from "./combined-matrix";
 import { matrixRankLabel, rankMoved, type HistoryView, type RankingView } from "./shared";
 import { HomeNote, type HomeNotes } from "./home-note";
 import { CategoryPanel } from "./category-tabs";
+import { CATEGORIES, CATEGORY_LABEL } from "@/lib/recognitions/constants";
 
 /**
  * One moderation version's final ranking and podium, read-only. Shows the
@@ -14,6 +15,11 @@ export function RankingTable({ view, home }: { view: RankingView; home?: HomeNot
   if (view.length === 0) return <p className="rx-mute rx-small">No ranking entered in this version.</p>;
   return (
     <div className="rx-stack">
+      {CATEGORIES.filter((c) => !view.some((v) => v.category === c)).map((c) => (
+        <CategoryPanel key={c} category={c} tabsOnly>
+          <p className="rx-mute rx-small">No {CATEGORY_LABEL[c]} chapter was ranked in this version.</p>
+        </CategoryPanel>
+      ))}
       {view.map((cat) => (
         <CategoryPanel key={cat.category} category={cat.category}>
         <div className="rx-stack">

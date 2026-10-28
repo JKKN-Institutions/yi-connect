@@ -473,18 +473,18 @@ export function validateModeration(
       const t = textBy.get(holders[0].nomination_id) ?? { rationale: "", citation: "" };
       const rw = countWords(t.rationale);
       const cw = countWords(t.citation);
-      if (strict && rw === 0) return { ok: false, error: `Write "Why ${label}?" for the ${where}.` };
-      if (strict && cw === 0) return { ok: false, error: `Write the ${label} citation for the ${where}.` };
+      if (strict && rw === 0) return { ok: false, error: `Write "Why this finalist?" for the ${where}.` };
+      if (strict && cw === 0) return { ok: false, error: `Write the citation for the ${where}.` };
       if (rw > WORDS.top3Rationale || t.rationale.length > MAX_RATIONALE_CHARS) {
         return {
           ok: false,
-          error: `"Why ${label}?" for the ${where} is ${rw} words. Cut it to ${WORDS.top3Rationale} or fewer.`,
+          error: `"Why this finalist?" for the ${where} is ${rw} words. Cut it to ${WORDS.top3Rationale} or fewer.`,
         };
       }
       if (cw > WORDS.top3Citation || t.citation.length > MAX_CITATION_CHARS) {
         return {
           ok: false,
-          error: `The ${label} citation for the ${where} is ${cw} words. Cut it to ${WORDS.top3Citation} or fewer.`,
+          error: `The citation for the ${where} is ${cw} words. Cut it to ${WORDS.top3Citation} or fewer.`,
         };
       }
       top3.push({ category, rank, nomination_id: holders[0].nomination_id, rationale: t.rationale, citation: t.citation });

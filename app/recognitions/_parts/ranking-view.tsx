@@ -42,11 +42,11 @@ export function RankingTable({ view }: { view: RankingView }) {
                     <div className="rx-h2">{p.chapterName}</div>
                   </div>
                   <div>
-                    <div className="rx-small rx-mute">Why {p.placeLabel}?</div>
+                    <div className="rx-small rx-mute">Why this finalist?</div>
                     <p className="rx-p-text rx-small">{p.rationale || "Not written yet."}</p>
                   </div>
                   <div>
-                    <div className="rx-small rx-mute">{p.placeLabel} citation</div>
+                    <div className="rx-small rx-mute">Citation</div>
                     <p className="rx-p-quote rx-small">{p.citation || "Not written yet."}</p>
                   </div>
                 </article>

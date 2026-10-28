@@ -162,7 +162,7 @@ export function ModerationForm({
                       <div className="rx-eyebrow">{label}</div>
                       <p className="rx-small rx-mute">
                         {holders.length === 0
-                          ? `Give one chapter final rank ${place} to write its ${label.toLowerCase()} rationale and citation.`
+                          ? `Give one chapter final rank ${place} to write its rationale and citation.`
                           : `${holders.length} chapters have final rank ${place}. Only one can.`}
                       </p>
                     </article>
@@ -177,7 +177,7 @@ export function ModerationForm({
                       <div className="rx-h2">{h.chapterName}</div>
                     </div>
                     <WordField
-                      label={`Why ${label}?`}
+                      label="Why this finalist?"
                       value={t.rationale}
                       onChange={(v) => setText(h.nominationId, "rationale", v)}
                       limit={WORDS.top3Rationale}
@@ -185,7 +185,7 @@ export function ModerationForm({
                       help="Required. The strong rationale for this place, based on the team meeting."
                     />
                     <WordField
-                      label={`${label} citation`}
+                      label="Citation"
                       value={t.citation}
                       onChange={(v) => setText(h.nominationId, "citation", v)}
                       limit={WORDS.top3Citation}

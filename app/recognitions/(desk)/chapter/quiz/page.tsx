@@ -39,7 +39,7 @@ export default async function QuizPage({
         </Link>
       </div>
       <p className="rx-small">
-        For every recognition and category, pick the chapter you think will get the Gold. You may pick your own chapter.{" "}
+        For every recognition and category, pick the chapter you think will receive the recognition. You may pick your own chapter.{" "}
         <strong>Not used in scoring.</strong>
       </p>
     </PageHead>

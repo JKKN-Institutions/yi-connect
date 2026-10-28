@@ -40,8 +40,8 @@ export function CategoryPanel({ category, rivals }: { category: Category | null;
         </>
       )}
       <p className="rx-small rx-mute">
-        Chapters in {others.join(" and ")} are evaluated separately. Each category gets its own Gold, Silver and
-        Bronze for every recognition.
+        Chapters in {others.join(" and ")} are evaluated separately. Each category has its own 3 finalists for every
+        recognition.
       </p>
     </section>
   );

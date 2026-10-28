@@ -19,6 +19,7 @@ import {
 } from "@/lib/yip/scoring-roles";
 import { fetchEventRoundLevel, type RoundLevel } from "@/lib/yip/round-level";
 import { resolveAwardsForLevel } from "@/lib/yip/awards";
+import { OFFICIAL_DUTY_ROLES } from "@/lib/yip/constants";
 import { listScoringBuckets } from "./scoring-buckets";
 import { getScoringFlagsConfig } from "./scoring-flags";
 import { getSessionScoringParams } from "./scoring";
@@ -1277,6 +1278,13 @@ export async function computeResults(
         return isIndependent;
       case "no_disciplinary":
         return (_p, r) => !r.hasDisciplinary;
+      // Competing Members only: excludes the Speaker and the House officials
+      // (Journalist / Administrator), who are scored on their own national
+      // sheet and must not take an MP award with that single-sheet score.
+      case "member":
+        return (p) =>
+          p.parliament_role !== "speaker" &&
+          !OFFICIAL_DUTY_ROLES.has(p.parliament_role ?? "");
       default:
         return all;
     }

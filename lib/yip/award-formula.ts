@@ -10,6 +10,7 @@ export const AWARD_ELIGIBILITIES = [
   "opposition",
   "independent",
   "no_disciplinary",
+  "member",
 ] as const;
 export type AwardEligibility = (typeof AWARD_ELIGIBILITIES)[number];
 
@@ -32,6 +33,7 @@ export const ELIGIBILITY_LABELS: Record<string, string> = {
   opposition: "Opposition bench",
   independent: "Independent MPs",
   no_disciplinary: "No disciplinary flag",
+  member: "Members only (not Speaker or House officials)",
 };
 export const RANK_MODE_LABELS: Record<string, string> = {
   family_sum: "Sum of criteria / families (uses the keys below)",

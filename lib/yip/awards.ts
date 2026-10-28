@@ -59,17 +59,40 @@ export const REGIONAL_AWARD_LABELS = [
   "Outstanding Committee Member",
 ] as const;
 
+/** The NATIONAL ROUND 2026 awards (Maria, 2026-10-25): 10 awards + 5 special
+ *  recognitions (scored, per the Tech Support Committee, 26 Oct). Seeded level-scoped '{national}' by
+ *  supabase/migrations/20261025171414_yip_national_round_2026_scoring.sql; labels verbatim. */
+export const NATIONAL_AWARD_LABELS = [
+  "National Best Parliamentarian Award",
+  "Best Speaker of the House Award",
+  "National Parliamentary Leadership Award",
+  "Best Treasury Bench Parliamentarian Award",
+  "Best Opposition Parliamentarian Award",
+  "Excellence in Parliamentary Conduct Award",
+  "Best Parliamentary Journalist – National Finals",
+  "Best Parliamentary Administrator – National Finals",
+  "Best Private Member's Bill Award",
+  "King Maker Award (Political Strategist)",
+  "Best Debater – National Finals",
+  "Best Zero Hour – National Finals",
+  "Best Question Hour – National Finals",
+  "Best Minister – National Finals",
+  "Best Committee Member – National Finals",
+] as const;
+
 export type AwardLabel =
   | (typeof AWARD_LABELS)[number]
-  | (typeof REGIONAL_AWARD_LABELS)[number];
+  | (typeof REGIONAL_AWARD_LABELS)[number]
+  | (typeof NATIONAL_AWARD_LABELS)[number];
 
 /** Every label the manual-override path accepts, across all round levels. */
-export const ALL_AWARD_LABELS: readonly string[] = [
-  ...AWARD_LABELS,
-  ...REGIONAL_AWARD_LABELS.filter(
-    (l) => !(AWARD_LABELS as readonly string[]).includes(l)
-  ),
-];
+export const ALL_AWARD_LABELS: readonly string[] = Array.from(
+  new Set<string>([
+    ...AWARD_LABELS,
+    ...REGIONAL_AWARD_LABELS,
+    ...NATIONAL_AWARD_LABELS,
+  ])
+);
 
 export function isAwardLabel(value: string): value is AwardLabel {
   return ALL_AWARD_LABELS.includes(value);

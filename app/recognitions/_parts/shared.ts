@@ -478,10 +478,16 @@ export function validateModeration(
       rank = k;
     }
     const words = countWords(g.reason);
-    if (words > WORDS.rankReason || g.reason.length > MAX_RANK_REASON_CHARS) {
+    if (words > WORDS.rankReason) {
       return {
         ok: false,
         error: `The reason for ${nameOf(n)}'s rank is ${words} words. Cut it to ${WORDS.rankReason} or fewer.`,
+      };
+    }
+    if (g.reason.length > MAX_RANK_REASON_CHARS) {
+      return {
+        ok: false,
+        error: `The reason for ${nameOf(n)}'s rank is over ${MAX_RANK_REASON_CHARS} characters. Shorten it or remove long links.`,
       };
     }
     if (strict && score === null) {

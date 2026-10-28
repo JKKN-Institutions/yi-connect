@@ -58,6 +58,19 @@ export const OFFICIAL_DUTY_ROLES = new Set<string>([
   "parliamentary_journalist",
 ]);
 
+// Officials of the House — the presiding officers (incl. their deposed "ex-"
+// forms) plus the duty officials above. Anyone NOT in this set is a competing
+// MP. Used by the 'mps_only' award eligibility (Director ruling 2026-10-28:
+// only competing MPs may win National Best Parliamentarian).
+export const HOUSE_OFFICIAL_ROLES = new Set<string>([
+  "speaker",
+  "deputy_speaker",
+  "nominated_speaker",
+  "ex_speaker",
+  "ex_deputy_speaker",
+  ...OFFICIAL_DUTY_ROLES,
+]);
+
 // "Ex-" roles — a single-seat leader deposed mid-event (no-confidence, impeach,
 // or organiser depose). They keep their base role's leadership points, but are
 // SYSTEM-ASSIGNED only: kept OUT of PARLIAMENT_ROLES so they never appear in the

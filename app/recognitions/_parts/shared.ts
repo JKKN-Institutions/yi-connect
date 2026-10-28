@@ -191,20 +191,48 @@ export function buildMatrixView(input: {
   };
 }
 
+export type Provisional = {
+  score: number;
+  /** A UNIQUE starting rank for the form (ties ordered by chapter name); the final rank may not tie. */
+  rank: number;
+  /** The combined matrix's rank: tied chapters share it (1, 1, 3). This is the "before Stage 2" rank. */
+  matrixRank: number;
+  /** How many chapters of the category share matrixRank (1 = no tie). */
+  tieSize: number;
+};
+
 /**
- * Prefill for the moderation form: the computed total, and a UNIQUE rank
- * (computeMatrix lets ties share a rank; the final rank may not).
- * Ties keep the matrix order, then chapter name.
+ * Prefill for the moderation form: the computed total, a unique starting
+ * rank, and the matrix rank with its tie size.
  */
-export function prefillFromMatrix(view: MatrixView): Record<string, { score: number; rank: number }> {
-  const out: Record<string, { score: number; rank: number }> = {};
+export function prefillFromMatrix(view: MatrixView): Record<string, Provisional> {
+  const out: Record<string, Provisional> = {};
   for (const cat of view.categories) {
     const sorted = [...cat.rows].sort((a, b) => a.rank - b.rank || a.chapterName.localeCompare(b.chapterName));
     sorted.forEach((r, i) => {
-      out[r.nominationId] = { score: r.total, rank: i + 1 };
+      out[r.nominationId] = {
+        score: r.total,
+        rank: i + 1,
+        matrixRank: r.rank,
+        tieSize: cat.rows.filter((x) => x.rank === r.rank).length,
+      };
     });
   }
   return out;
+}
+
+/**
+ * Did the final rank move from the matrix rank? Chapters tied in the matrix
+ * may take any place in their tie band [matrixRank, matrixRank + tieSize - 1]
+ * without counting as a move, so ordering a tie needs no reason.
+ */
+export function rankMoved(finalRank: number, matrixRank: number, tieSize: number): boolean {
+  return finalRank < matrixRank || finalRank > matrixRank + Math.max(1, tieSize) - 1;
+}
+
+/** "3", or "=1" when the chapter is tied in the matrix. */
+export function matrixRankLabel(matrixRank: number, tieSize: number): string {
+  return tieSize > 1 ? `=${matrixRank}` : String(matrixRank);
 }
 
 // ---------------------------------------------------------------------------
@@ -262,8 +290,10 @@ export type RankingView = Array<{
     region: string;
     finalScore: number | null;
     finalRank: number | null;
-    /** Rank before Stage 2 (the combined matrix), or null when unknown. */
+    /** Rank before Stage 2 (the combined matrix; ties share it), or null when unknown. */
     computedRank: number | null;
+    /** How many chapters in this ranking share computedRank (1 = no tie). */
+    computedTie: number;
     /** The NMT's reason for the final rank; empty when none was written. */
     reason: string;
   }>;
@@ -276,7 +306,7 @@ export function buildRankingView(
   chapters: Map<string, ChapterRow>,
   citationFor?: (category: Category, rank: number, fallback: string) => string,
   /** Provisional ranks from today's matrix, for versions saved before the rank was stored. */
-  provisional?: Record<string, { rank: number }>
+  provisional?: Record<string, { matrixRank: number }>
 ): RankingView {
   const nomById = new Map(nominations.map((n) => [n.id, n]));
   const rankings = Array.isArray(version.rankings) ? version.rankings : [];
@@ -291,10 +321,14 @@ export function buildRankingView(
         region: n!.region,
         finalScore: r.final_score,
         finalRank: r.final_rank,
-        computedRank: r.computed_rank ?? provisional?.[r.nomination_id]?.rank ?? null,
+        computedRank: r.computed_rank ?? provisional?.[r.nomination_id]?.matrixRank ?? null,
+        computedTie: 1,
         reason: (r.reason ?? "").trim(),
       }))
       .sort((a, b) => (a.finalRank ?? 999) - (b.finalRank ?? 999) || a.chapterName.localeCompare(b.chapterName));
+    for (const e of entries) {
+      if (e.computedRank !== null) e.computedTie = entries.filter((x) => x.computedRank === e.computedRank).length;
+    }
     const podium = top3
       .filter((t) => t.category === category)
       .sort((a, b) => a.rank - b.rank)
@@ -393,19 +427,19 @@ export type ValidatedModeration =
  * strict=false (Save draft): numbers that are filled in must be valid and
  * texts must fit their limits, but blanks are allowed.
  * strict=true (Submit): every nomination needs a unique rank covering 1..n in
- * its category, a reason wherever the rank differs from the provisional rank,
+ * its category, a reason wherever the rank moves out of its matrix rank's tie band,
  * and every podium place needs both texts.
  *
  * `provisional` is the combined matrix (prefillFromMatrix): the final score is
  * always its weighted total (Piyush, 28 Oct 2026: the NMT re-ranks, it does
- * not re-score), and its rank is stored as the "before Stage 2" rank.
+ * not re-score), and its matrix rank (ties shared) is stored as the "before Stage 2" rank.
  */
 export function validateModeration(
   input: ModerationInput,
   submittedNominations: NominationRow[],
   chapters: Map<string, ChapterRow>,
   strict: boolean,
-  provisional: Record<string, { score: number; rank: number }>
+  provisional: Record<string, Provisional>
 ): ValidatedModeration {
   if (!input || !Array.isArray(input.rankings) || !Array.isArray(input.texts)) {
     return { ok: false, error: "The ranking form arrived empty. Reload the page and try again." };
@@ -454,13 +488,19 @@ export function validateModeration(
       return { ok: false, error: `${nameOf(n)} has no combined total yet, so it can't be ranked. Reload the page.` };
     }
     if (strict && rank === null) return { ok: false, error: `Enter a final rank for ${nameOf(n)}.` };
-    if (strict && prov && rank !== prov.rank && g.reason === "") {
+    if (strict && prov && rank !== null && rankMoved(rank, prov.matrixRank, prov.tieSize) && g.reason === "") {
+      const from = prov.tieSize > 1 ? `tied rank ${prov.matrixRank}` : `rank ${prov.matrixRank}`;
       return {
         ok: false,
-        error: `${nameOf(n)} moves from rank ${prov.rank} to ${rank}. Write the reason for the change.`,
+        error: `${nameOf(n)} moves from ${from} to ${rank}. Write the reason for the change.`,
       };
     }
-    const entry: RankingEntry = { nomination_id: n.id, final_score: score, final_rank: rank, computed_rank: prov?.rank ?? null };
+    const entry: RankingEntry = {
+      nomination_id: n.id,
+      final_score: score,
+      final_rank: rank,
+      computed_rank: prov?.matrixRank ?? null,
+    };
     if (g.reason !== "") entry.reason = g.reason;
     rankings.push(entry);
   }

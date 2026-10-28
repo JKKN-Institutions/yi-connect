@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { RANK_LABEL, WORDS, type Category } from "@/lib/recognitions/constants";
 import { ConfirmDialog, ResultLine, WordField } from "@/app/recognitions/_ui/client";
 import { saveModerationDraft, submitModeration } from "@/app/recognitions/actions/moderation";
-import type { ModerationInput } from "@/app/recognitions/_parts/shared";
+import { matrixRankLabel, rankMoved, type ModerationInput } from "@/app/recognitions/_parts/shared";
 import { HomeNote, type HomeNotes } from "@/app/recognitions/_parts/home-note";
 import { CategoryPanel } from "@/app/recognitions/_parts/category-tabs";
 
@@ -13,7 +13,10 @@ export type FormRow = {
   chapterName: string;
   region: string;
   computedTotal: number;
+  /** The combined matrix's rank; tied chapters share it. */
   computedRank: number;
+  /** How many chapters share computedRank (1 = no tie). Any order inside the tie is not a move. */
+  tieSize: number;
 };
 export type FormCategory = { category: Category; label: string; rows: FormRow[] };
 export type FormInitial = {
@@ -101,7 +104,7 @@ export function ModerationForm({
             <ol className="rx-rank-list">
               {cat.rows.map((r) => {
                 const k = (ranks[r.nominationId] ?? "").trim();
-                const moved = k !== "" && Number(k) !== r.computedRank;
+                const moved = k !== "" && Number.isFinite(Number(k)) && rankMoved(Number(k), r.computedRank, r.tieSize);
                 return (
                   <li key={r.nominationId} className="rx-rank-card" data-moved={moved ? "true" : undefined}>
                     <div className="rx-rank-head">
@@ -112,7 +115,7 @@ export function ModerationForm({
                       </div>
                       {moved ? (
                         <span className="rx-small rx-rank-move">
-                          Rank {r.computedRank} to {k}
+                          Rank {matrixRankLabel(r.computedRank, r.tieSize)} to {k}
                         </span>
                       ) : null}
                     </div>
@@ -123,7 +126,8 @@ export function ModerationForm({
                       </div>
                       <div className="rx-rank-fig">
                         <span>Provisional rank</span>
-                        <span className="rx-num">{r.computedRank}</span>
+                        <span className="rx-num">{matrixRankLabel(r.computedRank, r.tieSize)}</span>
+                        {r.tieSize > 1 ? <span className="rx-small rx-mute">tied</span> : null}
                       </div>
                       <label className="rx-rank-fig">
                         <span>Final rank</span>
@@ -154,7 +158,8 @@ export function ModerationForm({
             </ol>
             <p className="rx-small rx-mute">
               Final rank 1 to {cat.rows.length}, each rank used once. Scores are not entered again: the weighted total
-              stands.
+              stands. Chapters tied on the weighted total (shown as =) can be put in any order among themselves without a
+              reason.
             </p>
             <div className="rx-podium">
               {Array.from({ length: places }, (_, i) => (i + 1) as 1 | 2 | 3).map((place) => {

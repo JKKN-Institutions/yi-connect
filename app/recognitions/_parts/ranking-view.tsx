@@ -1,7 +1,7 @@
 import "./parts.css";
 import { Seal, formatWhen } from "../_ui/primitives";
 import { fmt } from "./combined-matrix";
-import type { HistoryView, RankingView } from "./shared";
+import { matrixRankLabel, rankMoved, type HistoryView, type RankingView } from "./shared";
 import { HomeNote, type HomeNotes } from "./home-note";
 import { CategoryPanel } from "./category-tabs";
 
@@ -34,13 +34,15 @@ export function RankingTable({ view, home }: { view: RankingView; home?: HomeNot
                   <tr key={e.nominationId}>
                     <td className="rx-num">
                       <strong>{e.finalRank ?? "—"}</strong>
-                      {e.computedRank !== null && e.finalRank !== null && e.computedRank !== e.finalRank ? (
+                      {e.computedRank !== null && e.finalRank !== null && rankMoved(e.finalRank, e.computedRank, e.computedTie) ? (
                         <span className="rx-small rx-rank-move" style={{ display: "block", whiteSpace: "nowrap" }}>
                           {e.finalRank < e.computedRank ? "Up" : "Down"}
                         </span>
                       ) : null}
                     </td>
-                    <td className="rx-num rx-mute">{e.computedRank ?? "—"}</td>
+                    <td className="rx-num rx-mute">
+                      {e.computedRank === null ? "—" : matrixRankLabel(e.computedRank, e.computedTie)}
+                    </td>
                     <td style={{ minWidth: "13em" }}>
                       {e.chapterName}
                       <HomeNote names={home?.[e.chapterName]} />

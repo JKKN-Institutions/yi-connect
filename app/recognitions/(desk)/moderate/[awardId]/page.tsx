@@ -110,8 +110,9 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
           chapterName: r.chapterName,
           region: r.region,
           computedTotal: r.total,
-          // The unique provisional rank the final rank starts from (ties broken by name).
-          computedRank: prefill[r.nominationId]?.rank ?? r.rank,
+          // The matrix rank (ties share it) and how many chapters share it.
+          computedRank: prefill[r.nominationId]?.matrixRank ?? r.rank,
+          tieSize: prefill[r.nominationId]?.tieSize ?? 1,
         })),
       }));
     const draft = draftOpen ? latest : null;

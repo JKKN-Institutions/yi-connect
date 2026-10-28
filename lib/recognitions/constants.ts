@@ -249,3 +249,11 @@ export const JUSTIFICATION_MAX_CHARS = 2000;
  * desk, its actions and its wording back.
  */
 export const CHECK_STEP_ENABLED = false;
+
+/**
+ * Piyush, 28 Oct 11:05: an evaluator's home chapter is recorded and flagged
+ * wherever their marks appear, but they still score it. False = home
+ * chapters never hide a nomination; true restores the old rule that an
+ * evaluator never scores a chapter they are linked to (mail 3).
+ */
+export const HOME_CHAPTER_BLOCKS_SCORING = false;

@@ -106,6 +106,7 @@ export function CeremonyPDF({ report, includePending }: { report: CeremonyReport
                     <Text style={s.rank}>{p.region}</Text>
                   </View>
                   <Text style={s.chapter}>{p.chapterName}</Text>
+                  {p.homeOf ? <Text style={s.label}>Home chapter of {p.homeOf}</Text> : null}
                   <Text style={s.label}>Key achievements</Text>
                   {p.keyAchievements.length === 0 ? <Text>—</Text> : null}
                   {p.keyAchievements.map((k, j) => (

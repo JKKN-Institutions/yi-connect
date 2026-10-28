@@ -6,6 +6,7 @@ import {
   getCurrentCycle,
   getLayer1,
   getPeople,
+  homeChapterNotes,
   listAwards,
   listCitationEdits,
   listEvaluators,
@@ -31,6 +32,8 @@ export type CeremonyPlace = {
   rank: 1 | 2 | 3;
   rankLabel: string;
   chapterName: string;
+  /** "Omkar Sambary (NMT)" etc. when this is an evaluator's home chapter (28 Oct); "" if none. */
+  homeOf: string;
   region: string;
   keyAchievements: string[];
   citation: string;
@@ -71,7 +74,7 @@ export async function ceremonyReport(includePending: boolean): Promise<CeremonyR
       out.notIncluded.push({ title: award.title, why: PHASE_LABEL[state.phase] });
       continue;
     }
-    const edits = await listCitationEdits(award.id);
+    const [edits, home] = await Promise.all([listCitationEdits(award.id), homeChapterNotes(state)]);
     const noms = new Map(state.nominations.map((n) => [n.id, n]));
     const places: CeremonyPlace[] = [];
     for (const category of CATEGORIES) {
@@ -97,6 +100,7 @@ export async function ceremonyReport(includePending: boolean): Promise<CeremonyR
           rank,
           rankLabel: RANK_LABEL[rank],
           chapterName: chapter?.name ?? "Chapter not found",
+          homeOf: chapter ? (home[chapter.name] ?? []).join(", ") : "",
           region: nom?.region ?? "",
           keyAchievements: achievements,
           citation: effectiveText(edits, version.id, "citation", category, rank, entry.citation ?? ""),

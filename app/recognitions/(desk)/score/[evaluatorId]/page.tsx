@@ -268,6 +268,11 @@ export default async function ScoringSheetPage({
             <div className="rx-eyebrow">Dossier</div>
             <div className="rx-stack" style={{ gap: 6 }}>
               <h2 className="rx-h2" id="rx-dossier-h">{nameOf(current.chapter_id)}</h2>
+              {state.homeByDuty.get(duty.id)?.has(current.chapter_id) ? (
+                <div className="rx-small rx-home-note">
+                  Your home chapter. Score it as usual; everyone reviewing the marks sees it noted as your home chapter.
+                </div>
+              ) : null}
               <div className="rx-row" style={{ gap: 8 }}>
                 <Seal tone="mute">Region {current.region}</Seal>
                 <Seal tone="laurel">{CATEGORY_LABEL[current.category]}</Seal>

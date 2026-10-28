@@ -36,7 +36,7 @@ export async function GET(req: Request) {
 
   if (format === "xlsx") {
     const rows: Array<Array<string | number>> = [
-      ["Status", "Recognition", "Category", "Rank", "Place", "Chapter", "Region", "Key achievements", "Citation", "Announcement text"],
+      ["Status", "Recognition", "Category", "Rank", "Place", "Chapter", "Region", "Home chapter of", "Key achievements", "Citation", "Announcement text"],
     ];
     for (const a of report.awards) {
       for (const p of a.places) {
@@ -48,6 +48,7 @@ export async function GET(req: Request) {
           p.rankLabel,
           p.chapterName,
           p.region,
+          p.homeOf,
           p.keyAchievements.map((k) => `• ${k}`).join("\n"),
           p.citation,
           p.announcement,

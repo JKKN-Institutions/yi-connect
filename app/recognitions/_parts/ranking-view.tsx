@@ -2,9 +2,10 @@ import "./parts.css";
 import { Seal, formatWhen } from "../_ui/primitives";
 import { fmt } from "./combined-matrix";
 import type { HistoryView, RankingView } from "./shared";
+import { HomeNote, type HomeNotes } from "./home-note";
 
 /** One moderation version's final ranking and podium, read-only. */
-export function RankingTable({ view }: { view: RankingView }) {
+export function RankingTable({ view, home }: { view: RankingView; home?: HomeNotes }) {
   if (view.length === 0) return <p className="rx-mute rx-small">No ranking entered in this version.</p>;
   return (
     <div className="rx-stack">
@@ -25,7 +26,10 @@ export function RankingTable({ view }: { view: RankingView }) {
                 {cat.entries.map((e) => (
                   <tr key={e.nominationId}>
                     <td className="rx-num">{e.finalRank ?? "—"}</td>
-                    <td>{e.chapterName}</td>
+                    <td>
+                      {e.chapterName}
+                      <HomeNote names={home?.[e.chapterName]} />
+                    </td>
                     <td>{e.region}</td>
                     <td className="rx-num">{fmt(e.finalScore)}</td>
                   </tr>
@@ -40,6 +44,7 @@ export function RankingTable({ view }: { view: RankingView }) {
                   <div>
                     <div className="rx-eyebrow">{p.placeLabel}</div>
                     <div className="rx-h2">{p.chapterName}</div>
+                    <HomeNote names={home?.[p.chapterName]} />
                   </div>
                   <div>
                     <div className="rx-small rx-mute">Why this finalist?</div>

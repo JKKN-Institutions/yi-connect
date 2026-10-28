@@ -5,6 +5,7 @@ import { RANK_LABEL, WORDS, type Category } from "@/lib/recognitions/constants";
 import { ConfirmDialog, ResultLine, WordField } from "@/app/recognitions/_ui/client";
 import { saveModerationDraft, submitModeration } from "@/app/recognitions/actions/moderation";
 import type { ModerationInput } from "@/app/recognitions/_parts/shared";
+import { HomeNote, type HomeNotes } from "@/app/recognitions/_parts/home-note";
 
 export type FormRow = {
   nominationId: string;
@@ -31,11 +32,13 @@ export function ModerationForm({
   categories,
   initial,
   mode,
+  home,
 }: {
   awardId: string;
   categories: FormCategory[];
   initial: FormInitial;
   mode: "stage2" | "reevaluation";
+  home?: HomeNotes;
 }) {
   const [scores, setScores] = useState(initial.scores);
   const [ranks, setRanks] = useState(initial.ranks);
@@ -106,7 +109,10 @@ export function ModerationForm({
                 <tbody>
                   {cat.rows.map((r) => (
                     <tr key={r.nominationId}>
-                      <td>{r.chapterName}</td>
+                      <td>
+                        {r.chapterName}
+                        <HomeNote names={home?.[r.chapterName]} />
+                      </td>
                       <td>{r.region}</td>
                       <td className="rx-num">{r.computedTotal.toFixed(2)}</td>
                       <td className="rx-num">{r.computedRank}</td>
@@ -175,6 +181,7 @@ export function ModerationForm({
                     <div>
                       <div className="rx-eyebrow">{label}</div>
                       <div className="rx-h2">{h.chapterName}</div>
+                      <HomeNote names={home?.[h.chapterName]} />
                     </div>
                     <WordField
                       label="Why this finalist?"

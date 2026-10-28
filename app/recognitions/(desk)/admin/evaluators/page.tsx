@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireRxSuperAdmin } from "@/lib/recognitions/auth";
-import { conflictsForDuties, getCurrentCycle, getPeople, listAwards, listChapters, listEvaluators } from "@/lib/recognitions/data";
+import { homeChaptersForDuties, getCurrentCycle, getPeople, listAwards, listChapters, listEvaluators } from "@/lib/recognitions/data";
 import { LAYER_LABEL } from "@/lib/recognitions/constants";
 import { Ribbon } from "../../../_ui/ribbon";
 import { NoAccess, PageHead, Seal } from "../../../_ui/primitives";
@@ -32,7 +32,7 @@ export default async function EvaluatorsPage({ searchParams }: { searchParams: P
   const { award: awardParam } = await searchParams;
   const award = awards.find((a) => a.id === awardParam) ?? awards[0];
   const [duties, chapters] = await Promise.all([listEvaluators(award.id), listChapters()]);
-  const [people, conflicts] = await Promise.all([getPeople(duties.map((d) => d.person_id)), conflictsForDuties(duties)]);
+  const [people, conflicts] = await Promise.all([getPeople(duties.map((d) => d.person_id)), homeChaptersForDuties(duties)]);
   const chapterName = new Map(chapters.map((c) => [c.id, c.name]));
   const sorted = [...duties].sort((a, b) =>
     a.layer === b.layer ? (a.region ?? "").localeCompare(b.region ?? "") : a.layer === "rm" ? -1 : 1
@@ -42,8 +42,8 @@ export default async function EvaluatorsPage({ searchParams }: { searchParams: P
     <div className="rx-stack-lg">
       <PageHead eyebrow={`Control room · ${cycle.name}`} title="Evaluators">
         <p className="rx-mute">
-          Regional Mentors score their own region&apos;s nominations; the NMT scores every nomination for the recognition. Nobody scores a chapter
-          they are linked to. People are found by their Yi directory email.
+          Regional Mentors score their own region&apos;s nominations; the NMT scores every nomination for the recognition. An evaluator still
+          scores their home chapter; it is noted wherever their marks appear. People are found by their Yi directory email.
         </p>
       </PageHead>
 
@@ -71,7 +71,7 @@ export default async function EvaluatorsPage({ searchParams }: { searchParams: P
                 <tr>
                   <th>Person</th>
                   <th>Duty</th>
-                  <th>Won&apos;t see</th>
+                  <th>Home chapter</th>
                   <th></th>
                 </tr>
               </thead>
@@ -95,12 +95,12 @@ export default async function EvaluatorsPage({ searchParams }: { searchParams: P
                         </div>
                       </td>
                       <td className="rx-small" style={{ minWidth: 200 }}>
-                        {auto.length === 0 && declared.size === 0 ? <span className="rx-mute">No conflicts</span> : null}
+                        {auto.length === 0 && declared.size === 0 ? <span className="rx-mute">None recorded</span> : null}
                         {auto.map((id) => (
-                          <div key={`a-${id}`}>Linked to {chapterName.get(id) ?? "a chapter"} — won&apos;t see it</div>
+                          <div key={`a-${id}`}>{chapterName.get(id) ?? "a chapter"} <span className="rx-mute">· from their Yi role</span></div>
                         ))}
                         {[...declared].map((id) => (
-                          <div key={`d-${id}`}>Declared: {chapterName.get(id) ?? "a chapter"}</div>
+                          <div key={`d-${id}`}>{chapterName.get(id) ?? "a chapter"}</div>
                         ))}
                       </td>
                       <td>

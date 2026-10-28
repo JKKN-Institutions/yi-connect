@@ -25,6 +25,7 @@ const CSV_HEAD = [
   "Rank",
   "Chapter",
   "Region",
+  "Home chapter of",
   "Citation (read out on stage)",
   "NMT rationale",
 ];
@@ -49,6 +50,7 @@ export function stageSheetCsv(sheet: StageSheet): string {
         p.rank,
         p.chapterName,
         p.region,
+        p.homeOf,
         p.citation,
         p.rationale,
       ]);

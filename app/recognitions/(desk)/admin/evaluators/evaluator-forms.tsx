@@ -161,7 +161,7 @@ export function AssignEvaluatorForm({ awardId, hasLeader, chapters }: { awardId:
           )}
 
           <details className="rx-ad-details">
-            <summary>Declared conflicts ({conflicts.length})</summary>
+            <summary>Home chapter ({conflicts.length})</summary>
             <ConflictPicker chapters={chapters} value={conflicts} onChange={setConflicts} idPrefix={`as-cf-${awardId}`} />
           </details>
 
@@ -196,7 +196,7 @@ export function DutyActions({
     <div className="rx-stack" style={{ gap: 6 }}>
       <div className="rx-row" style={{ gap: 6, flexWrap: "nowrap" }}>
         <button type="button" className="rx-btn rx-btn-quiet rx-btn-sm" onClick={() => setEditOpen(true)}>
-          Conflicts
+          Home chapter
         </button>
         <button type="button" className="rx-btn rx-btn-danger rx-btn-sm" onClick={() => setRemoveOpen(true)}>
           Remove
@@ -219,8 +219,8 @@ export function DutyActions({
       </ConfirmDialog>
       <ConfirmDialog
         open={editOpen}
-        title={`Declared conflicts for ${personName}`}
-        confirmLabel="Save conflicts"
+        title={`Home chapter of ${personName}`}
+        confirmLabel="Save home chapter"
         busy={pending}
         onClose={() => setEditOpen(false)}
         onConfirm={() => run(() => updateEvaluatorConflicts({ evaluatorId, conflictChapterIds: value }), (r) => r.success && setEditOpen(false))}

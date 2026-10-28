@@ -1,6 +1,7 @@
 import "./parts.css";
 import { CHECK_STEP_ENABLED } from "@/lib/recognitions/constants";
 import type { DossierView, MatrixView, MatrixViewRow, RationaleView } from "./shared";
+import { HomeNote, type HomeNotes } from "./home-note";
 
 export function fmt(n: number | null | undefined, dp = 2): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return "—";
@@ -13,7 +14,7 @@ export function fmt(n: number | null | undefined, dp = 2): string {
  * both averages, the weighted total and the provisional rank, per category.
  * Read-only. Plain props: pass the output of buildMatrixView.
  */
-export function CombinedMatrix({ view }: { view: MatrixView }) {
+export function CombinedMatrix({ view, home }: { view: MatrixView; home?: HomeNotes }) {
   const anyRows = view.categories.some((c) => c.rows.length > 0);
   return (
     <section className="rx-stack" aria-labelledby="rx-p-matrix">
@@ -67,6 +68,7 @@ export function CombinedMatrix({ view }: { view: MatrixView }) {
                       <td className="rx-num">{r.rank}</td>
                       <td>
                         {r.chapterName}
+                        <HomeNote names={home?.[r.chapterName]} />
                         {r.dossier.nlAddedReason !== null ? (
                           <div className="rx-small rx-mute">Added by National Leadership</div>
                         ) : null}
@@ -93,8 +95,8 @@ export function CombinedMatrix({ view }: { view: MatrixView }) {
               </table>
             </div>
             <p className="rx-small rx-mute">
-              Evaluator totals are out of 25. A dash means that evaluator did not score the chapter (other region or a
-              conflict of interest).
+              Evaluator totals are out of 25. A dash means that evaluator did not score the chapter (another region, or
+              no marks submitted).
             </p>
             <div>
               {cat.rows.map((r) => (

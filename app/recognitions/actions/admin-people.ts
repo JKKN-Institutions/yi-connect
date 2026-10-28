@@ -182,7 +182,7 @@ export async function updateEvaluatorConflicts(input: { evaluatorId: string; con
   const chapterIds = new Set((await listChapters()).map((c) => c.id));
   const conflicts = [...new Set(input.conflictChapterIds ?? [])].filter((id) => chapterIds.has(id));
   const { error } = await svc.from("recognition_evaluators").update({ conflict_chapter_ids: conflicts }).eq("id", ev.id);
-  if (error) return { success: false, error: "Couldn't save the conflicts. Try again." };
+  if (error) return { success: false, error: "Couldn't save the home chapter. Try again." };
   const award = await getAward(ev.award_id);
   await audit({
     cycleId: award?.cycle_id ?? null,
@@ -194,7 +194,7 @@ export async function updateEvaluatorConflicts(input: { evaluatorId: string; con
     detail: { from: ev.conflict_chapter_ids ?? [], to: conflicts },
   });
   done();
-  return { success: true, message: "Declared conflicts saved." };
+  return { success: true, message: "Home chapter saved." };
 }
 
 // ---------------------------------------------------------------------------

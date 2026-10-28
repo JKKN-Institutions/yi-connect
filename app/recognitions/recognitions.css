@@ -374,3 +374,7 @@
 @media (prefers-reduced-motion: reduce) {
   .rx-root * { transition: none !important; animation: none !important; }
 }
+
+/* Home chapter of an evaluator (28 Oct). */
+.rx-home-note { color: var(--rx-plum); font-weight: 600; }
+.rx-ledger .rx-home-note { min-width: 11em; }

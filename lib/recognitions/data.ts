@@ -16,7 +16,7 @@ import type {
   ScoreHistoryRow,
   ScoreRow,
 } from "./types";
-import type { Category } from "./constants";
+import { HOME_CHAPTER_BLOCKS_SCORING, type Category } from "./constants";
 import { computeCompleteness, dutySeesNomination, type Completeness } from "./scoring";
 import { computePhase, latestDecisionFor, type Phase } from "./phase";
 import { inRace, isAddedForChapter } from "./check-rules";
@@ -166,11 +166,11 @@ export async function getPeople(ids: string[]): Promise<Map<string, PersonLite>>
 }
 
 /**
- * Conflict rule (mail 3): an evaluator linked to a chapter must not score
- * it. "Linked" = any ACTIVE directory role the person holds in that chapter
- * (any app), plus the chapters the super admin declared on the duty.
+ * An evaluator's home chapters: any ACTIVE directory role the person holds in
+ * a chapter (any app), plus the chapters recorded on the duty
+ * (conflict_chapter_ids, set on the Evaluators page or by a sheet load).
  */
-export async function conflictsForDuties(duties: EvaluatorRow[]): Promise<Map<string, Set<string>>> {
+export async function homeChaptersForDuties(duties: EvaluatorRow[]): Promise<Map<string, Set<string>>> {
   const out = new Map<string, Set<string>>();
   if (duties.length === 0) return out;
   const linked = await linkedChapters([...new Set(duties.map((d) => d.person_id))]);
@@ -181,11 +181,41 @@ export async function conflictsForDuties(duties: EvaluatorRow[]): Promise<Map<st
 }
 
 /**
+ * Conflict rule: the chapters a duty must NOT score. Empty for every duty
+ * while home chapters are only flagged (HOME_CHAPTER_BLOCKS_SCORING).
+ */
+export async function conflictsForDuties(duties: EvaluatorRow[]): Promise<Map<string, Set<string>>> {
+  if (HOME_CHAPTER_BLOCKS_SCORING) return homeChaptersForDuties(duties);
+  return new Map(duties.map((d) => [d.id, new Set<string>()]));
+}
+
+/**
+ * Chapter name -> who on this recognition calls it home, e.g. "Omkar Sambary (NMT)".
+ * Shown to the NMT, National Leadership and the super admin only; never on chapter pages.
+ */
+export async function homeChapterNotes(state: AwardState): Promise<Record<string, string[]>> {
+  const active = state.duties.filter((d) => d.is_active);
+  if (active.length === 0) return {};
+  const [chapters, people] = await Promise.all([chapterMap(), getPeople(active.map((d) => d.person_id))]);
+  const out: Record<string, string[]> = {};
+  for (const d of active) {
+    const who = `${people.get(d.person_id)?.full_name ?? "An evaluator"} (${d.layer === "rm" ? "RM" : "NMT"})`;
+    for (const id of state.homeByDuty.get(d.id) ?? []) {
+      const name = chapters.get(id)?.name;
+      if (!name) continue;
+      if (!(out[name] ??= []).includes(who)) out[name].push(who);
+    }
+  }
+  return out;
+}
+
+/**
  * The same conflict rule for a nomination CHECKER (recognitions_02): any
  * ACTIVE directory role the person holds in a chapter. A Regional Chair has
  * no duty row, so this is keyed by person.
  */
 export async function conflictsForPerson(personId: string): Promise<Set<string>> {
+  if (!HOME_CHAPTER_BLOCKS_SCORING) return new Set<string>();
   return (await linkedChapters([personId])).get(personId) ?? new Set<string>();
 }
 
@@ -396,6 +426,8 @@ export type AwardState = {
   checkedNominations: NominationRow[];
   duties: EvaluatorRow[];
   conflictsByDuty: Map<string, Set<string>>;
+  /** Each duty's home chapters, for the flag; they do not hide anything (HOME_CHAPTER_BLOCKS_SCORING). */
+  homeByDuty: Map<string, Set<string>>;
   completeness: Completeness;
   versions: ModerationVersionRow[];
   latestVersion: ModerationVersionRow | null;
@@ -425,7 +457,7 @@ export async function getAwardState(awardId: string): Promise<AwardState | null>
     listScoresForAward(awardId),
     listMentorSendBacks(awardId),
   ]);
-  const conflictsByDuty = await conflictsForDuties(duties);
+  const [conflictsByDuty, homeByDuty] = await Promise.all([conflictsForDuties(duties), homeChaptersForDuties(duties)]);
   const completeness = computeCompleteness({ cycle, nominations, duties, conflictsByDuty, scores });
   const latestVersion = versions[0] ?? null;
   const latestSubmittedVersion = versions.find((v) => v.status === "submitted") ?? null;
@@ -444,6 +476,7 @@ export async function getAwardState(awardId: string): Promise<AwardState | null>
     checkedNominations: nominations.filter(inRace),
     duties,
     conflictsByDuty,
+    homeByDuty,
     completeness,
     versions,
     latestVersion,

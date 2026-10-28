@@ -446,6 +446,8 @@ export function validateModeration(
   }
   const byId = new Map(submittedNominations.map((n) => [n.id, n]));
   const nameOf = (n: NominationRow) => chapterName(chapters, n.chapter_id);
+  // Categories sit on separate tabs, so a per-chapter error names the tab first.
+  const tab = (n: NominationRow) => `${CATEGORY_LABEL[n.category]}: `;
   const perCategory = new Map<Category, number>();
   for (const n of submittedNominations) perCategory.set(n.category, (perCategory.get(n.category) ?? 0) + 1);
 
@@ -481,24 +483,24 @@ export function validateModeration(
     if (words > WORDS.rankReason) {
       return {
         ok: false,
-        error: `The reason for ${nameOf(n)}'s rank is ${words} words. Cut it to ${WORDS.rankReason} or fewer.`,
+        error: `${tab(n)}the reason for ${nameOf(n)}'s rank is ${words} words. Cut it to ${WORDS.rankReason} or fewer.`,
       };
     }
     if (g.reason.length > MAX_RANK_REASON_CHARS) {
       return {
         ok: false,
-        error: `The reason for ${nameOf(n)}'s rank is over ${MAX_RANK_REASON_CHARS} characters. Shorten it or remove long links.`,
+        error: `${tab(n)}the reason for ${nameOf(n)}'s rank is over ${MAX_RANK_REASON_CHARS} characters. Shorten it or remove long links.`,
       };
     }
     if (strict && score === null) {
-      return { ok: false, error: `${nameOf(n)} has no combined total yet, so it can't be ranked. Reload the page.` };
+      return { ok: false, error: `${tab(n)}${nameOf(n)} has no combined total yet, so it can't be ranked. Reload the page.` };
     }
-    if (strict && rank === null) return { ok: false, error: `Enter a final rank for ${nameOf(n)}.` };
+    if (strict && rank === null) return { ok: false, error: `${tab(n)}enter a final rank for ${nameOf(n)}.` };
     if (strict && prov && rank !== null && rankMoved(rank, prov.matrixRank, prov.tieSize) && g.reason === "") {
       const from = prov.tieSize > 1 ? `tied rank ${prov.matrixRank}` : `rank ${prov.matrixRank}`;
       return {
         ok: false,
-        error: `${nameOf(n)} moves from ${from} to ${rank}. Write the reason for the change.`,
+        error: `${tab(n)}${nameOf(n)} moves from ${from} to ${rank}. Write the reason for the change.`,
       };
     }
     const entry: RankingEntry = {

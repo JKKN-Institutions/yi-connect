@@ -65,7 +65,7 @@ export function ModerationForm({
       for (const r of cat.rows) {
         const k = (ranks[r.nominationId] ?? "").trim();
         const rank = k === "" ? null : Number(k);
-        if (rank !== null && !Number.isFinite(rank)) return `Final rank for ${r.chapterName} is not a number.`;
+        if (rank !== null && !Number.isFinite(rank)) return `${cat.label}: final rank for ${r.chapterName} is not a number.`;
         // The score is the matrix's weighted total; the server sets it.
         rankings.push({ nomination_id: r.nominationId, final_score: null, final_rank: rank, reason: reasons[r.nominationId] ?? "" });
       }

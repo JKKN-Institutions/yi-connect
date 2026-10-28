@@ -19,6 +19,7 @@ import {
 } from "@/lib/yip/scoring-roles";
 import { fetchEventRoundLevel, type RoundLevel } from "@/lib/yip/round-level";
 import { resolveAwardsForLevel } from "@/lib/yip/awards";
+import { HOUSE_OFFICIAL_ROLES } from "@/lib/yip/constants";
 import { listScoringBuckets } from "./scoring-buckets";
 import { getScoringFlagsConfig } from "./scoring-flags";
 import { getSessionScoringParams } from "./scoring";
@@ -1146,6 +1147,11 @@ export async function computeResults(
     isOppositionMP(p.parliament_role, p.party_side);
   const isIndependent = (p: ParticipantLite) =>
     p.parliament_role === "independent_mp";
+  // Competing MPs only (Director ruling 2026-10-28): excludes the officials of
+  // the House (Speaker, Deputy, Nominated Speaker, their ex- forms, Journalist,
+  // Administrator). A participant with no role is not a seated MP → not eligible.
+  const isCompetingMP = (p: ParticipantLite) =>
+    !!p.parliament_role && !HOUSE_OFFICIAL_ROLES.has(p.parliament_role);
 
   // MVP min-participation gate (Director ruling "at least half"): a participant
   // must be scored in ≥ half as many sessions as the most-scored participant
@@ -1277,8 +1283,14 @@ export async function computeResults(
         return isIndependent;
       case "no_disciplinary":
         return (_p, r) => !r.hasDisciplinary;
-      default:
+      case "mps_only":
+        return isCompetingMP;
+      case "all":
         return all;
+      default:
+        // Fail CLOSED: an unknown value means an empty pool (no winner), never
+        // a wrong winner. The admin editor only saves known values.
+        return () => false;
     }
   }
   function rankByFn(mode: string, keys: string[]): (r: ResultRow) => number {

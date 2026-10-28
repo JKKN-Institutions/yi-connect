@@ -387,7 +387,7 @@ export async function saveCitationEdit(input: {
     category = input.category;
     rank = Number(input.rank);
     if (!version.top3.some((t) => t.category === category && t.rank === rank))
-      return { success: false, error: `There is no ${RANK_LABEL[rank as 1 | 2 | 3].toLowerCase()} in ${CATEGORY_LABEL[category]} in the latest moderation.` };
+      return { success: false, error: `There is no ${RANK_LABEL[rank as 1 | 2 | 3]} in ${CATEGORY_LABEL[category]} in the latest moderation.` };
     // The same word limits the spec sets for these texts apply to the polished version.
     const limit = input.field === "citation" ? WORDS.top3Citation : WORDS.announcementDraft;
     const words = countWords(body);

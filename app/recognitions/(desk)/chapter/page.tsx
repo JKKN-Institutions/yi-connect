@@ -80,7 +80,7 @@ export default async function ChapterDashboard({
       {toFix > 0 ? (
         <Notice tone="alert">
           {toFix === 1 ? "One nomination was" : `${toFix} nominations were`} sent back for a fix. Read the note, fix and
-          resubmit by {formatWhen(cycle.fix_deadline)}, or {toFix === 1 ? "it drops" : "they drop"} out of the race.{" "}
+          resubmit by {formatWhen(cycle.fix_deadline)}, or {toFix === 1 ? "it is" : "they are"} not considered this year.{" "}
           <Link href={link("/recognitions/chapter/apply")} className="rx-link">Fix now</Link>
         </Notice>
       ) : null}
@@ -117,7 +117,7 @@ export default async function ChapterDashboard({
           </Link>
         )}
         <Link href={link("/recognitions/chapter/quiz")} className={quizOpen && predictions.length === 0 ? "rx-btn rx-btn-gilt" : "rx-btn rx-btn-quiet"}>
-          {predictions.length > 0 ? "See your predictions" : "Predict the winners"}
+          {predictions.length > 0 ? "See your predictions" : "Make your predictions"}
         </Link>
       </div>
 
@@ -169,7 +169,7 @@ export default async function ChapterDashboard({
                       <p className="rx-small rx-mute">
                         {CHECK_STEP_ENABLED
                           ? st === "checked"
-                            ? "Passed both checks. It is in the race and is being scored."
+                            ? "Passed both checks. It is being evaluated."
                             : `Submitted ${formatWhen(n.submitted_at)}. Waiting for the Regional Chair and a Regional Mentor to check it.`
                           : `Submitted ${formatWhen(n.submitted_at)}. Locked. It goes to the evaluators for scoring.`}
                       </p>
@@ -185,9 +185,9 @@ export default async function ChapterDashboard({
       </section>
 
       <section className="rx-stack">
-        <div className="rx-eyebrow">Previous winners</div>
+        <div className="rx-eyebrow">Previous Gold, Silver and Bronze</div>
         {podiums.length === 0 ? (
-          <p className="rx-mute">No previous winners recorded yet.</p>
+          <p className="rx-mute">No previous recognitions recorded yet.</p>
         ) : (
           <div className="rx-grid">
             {podiums.map((p) => (

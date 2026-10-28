@@ -159,14 +159,14 @@ export const NOMINATION_STATUS_LABEL: Record<NominationStatus, string> = CHECK_S
       submitted: "Awaiting checks",
       returned: "Sent back",
       checked: "Passed checks",
-      excluded: "Out of the race",
+      excluded: "Not taken forward",
     }
   : {
       draft: "Draft",
       submitted: "Submitted",
       returned: "Sent back",
       checked: "Submitted",
-      excluded: "Out of the race",
+      excluded: "Not taken forward",
     };
 
 export type CheckSeat = "rc" | "rm";
@@ -248,7 +248,7 @@ export function exclusionReason(n: Nom, cycle: Deadlines, now: Date = new Date()
   if (effectiveStatus(n, cycle, now) !== "excluded") return null;
   if (isEvaluatorAdded(n)) {
     if (n.origin === "rm_added" && n.status === "excluded") {
-      return n.approved_at ? "The Recognitions super admin took it out of the race." : "An NMT member declined it.";
+      return n.approved_at ? "The Recognitions super admin did not take it forward." : "An NMT member declined it.";
     }
     if (awaitingNmtApproval(n)) return "No NMT member approved it before scoring closed.";
   }
@@ -262,5 +262,5 @@ export function exclusionReason(n: Nom, cycle: Deadlines, now: Date = new Date()
       ? "It did not pass both checks before re-evaluation closed."
       : "It did not pass both checks before checks closed.";
   }
-  return "The Recognitions super admin took it out of the race.";
+  return "The Recognitions super admin did not take it forward.";
 }

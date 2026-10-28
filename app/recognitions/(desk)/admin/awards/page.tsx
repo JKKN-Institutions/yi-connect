@@ -30,7 +30,7 @@ export default async function AwardsPage() {
     <div className="rx-stack-lg">
       <PageHead eyebrow={`Control room · ${cycle.name}`} title="Recognitions">
         <p className="rx-mute">
-          Each recognition crowns a winner, runner-up and second runner-up in every chapter category. Rename any of
+          Each recognition gives a Gold, Silver and Bronze in every chapter category. Rename any of
           them, set its kind (it groups the chapters&apos; list), or add a new one below.
         </p>
       </PageHead>

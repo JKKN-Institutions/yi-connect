@@ -34,7 +34,7 @@ export default async function StageSheetPage({ searchParams }: { searchParams: P
     <div className="rx-stack-lg">
       <PageHead eyebrow={`${sheet.cycle.name} · read out on stage`} title="Stage sheet">
         <p className="rx-mute rx-stage-tools">
-          For every recognition and category: the winner, runner-up and second runner-up, with the NMT&apos;s citation
+          For every recognition and category: the Gold, Silver and Bronze, with the NMT&apos;s citation
           (and the super admin&apos;s polish, where there is one).
         </p>
       </PageHead>

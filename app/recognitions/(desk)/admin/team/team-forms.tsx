@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { grantTeamRole, revokeTeamRole } from "../../../actions/admin-people";
 import { RX_ROLES } from "@/lib/recognitions/constants";
@@ -11,6 +12,9 @@ type TeamRole =
   | typeof RX_ROLES.nationalLeadership
   | typeof RX_ROLES.regionalChair
   | typeof RX_ROLES.chapterRep;
+
+// Not a team role: the NMT and RMs are set per vertical on the Evaluators page (Omkar, 2026-10-28).
+const EVALUATOR_PICK = "evaluator";
 
 export function GrantRoleForm({
   roles,
@@ -29,12 +33,14 @@ export function GrantRoleForm({
   const needsChapter = role === RX_ROLES.chapterRep;
   // A Regional Chair is scoped to one region; no region, no role (the server refuses too).
   const needsZone = role === RX_ROLES.regionalChair;
+  const isEvaluator = role === EVALUATOR_PICK;
 
   return (
     <form
       className="rx-stack"
       onSubmit={(e) => {
         e.preventDefault();
+        if (isEvaluator) return;
         run(
           () =>
             grantTeamRole({
@@ -58,6 +64,7 @@ export function GrantRoleForm({
             {roles.map((r) => (
               <option key={r.value} value={r.value}>{r.label}</option>
             ))}
+            <option value={EVALUATOR_PICK}>Regional Mentor or NMT</option>
           </select>
         </div>
         {needsChapter ? (
@@ -83,12 +90,28 @@ export function GrantRoleForm({
           </div>
         ) : null}
       </div>
-      <p className="rx-help">If no one in the Yi directory has that email, nothing is created — they need a Yi account first.</p>
-      <div>
-        <button type="submit" className="rx-btn" disabled={pending || email.trim() === "" || (needsChapter && chapterId === "") || (needsZone && zone === "")}>
-          {pending ? "Saving…" : "Give role"}
-        </button>
-      </div>
+      {isEvaluator ? (
+        <div className="rx-stack" style={{ gap: 8 }}>
+          <p className="rx-help">
+            A Regional Mentor or NMT member is added for one vertical at a time. On the Evaluators page, pick the
+            vertical, find the person by email, then choose Regional Mentor with a region, or NMT.
+          </p>
+          <div>
+            <Link href="/recognitions/admin/evaluators" className="rx-btn">
+              Go to Evaluators
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <>
+          <p className="rx-help">If no one in the Yi directory has that email, nothing is created — they need a Yi account first.</p>
+          <div>
+            <button type="submit" className="rx-btn" disabled={pending || email.trim() === "" || (needsChapter && chapterId === "") || (needsZone && zone === "")}>
+              {pending ? "Saving…" : "Give role"}
+            </button>
+          </div>
+        </>
+      )}
       <ResultLine result={result} />
     </form>
   );

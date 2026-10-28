@@ -15,7 +15,7 @@ import { gateChapterPage, nominationWindow } from "../load";
 import { withChapter } from "../shared";
 import { PredictionGrid } from "./grid";
 
-export const metadata = { title: "Predict the winners" };
+export const metadata = { title: "Make your predictions" };
 
 /** Column order: Pioneers, Trailblazers, Sparks (client, 2026-10-27), the same as CATEGORIES. */
 const QUIZ_ORDER: Category[] = [...CATEGORIES];
@@ -31,7 +31,7 @@ export default async function QuizPage({
   const back = withChapter("/recognitions/chapter", chapter.id, chapters.length);
 
   const head = (
-    <PageHead eyebrow={`${chapter.name} · Fun quiz`} title="Predict the winners">
+    <PageHead eyebrow={`${chapter.name} · Fun quiz`} title="Make your predictions">
       <ChapterSwitcher chapters={chapters} currentId={chapter.id} path="/recognitions/chapter/quiz" />
       <div>
         <Link href={back} className="rx-link rx-small">
@@ -39,7 +39,7 @@ export default async function QuizPage({
         </Link>
       </div>
       <p className="rx-small">
-        For every recognition and category, pick the chapter you think will win. You may pick your own chapter.{" "}
+        For every recognition and category, pick the chapter you think will get the Gold. You may pick your own chapter.{" "}
         <strong>Not used in scoring.</strong>
       </p>
     </PageHead>

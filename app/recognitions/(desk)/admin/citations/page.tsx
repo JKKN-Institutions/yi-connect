@@ -163,7 +163,7 @@ export default async function CitationsPage({ searchParams }: { searchParams: Pr
                     <td className="rx-small">{editors.get(e.edited_by)?.full_name ?? "Unknown"}</td>
                     <td className="rx-small">
                       {FIELD_LABEL[e.field]}
-                      {e.category && e.rank ? ` · ${CATEGORY_LABEL[e.category]} ${RANK_LABEL[e.rank as 1 | 2 | 3].toLowerCase()}` : ""}
+                      {e.category && e.rank ? ` · ${CATEGORY_LABEL[e.category]} ${RANK_LABEL[e.rank as 1 | 2 | 3]}` : ""}
                       {e.moderation_version_id ? <div className="rx-ad-mini">on version {versionNo.get(e.moderation_version_id) ?? "?"}</div> : null}
                     </td>
                     <td className="rx-small rx-ad-pre" style={{ minWidth: 260 }}>{e.body}</td>

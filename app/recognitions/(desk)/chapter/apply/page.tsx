@@ -125,7 +125,7 @@ export default async function ApplyPage({
                     ? filedNote
                     : st === "checked"
                       ? CHECK_STEP_ENABLED
-                        ? "Passed both checks. It is in the race and is being scored."
+                        ? "Passed both checks. It is being evaluated."
                         : filedNote
                       : st === "excluded"
                         ? (exclusionReason(n, cycle) ?? undefined)

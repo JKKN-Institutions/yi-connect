@@ -221,9 +221,9 @@ export const WORDS = {
 } as const;
 
 export const RANK_LABEL: Record<1 | 2 | 3, string> = {
-  1: "Winner",
-  2: "Runner-up",
-  3: "Second runner-up",
+  1: "Gold",
+  2: "Silver",
+  3: "Bronze",
 };
 
 /** Roles in yi_directory.role_assignments with app='recognitions'. */

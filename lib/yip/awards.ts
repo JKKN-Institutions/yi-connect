@@ -59,15 +59,39 @@ export const REGIONAL_AWARD_LABELS = [
   "Outstanding Committee Member",
 ] as const;
 
+/** The 10 NATIONAL FINALS awards (1 Nov 2026). Seeded level-scoped
+ *  '{national}' in yip.award_definitions; labels copied verbatim from the live
+ *  table (the two "– National Finals" labels use an EN dash). Without this list
+ *  a chair at the national round could not pin or clear any winner — including
+ *  King Maker, which has no auto-ranking and can only be awarded by a pin. */
+export const NATIONAL_AWARD_LABELS = [
+  "National Best Parliamentarian Award",
+  "Best Speaker of the House Award",
+  "National Parliamentary Leadership Award",
+  "Best Treasury Bench Parliamentarian Award",
+  "Best Opposition Parliamentarian Award",
+  "Excellence in Parliamentary Conduct Award",
+  "Best Parliamentary Journalist – National Finals",
+  "Best Parliamentary Administrator – National Finals",
+  "Best Private Member's Bill Award",
+  "King Maker Award (Political Strategist)",
+] as const;
+
 export type AwardLabel =
   | (typeof AWARD_LABELS)[number]
-  | (typeof REGIONAL_AWARD_LABELS)[number];
+  | (typeof REGIONAL_AWARD_LABELS)[number]
+  | (typeof NATIONAL_AWARD_LABELS)[number];
 
 /** Every label the manual-override path accepts, across all round levels. */
 export const ALL_AWARD_LABELS: readonly string[] = [
   ...AWARD_LABELS,
   ...REGIONAL_AWARD_LABELS.filter(
     (l) => !(AWARD_LABELS as readonly string[]).includes(l)
+  ),
+  ...NATIONAL_AWARD_LABELS.filter(
+    (l) =>
+      !(AWARD_LABELS as readonly string[]).includes(l) &&
+      !(REGIONAL_AWARD_LABELS as readonly string[]).includes(l)
   ),
 ];
 

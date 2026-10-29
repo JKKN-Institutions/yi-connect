@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireRxSuperAdmin } from "@/lib/recognitions/auth";
 import { getAwardState, getCurrentCycle, listAwards } from "@/lib/recognitions/data";
-import { PHASE_LABEL } from "@/lib/recognitions/phase";
+import { PHASE_LABEL, earlyTestOpen } from "@/lib/recognitions/phase";
 import { effectiveStatus } from "@/lib/recognitions/check-rules";
 import { CHECK_STEP_ENABLED } from "@/lib/recognitions/constants";
 import type { NominationStatus } from "@/lib/recognitions/types";
@@ -131,7 +131,7 @@ export default async function ControlRoomOverview() {
                     {award.stage2_unlock_reason ? ` Reason: ${award.stage2_unlock_reason}` : ""}
                   </Notice>
                 ) : null}
-                {st.phase === "stage1" && !award.stage2_unlocked_at ? (
+                {(st.phase === "stage1" || (st.phase === "nominations" && earlyTestOpen())) && !award.stage2_unlocked_at ? (
                   <ForceOpenStage2 awardId={award.id} awardTitle={award.title} rm={c.rm} nmt={c.nmt} />
                 ) : null}
                 {st.phase === "setup" ? (

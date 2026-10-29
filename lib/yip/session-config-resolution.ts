@@ -69,7 +69,10 @@ export type AgendaItemLike = {
  *   - only a shared sheet exists                -> the shared sheet;
  *   - only a chapter sheet exists, event is
  *     regional                                  -> null (role rubric), never
- *                                                  the chapter sheet.
+ *                                                  the chapter sheet;
+ *   - event is national and no national sheet
+ *     exists                                    -> null. National never falls
+ *                                                  back to a shared sheet.
  *
  * Omitting `level`, or passing null when an event's level cannot be read, is
  * FAIL CLOSED: only unscoped sheets are considered, which is exactly the
@@ -89,7 +92,15 @@ export function resolveSessionConfig<T extends SessionConfigLike>(
 
   // Level-scoped sheets first, then the shared ones. Within each tier the rule
   // is unchanged from before levels existed.
-  for (const tier of [scoped, global]) {
+  //
+  // NATIONAL FINALS (2026-10-29): no shared fallback. The Finals have their own
+  // sheet for every session they score, so a Finals session with no national
+  // sheet has NO sheet — it must never silently pick up a chapter-era shared
+  // sheet (the rehearsal found Voice of the Nation matching the shared "Matters
+  // of Urgent Public Importance" sheet by type). Chapter and regional rounds
+  // keep the shared fallback exactly as before.
+  const tiers = level === "national" ? [scoped] : [scoped, global];
+  for (const tier of tiers) {
     const hit = matchWithinTier(item, tier);
     if (hit) return hit;
   }

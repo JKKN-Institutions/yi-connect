@@ -99,7 +99,8 @@
 .rx-mark { display: flex; align-items: center; gap: 10px; color: var(--rx-laurel-deep); text-decoration: none; }
 .rx-mark-rule { display: block; width: 1px; height: 22px; background: var(--rx-line-strong); }
 .rx-mark-word { font-family: var(--font-rx-display), serif; font-size: 1.15rem; letter-spacing: 0.08em; }
-.rx-partners { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.rx-partners { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.rx-mark-word { min-width: 0; }
 .rx-desks { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
 .rx-desk-link {
   padding: 6px 12px;
@@ -371,6 +372,7 @@
   .rx-pips { gap: 4px; }
   .rx-desks { margin-left: 0; width: 100%; }
   .rx-mark-word { font-size: 1rem; letter-spacing: 0.04em; }
+  .rx-partners { gap: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

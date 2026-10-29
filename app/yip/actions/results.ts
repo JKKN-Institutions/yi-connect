@@ -19,7 +19,11 @@ import {
 } from "@/lib/yip/scoring-roles";
 import { fetchEventRoundLevel, type RoundLevel } from "@/lib/yip/round-level";
 import { resolveAwardsForLevel } from "@/lib/yip/awards";
-import { HOUSE_OFFICIAL_ROLES } from "@/lib/yip/constants";
+import {
+  roleEligibility,
+  schoolCapApplies,
+  SCHOOL_AWARD_CAP,
+} from "@/lib/yip/award-eligibility";
 import { listScoringBuckets } from "./scoring-buckets";
 import { getScoringFlagsConfig } from "./scoring-flags";
 import { getSessionScoringParams } from "./scoring";
@@ -33,64 +37,6 @@ import {
 type ActionResult<T = null> =
   | { success: true; data: T }
   | { success: false; error: string };
-
-// ─── Role classification helpers ─────────────────────────────────
-
-const RULING_ROLES = new Set([
-  "prime_minister",
-  "deputy_prime_minister",
-  "cabinet_minister",
-  // 2026 Regional Round: a Deputy Minister is an ordinary government-side
-  // participant — eligible for Best Member — Ruling Bench like a minister.
-  "deputy_minister",
-  "mp",
-  "bill_committee",
-  // A deposed PM / Deputy PM stays on the ruling bench.
-  "ex_prime_minister",
-  "ex_deputy_prime_minister",
-]);
-
-const OPPOSITION_ROLES = new Set([
-  "leader_of_opposition",
-  "shadow_minister",
-  "mp",
-  "bill_committee",
-  // A deposed Leader of Opposition stays on the opposition bench.
-  "ex_leader_of_opposition",
-]);
-
-const LEADERSHIP_ROLES = new Set([
-  "speaker",
-  "deputy_speaker",
-  "prime_minister",
-  "deputy_prime_minister",
-  "leader_of_opposition",
-  "party_leader",
-  "coalition_leader",
-  "cabinet_minister",
-  "shadow_minister",
-  "committee_chair",
-  // "Ex-" deposed leaders keep their leadership standing (and points). Note:
-  // role-SPECIFIC awards (e.g. "Best Prime Minister") key off the exact role
-  // string, so those still resolve to the CURRENT holder, not the Ex-.
-  "ex_prime_minister",
-  "ex_deputy_prime_minister",
-  "ex_leader_of_opposition",
-  "ex_speaker",
-  "ex_deputy_speaker",
-]);
-
-function isRulingMP(role: string | null, side: string | null): boolean {
-  if (!role || !side) return false;
-  if (side !== "ruling") return false;
-  return RULING_ROLES.has(role);
-}
-
-function isOppositionMP(role: string | null, side: string | null): boolean {
-  if (!role || !side) return false;
-  if (side !== "opposition") return false;
-  return OPPOSITION_ROLES.has(role);
-}
 
 // ─── Compute Results ─────────────────────────────────────────────
 
@@ -345,44 +291,6 @@ function removeAward(r: ResultRow, awardLabel: string): void {
 // student could stack awards) was REPLACED 2026-06-25 by the single cap-aware,
 // scarce-first pass in computeResults() (ONE award per student). Its gate +
 // tiebreak live there now. appendAward / removeAward remain the only mutators.
-
-// Per-school award cap (Director ruling 2026-06-28): at most this many INDIVIDUAL
-// awards per school. Team awards (Team Spirit) are a single collective committee
-// prize and are EXEMPT. Blank/unknown school is exempt too (each blank is its own
-// unknown school — grouping distinct unknown-school students would be wrong).
-const SCHOOL_AWARD_CAP = 3;
-
-/**
- * CHAPTER ROUNDS ONLY (Director ruling 2026-08-29).
- *
- * At a chapter round students arrive in school blocks and the cap does real
- * work — 69 of 87 schools field 4+ students, and 11 of the 36 schools that have
- * ever won something sit exactly at the ceiling.
- *
- * At a REGIONAL round it is both near-useless and unfair. Chapters send a few
- * delegates each from many different schools, so only 4 of 124 schools could
- * ever reach the cap. Worse, the blank-school exemption above makes it apply
- * unevenly to rounds of the same competition: on the day this was scoped,
- * Ahmedabad had 163 of 163 delegates with no school recorded and Durg 115 of
- * 115 — the cap was entirely inert for both — while SRTN had only 9 of 196
- * blank, so it bound on 95% of that field. Three regional rounds, three
- * different rulebooks, decided by nothing but whether a school name was typed.
- *
- * School is not the unit of a regional round; the CHAPTER is (Director,
- * 2026-08-29). A spread rule at that level belongs on chapter, not school.
- *
- * This changes NOTHING already computed: no regional round has ever assigned an
- * individual award, and chapter rounds keep the cap exactly as before.
- *
- * A NULL level keeps the cap. The level can be unresolved (an event with none
- * set, or a lookup that failed), and an unknown must never silently RELAX a
- * fairness rule — before this change the cap applied everywhere, so an
- * unresolved round keeps behaving exactly as it did. The cap is lifted only
- * where we positively know the round is not a chapter one.
- */
-function schoolCapApplies(roundLevel: RoundLevel | null): boolean {
-  return roundLevel !== "regional" && roundLevel !== "national";
-}
 
 export async function computeResults(
   eventId: string
@@ -1137,21 +1045,16 @@ export async function computeResults(
     (r: ResultRow): number =>
       keys.reduce((sum, k) => sum + parentScoreByKey(r.score_breakdown, k), 0);
 
-  // Role/side eligibility for the 6 matrix awards.
-  const isSpeaker = (p: ParticipantLite) => p.parliament_role === "speaker";
-  const isLeadership = (p: ParticipantLite) =>
-    !!p.parliament_role && LEADERSHIP_ROLES.has(p.parliament_role);
-  const isRuling = (p: ParticipantLite) =>
-    isRulingMP(p.parliament_role, p.party_side);
-  const isOpposition = (p: ParticipantLite) =>
-    isOppositionMP(p.parliament_role, p.party_side);
-  const isIndependent = (p: ParticipantLite) =>
-    p.parliament_role === "independent_mp";
-  // Competing MPs only (Director ruling 2026-10-28): excludes the officials of
-  // the House (Speaker, Deputy, Nominated Speaker, their ex- forms, Journalist,
-  // Administrator). A participant with no role is not a seated MP → not eligible.
-  const isCompetingMP = (p: ParticipantLite) =>
-    !!p.parliament_role && !HOUSE_OFFICIAL_ROLES.has(p.parliament_role);
+  // Role/side eligibility — ONE shared rule (lib/yip/award-eligibility.ts),
+  // the same one setAwardWinner checks a chair's pin against, so a pin can
+  // never land on a student the engine itself would refuse.
+  const byRole = (e: string) => (p: ParticipantLite) =>
+    roleEligibility(e, p.parliament_role, p.party_side) === true;
+  const isSpeaker = byRole("speaker");
+  const isLeadership = byRole("leadership");
+  const isRuling = byRole("ruling");
+  const isOpposition = byRole("opposition");
+  const isIndependent = byRole("independent");
 
   // MVP min-participation gate (Director ruling "at least half"): a participant
   // must be scored in ≥ half as many sessions as the most-scored participant
@@ -1270,28 +1173,12 @@ export async function computeResults(
     levels?: string[] | null;
   };
   function eligibilityFn(e: string): (p: ParticipantLite, r: ResultRow) => boolean {
-    switch (e) {
-      case "speaker":
-        return isSpeaker;
-      case "leadership":
-        return isLeadership;
-      case "ruling":
-        return isRuling;
-      case "opposition":
-        return isOpposition;
-      case "independent":
-        return isIndependent;
-      case "no_disciplinary":
-        return (_p, r) => !r.hasDisciplinary;
-      case "mps_only":
-        return isCompetingMP;
-      case "all":
-        return all;
-      default:
-        // Fail CLOSED: an unknown value means an empty pool (no winner), never
-        // a wrong winner. The admin editor only saves known values.
-        return () => false;
-    }
+    // 'no_disciplinary' depends on result data, not on the role.
+    if (e === "no_disciplinary") return (_p, r) => !r.hasDisciplinary;
+    // Every other value is a pure role/side rule. Fail CLOSED: an unknown value
+    // means an empty pool (no winner), never a wrong winner. The admin editor
+    // only saves known values.
+    return byRole(e);
   }
   function rankByFn(mode: string, keys: string[]): (r: ResultRow) => number {
     switch (mode) {

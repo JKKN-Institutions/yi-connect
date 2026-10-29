@@ -109,14 +109,57 @@ export function roleEligibility(
   }
 }
 
-/** Plain-English "who this award is for", used when a chair's pick is refused. */
+// ─── Chair's pin (setAwardWinner) ────────────────────────────────
+
+/** The presiding officers of the House — the Speaker and the deputies. */
+export const PRESIDING_OFFICER_ROLES = new Set([
+  "speaker",
+  "deputy_speaker",
+  "nominated_speaker",
+  "ex_speaker",
+  "ex_deputy_speaker",
+]);
+
+/**
+ * May a CHAIR pin this award on this participant? Starts from the engine's
+ * rule (roleEligibility) and widens it in exactly two places, for the chair's
+ * hand pick only — the engine's automatic pick is unchanged:
+ *
+ *   - 'speaker': any presiding officer (Director decision 2026-10-29) — the
+ *     chair may give Best Speaker of the House to a Deputy Speaker who
+ *     presided, though the engine still ranks the Speaker alone.
+ *   - 'ruling' / 'opposition': the student's SIDE alone, any role. Committee
+ *     chairs and party leaders sit on a bench but are outside the engine's
+ *     bench role lists, so a pin is their only route (master let these land).
+ *
+ * Same return contract as roleEligibility (null = not a role rule).
+ */
+export function pinEligibility(
+  eligibility: string,
+  role: string | null,
+  side: string | null
+): boolean | null {
+  switch (eligibility) {
+    case "speaker":
+      return !!role && PRESIDING_OFFICER_ROLES.has(role);
+    case "ruling":
+      return side === "ruling";
+    case "opposition":
+      return side === "opposition";
+    default:
+      return roleEligibility(eligibility, role, side);
+  }
+}
+
+/** Plain-English "who this award is for" when a chair's pick is refused —
+ *  describes the PIN rule (pinEligibility), which is what refused it. */
 export const ELIGIBILITY_PLAIN: Record<string, string> = {
   all: "open to everyone",
-  speaker: "for the Speaker only",
+  speaker: "for the Speaker or a Deputy Speaker only",
   leadership:
     "for leadership roles only — Speaker, Deputy Speaker, Prime Minister, Deputy PM, Leader of the Opposition, party and coalition leaders, ministers, shadow ministers and committee chairs",
-  ruling: "for ruling-bench (government side) members only",
-  opposition: "for opposition-bench members only",
+  ruling: "for students on the ruling (government) side only",
+  opposition: "for students on the opposition side only",
   independent: "for Independent MPs only",
   mps_only:
     "for MPs only — not the Speaker, Deputy Speakers, Journalists or Administrators",

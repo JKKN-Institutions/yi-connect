@@ -8,7 +8,7 @@ import { isAwardLabel, resolveAwardsForLevel } from "@/lib/yip/awards";
 import { fetchEventRoundLevel } from "@/lib/yip/round-level";
 import {
   ELIGIBILITY_PLAIN,
-  roleEligibility,
+  pinEligibility,
   schoolCapApplies,
   SCHOOL_AWARD_CAP,
 } from "@/lib/yip/award-eligibility";
@@ -115,13 +115,15 @@ export async function setAwardWinner(
     return { success: false, error: "That participant is not in this event." };
   }
 
-  // The pick must meet the award's eligibility — the SAME role/side rule the
-  // engine ranks with (lib/yip/award-eligibility.ts), checked before any write.
-  // The award is resolved exactly as computeResults resolves it (this round's
-  // level → its award set → match by label). Not blocked here: an award with no
-  // definition row, an in-code fallback award (no rank_mode — the engine keys
-  // those on award_key, and every live row has rank_mode), or a rule that
-  // depends on result data (roleEligibility → null, e.g. no disciplinary flag).
+  // The pick must meet the award's eligibility — the engine's role/side rule
+  // (lib/yip/award-eligibility.ts), widened for a chair's pin only by
+  // pinEligibility (Best Speaker → any presiding officer; bench awards → side
+  // alone). Checked before any write. The award is resolved exactly as
+  // computeResults resolves it (this round's level → its award set → match by
+  // label). Not blocked here: an award with no definition row, an in-code
+  // fallback award (no rank_mode — the engine keys those on award_key, and
+  // every live row has rank_mode), or a rule that depends on result data
+  // (→ null, e.g. no disciplinary flag).
   const roundLevel = await fetchEventRoundLevel(supabase as never, eventId);
   const { data: allAwardDefs } = await (supabase as unknown as SupabaseClient)
     .from("award_definitions")
@@ -138,16 +140,24 @@ export async function setAwardWinner(
   if (def?.rank_mode) {
     const eligibility = def.eligibility ?? "all";
     if (
-      roleEligibility(
+      pinEligibility(
         eligibility,
         participant.parliament_role,
         participant.party_side
       ) === false
     ) {
       const who = ELIGIBILITY_PLAIN[eligibility] ?? "not open to this student";
+      // Bench awards are judged on side alone, so say which side (if any) the
+      // student is recorded on.
+      const side =
+        eligibility === "ruling" || eligibility === "opposition"
+          ? participant.party_side
+            ? `, and ${participant.full_name} is on the ${participant.party_side} side`
+            : `, and ${participant.full_name} has no side recorded — set their party side first`
+          : "";
       return {
         success: false,
-        error: `${participant.full_name} can't receive ${awardLabel}: this award is ${who}.`,
+        error: `${participant.full_name} can't receive ${awardLabel}: this award is ${who}${side}.`,
       };
     }
   }

@@ -1507,8 +1507,10 @@ export async function computeResults(
         rank: idx + 1,
         participant_id: r.participant_id,
         // The metric this award ranks on, for THIS candidate (same rankBy that
-        // ordered the list).
-        score: Math.round(aw.rankBy(r) * 100) / 100,
+        // ordered the list). Kept at 6 decimals (was 2) so the results page can
+        // tell a real tie from a near one; 6dp still absorbs float noise
+        // (0.1 + 0.2). Every screen displays it at 1 decimal.
+        score: Math.round(aw.rankBy(r) * 1e6) / 1e6,
         // After the cap + chair overrides each row holds ≤1 award, so a simple
         // label-membership check is exact (team awards flag every co-winner).
         is_winner: labels.includes(aw.label),

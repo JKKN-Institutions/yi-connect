@@ -569,11 +569,23 @@ export function ResultsClient({
   const awardsWithWinner = awardWinners.size;
 
   // Ties — DISPLAY ONLY; never changes who the engine picked. An award is tied
-  // when a winner's ranking value equals a non-winner contender's. Compared on
-  // the stored candidate score (the engine's value at 2 decimals), not the
-  // 1-decimal display, so 12.34 vs 12.31 is not a tie. Team Spirit is skipped:
-  // every member of a committee shares one value by design, so a member who
-  // already holds another award would look like a false tie.
+  // when a winner's ranking value equals that of a non-winner contender who is
+  // still free to take it. Compared on the stored candidate score — the most
+  // precise value the page has (the engine's ranking value, kept at 6 decimals
+  // since this change; rows computed before it hold 2) — never the 1-decimal
+  // display. Not ties:
+  //   - a contender who already holds a DIFFERENT award — they lost this one to
+  //     the one-award-per-student rule, not to a coin toss;
+  //   - Team Spirit — every committee member shares one value by design.
+  const awardHeldBy = new Map(
+    results.map((r) => [r.participant_id, r.award_category ?? ""])
+  );
+  const holdsOtherAward = (pid: string, label: string) => {
+    const labels = (awardHeldBy.get(pid) ?? "")
+      .split(", ")
+      .filter((l) => l && !l.startsWith(NOT_RANKED_PREFIX));
+    return labels.some((l) => l !== label);
+  };
   const tiedAwardLabels = new Set<string>();
   const tiedCandidateKeys = new Set<string>(); // `${award_key}:${participant_id}`
   const candidateRankLabel = new Map<string, string>(); // same key → "1" / "=1"
@@ -587,7 +599,10 @@ export function ResultsClient({
               (c) =>
                 c.is_winner &&
                 g.candidates.some(
-                  (o) => !o.is_winner && Number(o.score) === Number(c.score)
+                  (o) =>
+                    !o.is_winner &&
+                    Number(o.score) === Number(c.score) &&
+                    !holdsOtherAward(o.participant_id, g.award_label)
                 )
             )
             .map((c) => Number(c.score))
@@ -600,7 +615,11 @@ export function ResultsClient({
       const ahead = scores.filter((x) => x > s).length;
       const shared = scores.filter((x) => x === s).length > 1;
       candidateRankLabel.set(key, `${shared ? "=" : ""}${ahead + 1}`);
-      if (tiedScores.has(s)) tiedCandidateKeys.add(key);
+      if (
+        tiedScores.has(s) &&
+        (c.is_winner || !holdsOtherAward(c.participant_id, g.award_label))
+      )
+        tiedCandidateKeys.add(key);
     }
   }
   const tieBadge = (

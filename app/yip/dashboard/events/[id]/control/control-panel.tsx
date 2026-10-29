@@ -66,6 +66,7 @@ import { advanceSpeaker, skipSpeaker, generateSpeakerQueue, getSpeakerQueue } fr
 import { QuestionHourPanel } from "./question-hour";
 import { GovernmentFormationPanel } from "./government-formation";
 import { VoteManager } from "./vote-manager";
+import { countOpenVotes } from "@/app/yip/actions/voting";
 import { BillSession } from "./bill-session";
 import { SpeakingFloorPanel } from "./speaking-floor-panel";
 import { ElectionResultsRollup } from "./election-results-rollup";
@@ -221,6 +222,8 @@ export function ControlPanel({
     cancelLabel?: string;
     /** Render the confirm button in destructive (red) style. */
     destructive?: boolean;
+    /** Optional highlighted warning line under the description. */
+    warning?: string;
   }>({ open: false, title: "", description: "", action: () => {} });
   // Inline duration editing in the agenda sidebar
   const [editingDurationId, setEditingDurationId] = useState<string | null>(null);
@@ -482,10 +485,30 @@ export function ControlPanel({
   // ─── Action handlers ──────────────────────────────────────────
 
   function handleStatusTransition(newStatus: string, label: string) {
+    // Ending a day (or the event) does NOT close a vote that is still open —
+    // so warn in the dialog when one is. It never closes the vote itself.
+    if (newStatus === "day1_complete" || newStatus === "completed") {
+      startTransition(async () => {
+        const open = await countOpenVotes(eventId);
+        openStatusDialog(
+          newStatus,
+          label,
+          open.success && open.data.open > 0
+            ? "A vote is still open — close it first, or it stays open after the day ends."
+            : undefined
+        );
+      });
+      return;
+    }
+    openStatusDialog(newStatus, label);
+  }
+
+  function openStatusDialog(newStatus: string, label: string, warning?: string) {
     setConfirmDialog({
       open: true,
       title: label,
       description: `Are you sure you want to ${label.toLowerCase()}? This action changes the event status and affects all connected clients.`,
+      warning,
       action: () => {
         startTransition(async () => {
           const result = await updateEventStatus(eventId, newStatus);
@@ -1685,6 +1708,7 @@ export function ControlPanel({
               eventId={eventId}
               currentAgendaItem={currentAgendaItem}
               totalParticipants={stats.totalParticipants}
+              electionsOff={initialEvent.level === "national"}
             />
           )}
 
@@ -2236,6 +2260,12 @@ export function ControlPanel({
               {confirmDialog.description}
             </DialogDescription>
           </DialogHeader>
+          {confirmDialog.warning && (
+            <p className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm font-medium text-amber-900">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" />
+              {confirmDialog.warning}
+            </p>
+          )}
           <DialogFooter>
             <Button
               variant="outline"

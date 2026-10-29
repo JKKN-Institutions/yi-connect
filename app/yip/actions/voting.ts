@@ -40,6 +40,9 @@ import { revalidatePath } from "next/cache";
 import type { RollupEntry, RollupOption } from "@/lib/yip/election-rollup";
 import { PARTY_LEADER_LABEL_ONLY_ROLES } from "@/lib/yip/constants";
 
+const NATIONAL_ELECTIONS_OFF =
+  "Elections are switched off at the National Finals — posts come from the organisers' list.";
+
 type VoteSession = Tables<{ schema: "yip" }, "vote_sessions">;
 type Vote = Tables<{ schema: "yip" }, "votes">;
 
@@ -429,6 +432,28 @@ export async function getDayCheckInSummary(
   return { success: true, data: { day, checkedIn, total } };
 }
 
+/**
+ * How many votes are still OPEN for this event — so the End Day / Complete
+ * Event confirmation can warn that an open vote outlives the day. Read only;
+ * it never closes anything. Organiser-gated.
+ */
+export async function countOpenVotes(
+  eventId: string
+): Promise<ActionResult<{ open: number }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage)
+    return { success: false, error: "Not authorized to manage this event" };
+
+  const supabase = await createServiceClient();
+  const { count, error } = await supabase
+    .from("vote_sessions")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", eventId)
+    .eq("status", "open");
+  if (error) return { success: false, error: error.message };
+  return { success: true, data: { open: count ?? 0 } };
+}
+
 export async function openVote(
   eventId: string,
   agendaItemId: string,
@@ -500,7 +525,7 @@ export async function openVote(
   // — elections are run AFTER allocation is locked, so that lock must not block here.
   const { data: lockState, error: lockErr } = await supabase
     .from("events")
-    .select("scores_locked, results_published_at")
+    .select("scores_locked, results_published_at, level")
     .eq("id", eventId)
     .single();
   if (lockErr || !lockState) return { success: false, error: "Event not found" };
@@ -509,6 +534,14 @@ export async function openVote(
   }
   if (lockState.scores_locked) {
     return { success: false, error: "Scores are locked — unlock scores before opening a vote." };
+  }
+  // National Finals: every post (Speaker, PM, ministers, party leaders…) is
+  // loaded from the organisers' sheet, and revealing an election rewrites
+  // parliament_role. Refuse every election kind there. Bill votes stay open —
+  // they seat nobody. Only an explicit 'national' blocks, so chapter and
+  // regional rounds are untouched.
+  if (lockState.level === "national" && voteType !== "bill_vote") {
+    return { success: false, error: NATIONAL_ELECTIONS_OFF };
   }
 
   // A Bill Vote only makes sense inside a session that puts a bill on the
@@ -1194,7 +1227,16 @@ export async function revealResults(
   // because positionBonuses is keyed on parliament_role and theirs is never
   // rewritten away from their senior post. Every other role is unaffected and
   // still gets cleared exactly as before.
-  {
+  //
+  // SKIPPED at the National Finals: there the party leaders come from the
+  // organisers' sheet and several also hold a minister's post, so this
+  // reconciliation would wipe a loaded leader on every bill-vote reveal.
+  const { data: revealEvent } = await supabase
+    .from("events")
+    .select("level")
+    .eq("id", session.event_id)
+    .maybeSingle();
+  if (revealEvent?.level !== "national") {
     const { data: leaderParties } = await supabase
       .from("parties")
       .select("id, party_leader_id")

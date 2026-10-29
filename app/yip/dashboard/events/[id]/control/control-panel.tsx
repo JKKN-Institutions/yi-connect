@@ -489,11 +489,13 @@ export function ControlPanel({
     // so warn in the dialog when one is. It never closes the vote itself.
     if (newStatus === "day1_complete" || newStatus === "completed") {
       startTransition(async () => {
-        const open = await countOpenVotes(eventId);
+        // A failed read (wifi blip, stale action id after a deploy) must never
+        // stop the organiser ending the day — open the dialog regardless.
+        const open = await countOpenVotes(eventId).catch(() => null);
         openStatusDialog(
           newStatus,
           label,
-          open.success && open.data.open > 0
+          open?.success && open.data.open > 0
             ? "A vote is still open — close it first, or it stays open after the day ends."
             : undefined
         );

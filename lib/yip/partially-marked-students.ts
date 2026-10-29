@@ -131,7 +131,7 @@ export async function getPartiallyMarkedStudents(
   }
   if (
     typeof participantCountRes.count === "number" &&
-    participantRows.length !== participantCountRes.count
+    participantRows.length < participantCountRes.count
   ) {
     return fail(
       `Only ${participantRows.length} of ${participantCountRes.count} students could be read, so part-marked students cannot be checked.`
@@ -139,7 +139,7 @@ export async function getPartiallyMarkedStudents(
   }
   if (
     typeof scoreCountRes.count === "number" &&
-    scoreRows.length !== scoreCountRes.count
+    scoreRows.length < scoreCountRes.count
   ) {
     return fail(
       `Only ${scoreRows.length} of ${scoreCountRes.count} marks could be read, so part-marked students cannot be checked.`

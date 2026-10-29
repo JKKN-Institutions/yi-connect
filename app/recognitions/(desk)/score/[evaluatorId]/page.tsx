@@ -122,6 +122,12 @@ export default async function ScoringSheetPage({
           </span>
         </Notice>
       ) : null}
+      {state.phase === "nominations" && win.state === "open" ? (
+        <Notice tone="alert">
+          Test scoring: marks made before nominations close are for testing and will be wiped before real scoring opens
+          on {formatWhen(cycle.nomination_deadline)}.
+        </Notice>
+      ) : null}
     </PageHead>
   );
 

@@ -155,6 +155,12 @@ export default async function MySheetsPage() {
                 </Notice>
               ) : (
                 <>
+                  {state.phase === "nominations" ? (
+                    <Notice tone="alert">
+                      Test scoring: marks made before nominations close are for testing and will be wiped before real
+                      scoring opens on {formatWhen(state.cycle.nomination_deadline)}.
+                    </Notice>
+                  ) : null}
                   <Deadline label="Stage 1 closes" iso={state.cycle.stage1_deadline} />
                   {extra?.rescore && duty.layer === "rm" && state.sendBacks[0] ? (
                     <Notice tone="alert">

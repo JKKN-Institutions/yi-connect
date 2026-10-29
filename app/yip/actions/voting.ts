@@ -406,6 +406,31 @@ async function countDayCheckin(
 }
 
 /**
+ * Turnout denominator for a vote result: students checked in for the event's
+ * CURRENT day. Check-in writes checked_in_day1 / checked_in_day2, never the
+ * legacy checked_in column, so counting that column read 0 at the Finals.
+ * Same rule as the Control page's Quick Stats: day 2 from day2_live onward,
+ * otherwise day 1.
+ */
+async function countCheckedInToday(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  eventId: string
+): Promise<number> {
+  const { data: ev } = await supabase
+    .from("events")
+    .select("status")
+    .eq("id", eventId)
+    .maybeSingle();
+  const day =
+    ev?.status === "day2_live" ||
+    ev?.status === "completed" ||
+    ev?.status === "results_published"
+      ? 2
+      : 1;
+  return (await countDayCheckin(supabase, eventId, day)).checkedIn;
+}
+
+/**
  * How many students are checked in for the day an agenda item belongs to — so
  * the control panel can warn the organiser BEFORE they open a day-gated vote
  * that nobody can cast in (the other half of the Erode Day-2 silent-vote issue).
@@ -977,11 +1002,10 @@ export async function revealResults(
   );
 
   // Count total participants for this event
-  const { count: totalParticipants } = await supabase
-    .from("participants")
-    .select("*", { count: "exact", head: true })
-    .eq("event_id", session.event_id)
-    .eq("checked_in", true);
+  const totalParticipants = await countCheckedInToday(
+    supabase,
+    session.event_id
+  );
 
   const winner = tallies.length > 0 ? tallies[0].vote_value : null;
 
@@ -1799,11 +1823,10 @@ export async function getVoteResults(
   // Get tallies (party-leader tallies are scoped to the party's own members).
   const { tallies, totalVotes } = await buildTallies(supabase, session);
 
-  const { count: totalParticipants } = await supabase
-    .from("participants")
-    .select("*", { count: "exact", head: true })
-    .eq("event_id", session.event_id)
-    .eq("checked_in", true);
+  const totalParticipants = await countCheckedInToday(
+    supabase,
+    session.event_id
+  );
 
   const winner = tallies.length > 0 ? tallies[0].vote_value : null;
   const outcome = await resolveOutcome(supabase, session, tallies);

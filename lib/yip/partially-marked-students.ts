@@ -11,6 +11,8 @@
  * 126). This read lists checked-in students who have a mark in at least one
  * scored session that has run, but are missing from another one.
  *
+ * National Finals only (returns an empty list for any other level).
+ *
  * Same privacy shape as getUnmarkedStudents: gated on canManage, returns only
  * the ABSENCE of a mark (seat, name, which sessions are missing) — never a
  * score, total, average, rank or count of marks. Read-only; a warning, never a
@@ -59,6 +61,16 @@ export async function getPartiallyMarkedStudents(
   if (!access.canManage) return null;
 
   const supabase = await createServiceClient();
+
+  // NATIONAL FINALS ONLY. At chapter and regional rounds only the speakers are
+  // marked in a session by design, so this rule flags ~85–90% of the House
+  // (measured on the three biggest past rounds) — pure noise there.
+  const { data: ev } = await supabase
+    .from("events")
+    .select("level")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (ev?.level !== "national") return { students: [], couldNotCheck: null };
 
   const [participantCountRes, scoreCountRes] = await Promise.all([
     supabase

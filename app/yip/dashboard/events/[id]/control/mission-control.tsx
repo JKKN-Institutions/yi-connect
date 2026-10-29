@@ -192,6 +192,7 @@ export function MissionControl({ eventId }: { eventId: string }) {
       </CardContent>
     </Card>
       <UnmarkedStudentsPanel eventId={eventId} />
+      <PartiallyMarkedNote eventId={eventId} />
     </div>
   );
 }
@@ -216,19 +217,14 @@ export function MissionControl({ eventId }: { eventId: string }) {
  */
 function UnmarkedStudentsPanel({ eventId }: { eventId: string }) {
   const [data, setData] = useState<UnmarkedStudents | null>(null);
-  const [partial, setPartial] = useState<PartiallyMarkedStudents | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const load = useCallback(() => {
     startTransition(async () => {
-      const [r, p] = await Promise.all([
-        getUnmarkedStudents(eventId),
-        getPartiallyMarkedStudents(eventId),
-      ]);
+      const r = await getUnmarkedStudents(eventId);
       setData(r);
-      setPartial(p);
       setLoaded(true);
     });
   }, [eventId]);
@@ -262,19 +258,10 @@ function UnmarkedStudentsPanel({ eventId }: { eventId: string }) {
   const absent = noMarkAtAll.length - present.length;
   const sessionGaps = sessions.reduce((n, s) => n + s.unmarked, 0);
   const unmarkedSessions = sessions.filter((s) => s.noMarksAtAll);
-  // Marked in some scored sessions but missing from others — averaged over
-  // fewer sessions, so they can rank above students marked all day.
-  const partStudents = partial?.students ?? [];
-  const partCouldNotCheck = partial?.couldNotCheck ?? null;
 
   // All clear — say so quietly, so an organiser can tell "checked, nothing to
   // do" apart from "this panel never loaded".
-  if (
-    noMarkAtAll.length === 0 &&
-    sessions.length === 0 &&
-    partStudents.length === 0 &&
-    !partCouldNotCheck
-  ) {
+  if (noMarkAtAll.length === 0 && sessions.length === 0) {
     return (
       <Card className="border-emerald-200 overflow-hidden">
         <CardContent className="flex items-center gap-2 py-3">
@@ -310,9 +297,7 @@ function UnmarkedStudentsPanel({ eventId }: { eventId: string }) {
                   ? `${present.length} student${present.length === 1 ? "" : "s"} in the House ${present.length === 1 ? "has" : "have"} no mark at all`
                   : noMarkAtAll.length > 0
                     ? `${noMarkAtAll.length} student${noMarkAtAll.length === 1 ? "" : "s"} with no mark — none of them checked in`
-                    : sessionGaps > 0 || partStudents.length === 0
-                      ? `${sessionGaps} speaking slot${sessionGaps === 1 ? "" : "s"} with no mark`
-                      : `${partStudents.length} student${partStudents.length === 1 ? "" : "s"} marked in only some sessions`}
+                    : `${sessionGaps} speaking slot${sessionGaps === 1 ? "" : "s"} with no mark`}
               </p>
             </div>
           </div>
@@ -362,25 +347,6 @@ function UnmarkedStudentsPanel({ eventId }: { eventId: string }) {
           </div>
         )}
 
-        {partStudents.length > 0 && (
-          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
-            <p className="text-sm font-medium text-amber-900">
-              {partStudents.length}{" "}
-              {partStudents.length === 1
-                ? "student has marks in some sessions but not others."
-                : "students have marks in some sessions but not others."}
-            </p>
-            <p className="mt-1 text-xs text-amber-700">
-              Their result is worked out from fewer sessions, so it can beat
-              students marked all day. Send a judge to fill the missing sessions.
-            </p>
-          </div>
-        )}
-
-        {partCouldNotCheck && (
-          <p className="text-xs text-gray-500">{partCouldNotCheck}</p>
-        )}
-
         <p className="text-[11px] text-gray-400">
           This is a warning — it never blocks you. It shows who has no mark, never
           anyone&apos;s marks.
@@ -420,32 +386,77 @@ function UnmarkedStudentsPanel({ eventId }: { eventId: string }) {
                   <StudentList students={s.students} />
                 </div>
               ))}
-            {partStudents.length > 0 && (
-              <div>
-                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-                  Marked in some sessions, missing in others ({partStudents.length})
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * National Finals only: students marked in some scored sessions but not
+ * others. Informational, not a warning — the server returns nothing at
+ * chapter/regional rounds, where only the speakers are marked by design, so
+ * this renders nothing there. Seat, name and missing sessions only.
+ */
+function PartiallyMarkedNote({ eventId }: { eventId: string }) {
+  const [data, setData] = useState<PartiallyMarkedStudents | null>(null);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () =>
+      getPartiallyMarkedStudents(eventId).then((r) => {
+        if (!cancelled) setData(r);
+      });
+    load();
+    const t = setInterval(load, 60000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [eventId]);
+
+  if (!data) return null;
+  if (data.couldNotCheck) {
+    return <p className="px-1 text-xs text-gray-500">{data.couldNotCheck}</p>;
+  }
+  const students = data.students;
+  if (students.length === 0) return null;
+
+  return (
+    <Card className="border-gray-200 overflow-hidden">
+      <CardContent className="space-y-2 py-3">
+        <p className="text-xs text-gray-500">
+          {students.length} {students.length === 1 ? "student has" : "students have"}{" "}
+          marks in some sessions but not others. Each student&apos;s score is
+          the average of the sessions they were marked in.
+        </p>
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex w-full items-center justify-between rounded-md px-1 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          <span>{expanded ? "Hide" : "Show"} who is missing</span>
+          {expanded ? (
+            <ChevronDown className="size-4" />
+          ) : (
+            <ChevronRight className="size-4" />
+          )}
+        </button>
+        {expanded && (
+          <div className="divide-y divide-gray-100 rounded-lg border border-gray-100">
+            {students.map((s) => (
+              <div key={s.participantId} className="px-3 py-2">
+                <p className="truncate text-sm font-medium text-gray-900">
+                  {s.seat != null ? `Seat ${s.seat} · ` : ""}
+                  {s.participantName}
                 </p>
-                <div className="divide-y divide-gray-100 rounded-lg border border-gray-100">
-                  {partStudents.map((s) => (
-                    <div
-                      key={s.participantId}
-                      className="flex items-start gap-3 px-3 py-2"
-                    >
-                      <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-gray-900">
-                          {s.seat != null ? `Seat ${s.seat} · ` : ""}
-                          {s.participantName}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          Missing: {s.missingSessions.join(", ")}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <p className="text-xs text-gray-500">
+                  Missing: {s.missingSessions.join(", ")}
+                </p>
               </div>
-            )}
+            ))}
           </div>
         )}
       </CardContent>

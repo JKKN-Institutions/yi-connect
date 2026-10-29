@@ -27,10 +27,12 @@ function Svg({ size = 18, className, title, children }: P & { children: React.Re
 
 /**
  * The header's logo row, in Piyush's order (28 Oct): Yi, One Bharat, Take Pride, CII.
- * Only the Yi file is in hand; add each of the other three here once it is shared.
+ * One Bharat and CII are the files YIP already uses. Take Pride goes between them once it is shared.
  */
 const PARTNER_LOGOS: Array<{ src: string; alt: string; ratio: number }> = [
   { src: "/recognitions-assets/yi-mark.png", alt: "Young Indians", ratio: 147 / 160 },
+  { src: "/recognitions-assets/one-bharat.svg", alt: "One Bharat", ratio: 200 / 136 },
+  { src: "/recognitions-assets/cii.png", alt: "CII", ratio: 400 / 248 },
 ];
 
 export function PartnerMarks({ height = 26 }: { height?: number }) {

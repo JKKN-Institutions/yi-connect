@@ -91,7 +91,11 @@ export default async function ChapterDashboard({
           can apply once it&apos;s done.
         </Notice>
       ) : win.state === "not_open" ? (
-        <Notice>Nominations haven&apos;t opened yet. The Recognitions super admin will set the deadline.</Notice>
+        <Notice>
+          {win.opensAt
+            ? `Nominations open on ${formatWhen(win.opensAt)}.`
+            : "Nominations haven't opened yet. The Recognitions super admin will set the deadline."}
+        </Notice>
       ) : win.state === "closed" ? (
         <Notice>
           Nominations closed on {formatWhen(win.deadline)}.{" "}

@@ -104,7 +104,10 @@ export default async function QuizPage({
   const win = nominationWindow(cycle);
   let closed: string | null = null;
   if (!cycle.quiz_open) closed = "The prediction quiz is closed.";
-  else if (win.state === "not_open") closed = "The quiz opens with nominations. The Recognitions super admin hasn't set the deadline yet.";
+  else if (win.state === "not_open")
+    closed = win.opensAt
+      ? `The quiz opens with nominations on ${formatWhen(win.opensAt)}.`
+      : "The quiz opens with nominations. The Recognitions super admin hasn't set the deadline yet.";
   else if (win.state === "closed") closed = `The quiz closed with nominations on ${formatWhen(win.deadline)}.`;
   else if (awards.length === 0) closed = "No recognitions have been set up for this cycle yet.";
 

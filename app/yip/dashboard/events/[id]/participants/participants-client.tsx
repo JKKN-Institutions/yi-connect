@@ -12,7 +12,7 @@ import {
   updateParticipant,
   setParticipantBenches,
 } from "@/app/yip/actions/participants";
-import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
+import { ROLE_LABELS, PARTY_COLORS, HOUSE_OFFICIAL_ROLES } from "@/lib/yip/constants";
 import {
   describePartySide,
   PARTY_SIDE_LABELS,
@@ -60,6 +60,13 @@ import { EmailSendCodes } from "@/components/yip/email-send-codes";
 import { ParticipantProfileDialog } from "@/components/yip/participant-profile-dialog";
 import { exportAllocationRoster } from "@/app/yip/actions/school-export";
 import { toast } from "sonner";
+
+// Officials of the House (Speaker, Deputies, Journalists, Administrators) sit
+// on no bench by design and are marked on role-only sheets, so a missing bench
+// is only a gap for everyone else.
+function needsBench(p: { party_side?: string | null; parliament_role?: string | null }) {
+  return !p.party_side && !HOUSE_OFFICIAL_ROLES.has(p.parliament_role ?? "");
+}
 
 type Participant = {
   id: string;
@@ -441,7 +448,7 @@ export function ParticipantsClient({
   // national admin ruled out (18 Aug 2026), because the bench decides which two
   // criteria the student is marked on. Today this gap is invisible until it
   // blocks someone mid-session, so it is stated on the screen instead.
-  const missingBenchCount = participants.filter((p) => !p.party_side).length;
+  const missingBenchCount = participants.filter(needsBench).length;
 
   const filtersActive =
     checkInFilter !== "all" ||
@@ -498,7 +505,7 @@ export function ParticipantsClient({
     // to guess for, which is the set an organiser wants to bulk-assign.
     // (missingBenchCount below counts the same thing across the whole roster.)
     if (benchFilter === "none")
-      filtered = filtered.filter((p) => !p.party_side);
+      filtered = filtered.filter(needsBench);
     else if (benchFilter !== "all")
       filtered = filtered.filter((p) => p.party_side === benchFilter);
 

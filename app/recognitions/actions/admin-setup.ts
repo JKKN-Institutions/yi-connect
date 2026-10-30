@@ -6,6 +6,7 @@ import { rxService } from "@/lib/recognitions/supabase";
 import { audit, getAward, getAwardState, getCurrentCycle, listAwards } from "@/lib/recognitions/data";
 import { KNOWN_RECOGNITIONS, SLUG_RE, isKind } from "@/lib/recognitions/constants";
 import type { ActionResult } from "@/lib/recognitions/types";
+import { earlyTestOpen } from "@/lib/recognitions/phase";
 import { istInputToIso, plainDbError } from "../(desk)/admin/_lib/ist";
 
 /**
@@ -295,7 +296,7 @@ export async function forceOpenStage2(input: { awardId: string; reason: string }
 
   const state = await getAwardState(input.awardId);
   if (!state) return { success: false, error: "That recognition no longer exists." };
-  if (state.phase !== "stage1")
+  if (state.phase !== "stage1" && !(state.phase === "nominations" && earlyTestOpen()))
     return { success: false, error: "Stage 2 can only be forced open while the recognition is in Stage 1 scoring." };
   if (state.award.stage2_unlocked_at) return { success: true, message: "Stage 2 is already open for this recognition." };
 

@@ -223,7 +223,7 @@
 .rx-meter[data-over="true"] .rx-meter-count { color: var(--rx-vermilion); font-weight: 600; }
 
 /* Pip scale: six stops, 0 to 5, for one parameter. */
-.rx-pips { display: inline-flex; gap: 6px; }
+.rx-pips { display: inline-flex; flex-wrap: wrap; gap: 6px; }
 .rx-pip {
   width: 40px;
   height: 40px;
@@ -370,6 +370,8 @@
   .rx-plate { padding: 16px; }
   .rx-pip { width: 38px; height: 38px; }
   .rx-pips { gap: 4px; }
+  /* 0-10 scale: 11 pips wrap onto two rows on a phone instead of overflowing. */
+  .rx-pips[data-max="10"] .rx-pip { width: 34px; height: 34px; }
   .rx-desks { margin-left: 0; width: 100%; }
   .rx-mark-word { font-size: 1rem; letter-spacing: 0.04em; }
   .rx-partners { gap: 8px; }

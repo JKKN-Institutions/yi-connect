@@ -1,20 +1,27 @@
 /**
  * Yi Recognitions scoring — pure functions, no I/O.
  *
- * Formula (Latest Evaluation Matrix doc):
- *   total = w1 * L1/100  +  w2 * L2  +  w3 * L3          (w1+w2+w3 = 100)
- *   L1  Health Card score, 0-100, uploaded from Yi National's Excel.
- *   L2  mean of the Regional Mentors' totals (/25), as a 0-1 fraction.
- *       layer2_mode 'raw'        -> mean/25
+ * Formula (30 Oct 2026 model, Piyush):
+ *   total = w1 * A  +  w2 * L2  +  w3 * L3          (w1+w2+w3 = 100)
+ *   A   Part A, the Health Card activity score, as a 0-1 fraction. Every RM
+ *       and NMT member marks the recognition's Health Card measures 0-10.
+ *       One scorer's Part A = sum(weight * mark) / (10 * sum(weight)).
+ *       RM side = mean over the RMs who marked it; NMT side likewise.
+ *       A = mean of the two sides (each side counts half, however many
+ *       scorers it has); one side only -> that side; none -> missing.
+ *       The super admin's uploaded Health Card (old Layer 1) is reference
+ *       only and no longer feeds the total.
+ *   L2  Part B, mean of the Regional Mentors' totals (/50), as a 0-1 fraction.
+ *       layer2_mode 'raw'        -> mean/50
  *       layer2_mode 'percentile' -> percentile of the mean among the award's
  *                                   nominations in the SAME region (mail 3:
  *                                   "convert to percentile in every region").
- *   L3  mean of the NMT totals (/25), as a 0-1 fraction. Always raw: the
- *       matrix doc gives no percentile rule for Layer 3.
- * A missing layer counts as 0 and is flagged on the row, never hidden.
+ *   L3  Part B, mean of the NMT totals (/50), as a 0-1 fraction. Always raw:
+ *       the matrix doc gives no percentile rule for Layer 3.
+ * A missing part counts as 0 and is flagged on the row, never hidden.
  */
 
-import { CHECK_STEP_ENABLED, MAX_LAYER_TOTAL, PARAM_KEYS } from "./constants";
+import { CHECK_STEP_ENABLED, MAX_LAYER_TOTAL, MAX_PARAM, PARAM_KEYS, PART_A_MAX, PART_A_PREFIX } from "./constants";
 import type { Category, Layer } from "./constants";
 import type { CycleRow, EvaluatorRow, NominationRow, ScoreParams, ScoreRow } from "./types";
 import { awaitingNmtApproval, inRace, isNlAdded, stillInCheck } from "./check-rules";
@@ -28,8 +35,39 @@ export function paramsTotal(params: ScoreParams): number {
 export function paramsComplete(params: ScoreParams): boolean {
   return PARAM_KEYS.every((k) => {
     const v = params[k];
-    return typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 5;
+    return typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= MAX_PARAM;
   });
+}
+
+/** One Part A question: a Health Card measure of the award's table. Plain data. */
+export type PartAMeasure = { key: string; weight: number };
+
+/** The params key a Part A mark is stored under. */
+export function partAKey(measureKey: string): `a_${string}` {
+  return `${PART_A_PREFIX}${measureKey}` as `a_${string}`;
+}
+
+/** True for a whole-number mark in 0..max. */
+export function isMark(v: unknown, max: number): v is number {
+  return typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= max;
+}
+
+/**
+ * One scorer's Part A as a 0-1 fraction: sum(weight * mark) / (10 * sum(weight)).
+ * Null unless EVERY measure carries a valid mark, or when there are no
+ * measures / the weights sum to 0.
+ */
+export function partAFraction(params: ScoreParams, measures: PartAMeasure[]): number | null {
+  if (measures.length === 0) return null;
+  let sumW = 0;
+  let sum = 0;
+  for (const m of measures) {
+    const v = params[partAKey(m.key)];
+    if (!isMark(v, PART_A_MAX)) return null;
+    sumW += m.weight;
+    sum += m.weight * v;
+  }
+  return sumW > 0 ? sum / (PART_A_MAX * sumW) : null;
 }
 
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
@@ -47,26 +85,35 @@ export type MatrixRow = {
   chapter_id: string;
   category: Category;
   region: string;
-  l1: number | null;
+  /** Part A per side (0-1): mean of the RM scorers' and of the NMT scorers' Part A. */
+  partARm: number | null;
+  partANmt: number | null;
+  /** Part A (0-1): mean of the two sides, or the one side that has marks. */
+  partA: number | null;
   rmTotals: number[];
   nmtTotals: number[];
   l2Avg: number | null;
   l2Fraction: number | null;
   l3Avg: number | null;
   l3Fraction: number | null;
+  /** Each part's share of the total, in points (weights 50 / 25 / 25 sum to 100). */
+  partAPoints: number;
+  rmPoints: number;
+  nmtPoints: number;
   total: number;
   /** Rank within the category by total. Ties share a rank (1, 1, 3). */
   rank: number;
-  missing: Array<"layer1" | "layer2" | "layer3">;
+  missing: Array<"partA" | "layer2" | "layer3">;
 };
 
 export function computeMatrix(input: {
   cycle: Pick<CycleRow, "weight_layer1" | "weight_layer2" | "weight_layer3" | "layer2_mode">;
   nominations: NominationRow[];
   scores: ScoreRow[];
-  layer1: Map<string, number>;
+  /** The award's Health Card measures (Part A questions). */
+  partAMeasures: PartAMeasure[];
 }): MatrixRow[] {
-  const { cycle, nominations, layer1 } = input;
+  const { cycle, nominations, partAMeasures } = input;
   const submitted = input.scores.filter((s) => s.status === "submitted");
 
   // Only nominations in the race are ranked (check-rules inRace: in 2026 every submitted one).
@@ -76,9 +123,21 @@ export function computeMatrix(input: {
       const mine = submitted.filter((s) => s.nomination_id === n.id);
       const rmTotals = mine.filter((s) => s.layer === "rm").map((s) => paramsTotal(s.params));
       const nmtTotals = mine.filter((s) => s.layer === "nmt").map((s) => paramsTotal(s.params));
+      const partASide = (layer: Layer) =>
+        mean(
+          mine
+            .filter((s) => s.layer === layer)
+            .map((s) => partAFraction(s.params, partAMeasures))
+            .filter((x): x is number => x !== null)
+        );
+      const partARm = partASide("rm");
+      const partANmt = partASide("nmt");
+      const sides = [partARm, partANmt].filter((x): x is number => x !== null);
       return {
         n,
-        l1: layer1.has(n.chapter_id) ? layer1.get(n.chapter_id)! : null,
+        partARm,
+        partANmt,
+        partA: mean(sides),
         rmTotals,
         nmtTotals,
         l2Avg: mean(rmTotals),
@@ -99,12 +158,12 @@ export function computeMatrix(input: {
       }
     }
     const l3Fraction = b.l3Avg === null ? null : b.l3Avg / MAX_LAYER_TOTAL;
-    const total =
-      (cycle.weight_layer1 * (b.l1 ?? 0)) / 100 +
-      cycle.weight_layer2 * (l2Fraction ?? 0) +
-      cycle.weight_layer3 * (l3Fraction ?? 0);
+    const partAPoints = cycle.weight_layer1 * (b.partA ?? 0);
+    const rmPoints = cycle.weight_layer2 * (l2Fraction ?? 0);
+    const nmtPoints = cycle.weight_layer3 * (l3Fraction ?? 0);
+    const total = partAPoints + rmPoints + nmtPoints;
     const missing: MatrixRow["missing"] = [];
-    if (b.l1 === null) missing.push("layer1");
+    if (b.partA === null) missing.push("partA");
     if (b.l2Avg === null) missing.push("layer2");
     if (b.l3Avg === null) missing.push("layer3");
     return {
@@ -112,13 +171,18 @@ export function computeMatrix(input: {
       chapter_id: b.n.chapter_id,
       category: b.n.category,
       region: b.n.region,
-      l1: b.l1,
+      partARm: b.partARm,
+      partANmt: b.partANmt,
+      partA: b.partA,
       rmTotals: b.rmTotals,
       nmtTotals: b.nmtTotals,
       l2Avg: b.l2Avg,
       l2Fraction,
       l3Avg: b.l3Avg,
       l3Fraction,
+      partAPoints: Math.round(partAPoints * 100) / 100,
+      rmPoints: Math.round(rmPoints * 100) / 100,
+      nmtPoints: Math.round(nmtPoints * 100) / 100,
       total: Math.round(total * 100) / 100,
       rank: 0,
       missing,

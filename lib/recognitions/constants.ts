@@ -188,8 +188,8 @@ export const LAYER3_PARAMS: ParamDef[] = [
   },
   {
     key: "p5",
-    // A normal NMT measure out of 5, like p1-p4 (Director, 2026-10-15,
-    // from the Latest Evaluation Matrix). The NMT total is /25.
+    // A normal NMT measure, like p1-p4 (Director, 2026-10-15, from the
+    // Latest Evaluation Matrix). Marked 0-10 since 30 Oct; the NMT total is /50.
     label: "Storytelling & Documentation",
     hint: "Ability to capture and communicate the initiative as a compelling, evidence-backed case study. Indicators: quality of documentation; clear problem–solution–impact narrative; evidence/data; visual assets; replicability of the story.",
   },
@@ -200,8 +200,20 @@ export const PARAMS_FOR_LAYER: Record<Layer, ParamDef[]> = {
   nmt: LAYER3_PARAMS,
 };
 
-export const MAX_PARAM = 5;
-export const MAX_LAYER_TOTAL = 25;
+/**
+ * Part B (the five parameters) is marked 0-10 since the 30 Oct model change
+ * (Piyush; the Director chose 0-10), so a layer total is out of 50.
+ */
+export const MAX_PARAM = 10;
+export const MAX_LAYER_TOTAL = PARAM_KEYS.length * MAX_PARAM;
+
+/**
+ * Part A (30 Oct): every RM and NMT member marks the recognition's own
+ * Health Card measures (recognition_health_card_measures), each 0-10.
+ * Stored in recognition_scores.params next to p1..p5 as `a_<measure_key>`.
+ */
+export const PART_A_MAX = 10;
+export const PART_A_PREFIX = "a_";
 
 /** Word limits: mail 1's, plus the 2026 "why" (recognitions_04). */
 export const WORDS = {

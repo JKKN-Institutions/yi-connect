@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import { countWords } from "@/lib/recognitions/words";
 
 /** Text box with a word meter that fills as you write and turns red past the limit. */
@@ -60,12 +60,18 @@ export function WordField({
 export function PipScale({
   label,
   hint,
+  more,
+  max = 5,
   value,
   onChange,
   disabled = false,
 }: {
   label: string;
   hint?: string;
+  /** Extra detail under the hint (e.g. a click-to-expand <details>). */
+  more?: ReactNode;
+  /** Highest mark; pips run 0..max. */
+  max?: number;
   value: number | undefined;
   onChange: (v: number) => void;
   disabled?: boolean;
@@ -76,16 +82,17 @@ export function PipScale({
       <div style={{ flex: "1 1 220px" }}>
         <div className="rx-h3" id={id}>{label}</div>
         {hint ? <div className="rx-help">{hint}</div> : null}
+        {more}
       </div>
-      <div className="rx-pips" role="radiogroup" aria-labelledby={id}>
-        {[0, 1, 2, 3, 4, 5].map((n) => (
+      <div className="rx-pips" role="radiogroup" aria-labelledby={id} data-max={max}>
+        {Array.from({ length: max + 1 }, (_, n) => n).map((n) => (
           <button
             key={n}
             type="button"
             role="radio"
             className="rx-pip"
             aria-checked={value === n}
-            aria-label={`${n} of 5`}
+            aria-label={`${n} of ${max}`}
             disabled={disabled}
             onClick={() => onChange(n)}
           >

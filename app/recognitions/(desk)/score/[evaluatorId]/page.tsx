@@ -7,7 +7,7 @@ import {
   listScoresForDuty,
   nominationsForDuty,
 } from "@/lib/recognitions/data";
-import { CATEGORIES, CATEGORY_LABEL, CHECK_STEP_ENABLED, PARAM_KEYS, type ParamKey } from "@/lib/recognitions/constants";
+import { CATEGORIES, CATEGORY_LABEL, CHECK_STEP_ENABLED, PARAM_KEYS, PART_A_PREFIX } from "@/lib/recognitions/constants";
 import { Ribbon } from "../../../_ui/ribbon";
 import { IconArrowLeft, IconArrowRight, IconDownload, IconEyeOff, IconLock } from "../../../_ui/icons";
 import { Deadline, NoAccess, Notice, PageHead, Seal, formatWhen } from "../../../_ui/primitives";
@@ -17,7 +17,8 @@ import { mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
 import { ScoreSheet } from "./sheet";
 import { FlagToggle } from "./flags";
 import { HealthCardPanel } from "./health-card-panel";
-import { loadAwardHealthCard } from "@/lib/recognitions/health-card";
+import { lines, loadAwardHealthCard } from "@/lib/recognitions/health-card";
+import type { PartAQuestion } from "../score-types";
 import { CheckList } from "../../check/check-list";
 import { loadCheckItems } from "../../check/load";
 import "../score.css";
@@ -203,8 +204,18 @@ export default async function ScoringSheetPage({
   const href = (id: string) => `/recognitions/score/${duty.id}?n=${id}`;
   const doneCount = inCat.filter((n) => mine.get(n.id)?.status === "submitted").length;
 
-  const initialParams: Partial<Record<ParamKey, number>> = {};
-  for (const k of PARAM_KEYS) {
+  // Part A questions: the award's Health Card measures (the same list the server action checks against).
+  const partA: PartAQuestion[] = hc.measures.map((m) => ({
+    key: m.key,
+    label: m.label,
+    definition: m.definition,
+    indicators: lines(m.indicators),
+    purpose: m.purpose,
+    impact: m.impact,
+    weight: m.weight,
+  }));
+  const initialParams: Record<string, number> = {};
+  for (const k of [...PARAM_KEYS, ...partA.map((q) => `${PART_A_PREFIX}${q.key}` as const)]) {
     const v = score?.params?.[k];
     if (typeof v === "number") initialParams[k] = v;
   }
@@ -415,7 +426,7 @@ export default async function ScoringSheetPage({
             <hr className="rx-rule" />
 
             <section className="rx-stack" style={{ gap: 8 }}>
-              <h3 className="rx-h3">National Health Card</h3>
+              <h3 className="rx-h3">National Health Card · reference for Part A</h3>
               <HealthCardPanel tableKey={hc.tableKey} measures={hc.measures} card={hcCard} weightLayer1={cycle.weight_layer1} />
               {files.length === 0 ? (
                 <p className="rx-small rx-mute">The National Health Card for this recognition hasn&apos;t been uploaded yet.</p>
@@ -446,6 +457,7 @@ export default async function ScoringSheetPage({
             nominationId={current.id}
             chapterName={nameOf(current.chapter_id)}
             layer={duty.layer}
+            partA={partA}
             initialParams={initialParams}
             initialReasons={score?.reasons ?? []}
             initialComments={score?.additional_comments ?? ""}

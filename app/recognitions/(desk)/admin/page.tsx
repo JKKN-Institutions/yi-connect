@@ -66,7 +66,7 @@ export default async function ControlRoomOverview() {
           <Deadline label="Re-evaluation closes" iso={cycle.reevaluation_deadline} />
         </div>
         <p className="rx-small rx-mute">
-          Weights: Layer 1 {cycle.weight_layer1}% · Layer 2 {cycle.weight_layer2}% · Layer 3 {cycle.weight_layer3}% ·
+          Weights: Part A · Health Card (RM+NMT) {cycle.weight_layer1}% · Layer 2 {cycle.weight_layer2}% · Layer 3 {cycle.weight_layer3}% ·
           Layer 2 counted as {cycle.layer2_mode === "percentile" ? "percentile within region" : "raw score"} · Prediction quiz{" "}
           {cycle.quiz_open ? "open" : "closed"}
         </p>

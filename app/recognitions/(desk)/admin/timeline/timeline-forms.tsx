@@ -97,7 +97,7 @@ export function CycleSettingsForm({ cycle }: { cycle: Settings }) {
       <div className="rx-ad-fields">
         {(
           [
-            ["weight1", "Layer 1 · Health Card"],
+            ["weight1", "Part A · Health Card (RM+NMT)"],
             ["weight2", "Layer 2 · Regional Mentors"],
             ["weight3", "Layer 3 · NMT"],
           ] as const
@@ -127,7 +127,7 @@ export function CycleSettingsForm({ cycle }: { cycle: Settings }) {
         <label className="rx-tile" aria-checked={v.layer2Mode === "raw"}>
           <input type="radio" name="l2mode" className="rx-ad-check" checked={v.layer2Mode === "raw"} onChange={() => set("layer2Mode", "raw")} />
           <span>
-            <strong>Raw score</strong> — each chapter&apos;s average RM total out of 25 counts as it is. (Default; the latest matrix doc says nothing more.)
+            <strong>Raw score</strong> — each chapter&apos;s average RM total out of 50 counts as it is. (Default; the latest matrix doc says nothing more.)
           </span>
         </label>
         <label className="rx-tile" aria-checked={v.layer2Mode === "percentile"}>

@@ -9,10 +9,14 @@ import { IconArrowLeft } from "@/app/recognitions/_ui/icons";
 import { Deadline, NoAccess, Notice, PageHead, PhaseSeal, formatWhen } from "@/app/recognitions/_ui/primitives";
 import { CombinedMatrix } from "@/app/recognitions/_parts/combined-matrix";
 import { PredictionsBoard } from "@/app/recognitions/_parts/predictions-board";
-import { RankingTable, VersionHistory } from "@/app/recognitions/_parts/ranking-view";
+import { VersionHistory } from "@/app/recognitions/_parts/ranking-view";
 import { loadStage2 } from "@/app/recognitions/_parts/load";
-import { buildRankingView, prefillFromMatrix } from "@/app/recognitions/_parts/shared";
-import { CategoryTabs } from "@/app/recognitions/_parts/category-tabs";
+import { buildRankingView, prefillFromMatrix, type MatrixView, type Provisional } from "@/app/recognitions/_parts/shared";
+import { CategoryPanel, CategoryTabs } from "@/app/recognitions/_parts/category-tabs";
+import { StandingsTable, type StandingRow } from "@/app/recognitions/_parts/standings-table";
+import { HomeNote, type HomeNotes } from "@/app/recognitions/_parts/home-note";
+import { CATEGORIES, CATEGORY_LABEL } from "@/lib/recognitions/constants";
+import type { ChapterRow, ModerationVersionRow, NominationRow } from "@/lib/recognitions/types";
 import { STAGE2_LOCKED } from "../copy";
 import { ModerationForm, type FormCategory, type FormInitial } from "./moderation-form";
 import { ReopenButton } from "./reopen-button";
@@ -100,21 +104,7 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
   const initial: FormInitial = { ranks: {}, reasons: {}, texts: {} };
   const prefill = prefillFromMatrix(data.matrix);
   if (canEdit) {
-    formCategories = data.matrix.categories
-      .filter((c) => c.rows.length > 0)
-      .map((c) => ({
-        category: c.category,
-        label: c.label,
-        rows: c.rows.map((r) => ({
-          nominationId: r.nominationId,
-          chapterName: r.chapterName,
-          region: r.region,
-          computedTotal: r.total,
-          // The matrix rank (ties share it) and how many chapters share it.
-          computedRank: prefill[r.nominationId]?.matrixRank ?? r.rank,
-          tieSize: prefill[r.nominationId]?.tieSize ?? 1,
-        })),
-      }));
+    formCategories = standingCategories(data.matrix, prefill);
     const draft = draftOpen ? latest : null;
     for (const c of formCategories) {
       for (const r of c.rows) {
@@ -187,7 +177,7 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
             <p className="rx-small rx-mute">
               {draftOpen
                 ? `You are editing draft version ${latest!.version}.`
-                : "Ranks are prefilled from the combined matrix. Change them on the call with the Regional Mentors, and say why for every chapter that moves."}{" "}
+                : "Ranks are prefilled from the combined matrix. Change them on the call with the Regional Mentors. Say why for every chapter ranked 1 to 5 and every chapter that moves."}{" "}
               The 3 finalists in each category also need a rationale and a citation.
             </p>
             {formCategories.length === 0 ? (
@@ -196,6 +186,7 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
               <ModerationForm
                 awardId={award.id}
                 categories={formCategories}
+                weights={data.matrix.weights}
                 initial={initial}
                 mode={phase === "reevaluation" ? "reevaluation" : "stage2"}
                 home={home}
@@ -216,8 +207,12 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
         {shownVersion && !canEdit ? (
           <div className="rx-stack">
             <div className="rx-eyebrow">Latest submitted · version {shownVersion.version}</div>
-            <RankingTable
-              view={buildRankingView(shownVersion, state.nominations, data.chapters, undefined, prefill)}
+            <ReadOnlyStandings
+              version={shownVersion}
+              matrix={data.matrix}
+              prefill={prefill}
+              nominations={state.nominations}
+              chapters={data.chapters}
               home={home}
             />
           </div>
@@ -241,6 +236,98 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
       />
 
       <VersionHistory history={data.history} />
+    </div>
+  );
+}
+
+/** The Stage 2 table's rows per category, from the combined matrix (matrix rank and tie size from prefill). */
+function standingCategories(
+  matrix: MatrixView,
+  prefill: Record<string, Provisional>
+): Array<{ category: FormCategory["category"]; label: string; rows: StandingRow[] }> {
+  return matrix.categories
+    .filter((c) => c.rows.length > 0)
+    .map((c) => ({
+      category: c.category,
+      label: c.label,
+      rows: c.rows.map((r) => ({
+        nominationId: r.nominationId,
+        chapterName: r.chapterName,
+        region: r.region,
+        partAPoints: r.partAPoints,
+        rmPoints: r.rmPoints,
+        nmtPoints: r.nmtPoints,
+        total: r.total,
+        // The matrix rank (ties share it) and how many chapters share it.
+        matrixRank: prefill[r.nominationId]?.matrixRank ?? r.rank,
+        tieSize: prefill[r.nominationId]?.tieSize ?? 1,
+        missing: r.missing,
+      })),
+    }));
+}
+
+/**
+ * The latest submitted ranking, read-only: the same table as the NMT leader's
+ * form (no inputs), then the podium texts.
+ */
+function ReadOnlyStandings({
+  version,
+  matrix,
+  prefill,
+  nominations,
+  chapters,
+  home,
+}: {
+  version: ModerationVersionRow;
+  matrix: MatrixView;
+  prefill: Record<string, Provisional>;
+  nominations: NominationRow[];
+  chapters: Map<string, ChapterRow>;
+  home?: HomeNotes;
+}) {
+  const ranking = buildRankingView(version, nominations, chapters, undefined, prefill);
+  const final: Record<string, { rank: number | null; reason: string }> = {};
+  for (const cat of ranking) for (const e of cat.entries) final[e.nominationId] = { rank: e.finalRank, reason: e.reason };
+  const cats = standingCategories(matrix, prefill);
+  return (
+    <div className="rx-stack">
+      {CATEGORIES.filter((c) => !cats.some((x) => x.category === c)).map((c) => (
+        <CategoryPanel key={c} category={c} tabsOnly>
+          <p className="rx-mute rx-small">No {CATEGORY_LABEL[c]} chapter is in the race for this recognition.</p>
+        </CategoryPanel>
+      ))}
+      {cats.map((cat) => {
+        const podium = ranking.find((r) => r.category === cat.category)?.podium ?? [];
+        return (
+          <CategoryPanel key={cat.category} category={cat.category}>
+            <div className="rx-stack">
+              <h3 className="rx-h3">{cat.label}</h3>
+              <StandingsTable label={cat.label} weights={matrix.weights} rows={cat.rows} home={home} final={final} />
+              {podium.length > 0 ? (
+                <div className="rx-podium">
+                  {podium.map((p) => (
+                    <article key={p.rank} className="rx-plate rx-place rx-stack" data-rank={p.rank}>
+                      <div>
+                        <div className="rx-eyebrow">{p.placeLabel}</div>
+                        <div className="rx-h2">{p.chapterName}</div>
+                        <HomeNote names={home?.[p.chapterName]} />
+                      </div>
+                      <div>
+                        <div className="rx-small rx-mute">Why this finalist?</div>
+                        <p className="rx-p-text rx-small">{p.rationale || "Not written yet."}</p>
+                      </div>
+                      <div>
+                        <div className="rx-small rx-mute">Citation</div>
+                        <p className="rx-p-quote rx-small">{p.citation || "Not written yet."}</p>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </CategoryPanel>
+        );
+      })}
     </div>
   );
 }

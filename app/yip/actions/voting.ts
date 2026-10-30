@@ -40,6 +40,9 @@ import { revalidatePath } from "next/cache";
 import type { RollupEntry, RollupOption } from "@/lib/yip/election-rollup";
 import { PARTY_LEADER_LABEL_ONLY_ROLES } from "@/lib/yip/constants";
 
+const NATIONAL_ELECTIONS_OFF =
+  "Elections are switched off at the National Finals — posts come from the organisers' list.";
+
 type VoteSession = Tables<{ schema: "yip" }, "vote_sessions">;
 type Vote = Tables<{ schema: "yip" }, "votes">;
 
@@ -403,6 +406,31 @@ async function countDayCheckin(
 }
 
 /**
+ * Turnout denominator for a vote result: students checked in for the event's
+ * CURRENT day. Check-in writes checked_in_day1 / checked_in_day2, never the
+ * legacy checked_in column, so counting that column read 0 at the Finals.
+ * Same rule as the Control page's Quick Stats: day 2 from day2_live onward,
+ * otherwise day 1.
+ */
+async function countCheckedInToday(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  eventId: string
+): Promise<number> {
+  const { data: ev } = await supabase
+    .from("events")
+    .select("status")
+    .eq("id", eventId)
+    .maybeSingle();
+  const day =
+    ev?.status === "day2_live" ||
+    ev?.status === "completed" ||
+    ev?.status === "results_published"
+      ? 2
+      : 1;
+  return (await countDayCheckin(supabase, eventId, day)).checkedIn;
+}
+
+/**
  * How many students are checked in for the day an agenda item belongs to — so
  * the control panel can warn the organiser BEFORE they open a day-gated vote
  * that nobody can cast in (the other half of the Erode Day-2 silent-vote issue).
@@ -427,6 +455,28 @@ export async function getDayCheckInSummary(
   const day = item?.day ?? null;
   const { checkedIn, total } = await countDayCheckin(supabase, eventId, day);
   return { success: true, data: { day, checkedIn, total } };
+}
+
+/**
+ * How many votes are still OPEN for this event — so the End Day / Complete
+ * Event confirmation can warn that an open vote outlives the day. Read only;
+ * it never closes anything. Organiser-gated.
+ */
+export async function countOpenVotes(
+  eventId: string
+): Promise<ActionResult<{ open: number }>> {
+  const access = await getYipEventAccess(eventId);
+  if (!access.canManage)
+    return { success: false, error: "Not authorized to manage this event" };
+
+  const supabase = await createServiceClient();
+  const { count, error } = await supabase
+    .from("vote_sessions")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", eventId)
+    .eq("status", "open");
+  if (error) return { success: false, error: error.message };
+  return { success: true, data: { open: count ?? 0 } };
 }
 
 export async function openVote(
@@ -500,7 +550,7 @@ export async function openVote(
   // — elections are run AFTER allocation is locked, so that lock must not block here.
   const { data: lockState, error: lockErr } = await supabase
     .from("events")
-    .select("scores_locked, results_published_at")
+    .select("scores_locked, results_published_at, level")
     .eq("id", eventId)
     .single();
   if (lockErr || !lockState) return { success: false, error: "Event not found" };
@@ -509,6 +559,14 @@ export async function openVote(
   }
   if (lockState.scores_locked) {
     return { success: false, error: "Scores are locked — unlock scores before opening a vote." };
+  }
+  // National Finals: every post (Speaker, PM, ministers, party leaders…) is
+  // loaded from the organisers' sheet, and revealing an election rewrites
+  // parliament_role. Refuse every election kind there. Bill votes stay open —
+  // they seat nobody. Only an explicit 'national' blocks, so chapter and
+  // regional rounds are untouched.
+  if (lockState.level === "national" && voteType !== "bill_vote") {
+    return { success: false, error: NATIONAL_ELECTIONS_OFF };
   }
 
   // A Bill Vote only makes sense inside a session that puts a bill on the
@@ -944,11 +1002,10 @@ export async function revealResults(
   );
 
   // Count total participants for this event
-  const { count: totalParticipants } = await supabase
-    .from("participants")
-    .select("*", { count: "exact", head: true })
-    .eq("event_id", session.event_id)
-    .eq("checked_in", true);
+  const totalParticipants = await countCheckedInToday(
+    supabase,
+    session.event_id
+  );
 
   const winner = tallies.length > 0 ? tallies[0].vote_value : null;
 
@@ -1194,7 +1251,16 @@ export async function revealResults(
   // because positionBonuses is keyed on parliament_role and theirs is never
   // rewritten away from their senior post. Every other role is unaffected and
   // still gets cleared exactly as before.
-  {
+  //
+  // SKIPPED at the National Finals: there the party leaders come from the
+  // organisers' sheet and several also hold a minister's post, so this
+  // reconciliation would wipe a loaded leader on every bill-vote reveal.
+  const { data: revealEvent } = await supabase
+    .from("events")
+    .select("level")
+    .eq("id", session.event_id)
+    .maybeSingle();
+  if (revealEvent?.level !== "national") {
     const { data: leaderParties } = await supabase
       .from("parties")
       .select("id, party_leader_id")
@@ -1757,11 +1823,10 @@ export async function getVoteResults(
   // Get tallies (party-leader tallies are scoped to the party's own members).
   const { tallies, totalVotes } = await buildTallies(supabase, session);
 
-  const { count: totalParticipants } = await supabase
-    .from("participants")
-    .select("*", { count: "exact", head: true })
-    .eq("event_id", session.event_id)
-    .eq("checked_in", true);
+  const totalParticipants = await countCheckedInToday(
+    supabase,
+    session.event_id
+  );
 
   const winner = tallies.length > 0 ? tallies[0].vote_value : null;
   const outcome = await resolveOutcome(supabase, session, tallies);

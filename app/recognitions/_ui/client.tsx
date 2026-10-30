@@ -56,7 +56,7 @@ export function WordField({
   );
 }
 
-/** One parameter on a 0-5 scale, as six round stops. */
+/** One mark on a 0..max scale (default 5), as round stops. */
 export function PipScale({
   label,
   hint,

@@ -212,7 +212,6 @@ export default async function ScoringSheetPage({
     indicators: lines(m.indicators),
     purpose: m.purpose,
     impact: m.impact,
-    weight: m.weight,
   }));
   const initialParams: Record<string, number> = {};
   for (const k of [...PARAM_KEYS, ...partA.map((q) => `${PART_A_PREFIX}${q.key}` as const)]) {

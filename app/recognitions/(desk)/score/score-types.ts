@@ -26,5 +26,4 @@ export type PartAQuestion = {
   indicators: string[];
   purpose: string;
   impact: string;
-  weight: number;
 };

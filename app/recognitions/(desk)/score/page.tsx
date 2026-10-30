@@ -157,8 +157,7 @@ export default async function MySheetsPage() {
                 <>
                   {state.phase === "nominations" ? (
                     <Notice tone="alert">
-                      Test scoring: marks made before nominations close are for testing and will be wiped before real
-                      scoring opens on {formatWhen(state.cycle.nomination_deadline)}.
+                      Test scoring: these marks are for testing only. Test scoring shuts on 31 Oct 2026, 11:59 pm IST, and every test mark is wiped before chapters' real nominations are scored.
                     </Notice>
                   ) : null}
                   <Deadline label="Stage 1 closes" iso={state.cycle.stage1_deadline} />

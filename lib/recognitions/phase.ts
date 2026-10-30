@@ -32,6 +32,19 @@ export const PHASE_LABEL: Record<Phase, string> = {
   finalized: "Finalised",
 };
 
+/**
+ * Early test scoring (Piyush, 29 Oct; the Director agreed 09:33 and, for Stage 2, 12:10):
+ * while nominations are still open, Regional Mentors and the NMT may score, and a
+ * recognition the super admin forces open moves on to Stage 2, so the whole flow can be
+ * tested. It shuts by itself at this moment, before the real opening on 7 Nov 23:59 IST.
+ * Everything made before then (marks, Stage 2 unlocks, rankings, decisions) is wiped.
+ */
+export const EARLY_TEST_SCORING_UNTIL = "2026-11-07T12:00:00+05:30";
+
+export function earlyTestOpen(now: Date = new Date()): boolean {
+  return !isPast(EARLY_TEST_SCORING_UNTIL, now);
+}
+
 export function computePhase(input: {
   cycle: Pick<CycleRow, "nomination_deadline">;
   award: Pick<AwardRow, "stage2_unlocked_at">;
@@ -43,7 +56,10 @@ export function computePhase(input: {
   const now = input.now ?? new Date();
   const nd = input.cycle.nomination_deadline;
   if (!nd) return "setup";
-  if (now.getTime() <= Date.parse(nd)) return "nominations";
+  // During the early test window, a recognition forced open for testing carries on to Stage 2.
+  if (now.getTime() <= Date.parse(nd) && !(input.award.stage2_unlocked_at && earlyTestOpen(now))) {
+    return "nominations";
+  }
 
   const v = input.latestVersion;
   if (v) {

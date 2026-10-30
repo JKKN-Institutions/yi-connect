@@ -23,6 +23,10 @@ import {
   type UnmarkedStudent,
   type UnmarkedStudents,
 } from "@/app/yip/actions/unmarked-students";
+import {
+  getPartiallyMarkedStudents,
+  type PartiallyMarkedStudents,
+} from "@/lib/yip/partially-marked-students";
 import { INK, SAFFRON, SERIF } from "@/app/yip/me/credential-ui";
 
 /**
@@ -188,6 +192,7 @@ export function MissionControl({ eventId }: { eventId: string }) {
       </CardContent>
     </Card>
       <UnmarkedStudentsPanel eventId={eventId} />
+      <PartiallyMarkedNote eventId={eventId} />
     </div>
   );
 }
@@ -381,6 +386,77 @@ function UnmarkedStudentsPanel({ eventId }: { eventId: string }) {
                   <StudentList students={s.students} />
                 </div>
               ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * National Finals only: students marked in some scored sessions but not
+ * others. Informational, not a warning — the server returns nothing at
+ * chapter/regional rounds, where only the speakers are marked by design, so
+ * this renders nothing there. Seat, name and missing sessions only.
+ */
+function PartiallyMarkedNote({ eventId }: { eventId: string }) {
+  const [data, setData] = useState<PartiallyMarkedStudents | null>(null);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () =>
+      getPartiallyMarkedStudents(eventId).then((r) => {
+        if (!cancelled) setData(r);
+      });
+    load();
+    const t = setInterval(load, 60000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [eventId]);
+
+  if (!data) return null;
+  if (data.couldNotCheck) {
+    return <p className="px-1 text-xs text-gray-500">{data.couldNotCheck}</p>;
+  }
+  const students = data.students;
+  if (students.length === 0) return null;
+
+  return (
+    <Card className="border-gray-200 overflow-hidden">
+      <CardContent className="space-y-2 py-3">
+        <p className="text-xs text-gray-500">
+          {students.length} {students.length === 1 ? "student has" : "students have"}{" "}
+          marks in some sessions but not others. Each student&apos;s score is
+          the average of the sessions they were marked in.
+        </p>
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex w-full items-center justify-between rounded-md px-1 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          <span>{expanded ? "Hide" : "Show"} who is missing</span>
+          {expanded ? (
+            <ChevronDown className="size-4" />
+          ) : (
+            <ChevronRight className="size-4" />
+          )}
+        </button>
+        {expanded && (
+          <div className="divide-y divide-gray-100 rounded-lg border border-gray-100">
+            {students.map((s) => (
+              <div key={s.participantId} className="px-3 py-2">
+                <p className="truncate text-sm font-medium text-gray-900">
+                  {s.seat != null ? `Seat ${s.seat} · ` : ""}
+                  {s.participantName}
+                </p>
+                <p className="text-xs text-gray-500">
+                  Missing: {s.missingSessions.join(", ")}
+                </p>
+              </div>
+            ))}
           </div>
         )}
       </CardContent>

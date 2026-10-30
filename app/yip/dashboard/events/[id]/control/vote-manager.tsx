@@ -169,6 +169,12 @@ interface VoteManagerProps {
   eventId: string;
   currentAgendaItem: AgendaItem | null;
   totalParticipants: number;
+  /**
+   * National Finals: every post comes from the organisers' list, so no election
+   * (Speaker, party leader, PM / Deputy / LoP, cabinet, shadow) is offered —
+   * only the Motion of the House. openVote refuses them server-side too.
+   */
+  electionsOff?: boolean;
 }
 
 // ─── Component ──────────────────────────────────────────────────
@@ -177,6 +183,7 @@ export function VoteManager({
   eventId,
   currentAgendaItem,
   totalParticipants,
+  electionsOff = false,
 }: VoteManagerProps) {
   const [isPending, startTransition] = useTransition();
   const [candidates, setCandidates] = useState<VoteCandidate[]>([]);
@@ -1686,13 +1693,21 @@ export function VoteManager({
   // menu so the panel isn't cluttered with all of them. The menu AUTO-OPENS (see
   // effect below) when the current agenda item has its OWN vote (Speaker / Bill),
   // so that primary action is visible without a tap; otherwise it's collapsed.
+  const electionsOffNote = electionsOff ? (
+    <p className="text-xs text-muted-foreground">
+      Posts at the National Finals come from the organisers&apos; list, so
+      elections are switched off here.
+    </p>
+  ) : null;
   const hasElectionLaunchers =
-    !!speakerLauncher ||
     !!motionLauncher ||
-    !!partyLeaderList ||
-    !!leadershipList ||
-    !!cabinetSection ||
-    !!shadowSection;
+    !!electionsOffNote ||
+    (!electionsOff &&
+      (!!speakerLauncher ||
+        !!partyLeaderList ||
+        !!leadershipList ||
+        !!cabinetSection ||
+        !!shadowSection));
   const electionLaunchers = hasElectionLaunchers ? (
     <div className="rounded-lg border bg-card">
       <button
@@ -1704,8 +1719,9 @@ export function VoteManager({
           <Crown className="size-4 text-[#FF9933]" />
           Run a vote
           <span className="hidden text-xs font-normal text-muted-foreground sm:inline">
-            speaker · motion · party leader · PM / Deputy / LoP · cabinet ·
-            shadow
+            {electionsOff
+              ? "motion of the House"
+              : "speaker · motion · party leader · PM / Deputy / LoP · cabinet · shadow"}
           </span>
         </span>
         {electionsMenuOpen ? (
@@ -1716,12 +1732,21 @@ export function VoteManager({
       </button>
       {electionsMenuOpen && (
         <div className="space-y-4 border-t p-3">
-          {speakerLauncher}
-          {motionLauncher}
-          {partyLeaderList}
-          {leadershipList}
-          {cabinetSection}
-          {shadowSection}
+          {electionsOff ? (
+            <>
+              {motionLauncher}
+              {electionsOffNote}
+            </>
+          ) : (
+            <>
+              {speakerLauncher}
+              {motionLauncher}
+              {partyLeaderList}
+              {leadershipList}
+              {cabinetSection}
+              {shadowSection}
+            </>
+          )}
         </div>
       )}
     </div>

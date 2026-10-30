@@ -1,5 +1,5 @@
 import type { Phase } from "@/lib/recognitions/phase";
-import { isPast } from "@/lib/recognitions/phase";
+import { earlyTestOpen, isPast } from "@/lib/recognitions/phase";
 import type { CycleRow, NominationOrigin } from "@/lib/recognitions/types";
 import { isNlAdded } from "@/lib/recognitions/check-rules";
 
@@ -17,20 +17,13 @@ export type ScoringWindow =
   | { state: "closed" }
   | { state: "over" };
 
-/**
- * Early test scoring (Piyush, 29 Oct; Director's word 09:33): Regional Mentors and the
- * NMT may score submitted nominations while nominations are still open, so the flow
- * can be tested. It shuts by itself at this moment, before the real opening on 7 Nov
- * 23:59 IST, and every mark made before then is wiped. Nominations stay open throughout.
- */
-export const EARLY_TEST_SCORING_UNTIL = "2026-11-07T12:00:00+05:30";
-
 export function scoringWindow(
   phase: Phase,
   cycle: Pick<CycleRow, "stage1_deadline">,
   now: Date = new Date()
 ): ScoringWindow {
-  if (phase === "nominations" && !isPast(EARLY_TEST_SCORING_UNTIL, now)) return { state: "open" };
+  // Early test scoring: see EARLY_TEST_SCORING_UNTIL in lib/recognitions/phase.ts.
+  if (phase === "nominations" && earlyTestOpen(now)) return { state: "open" };
   if (phase === "setup" || phase === "nominations") return { state: "notYet" };
   if (phase !== "stage1") return { state: "over" };
   if (isPast(cycle.stage1_deadline)) return { state: "closed" };

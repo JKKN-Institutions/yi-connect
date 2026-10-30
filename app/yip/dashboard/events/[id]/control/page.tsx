@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/yip/supabase/server";
+import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { Forbidden403 } from "@/app/yip/_components/Forbidden403";
@@ -52,17 +52,30 @@ export default async function ControlPage({
     .order("day")
     .order("sequence_order");
 
-  // Fetch participant stats
+  // Fetch participant stats.
+  // Participant counts go through the service client: the signed-in staff role
+  // has no SELECT grant on yip.participants, so the user client counted 0
+  // (National Finals rehearsal: "Participants 0" with 127 students). Access is
+  // already gated above by getEvent (canView).
+  // "Checked In" counts the CURRENT day's flag — check-in writes
+  // checked_in_day1 / checked_in_day2, never the legacy checked_in column.
+  const service = await createServiceClient();
+  const checkInColumn =
+    event.status === "day2_live" ||
+    event.status === "completed" ||
+    event.status === "results_published"
+      ? "checked_in_day2"
+      : "checked_in_day1";
   const [participantRes, checkedInRes, scoresRes] = await Promise.all([
-    supabase
+    service
       .from("participants")
-      .select("*", { count: "exact", head: true })
+      .select("id", { count: "exact", head: true })
       .eq("event_id", id),
-    supabase
+    service
       .from("participants")
-      .select("*", { count: "exact", head: true })
+      .select("id", { count: "exact", head: true })
       .eq("event_id", id)
-      .eq("checked_in", true),
+      .eq(checkInColumn, true),
     supabase
       .from("scores")
       .select("*", { count: "exact", head: true })

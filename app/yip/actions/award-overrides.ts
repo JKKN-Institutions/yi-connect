@@ -12,6 +12,11 @@ import {
   schoolCapApplies,
   SCHOOL_AWARD_CAP,
 } from "@/lib/yip/award-eligibility";
+import {
+  fetchPmbPresenterIds,
+  PMB_AWARD_KEY,
+  pmbPresenterRuleApplies,
+} from "@/lib/yip/pmb-award-presenters";
 import { computeResults } from "./results";
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -127,9 +132,10 @@ export async function setAwardWinner(
   const roundLevel = await fetchEventRoundLevel(supabase as never, eventId);
   const { data: allAwardDefs } = await (supabase as unknown as SupabaseClient)
     .from("award_definitions")
-    .select("label, eligibility, rank_mode, levels");
+    .select("award_key, label, eligibility, rank_mode, levels");
   const def = resolveAwardsForLevel(
     (allAwardDefs ?? []) as {
+      award_key: string;
       label: string;
       eligibility: string | null;
       rank_mode: string | null;
@@ -158,6 +164,29 @@ export async function setAwardWinner(
       return {
         success: false,
         error: `${participant.full_name} can't receive ${awardLabel}: this award is ${who}${side}.`,
+      };
+    }
+  }
+
+  // Finals: Best Private Member's Bill only for a student who moves a private
+  // member's bill on the Bills page — the same limit the engine applies.
+  if (def?.award_key === PMB_AWARD_KEY && roundLevel === "national") {
+    let presenters: Set<string>;
+    try {
+      presenters = await fetchPmbPresenterIds(
+        supabase as unknown as SupabaseClient,
+        eventId
+      );
+    } catch (e) {
+      return { success: false, error: (e as Error).message };
+    }
+    if (
+      pmbPresenterRuleApplies(def.award_key, roundLevel, presenters) &&
+      !presenters.has(participant.id)
+    ) {
+      return {
+        success: false,
+        error: `${participant.full_name} can't receive ${awardLabel}: at the Finals this award is only for students who move a private member's bill. If they presented one, add their bill on the Bills page with them as the mover first.`,
       };
     }
   }

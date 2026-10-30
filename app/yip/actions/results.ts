@@ -24,6 +24,10 @@ import {
   schoolCapApplies,
   SCHOOL_AWARD_CAP,
 } from "@/lib/yip/award-eligibility";
+import {
+  fetchPmbPresenterIds,
+  pmbPresenterRuleApplies,
+} from "@/lib/yip/pmb-award-presenters";
 import { listScoringBuckets } from "./scoring-buckets";
 import { getScoringFlagsConfig } from "./scoring-flags";
 import { getSessionScoringParams } from "./scoring";
@@ -1207,6 +1211,17 @@ export async function computeResults(
         ? (p: ParticipantLite, r: ResultRow) =>
             baseElig(p, r) && r.consistencySessionCount >= mvpMinSessions
         : baseElig;
+    // Finals: Best Private Member's Bill only for students who move a private
+    // member's bill on the Bills page (lib/yip/pmb-award-presenters.ts).
+    if (pmbPresenterRuleApplies(row.award_key, roundLevel, pmbPresenterIds)) {
+      const inner = eligible;
+      return {
+        eligible: (p: ParticipantLite, r: ResultRow) =>
+          inner(p, r) && pmbPresenterIds.has(p.id),
+        rankBy,
+        isTeam: row.is_team ?? false,
+      };
+    }
     return { eligible, rankBy, isTeam: row.is_team ?? false };
   }
 
@@ -1231,6 +1246,20 @@ export async function computeResults(
     (allAwardDefs ?? []) as AwardConfigRow[],
     roundLevel
   );
+  // Students who move a private member's bill — read before any award spec is
+  // built (buildSpec uses it). A failed read stops the compute rather than
+  // quietly dropping the Finals limit on Best Private Member's Bill.
+  let pmbPresenterIds = new Set<string>();
+  if (roundLevel === "national") {
+    try {
+      pmbPresenterIds = await fetchPmbPresenterIds(
+        supabase as unknown as SupabaseClient,
+        eventId
+      );
+    } catch (e) {
+      return { success: false, error: (e as Error).message };
+    }
+  }
   const { data: awardCfgRows } = await supabase
     .from("event_award_config")
     .select("award_key, recipients, is_active")

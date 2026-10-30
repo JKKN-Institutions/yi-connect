@@ -153,7 +153,11 @@ export default async function ApplyPage({
       </Notice>
     );
   } else if (win.state === "not_open") {
-    blocker = <Notice>Nominations haven&apos;t opened yet. The Recognitions super admin will set the deadline.</Notice>;
+    blocker = <Notice>
+          {win.opensAt
+            ? `Nominations open on ${formatWhen(win.opensAt)}.`
+            : "Nominations haven't opened yet. The Recognitions super admin will set the deadline."}
+        </Notice>;
   } else if (win.state === "closed") {
     blocker = <Notice>Nominations closed on {formatWhen(win.deadline)}.</Notice>;
   } else if (awards.length === 0) {

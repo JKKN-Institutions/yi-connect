@@ -11,7 +11,7 @@ import {
   listNominationsForChapter,
   listPredictionsByChapter,
 } from "@/lib/recognitions/data";
-import { isPast } from "@/lib/recognitions/phase";
+import { NOMINATIONS_OPEN_AT, isPast } from "@/lib/recognitions/phase";
 import { canFix, isAddedForChapter } from "@/lib/recognitions/check-rules";
 import { CATEGORIES, CHECK_STEP_ENABLED, type Category } from "@/lib/recognitions/constants";
 import type { ActionResult, AwardRow, ChapterRow, CycleRow, NominationRow } from "@/lib/recognitions/types";
@@ -53,6 +53,9 @@ async function nominationContext(chapterId: string): Promise<CtxResult> {
   // No deadline set = the cycle is still being set up, so nominations are not open.
   if (!cycle.nomination_deadline) {
     return { ok: false, error: "Nominations haven't opened yet. The Recognitions super admin sets the deadline." };
+  }
+  if (!isPast(NOMINATIONS_OPEN_AT)) {
+    return { ok: false, error: `Nominations open on ${formatWhen(NOMINATIONS_OPEN_AT)}.` };
   }
   if (isPast(cycle.nomination_deadline)) {
     return { ok: false, error: `Nominations closed on ${formatWhen(cycle.nomination_deadline)}.` };
@@ -372,6 +375,9 @@ export async function submitPredictions(chapterId: string, picks: unknown): Prom
   if (!cycle) return { success: false, error: "No recognitions cycle is open right now." };
   if (!cycle.quiz_open) return { success: false, error: "The prediction quiz is closed." };
   if (!cycle.nomination_deadline) return { success: false, error: "The prediction quiz hasn't opened yet." };
+  if (!isPast(NOMINATIONS_OPEN_AT)) {
+    return { success: false, error: `The prediction quiz opens with nominations on ${formatWhen(NOMINATIONS_OPEN_AT)}.` };
+  }
   if (isPast(cycle.nomination_deadline)) {
     return { success: false, error: `The prediction quiz closed with nominations on ${formatWhen(cycle.nomination_deadline)}.` };
   }

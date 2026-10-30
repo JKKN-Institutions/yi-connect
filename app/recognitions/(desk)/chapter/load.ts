@@ -12,7 +12,7 @@ import {
   listModerationVersions,
   listNominationsForAward,
 } from "@/lib/recognitions/data";
-import { isPast } from "@/lib/recognitions/phase";
+import { NOMINATIONS_OPEN_AT, isPast } from "@/lib/recognitions/phase";
 import type { AwardKind, Category, Vertical } from "@/lib/recognitions/constants";
 import type { ChapterRow, CycleRow } from "@/lib/recognitions/types";
 import { pickChapterId } from "./shared";
@@ -30,12 +30,13 @@ export async function gateChapterPage(
 
 export type NominationWindow =
   | { state: "open"; deadline: string }
-  | { state: "not_open" }
+  | { state: "not_open"; opensAt?: string }
   | { state: "closed"; deadline: string };
 
 /** A cycle with no deadline set is still being set up: nominations are not open yet. */
 export function nominationWindow(cycle: CycleRow): NominationWindow {
   if (!cycle.nomination_deadline) return { state: "not_open" };
+  if (!isPast(NOMINATIONS_OPEN_AT)) return { state: "not_open", opensAt: NOMINATIONS_OPEN_AT };
   if (isPast(cycle.nomination_deadline)) return { state: "closed", deadline: cycle.nomination_deadline };
   return { state: "open", deadline: cycle.nomination_deadline };
 }

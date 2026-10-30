@@ -46,6 +46,9 @@ export function earlyTestOpen(now: Date = new Date()): boolean {
   return !isPast(EARLY_TEST_SCORING_UNTIL, now);
 }
 
+/** Chapters may file only from this moment (Piyush, 30 Oct: the mailer goes out on 30–31 Oct, filing starts 1 Nov). */
+export const NOMINATIONS_OPEN_AT = "2026-11-01T00:00:00+05:30";
+
 export function computePhase(input: {
   cycle: Pick<CycleRow, "nomination_deadline">;
   award: Pick<AwardRow, "stage2_unlocked_at">;

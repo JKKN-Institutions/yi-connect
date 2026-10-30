@@ -220,6 +220,18 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
         {!shownVersion && !canEdit ? (
           <p className="rx-mute">The NMT leader hasn&apos;t submitted a ranking yet.</p>
         ) : null}
+        {!shownVersion && !canEdit && !beforeStage2 ? (
+          // The other NMT members join the leader's discussion (Piyush, 29 Oct): they follow the
+          // provisional standings, sortable, with no inputs, until the leader submits.
+          <div className="rx-stack">
+            <div className="rx-eyebrow">Provisional standings · from the combined matrix</div>
+            {standingCategories(data.matrix, prefill).map((cat) => (
+              <CategoryPanel key={cat.category} category={cat.category}>
+                <StandingsTable label={cat.label} weights={data.matrix.weights} rows={cat.rows} home={home} />
+              </CategoryPanel>
+            ))}
+          </div>
+        ) : null}
       </section>
       </CategoryTabs>
 

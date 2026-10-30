@@ -1145,21 +1145,22 @@ export function ParticipantsClient({
                     <DialogHeader>
                       <DialogTitle>Final confirmation</DialogTitle>
                       <DialogDescription>
-                        This will permanently delete all{" "}
-                        {initialParticipants.length} registrants. Type{" "}
-                        <strong>{initialParticipants.length}</strong> below to
+                        This will permanently remove all{" "}
+                        <strong>{initialParticipants.length}</strong> students
+                        from this event. Type <strong>DELETE</strong> below to
                         confirm.
                       </DialogDescription>
                     </DialogHeader>
                     <div>
                       <Label htmlFor="delete-confirm">
-                        Type {initialParticipants.length} to confirm
+                        Type DELETE to confirm
                       </Label>
                       <Input
                         id="delete-confirm"
                         value={deleteConfirmText}
                         onChange={(e) => setDeleteConfirmText(e.target.value)}
-                        placeholder={String(initialParticipants.length)}
+                        placeholder="DELETE"
+                        autoComplete="off"
                         autoFocus
                       />
                     </div>
@@ -1178,8 +1179,7 @@ export function ParticipantsClient({
                         onClick={handleDeleteAll}
                         disabled={
                           deletingAll ||
-                          deleteConfirmText.trim() !==
-                            String(initialParticipants.length)
+                          deleteConfirmText.trim() !== "DELETE"
                         }
                       >
                         {deletingAll ? (
@@ -1187,7 +1187,7 @@ export function ParticipantsClient({
                         ) : (
                           <Trash2 className="size-4" />
                         )}
-                        Permanently delete all
+                        Remove all {initialParticipants.length} students
                       </Button>
                     </DialogFooter>
                   </>

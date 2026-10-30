@@ -212,8 +212,12 @@ export function resolveGuideSheets(
   const scopedByKey = lowestPerKey(scoped);
 
   const chosen: { row: GuideConfigRow; source: "level" | "shared" }[] = [];
-  for (const [key, row] of sharedByKey) {
-    if (!scopedByKey.has(key)) chosen.push({ row, source: "shared" });
+  // National never falls back to a shared sheet — same rule as
+  // resolveSessionConfig in lib/yip/session-config-resolution.ts.
+  if (level !== "national") {
+    for (const [key, row] of sharedByKey) {
+      if (!scopedByKey.has(key)) chosen.push({ row, source: "shared" });
+    }
   }
   for (const [, row] of scopedByKey) chosen.push({ row, source: "level" });
 

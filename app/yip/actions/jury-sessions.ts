@@ -226,6 +226,13 @@ export type ScoringToggleSession = {
    * be ambiguous, so the host is told which sheet the fallback landed on.
    */
   criteria_from_type_fallback: boolean;
+  /**
+   * National Finals only: a shared (chapter-era) sheet would match this
+   * session, but the Finals never fall back to shared sheets, so it has no
+   * sheet. Listed (switched off, locked) so the host can see why rather than
+   * the session silently vanishing from the list.
+   */
+  national_sheet_missing: boolean;
 };
 
 /** All sessions a chapter can toggle scoring for in this event (gated). */
@@ -267,10 +274,22 @@ export async function getScoringToggleSessions(
     levels: p.levels ?? null,
   }));
 
+  // National Finals: a session that only a shared sheet would match resolves
+  // to nothing (see resolveSessionConfig). A null level resolves against
+  // shared sheets only, so this asks "would the old fallback have hit?".
+  const nationalSheetMissing = (a: { session_key: string | null; agenda_type: string | null }) =>
+    level === "national" &&
+    resolveSessionConfig(a, configs, level) === null &&
+    resolveSessionConfig(a, configs, null) !== null;
+
   // Show sessions that CAN be scored (active criteria) or are currently scored
-  // (so an already-on session can always be turned off).
+  // (so an already-on session can always be turned off), plus Finals sessions
+  // that are missing their national sheet (shown locked, with the reason).
   const candidates = agenda.filter(
-    (a) => resolveSessionConfig(a, configs, level) !== null || a.is_scoreable === true
+    (a) =>
+      resolveSessionConfig(a, configs, level) !== null ||
+      a.is_scoreable === true ||
+      nationalSheetMissing(a)
   );
 
   // Tally existing scores per candidate session in one query.
@@ -302,6 +321,7 @@ export async function getScoringToggleSessions(
       criteria_label: cfg?.label ?? null,
       criteria_weight: cfg ? cfg.session_weight : null,
       criteria_from_type_fallback: cfg !== null && !a.session_key,
+      national_sheet_missing: nationalSheetMissing(a),
     };
   });
 

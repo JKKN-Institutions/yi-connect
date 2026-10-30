@@ -75,6 +75,10 @@ export function ScoredSessionsPanel({
             const saving = savingId === s.id;
             const confirming = pendingOffId === s.id;
             const criteriaGone = !s.has_criteria && s.is_scoreable;
+            // No sheet and currently off: nothing to switch on (the server
+            // would refuse too). An ON session stays switchable so it can be
+            // turned off.
+            const locked = !s.has_criteria && !s.is_scoreable;
             return (
               <li key={s.id} className="flex items-center gap-3 py-2.5">
                 <div className="min-w-0 flex-1">
@@ -104,7 +108,13 @@ export function ScoredSessionsPanel({
                         check this is the right sheet
                       </span>
                     )}
-                    {criteriaGone && (
+                    {s.national_sheet_missing && (
+                      <span className="inline-flex items-center gap-1 text-amber-700">
+                        <AlertTriangle className="size-3" /> No National Finals
+                        marking sheet for this session yet.
+                      </span>
+                    )}
+                    {criteriaGone && !s.national_sheet_missing && (
                       <span className="inline-flex items-center gap-1 text-amber-700">
                         <AlertTriangle className="size-3" /> criteria removed from
                         master — can only switch off
@@ -139,7 +149,12 @@ export function ScoredSessionsPanel({
                     role="switch"
                     aria-checked={s.is_scoreable}
                     aria-label={`Scoring for ${s.title}`}
-                    disabled={saving}
+                    disabled={saving || locked}
+                    title={
+                      locked
+                        ? "Only sessions that have scoring criteria set up can be switched on."
+                        : undefined
+                    }
                     onClick={() => onToggle(s)}
                     className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50
                       ${s.is_scoreable ? "bg-[#138808]" : "bg-gray-300"}`}

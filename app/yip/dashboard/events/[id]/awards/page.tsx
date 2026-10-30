@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
@@ -47,6 +48,16 @@ export default async function EventAwardsPage({
           Anything you leave alone uses the national default. Changes apply the
           next time results are computed. The national team sets the default list
           and each award&apos;s basis under Admin → Awards.
+        </p>
+        <p className="mt-2 text-sm text-[#1a1a3e]">
+          To choose or change a winner (for example King Maker), use
+          &lsquo;Override Award Winner&rsquo; on the{" "}
+          <Link
+            href={`/yip/dashboard/events/${id}/results`}
+            className="font-medium text-[#FF9933] underline underline-offset-4"
+          >
+            Results page →
+          </Link>
         </p>
       </div>
       <EventAwardConfig eventId={id} initialConfig={config} defaultOpen />

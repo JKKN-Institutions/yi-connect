@@ -28,6 +28,14 @@ import { LeadershipTracker } from "./leadership-tracker";
 import { Badge } from "@/components/yip/ui/badge";
 import { Button } from "@/components/yip/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/yip/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/yip/ui/dialog";
 import { SearchablePersonSelect } from "@/components/yip/searchable-person-select";
 import {
   Table,
@@ -381,6 +389,9 @@ export function ResultsClient({
     router.refresh();
   }
   const [publishLoading, setPublishLoading] = useState(false);
+  // Publishing reveals results to every student and juror at once, so it asks
+  // first. Unpublishing stays one tap (it only hides them again).
+  const [confirmPublishOpen, setConfirmPublishOpen] = useState(false);
   const [computeLoading, setComputeLoading] = useState(false);
   const [message, setMessage] = useState<{
     // "info" = a benign, non-error outcome (e.g. nothing to compute yet) —
@@ -556,6 +567,66 @@ export function ResultsClient({
     awardAvailability.map((a) => [a.label, a])
   );
   const awardsWithWinner = awardWinners.size;
+
+  // Ties — DISPLAY ONLY; never changes who the engine picked. An award is tied
+  // when a winner's ranking value equals that of a non-winner contender who is
+  // still free to take it. Compared on the stored candidate score — the most
+  // precise value the page has (the engine's ranking value, kept at 6 decimals
+  // since this change; rows computed before it hold 2) — never the 1-decimal
+  // display. Not ties:
+  //   - a contender who already holds a DIFFERENT award — they lost this one to
+  //     the one-award-per-student rule, not to a coin toss;
+  //   - Team Spirit — every committee member shares one value by design.
+  const awardHeldBy = new Map(
+    results.map((r) => [r.participant_id, r.award_category ?? ""])
+  );
+  const holdsOtherAward = (pid: string, label: string) => {
+    const labels = (awardHeldBy.get(pid) ?? "")
+      .split(", ")
+      .filter((l) => l && !l.startsWith(NOT_RANKED_PREFIX));
+    return labels.some((l) => l !== label);
+  };
+  const tiedAwardLabels = new Set<string>();
+  const tiedCandidateKeys = new Set<string>(); // `${award_key}:${participant_id}`
+  const candidateRankLabel = new Map<string, string>(); // same key → "1" / "=1"
+  for (const g of awardCandidates) {
+    const scores = g.candidates.map((c) => Number(c.score));
+    const tiedScores = new Set(
+      g.award_key === "team_spirit"
+        ? []
+        : g.candidates
+            .filter(
+              (c) =>
+                c.is_winner &&
+                g.candidates.some(
+                  (o) =>
+                    !o.is_winner &&
+                    Number(o.score) === Number(c.score) &&
+                    !holdsOtherAward(o.participant_id, g.award_label)
+                )
+            )
+            .map((c) => Number(c.score))
+    );
+    if (tiedScores.size > 0) tiedAwardLabels.add(g.award_label);
+    for (const c of g.candidates) {
+      const s = Number(c.score);
+      const key = `${g.award_key}:${c.participant_id}`;
+      // Competition ranking: equal values share a rank ("=1", "=1", "3").
+      const ahead = scores.filter((x) => x > s).length;
+      const shared = scores.filter((x) => x === s).length > 1;
+      candidateRankLabel.set(key, `${shared ? "=" : ""}${ahead + 1}`);
+      if (
+        tiedScores.has(s) &&
+        (c.is_winner || !holdsOtherAward(c.participant_id, g.award_label))
+      )
+        tiedCandidateKeys.add(key);
+    }
+  }
+  const tieBadge = (
+    <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+      Tie — the chair decides
+    </span>
+  );
 
   // Interim-recompute guardrail: two-day event with zero Day-2 check-ins ⇒
   // computing now marks everyone "Not ranked — absent Day 2". Shown in both the
@@ -875,7 +946,9 @@ export function ResultsClient({
                 ? "bg-red-600 text-white hover:bg-red-700"
                 : "bg-[#FF9933] text-white hover:bg-[#E68A2E]"
             }
-            onClick={handlePublishToggle}
+            onClick={() =>
+              isPublished ? handlePublishToggle() : setConfirmPublishOpen(true)
+            }
             disabled={publishLoading}
           >
             {publishLoading ? (
@@ -889,6 +962,36 @@ export function ResultsClient({
           </Button>
         </div>
       </div>
+
+      <Dialog open={confirmPublishOpen} onOpenChange={setConfirmPublishOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Publish results?</DialogTitle>
+            <DialogDescription>
+              Every student and juror will see the results and award winners
+              straight away. You can unpublish afterwards.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmPublishOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-[#FF9933] text-white hover:bg-[#E68A2E]"
+              disabled={publishLoading}
+              onClick={() => {
+                setConfirmPublishOpen(false);
+                handlePublishToggle();
+              }}
+            >
+              Publish
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Award Cards — ALL 15 workbook awards always render; ones with no
           eligible winner show "Not awarded yet" + what they need. */}
@@ -944,6 +1047,15 @@ export function ResultsClient({
                       <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                         {label}
                       </p>
+                      {tiedAwardLabels.has(label) && (
+                        <div className="mt-1">
+                          {tieBadge}
+                          <p className="mt-0.5 text-xs text-amber-700">
+                            Another contender has exactly the same score for
+                            this award — see Award contenders below.
+                          </p>
+                        </div>
+                      )}
                       {hasWinner ? (
                         winners.map((w) => (
                           <div key={w.participant_id} className="mt-1">
@@ -1062,33 +1174,49 @@ export function ResultsClient({
                         {group.award_label}
                       </p>
                     </div>
+                    {tiedAwardLabels.has(group.award_label) && (
+                      <div className="mb-2">{tieBadge}</div>
+                    )}
                     <ol className="space-y-1">
-                      {group.candidates.map((c) => (
-                        <li
-                          key={`${group.award_key}-${c.participant_id}`}
-                          className={`flex items-center justify-between gap-2 rounded px-2 py-1 text-sm ${
-                            c.is_winner
-                              ? "bg-white/80 font-semibold text-gray-900 ring-1 ring-[#FF9933]/40"
-                              : "text-gray-700"
-                          }`}
-                        >
-                          <span className="flex min-w-0 items-center gap-1.5">
-                            {c.is_winner ? (
-                              <Crown className="size-3.5 shrink-0 text-[#FF9933]" />
-                            ) : (
-                              <span className="w-3.5 shrink-0 text-center text-xs text-gray-400">
-                                {c.rank}
+                      {group.candidates.map((c) => {
+                        const key = `${group.award_key}:${c.participant_id}`;
+                        const tied = tiedCandidateKeys.has(key);
+                        return (
+                          <li
+                            key={`${group.award_key}-${c.participant_id}`}
+                            className={`flex items-center justify-between gap-2 rounded px-2 py-1 text-sm ${
+                              tied
+                                ? c.is_winner
+                                  ? "bg-amber-50 font-semibold text-gray-900 ring-1 ring-amber-400"
+                                  : "bg-amber-50 text-gray-700 ring-1 ring-amber-300"
+                                : c.is_winner
+                                  ? "bg-white/80 font-semibold text-gray-900 ring-1 ring-[#FF9933]/40"
+                                  : "text-gray-700"
+                            }`}
+                          >
+                            <span className="flex min-w-0 items-center gap-1.5">
+                              {c.is_winner ? (
+                                <Crown className="size-3.5 shrink-0 text-[#FF9933]" />
+                              ) : (
+                                <span className="min-w-3.5 shrink-0 text-center text-xs text-gray-400">
+                                  {candidateRankLabel.get(key) ?? c.rank}
+                                </span>
+                              )}
+                              <span className="truncate">
+                                {c.participant_name ?? "—"}
                               </span>
-                            )}
-                            <span className="truncate">
-                              {c.participant_name ?? "—"}
+                              {tied && (
+                                <span className="shrink-0 text-[11px] font-semibold text-amber-700">
+                                  tie
+                                </span>
+                              )}
                             </span>
-                          </span>
-                          <span className="shrink-0 tabular-nums text-xs text-gray-500">
-                            {c.score.toFixed(1)}
-                          </span>
-                        </li>
-                      ))}
+                            <span className="shrink-0 tabular-nums text-xs text-gray-500">
+                              {c.score.toFixed(1)}
+                            </span>
+                          </li>
+                        );
+                      })}
                     </ol>
                   </div>
                 );

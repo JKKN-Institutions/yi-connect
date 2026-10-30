@@ -4,9 +4,17 @@ import { createServiceClient } from "@/lib/yip/supabase/server";
 import { createClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
 import { logAuditAction } from "@/lib/yip/audit/log-action";
-import { isAwardLabel } from "@/lib/yip/awards";
+import { isAwardLabel, resolveAwardsForLevel } from "@/lib/yip/awards";
+import { fetchEventRoundLevel } from "@/lib/yip/round-level";
+import {
+  ELIGIBILITY_PLAIN,
+  pinEligibility,
+  schoolCapApplies,
+  SCHOOL_AWARD_CAP,
+} from "@/lib/yip/award-eligibility";
 import { computeResults } from "./results";
 import { revalidatePath } from "next/cache";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 type ActionResult<T = null> =
   | { success: true; data: T }
@@ -99,12 +107,59 @@ export async function setAwardWinner(
   // The pick must be a participant of THIS event (no cross-event override).
   const { data: participant } = await supabase
     .from("participants")
-    .select("id")
+    .select("id, full_name, parliament_role, party_side")
     .eq("id", participantId)
     .eq("event_id", eventId)
     .maybeSingle();
   if (!participant) {
     return { success: false, error: "That participant is not in this event." };
+  }
+
+  // The pick must meet the award's eligibility — the engine's role/side rule
+  // (lib/yip/award-eligibility.ts), widened for a chair's pin only by
+  // pinEligibility (Best Speaker → any presiding officer; bench awards → side
+  // alone). Checked before any write. The award is resolved exactly as
+  // computeResults resolves it (this round's level → its award set → match by
+  // label). Not blocked here: an award with no definition row, an in-code
+  // fallback award (no rank_mode — the engine keys those on award_key, and
+  // every live row has rank_mode), or a rule that depends on result data
+  // (→ null, e.g. no disciplinary flag).
+  const roundLevel = await fetchEventRoundLevel(supabase as never, eventId);
+  const { data: allAwardDefs } = await (supabase as unknown as SupabaseClient)
+    .from("award_definitions")
+    .select("label, eligibility, rank_mode, levels");
+  const def = resolveAwardsForLevel(
+    (allAwardDefs ?? []) as {
+      label: string;
+      eligibility: string | null;
+      rank_mode: string | null;
+      levels: string[] | null;
+    }[],
+    roundLevel
+  ).find((d) => d.label === awardLabel);
+  if (def?.rank_mode) {
+    const eligibility = def.eligibility ?? "all";
+    if (
+      pinEligibility(
+        eligibility,
+        participant.parliament_role,
+        participant.party_side
+      ) === false
+    ) {
+      const who = ELIGIBILITY_PLAIN[eligibility] ?? "not open to this student";
+      // Bench awards are judged on side alone, so say which side (if any) the
+      // student is recorded on.
+      const side =
+        eligibility === "ruling" || eligibility === "opposition"
+          ? participant.party_side
+            ? `, and ${participant.full_name} is on the ${participant.party_side} side`
+            : `, and ${participant.full_name} has no side recorded — set their party side first`
+          : "";
+      return {
+        success: false,
+        error: `${participant.full_name} can't receive ${awardLabel}: this award is ${who}${side}.`,
+      };
+    }
   }
 
   // Who is making the change (for the audit trail + the override card).
@@ -164,7 +219,7 @@ export async function setAwardWinner(
   // earlier valid override, and tell the chair why.
   const { data: landedRow } = await supabase
     .from("results")
-    .select("award_category")
+    .select("award_category, rank")
     .eq("event_id", eventId)
     .eq("participant_id", participantId)
     .maybeSingle();
@@ -172,6 +227,44 @@ export async function setAwardWinner(
     .split(", ")
     .includes(awardLabel);
   if (!landed) {
+    // Say the ACTUAL reason the recompute skipped this pin (read from the fresh
+    // recompute, before the rollback below re-runs it). The override pass in
+    // computeResults skips a pin for exactly these causes, checked in order.
+    const name = participant.full_name;
+    let why: string;
+    if (!landedRow) {
+      // No result row → the student has no submitted marks at all.
+      why = `${name} has no marks yet, so there is no result to give an award to. Make sure the judges' scores for ${name} are submitted, recompute, then try again.`;
+    } else if (
+      landedRow.rank == null &&
+      (landedRow.award_category ?? "").startsWith("Not ranked")
+    ) {
+      // The engine's own day-presence verdict, e.g. "Not ranked — absent Day 2".
+      const detail = (landedRow.award_category ?? "").replace(
+        /^Not ranked\s*—\s*/,
+        ""
+      );
+      why = `${name} wasn't checked in on every day of the round (${detail}), and only students present every day can receive an award.`;
+    } else {
+      // Pinned to another award too? Each student holds one award, so the
+      // other pin can take this one back.
+      const { data: otherPin } = await supabase
+        .from("award_overrides")
+        .select("award_label")
+        .eq("event_id", eventId)
+        .eq("participant_id", participantId)
+        .neq("award_label", awardLabel)
+        .limit(1)
+        .maybeSingle();
+      if (otherPin) {
+        why = `${name} is already pinned to ${otherPin.award_label}, and each student can hold only one award. Clear that pin first.`;
+      } else if (schoolCapApplies(roundLevel)) {
+        why = `${name}'s school already holds the maximum of ${SCHOOL_AWARD_CAP} awards at this chapter round. Choose a student from a school under the cap.`;
+      } else {
+        why = `the results recompute didn't give the award to ${name}. Check that ${name} has submitted marks for this award, then try again.`;
+      }
+    }
+
     if (priorOverride && priorOverride.participant_id !== participantId) {
       await supabase.from("award_overrides").upsert(
         {
@@ -195,8 +288,7 @@ export async function setAwardWinner(
     revalidatePath(`/yip/dashboard/events/${eventId}/results`);
     return {
       success: false,
-      error:
-        "Couldn't pin this winner: that student's school already holds the maximum of 3 awards, or the student didn't attend every day. Choose a student from a school under the cap.",
+      error: `Couldn't pin this winner: ${why}`,
     };
   }
 

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/yip/supabase/server";
+import { createClient, createServiceClient } from "@/lib/yip/supabase/server";
 import { getEvent } from "@/app/yip/actions/events";
 import { getEventParticipants } from "@/app/yip/actions/participants";
 import { getCabinetConfig } from "@/app/yip/actions/cabinet";
@@ -41,6 +41,25 @@ export default async function ParticipantsPage({
   // not just the static 8).
   const { ministries } = await getCabinetConfig(id);
 
+  // The scored agenda session that marks the officials of the House (Speaker,
+  // Deputies, Journalists, Administrators) on the duty-roles sheet — named on
+  // the bench banner so organisers know these benchless students ARE marked.
+  let officialsSession: { day: number | null; title: string } | null = null;
+  if (access.canView) {
+    const svc = await createServiceClient();
+    const { data: dutyItems } = await svc
+      .from("agenda")
+      .select("day, title, sequence_order")
+      .eq("event_id", id)
+      .eq("is_scoreable", true)
+      .or("session_key.eq.national_duty_roles,agenda_type.eq.closing_remarks")
+      .order("day", { ascending: true })
+      .order("sequence_order", { ascending: true })
+      .limit(1);
+    const first = dutyItems?.[0];
+    if (first) officialsSession = { day: first.day ?? null, title: first.title };
+  }
+
   // The balancing field is collected only to spread parties + committees and is
   // NEVER shown in the platform — strip it from the client payload entirely (the
   // roster export reads it server-side; it is purged only when the event's PII is
@@ -57,6 +76,7 @@ export default async function ParticipantsPage({
       canManage={access.canManage}
       canEdit={access.canDelete}
       ministries={ministries}
+      officialsSession={officialsSession}
     />
   );
 }

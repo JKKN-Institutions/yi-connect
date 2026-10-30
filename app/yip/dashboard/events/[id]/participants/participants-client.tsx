@@ -12,7 +12,7 @@ import {
   updateParticipant,
   setParticipantBenches,
 } from "@/app/yip/actions/participants";
-import { ROLE_LABELS, PARTY_COLORS } from "@/lib/yip/constants";
+import { ROLE_LABELS, PARTY_COLORS, HOUSE_OFFICIAL_ROLES } from "@/lib/yip/constants";
 import {
   describePartySide,
   PARTY_SIDE_LABELS,
@@ -60,6 +60,13 @@ import { EmailSendCodes } from "@/components/yip/email-send-codes";
 import { ParticipantProfileDialog } from "@/components/yip/participant-profile-dialog";
 import { exportAllocationRoster } from "@/app/yip/actions/school-export";
 import { toast } from "sonner";
+
+// Officials of the House (Speaker, Deputies, Journalists, Administrators) sit
+// on no bench by design and are marked on role-only sheets, so a missing bench
+// is only a gap for everyone else.
+function needsBench(p: { party_side?: string | null; parliament_role?: string | null }) {
+  return !p.party_side && !HOUSE_OFFICIAL_ROLES.has(p.parliament_role ?? "");
+}
 
 type Participant = {
   id: string;
@@ -156,6 +163,7 @@ export function ParticipantsClient({
   canManage = false,
   canEdit = false,
   ministries,
+  officialsSession = null,
 }: {
   eventId: string;
   eventName: string;
@@ -169,6 +177,8 @@ export function ParticipantsClient({
   canEdit?: boolean;
   /** The event's effective cabinet portfolios for the Ministry dropdown. */
   ministries: MinistryPortfolio[];
+  /** The scored agenda session that marks the officials of the House. */
+  officialsSession?: { day: number | null; title: string } | null;
 }) {
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -441,7 +451,19 @@ export function ParticipantsClient({
   // national admin ruled out (18 Aug 2026), because the bench decides which two
   // criteria the student is marked on. Today this gap is invisible until it
   // blocks someone mid-session, so it is stated on the screen instead.
-  const missingBenchCount = participants.filter((p) => !p.party_side).length;
+  const missingBenchCount = participants.filter(needsBench).length;
+  // Officials of the House have no bench on purpose — counted per role so the
+  // banner can say who they are and when they are marked.
+  const officialCounts = new Map<string, number>();
+  for (const p of participants) {
+    const role = p.parliament_role ?? "";
+    if (!p.party_side && HOUSE_OFFICIAL_ROLES.has(role))
+      officialCounts.set(role, (officialCounts.get(role) ?? 0) + 1);
+  }
+  const officialsTotal = Array.from(officialCounts.values()).reduce((a, b) => a + b, 0);
+  const officialsBreakdown = Array.from(officialCounts.entries())
+    .map(([role, n]) => `${n} ${ROLE_LABELS[role] ?? role}`)
+    .join(", ");
 
   const filtersActive =
     checkInFilter !== "all" ||
@@ -498,7 +520,7 @@ export function ParticipantsClient({
     // to guess for, which is the set an organiser wants to bulk-assign.
     // (missingBenchCount below counts the same thing across the whole roster.)
     if (benchFilter === "none")
-      filtered = filtered.filter((p) => !p.party_side);
+      filtered = filtered.filter(needsBench);
     else if (benchFilter !== "all")
       filtered = filtered.filter((p) => p.party_side === benchFilter);
 
@@ -1347,13 +1369,24 @@ export function ParticipantsClient({
           <span className="font-medium">
             {missingBenchCount > 0
               ? `${missingBenchCount} of ${participants.length} students have no bench recorded`
-              : `All ${participants.length} students have a bench recorded`}
+              : `All ${participants.length - officialsTotal} members have a bench recorded`}
           </span>
           <span className="text-xs opacity-80">
             {missingBenchCount > 0
               ? "A juror scoring these students is asked to pick a side in the hall. Set it here before the round."
               : "Jurors will see only the criteria for each student's own bench."}
           </span>
+          {officialsTotal > 0 && (
+            <p className="basis-full text-xs">
+              <span className="font-medium">
+                Not counted: {officialsTotal} officials of the House ({officialsBreakdown}).
+              </span>{" "}
+              They have no bench on purpose. Don&apos;t set one.{" "}
+              {officialsSession
+                ? `They are marked in ${officialsSession.day ? `Day ${officialsSession.day} · ` : ""}${officialsSession.title}, on the duty-roles sheet. Tick that session for the jurors who will mark them on Jury › Sessions.`
+                : "No scored session in this event's agenda marks them yet."}
+            </p>
+          )}
 
           <Dialog open={benchDialogOpen} onOpenChange={setBenchDialogOpen}>
             <DialogTrigger

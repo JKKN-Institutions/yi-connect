@@ -2,6 +2,7 @@
 
 import { createServiceClient } from "@/lib/yip/supabase/server";
 import { getYipEventAccess } from "@/lib/yip/auth/event-access";
+import { HOUSE_OFFICIAL_ROLES } from "@/lib/yip/constants";
 import { getPositionBonusConfigAdmin } from "@/app/yip/actions/positions";
 import {
   effectiveCabinetCount,
@@ -106,7 +107,11 @@ export async function getEventReadiness(
       .from("participants")
       .select("id", { count: "exact", head: true })
       .eq("event_id", eventId)
-      .is("party_side", null),
+      .is("party_side", null)
+      // Officials of the House sit on no bench by design (see participants page).
+      .or(
+        `parliament_role.is.null,parliament_role.not.in.(${Array.from(HOUSE_OFFICIAL_ROLES).join(",")})`
+      ),
     supabase
       .from("agenda")
       .select("id", { count: "exact", head: true })

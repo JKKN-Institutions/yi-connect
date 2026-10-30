@@ -95,13 +95,19 @@ export function ScoreSheet({
       const res = await saveScore({ evaluatorId, nominationId, params: marks, reasons, comments, submit: false });
       if (res.success) {
         setDirty(false);
-        setResult({ ok: true, text: "Draft saved automatically." });
+        // Keep a "Not ready to submit" warning on screen while something is still missing.
+        const stillMissing = problems.length > 0;
+        setResult((prev) =>
+          prev && !prev.ok && stillMissing && prev.text.startsWith("Not ready")
+            ? { ok: false, text: `Not ready to submit: ${problems[0]}` }
+            : { ok: true, text: "Draft saved automatically." }
+        );
       } else {
         setResult({ ok: false, text: res.error });
       }
     }, 2000);
     return () => clearTimeout(t);
-  }, [dirty, readOnly, pending, overLimit, marks, reasons, comments, evaluatorId, nominationId]);
+  }, [dirty, readOnly, pending, overLimit, problems, marks, reasons, comments, evaluatorId, nominationId]);
 
   function askSubmit() {
     if (problems.length > 0) {

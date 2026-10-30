@@ -18,7 +18,11 @@
  *                                   "convert to percentile in every region").
  *   L3  Part B, mean of the NMT totals (/50), as a 0-1 fraction. Always raw:
  *       the matrix doc gives no percentile rule for Layer 3.
- * A missing part counts as 0 and is flagged on the row, never hidden.
+ * No RM (Piyush, 30 Oct 18:58): if a nomination has no submitted RM marks
+ *   (the region has no RM, or the RM did not score by the deadline), the NMT
+ *   Part B fraction stands in for the RM's, so the total is Health Card 50%
+ *   + NMT 50%. Part A already uses whichever side has marks.
+ * Any other missing part counts as 0 and is flagged on the row, never hidden.
  */
 
 import { CHECK_STEP_ENABLED, MAX_LAYER_TOTAL, MAX_PARAM, PARAM_KEYS, PART_A_MAX, PART_A_PREFIX } from "./constants";
@@ -100,6 +104,8 @@ export type MatrixRow = {
   partAPoints: number;
   rmPoints: number;
   nmtPoints: number;
+  /** True when no RM marked it, so the NMT Part B filled the RM's share. */
+  rmFromNmt: boolean;
   total: number;
   /** Rank within the category by total. Ties share a rank (1, 1, 3). */
   rank: number;
@@ -159,7 +165,9 @@ export function computeMatrix(input: {
     }
     const l3Fraction = b.l3Avg === null ? null : b.l3Avg / MAX_LAYER_TOTAL;
     const partAPoints = cycle.weight_layer1 * (b.partA ?? 0);
-    const rmPoints = cycle.weight_layer2 * (l2Fraction ?? 0);
+    // No RM marks: the NMT Part B stands in for the RM's (Piyush, 30 Oct).
+    const rmFromNmt = l2Fraction === null && l3Fraction !== null;
+    const rmPoints = cycle.weight_layer2 * (rmFromNmt ? (l3Fraction as number) : (l2Fraction ?? 0));
     const nmtPoints = cycle.weight_layer3 * (l3Fraction ?? 0);
     const total = partAPoints + rmPoints + nmtPoints;
     const missing: MatrixRow["missing"] = [];
@@ -183,6 +191,7 @@ export function computeMatrix(input: {
       partAPoints: Math.round(partAPoints * 100) / 100,
       rmPoints: Math.round(rmPoints * 100) / 100,
       nmtPoints: Math.round(nmtPoints * 100) / 100,
+      rmFromNmt,
       total: Math.round(total * 100) / 100,
       rank: 0,
       missing,

@@ -180,7 +180,9 @@ export function buildMatrixView(input: {
           nmtAvg: r.l3Avg,
           total: r.total,
           rank: r.rank,
-          missing: r.missing.map((m) => MISSING_LABEL[m]),
+          missing: r.missing.map((m) =>
+            m === "layer2" && r.rmFromNmt ? "RM scores (NMT counted in their place)" : MISSING_LABEL[m]
+          ),
           dossier: dossierOf(n),
           rationales: mine.map((s) => ({
             label: labels.get(s.evaluator_id)?.label ?? (s.layer === "rm" ? "RM" : "NMT"),

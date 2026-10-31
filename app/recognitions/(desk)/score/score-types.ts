@@ -17,3 +17,13 @@ export type FlagInput = {
   nominationId: string;
   on: boolean;
 };
+
+/** One Part A question on the sheet: a Health Card measure, plain data (indicators pre-split into lines). */
+export type PartAQuestion = {
+  key: string;
+  label: string;
+  definition: string;
+  indicators: string[];
+  purpose: string;
+  impact: string;
+};

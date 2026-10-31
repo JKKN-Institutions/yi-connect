@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import { requireRxNationalLeadership, requireRxOversight } from "@/lib/recognitions/auth";
 import { effectiveText, getAwardState, getPeople, homeChapterNotes, listAudit, listCitationEdits, listScoreHistory } from "@/lib/recognitions/data";
 import { scoreSight } from "@/lib/recognitions/sight";
-import { CATEGORIES, CATEGORY_LABEL, CHECK_STEP_ENABLED, LAYER2_PARAMS, LAYER3_PARAMS, LAYER_LABEL, PARAM_KEYS } from "@/lib/recognitions/constants";
-import { paramsTotal } from "@/lib/recognitions/scoring";
+import { CATEGORIES, CATEGORY_LABEL, CHECK_STEP_ENABLED, LAYER2_PARAMS, LAYER3_PARAMS, LAYER_LABEL, MAX_LAYER_TOTAL, PARAM_KEYS } from "@/lib/recognitions/constants";
+import { paramsTotal, partAFraction } from "@/lib/recognitions/scoring";
 import { Ribbon } from "@/app/recognitions/_ui/ribbon";
 import { IconArrowLeft } from "@/app/recognitions/_ui/icons";
 import { NoAccess, Notice, PageHead, PhaseSeal, Seal, formatWhen } from "@/app/recognitions/_ui/primitives";
@@ -69,6 +69,11 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
     listCitationEdits(awardId),
     listScoreHistory(awardId),
   ]);
+  // One evaluator's Part A (Health Card marks) out of 100, or a dash until every measure is marked.
+  const partAPct = (params: Parameters<typeof partAFraction>[0]) => {
+    const f = partAFraction(params, data.partAMeasures);
+    return f === null ? "—" : String(Math.round(f * 1000) / 10);
+  };
   // Chapters National Leadership added (recognitions_03), and whether more can be added now.
   const addedNoms = state.nominations
     .filter(isNlAdded)
@@ -207,7 +212,8 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
         <p className="rx-small rx-mute">
           Every Regional Mentor and NMT score with the evaluator&apos;s name. RM parameters:{" "}
           {LAYER2_PARAMS.map((p, i) => `P${i + 1} ${p.label}`).join(", ")}. NMT parameters:{" "}
-          {LAYER3_PARAMS.map((p, i) => `P${i + 1} ${p.label}`).join(", ")}.
+          {LAYER3_PARAMS.map((p, i) => `P${i + 1} ${p.label}`).join(", ")}. Part B parameters are marked 0 to 10 (total
+          out of {MAX_LAYER_TOTAL}). Part A is the evaluator&apos;s own Health Card activity score, out of 100.
         </p>
         {state.checkedNominations.length === 0 ? (
           <p className="rx-mute">No nomination for this recognition is in the race yet.</p>
@@ -251,6 +257,7 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
                                   <tr>
                                     <th>Evaluator</th>
                                     <th>Layer</th>
+                                    <th className="rx-num">Part A</th>
                                     {PARAM_KEYS.map((k, i) => (
                                       <th key={k} className="rx-num">P{i + 1}</th>
                                     ))}
@@ -263,6 +270,7 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
                                     <tr key={s.id}>
                                       <td>{data.evaluatorNames[s.evaluator_id] ?? "Unknown evaluator"}</td>
                                       <td>{s.layer === "rm" ? "RM" : "NMT"}</td>
+                                      <td className="rx-num">{partAPct(s.params)}</td>
                                       {PARAM_KEYS.map((k) => (
                                         <td key={k} className="rx-num">{s.params[k] ?? "—"}</td>
                                       ))}
@@ -289,6 +297,7 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
                                     <tr>
                                       <th>Evaluator</th>
                                       <th className="rx-num">Round</th>
+                                      <th className="rx-num">Part A</th>
                                       {PARAM_KEYS.map((k, i) => (
                                         <th key={k} className="rx-num">P{i + 1}</th>
                                       ))}
@@ -303,6 +312,7 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
                                         <tr key={h.id}>
                                           <td>{data.evaluatorNames[h.evaluator_id] ?? "Unknown evaluator"}</td>
                                           <td className="rx-num">{h.round}</td>
+                                          <td className="rx-num">{partAPct(h.params)}</td>
                                           {PARAM_KEYS.map((k) => (
                                             <td key={k} className="rx-num">{h.params[k] ?? "—"}</td>
                                           ))}

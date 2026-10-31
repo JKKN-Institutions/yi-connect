@@ -18,7 +18,8 @@ import type {
   ScoreRow,
   Top3Entry,
 } from "@/lib/recognitions/types";
-import { computeMatrix, paramsTotal } from "@/lib/recognitions/scoring";
+import { computeMatrix, paramsTotal, type PartAMeasure } from "@/lib/recognitions/scoring";
+import { categoryRankingProblem } from "@/lib/recognitions/moderation-rules";
 import { countWords } from "@/lib/recognitions/words";
 import { ADDED_BY_LABEL, isAddedForChapter } from "@/lib/recognitions/check-rules";
 
@@ -59,8 +60,13 @@ export type MatrixViewRow = {
   nominationId: string;
   chapterName: string;
   region: string;
-  l1: number | null;
-  /** evaluatorId -> that evaluator's submitted total (/25). */
+  /** Part A, the Health Card activity score marked by the RMs and the NMT, 0-100 (null = no marks yet). */
+  partA: number | null;
+  /** Each part's share of the total in points: Part A (out of weight 1), RM and NMT Part B. */
+  partAPoints: number;
+  rmPoints: number;
+  nmtPoints: number;
+  /** evaluatorId -> that evaluator's submitted Part B total (/50). */
   perEvaluator: Record<string, number>;
   rmAvg: number | null;
   nmtAvg: number | null;
@@ -85,8 +91,8 @@ export type MatrixView = {
   categories: MatrixCategoryView[];
 };
 
-const MISSING_LABEL: Record<"layer1" | "layer2" | "layer3", string> = {
-  layer1: "Health Card",
+const MISSING_LABEL: Record<"partA" | "layer2" | "layer3", string> = {
+  partA: "Part A · Health Card marks",
   layer2: "RM scores",
   layer3: "NMT scores",
 };
@@ -120,13 +126,14 @@ export function buildMatrixView(input: {
   cycle: Pick<CycleRow, "weight_layer1" | "weight_layer2" | "weight_layer3" | "layer2_mode">;
   nominations: NominationRow[];
   scores: ScoreRow[];
-  layer1: Map<string, number>;
+  /** The award's Health Card measures: the Part A questions. */
+  partAMeasures: PartAMeasure[];
   chapters: Map<string, ChapterRow>;
   names?: Record<string, string>;
 }): MatrixView {
   const { cycle, nominations, chapters, names } = input;
   const submitted = input.scores.filter((s) => s.status === "submitted");
-  const matrix = computeMatrix({ cycle, nominations, scores: submitted, layer1: input.layer1 });
+  const matrix = computeMatrix({ cycle, nominations, scores: submitted, partAMeasures: input.partAMeasures });
   const nomById = new Map(nominations.map((n) => [n.id, n]));
 
   const labels = new Map<string, EvalColumn>();
@@ -164,13 +171,18 @@ export function buildMatrixView(input: {
           nominationId: r.nomination_id,
           chapterName: chapterName(chapters, r.chapter_id),
           region: r.region,
-          l1: r.l1,
+          partA: r.partA === null ? null : Math.round(r.partA * 10000) / 100,
+          partAPoints: r.partAPoints,
+          rmPoints: r.rmPoints,
+          nmtPoints: r.nmtPoints,
           perEvaluator,
           rmAvg: r.l2Avg,
           nmtAvg: r.l3Avg,
           total: r.total,
           rank: r.rank,
-          missing: r.missing.map((m) => MISSING_LABEL[m]),
+          missing: r.missing.map((m) =>
+            m === "layer2" && r.rmFromNmt ? "RM scores (NMT counted in their place)" : MISSING_LABEL[m]
+          ),
           dossier: dossierOf(n),
           rationales: mine.map((s) => ({
             label: labels.get(s.evaluator_id)?.label ?? (s.layer === "rm" ? "RM" : "NMT"),
@@ -221,14 +233,8 @@ export function prefillFromMatrix(view: MatrixView): Record<string, Provisional>
   return out;
 }
 
-/**
- * Did the final rank move from the matrix rank? Chapters tied in the matrix
- * may take any place in their tie band [matrixRank, matrixRank + tieSize - 1]
- * without counting as a move, so ordering a tie needs no reason.
- */
-export function rankMoved(finalRank: number, matrixRank: number, tieSize: number): boolean {
-  return finalRank < matrixRank || finalRank > matrixRank + Math.max(1, tieSize) - 1;
-}
+// The ranking rules live in lib/recognitions/moderation-rules.ts so the form and the server share them.
+export { rankMoved, reasonRequired } from "@/lib/recognitions/moderation-rules";
 
 /** "3", or "=1" when the chapter is tied in the matrix. */
 export function matrixRankLabel(matrixRank: number, tieSize: number): string {
@@ -427,8 +433,9 @@ export type ValidatedModeration =
  * strict=false (Save draft): numbers that are filled in must be valid and
  * texts must fit their limits, but blanks are allowed.
  * strict=true (Submit): every nomination needs a unique rank covering 1..n in
- * its category, a reason wherever the rank moves out of its matrix rank's tie band,
- * and every podium place needs both texts.
+ * its category, a reason for final ranks 1-5 and wherever the rank moves out of
+ * its matrix rank's tie band (categoryRankingProblem, the same rule the form
+ * runs), and every podium place needs both texts.
  *
  * `provisional` is the combined matrix (prefillFromMatrix): the final score is
  * always its weighted total (Piyush, 28 Oct 2026: the NMT re-ranks, it does
@@ -495,14 +502,7 @@ export function validateModeration(
     if (strict && score === null) {
       return { ok: false, error: `${tab(n)}${nameOf(n)} has no combined total yet, so it can't be ranked. Reload the page.` };
     }
-    if (strict && rank === null) return { ok: false, error: `${tab(n)}enter a final rank for ${nameOf(n)}.` };
-    if (strict && prov && rank !== null && rankMoved(rank, prov.matrixRank, prov.tieSize) && g.reason === "") {
-      const from = prov.tieSize > 1 ? `tied rank ${prov.matrixRank}` : `rank ${prov.matrixRank}`;
-      return {
-        ok: false,
-        error: `${tab(n)}${nameOf(n)} moves from ${from} to ${rank}. Write the reason for the change.`,
-      };
-    }
+    if (strict && rank === null) return { ok: false, error: `${tab(n)}choose a final rank for ${nameOf(n)}.` };
     const entry: RankingEntry = {
       nomination_id: n.id,
       final_score: score,
@@ -514,17 +514,25 @@ export function validateModeration(
   }
 
   if (strict) {
+    // Duplicates and the reason rule: the SAME function the form runs before it submits.
     for (const category of CATEGORIES) {
-      const ranks = rankings
-        .filter((r) => byId.get(r.nomination_id)!.category === category)
-        .map((r) => r.final_rank as number);
-      const dup = ranks.find((k, i) => ranks.indexOf(k) !== i);
-      if (dup !== undefined) {
-        return {
-          ok: false,
-          error: `Two ${CATEGORY_LABEL[category]} chapters share final rank ${dup}. Each rank can be used once.`,
-        };
-      }
+      const problem = categoryRankingProblem(
+        CATEGORY_LABEL[category],
+        rankings
+          .filter((r) => byId.get(r.nomination_id)!.category === category)
+          .map((r) => {
+            const prov = provisional[r.nomination_id];
+            return {
+              name: nameOf(byId.get(r.nomination_id)!),
+              finalRank: r.final_rank,
+              reason: r.reason ?? "",
+              // A chapter with no matrix row was refused above (no combined total).
+              matrixRank: prov?.matrixRank ?? r.final_rank ?? 0,
+              tieSize: prov?.tieSize ?? 1,
+            };
+          })
+      );
+      if (problem) return { ok: false, error: problem };
     }
   }
 

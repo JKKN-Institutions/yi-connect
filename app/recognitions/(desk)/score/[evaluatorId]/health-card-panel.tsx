@@ -3,6 +3,8 @@ import { HC_TABLE_TITLE, lines, type ChapterHealthCard, type HcMeasure, type HcT
 
 /**
  * The chapter's Health Card on the scoring sheet: objective data, frozen,
+ * shown as REFERENCE for the evaluator's own Part A marks (30 Oct model: this
+ * uploaded score no longer feeds the matrix total),
  * shown before and after submitting (it is not another evaluator's mark, so
  * blind scoring is untouched). Only the super admin changes it, in the
  * control room. Each measure name is a <details> summary: a tap (phone) or
@@ -26,8 +28,8 @@ export function HealthCardPanel({
   if (!card) {
     return (
       <div className="rx-notice" data-hc="none">
-        <strong>No Health Card data</strong> for this chapter yet. Its Layer 1 is missing and counts as 0 in the combined matrix until the
-        super admin loads it.
+        <strong>No Health Card data</strong> for this chapter has been loaded by the super admin yet. Mark Part A on what you
+        know of the chapter&apos;s activity.
       </div>
     );
   }
@@ -70,7 +72,7 @@ export function HealthCardPanel({
                           ) : null}
                         </div>
                       </details>
-                      <div className="rx-small rx-mute">{fmt(m.weight)}% of Layer 1</div>
+                      <div className="rx-small rx-mute">{fmt(m.weight)}% weight</div>
                     </td>
                     <td className="rx-num">{s === null ? <span className="rx-mute">—</span> : fmt(s)}</td>
                   </tr>
@@ -79,7 +81,7 @@ export function HealthCardPanel({
             </tbody>
             <tfoot>
               <tr>
-                <th scope="row">Layer 1 (out of 100)</th>
+                <th scope="row">Health Card score (out of 100)</th>
                 <td className="rx-num" data-hc-layer1>
                   <strong>{card.layer1 === null ? "missing" : fmt(card.layer1)}</strong>
                 </td>
@@ -90,18 +92,19 @@ export function HealthCardPanel({
       ) : (
         <div className="rx-sheet-total" data-hc-layer1-single>
           <span className="rx-small">
-            Layer 1 (Health Card) · one overall score, no measure breakdown
+            Health Card · one overall score, no measure breakdown
           </span>
           <span className="rx-sheet-total-n">{card.layer1 === null ? "—" : fmt(card.layer1)}</span>
         </div>
       )}
       {card.incomplete ? (
         <p className="rx-small rx-notice">
-          Some measure scores are missing, so this chapter&apos;s Layer 1 is missing (counted as 0) until the super admin loads the rest.
+          Some measure scores are missing, so this chapter&apos;s overall Health Card score can&apos;t be shown until the super admin loads the rest.
         </p>
       ) : null}
       <p className="rx-small rx-mute">
-        Layer 1 is {weightLayer1}% of the final score: {card.layer1 === null ? "missing" : `${fmt(card.layer1)} × ${weightLayer1}% = ${fmt(Math.round(card.layer1 * weightLayer1) / 100)} points`}.
+        Reference only. The {weightLayer1}% Health Card share of the final score comes from the Part A marks the Regional
+        Mentors and the NMT give, not from this figure.
       </p>
     </div>
   );

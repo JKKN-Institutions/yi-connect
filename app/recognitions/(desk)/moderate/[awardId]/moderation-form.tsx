@@ -2,22 +2,16 @@
 
 import { useState, useTransition } from "react";
 import { CATEGORIES, CATEGORY_LABEL, RANK_LABEL, WORDS, type Category } from "@/lib/recognitions/constants";
+import { categoryRankingProblem, type RankingRuleRow } from "@/lib/recognitions/moderation-rules";
 import { ConfirmDialog, ResultLine, WordField } from "@/app/recognitions/_ui/client";
 import { saveModerationDraft, submitModeration } from "@/app/recognitions/actions/moderation";
-import { matrixRankLabel, rankMoved, type ModerationInput } from "@/app/recognitions/_parts/shared";
+import type { ModerationInput } from "@/app/recognitions/_parts/shared";
 import { HomeNote, type HomeNotes } from "@/app/recognitions/_parts/home-note";
 import { CategoryPanel } from "@/app/recognitions/_parts/category-tabs";
+import { StandingsTable, type StandingRow } from "@/app/recognitions/_parts/standings-table";
 
-export type FormRow = {
-  nominationId: string;
-  chapterName: string;
-  region: string;
-  computedTotal: number;
-  /** The combined matrix's rank; tied chapters share it. */
-  computedRank: number;
-  /** How many chapters share computedRank (1 = no tie). Any order inside the tie is not a move. */
-  tieSize: number;
-};
+/** One chapter on the form: the Stage 2 table row (scores, matrix rank and tie size). */
+export type FormRow = StandingRow;
 export type FormCategory = { category: Category; label: string; rows: FormRow[] };
 export type FormInitial = {
   ranks: Record<string, string>;
@@ -28,9 +22,12 @@ export type FormInitial = {
 
 /**
  * The NMT leader's final ranking, on the joint call with the Regional Mentors
- * (Piyush, 28 Oct 2026): no re-scoring. Each chapter shows its weighted total
- * and provisional rank; the leader sets the final rank and writes why. A
- * reason is required wherever the rank moves. Podium cards follow the FINAL ranks: a
+ * (Piyush, 28 Oct 2026): no re-scoring. Per category, a sortable table shows
+ * each chapter's Health Card (Part A), RM and NMT shares, total and
+ * provisional rank (Piyush's sketch, 30 Oct); the leader picks the final rank
+ * from a dropdown and writes why. A reason is required for final ranks 1-5
+ * and wherever the rank moves (categoryRankingProblem, the rule the server
+ * runs too). Podium cards follow the FINAL ranks: a
  * chapter gets a card the moment it alone holds rank 1, 2 or 3 in its
  * category. Texts belong to the chapter, so swapping two ranks carries
  * each chapter's text with it. The server re-derives the podium.
@@ -38,12 +35,14 @@ export type FormInitial = {
 export function ModerationForm({
   awardId,
   categories,
+  weights,
   initial,
   mode,
   home,
 }: {
   awardId: string;
   categories: FormCategory[];
+  weights: { l1: number; l2: number; l3: number };
   initial: FormInitial;
   mode: "stage2" | "reevaluation";
   home?: HomeNotes;
@@ -59,15 +58,28 @@ export function ModerationForm({
   const setText = (id: string, field: "rationale" | "citation", v: string) =>
     setTexts((t) => ({ ...t, [id]: { ...(t[id] ?? { rationale: "", citation: "" }), [field]: v } }));
 
-  function build(): ModerationInput | string {
+  /**
+   * Every chapter needs a final rank before saving or submitting. On submit
+   * the same rule as the server also applies: no rank twice, and a reason for
+   * ranks 1-5 and every move.
+   */
+  function build(submit: boolean): ModerationInput | string {
     const rankings: ModerationInput["rankings"] = [];
     for (const cat of categories) {
+      const ruleRows: RankingRuleRow[] = [];
       for (const r of cat.rows) {
         const k = (ranks[r.nominationId] ?? "").trim();
         const rank = k === "" ? null : Number(k);
-        if (rank !== null && !Number.isFinite(rank)) return `${cat.label}: final rank for ${r.chapterName} is not a number.`;
+        if (rank === null) return `${cat.label}: choose a final rank for ${r.chapterName}.`;
+        if (!Number.isInteger(rank)) return `${cat.label}: final rank for ${r.chapterName} is not a whole number.`;
+        const reason = reasons[r.nominationId] ?? "";
+        ruleRows.push({ name: r.chapterName, finalRank: rank, reason, matrixRank: r.matrixRank, tieSize: r.tieSize });
         // The score is the matrix's weighted total; the server sets it.
-        rankings.push({ nomination_id: r.nominationId, final_score: null, final_rank: rank, reason: reasons[r.nominationId] ?? "" });
+        rankings.push({ nomination_id: r.nominationId, final_score: null, final_rank: rank, reason });
+      }
+      if (submit) {
+        const problem = categoryRankingProblem(cat.label, ruleRows);
+        if (problem) return problem;
       }
     }
     const textsOut = Object.entries(texts).map(([nomination_id, t]) => ({
@@ -79,7 +91,7 @@ export function ModerationForm({
   }
 
   function run(submit: boolean) {
-    const input = build();
+    const input = build(submit);
     if (typeof input === "string") {
       setResult({ ok: false, text: input });
       setConfirm(false);
@@ -106,65 +118,23 @@ export function ModerationForm({
           <CategoryPanel key={cat.category} category={cat.category}>
           <section className="rx-stack" aria-label={`${cat.label} final ranking`}>
             <h3 className="rx-h2">{cat.label}</h3>
-            <ol className="rx-rank-list">
-              {cat.rows.map((r) => {
-                const k = (ranks[r.nominationId] ?? "").trim();
-                const moved = k !== "" && Number.isFinite(Number(k)) && rankMoved(Number(k), r.computedRank, r.tieSize);
-                return (
-                  <li key={r.nominationId} className="rx-rank-card" data-moved={moved ? "true" : undefined}>
-                    <div className="rx-rank-head">
-                      <div style={{ minWidth: 0 }}>
-                        <strong style={{ overflowWrap: "anywhere" }}>{r.chapterName}</strong>
-                        <span className="rx-small rx-mute"> · {r.region}</span>
-                        <HomeNote names={home?.[r.chapterName]} />
-                      </div>
-                      {moved ? (
-                        <span className="rx-small rx-rank-move">
-                          Rank {matrixRankLabel(r.computedRank, r.tieSize)} to {k}
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="rx-rank-figs">
-                      <div className="rx-rank-fig">
-                        <span>Weighted total</span>
-                        <span className="rx-num">{r.computedTotal.toFixed(2)}</span>
-                      </div>
-                      <div className="rx-rank-fig">
-                        <span>Provisional rank</span>
-                        <span className="rx-num">{matrixRankLabel(r.computedRank, r.tieSize)}</span>
-                        {r.tieSize > 1 ? <span className="rx-small rx-mute">tied</span> : null}
-                      </div>
-                      <label className="rx-rank-fig">
-                        <span>Final rank</span>
-                        <input
-                          className="rx-input rx-p-num-input"
-                          type="number"
-                          inputMode="numeric"
-                          min={1}
-                          max={cat.rows.length}
-                          step={1}
-                          aria-label={`Final rank for ${r.chapterName}`}
-                          value={ranks[r.nominationId] ?? ""}
-                          onChange={(e) => setRanks((s) => ({ ...s, [r.nominationId]: e.target.value }))}
-                        />
-                      </label>
-                    </div>
-                    <WordField
-                      label={`Why this rank for ${r.chapterName}?`}
-                      value={reasons[r.nominationId] ?? ""}
-                      onChange={(v) => setReasons((s) => ({ ...s, [r.nominationId]: v }))}
-                      limit={WORDS.rankReason}
-                      rows={3}
-                      help={moved ? "Required: the rank changed from the provisional rank." : "Optional while the rank stays as it is."}
-                    />
-                  </li>
-                );
-              })}
-            </ol>
+            <StandingsTable
+              label={cat.label}
+              weights={weights}
+              rows={cat.rows}
+              home={home}
+              edit={{
+                ranks,
+                reasons,
+                setRank: (id, v) => setRanks((x) => ({ ...x, [id]: v })),
+                setReason: (id, v) => setReasons((x) => ({ ...x, [id]: v })),
+              }}
+            />
             <p className="rx-small rx-mute">
-              Final rank 1 to {cat.rows.length}, each rank used once. Scores are not entered again: the weighted total
-              stands. Chapters tied on the weighted total (shown as =) can be put in any order among themselves without a
-              reason.
+              Choose a final rank 1 to {cat.rows.length} for every chapter, each rank used once. Scores are not entered
+              again: the total stands. Give a reason for every chapter ranked 1 to 5, and for any chapter whose rank moves;
+              chapters tied on the total (shown as =) can be put in any order among themselves without that counting as a
+              move. Tap a score heading to sort.
             </p>
             <div className="rx-podium">
               {Array.from({ length: places }, (_, i) => (i + 1) as 1 | 2 | 3).map((place) => {
@@ -222,7 +192,19 @@ export function ModerationForm({
           <button type="button" className="rx-btn rx-btn-quiet" disabled={pending} onClick={() => run(false)}>
             {pending && !confirm ? "Saving…" : "Save draft"}
           </button>
-          <button type="button" className="rx-btn rx-btn-gilt" disabled={pending} onClick={() => setConfirm(true)}>
+          <button
+            type="button"
+            className="rx-btn rx-btn-gilt"
+            disabled={pending}
+            onClick={() => {
+              const input = build(true);
+              if (typeof input === "string") setResult({ ok: false, text: input });
+              else {
+                setResult(null);
+                setConfirm(true);
+              }
+            }}
+          >
             {mode === "reevaluation" ? "Submit revised moderation" : "Submit moderation"}
           </button>
         </div>

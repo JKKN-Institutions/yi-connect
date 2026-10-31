@@ -4,7 +4,7 @@ import {
   chapterMap,
   getAwardState,
   getCurrentCycle,
-  getLayer1,
+  getPartAMeasures,
   getPeople,
   homeChapterNotes,
   listAwards,
@@ -13,7 +13,7 @@ import {
   listScoresForAward,
   effectiveText,
 } from "@/lib/recognitions/data";
-import { CATEGORIES, CATEGORY_LABEL, LAYER_LABEL, RANK_LABEL, verticalLabel, type Category } from "@/lib/recognitions/constants";
+import { CATEGORIES, CATEGORY_LABEL, LAYER_LABEL, MAX_LAYER_TOTAL, RANK_LABEL, verticalLabel, type Category } from "@/lib/recognitions/constants";
 import { computeMatrix, paramsTotal } from "@/lib/recognitions/scoring";
 import { PHASE_LABEL } from "@/lib/recognitions/phase";
 import { ADDED_BY_LABEL, isAddedForChapter } from "@/lib/recognitions/check-rules";
@@ -136,6 +136,11 @@ export type VerticalSheet = {
 
 const pct = (f: number | null) => (f === null ? null : Math.round(f * 1000) / 10);
 const round2 = (n: number | null) => (n === null ? null : Math.round(n * 100) / 100);
+const MISSING_COL: Record<"partA" | "layer2" | "layer3", string> = {
+  partA: "Part A (Health Card marks)",
+  layer2: "RM scores",
+  layer3: "NMT scores",
+};
 
 export async function verticalReport(): Promise<{ cycle: CycleRow; sheets: VerticalSheet[] } | null> {
   const cycle = await getCurrentCycle();
@@ -146,12 +151,12 @@ export async function verticalReport(): Promise<{ cycle: CycleRow; sheets: Verti
   for (const award of awards) {
     const state = await getAwardState(award.id);
     if (!state) continue;
-    const [scores, layer1, evaluators] = await Promise.all([
+    const [scores, partAMeasures, evaluators] = await Promise.all([
       listScoresForAward(award.id),
-      getLayer1(award.id),
+      getPartAMeasures(award.id),
       listEvaluators(award.id, true),
     ]);
-    const matrix = computeMatrix({ cycle, nominations: state.nominations, scores, layer1 });
+    const matrix = computeMatrix({ cycle, nominations: state.nominations, scores, partAMeasures });
     const people = await getPeople(evaluators.map((e) => e.person_id));
 
     // One column per evaluator who is active or has submitted at least one score.
@@ -179,8 +184,8 @@ export async function verticalReport(): Promise<{ cycle: CycleRow; sheets: Verti
       ["Recognition", award.title],
       ["Vertical", verticalLabel(award)],
       ["Phase", PHASE_LABEL[state.phase]],
-      ["Weights", `Layer 1 ${cycle.weight_layer1}% · Layer 2 ${cycle.weight_layer2}% · Layer 3 ${cycle.weight_layer3}%`],
-      ["Layer 2 counted as", cycle.layer2_mode === "percentile" ? "Percentile within the region" : "Raw score out of 25"],
+      ["Weights", `Part A · Health Card (RM+NMT) ${cycle.weight_layer1}% · RM ${cycle.weight_layer2}% · NMT ${cycle.weight_layer3}%`],
+      ["Layer 2 counted as", cycle.layer2_mode === "percentile" ? "Percentile within the region" : `Raw score out of ${MAX_LAYER_TOTAL}`],
       ["Final rank from", version ? `Moderation version ${version.version} (submitted)` : "No submitted moderation yet"],
       ["Scoring progress", `${LAYER_LABEL.rm}: ${state.completeness.rm.submitted}/${state.completeness.rm.required} · NMT: ${state.completeness.nmt.submitted}/${state.completeness.nmt.required}`],
       [],
@@ -189,12 +194,14 @@ export async function verticalReport(): Promise<{ cycle: CycleRow; sheets: Verti
         "Matrix rank",
         "Chapter",
         "Region",
-        "Layer 1 (0-100)",
+        "Part A · Health Card (RM+NMT, 0-100)",
+        "Part A · RM side (0-100)",
+        "Part A · NMT side (0-100)",
         ...rmCols.map(colHead),
-        "RM average (/25)",
+        `RM average (/${MAX_LAYER_TOTAL})`,
         "Layer 2 counted (%)",
         ...nmtCols.map(colHead),
-        "NMT average (/25)",
+        `NMT average (/${MAX_LAYER_TOTAL})`,
         "Layer 3 counted (%)",
         "Combined total (/100)",
         "Missing layers",
@@ -209,7 +216,9 @@ export async function verticalReport(): Promise<{ cycle: CycleRow; sheets: Verti
         row.rank,
         chapters.get(row.chapter_id)?.name ?? "Chapter not found",
         row.region,
-        row.l1,
+        pct(row.partA),
+        pct(row.partARm),
+        pct(row.partANmt),
         ...rmCols.map((c) => totalOf(c.id, row.nomination_id)),
         round2(row.l2Avg),
         pct(row.l2Fraction),
@@ -217,7 +226,7 @@ export async function verticalReport(): Promise<{ cycle: CycleRow; sheets: Verti
         round2(row.l3Avg),
         pct(row.l3Fraction),
         row.total,
-        row.missing.map((m) => m.replace("layer", "Layer ")).join(", "),
+        row.missing.map((m) => MISSING_COL[m]).join(", "),
         fin?.final_score ?? null,
         fin?.final_rank ?? null,
       ]);

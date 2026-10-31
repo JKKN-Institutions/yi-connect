@@ -65,3 +65,24 @@
   .rx-p-dl { grid-template-columns: 1fr; gap: 2px; }
   .rx-p-dl dd { margin-bottom: 8px; }
 }
+
+/* Stage 2 standings table (30 Oct): sortable score headers, rank dropdown, reason box.
+   Its own horizontal scroll: at 390px the page body never scrolls sideways. */
+.rx-st-wrap { max-width: 100%; min-width: 0; }
+.rx-st th, .rx-st td { vertical-align: top; }
+.rx-st-sort {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-weight: inherit;
+}
+.rx-st-sort:focus-visible { outline: 2px solid var(--rx-gilt); outline-offset: 2px; }
+.rx-st-sort[data-active="true"] { color: var(--rx-gilt-deep); }
+.rx-st-share { font-size: 0.72rem; color: var(--rx-mute); font-weight: 400; }
+.rx-st-chapter { min-width: 9em; overflow-wrap: anywhere; }
+.rx-st-select { width: auto; min-width: 84px; padding: 6px 8px; }
+.rx-st-reason { min-width: 16em; }
+.rx-st tr[data-moved="true"] td:first-child { box-shadow: inset 3px 0 0 var(--rx-gilt); }

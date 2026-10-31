@@ -96,6 +96,13 @@ export function EventDangerZone({
                 Your imported students and the agenda are kept.
               </span>
             </p>
+            <p className="mt-2 text-sm text-gray-600">
+              <span className="font-medium text-red-700">
+                Loaded the house from an allocated roster sheet?
+              </span>{" "}
+              Don&apos;t use this — it also wipes the parties, constituencies
+              and committees that came from the sheet.
+            </p>
           </div>
         </div>
         <Button

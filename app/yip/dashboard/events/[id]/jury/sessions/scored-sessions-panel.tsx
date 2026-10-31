@@ -58,6 +58,16 @@ export function ScoredSessionsPanel({
         isn&apos;t scoring it. Only sessions that have scoring criteria set up can
         be switched on.
       </p>
+      {sessions.some(
+        (s) => s.is_scoreable && s.criteria_label?.startsWith("Duty Roles")
+      ) && (
+        <p className="mb-3 text-sm text-gray-500">
+          The Duty Roles sheet marks only the Speaker, Deputy Speakers,
+          Journalists and Administrators. Any other delegate opened on that
+          session shows a &ldquo;can&apos;t be marked yet&rdquo; box, and that
+          is expected.
+        </p>
+      )}
 
       {error && (
         <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

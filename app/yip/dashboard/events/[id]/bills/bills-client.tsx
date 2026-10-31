@@ -574,6 +574,12 @@ export function BillsClient({
                   }
                   placeholder="Type to search Members (non-ministers)…"
                 />
+                <p className="text-xs text-gray-500">
+                  Choose the student who will present the bill as the mover. At
+                  National rounds, Best Private Member&apos;s Bill can only go
+                  to a student who moves or presents an approved Private
+                  Member&apos;s Bill.
+                </p>
               </div>
             )}
             <div className="space-y-1.5">

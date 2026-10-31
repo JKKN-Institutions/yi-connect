@@ -428,6 +428,11 @@ export function AllocationClient({
                 )}
                 {loading ? "Running Allocation..." : "Run Allocation"}
               </Button>
+              <p className="mt-2 text-xs text-gray-500">
+                Gives every student a party, a constituency and a committee.
+                Skip it if you&apos;re uploading an allocated roster below — that
+                sheet brings its own allocation.
+              </p>
               {!ready && (
                 <p className="mt-2 text-xs text-amber-600">
                   Finish the steps above to enable allocation.
@@ -869,7 +874,9 @@ export function AllocationClient({
             </DialogTitle>
             <DialogDescription>
               This will overwrite all current party, role, ministry, constituency,
-              and committee assignments. This action cannot be undone.
+              and committee assignments. This action cannot be undone. If this
+              house was imported already allocated from a roster sheet, cancel —
+              re-running replaces the sheet&apos;s seats and committees.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

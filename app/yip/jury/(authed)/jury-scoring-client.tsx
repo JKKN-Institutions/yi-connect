@@ -1571,6 +1571,15 @@ function JuryScoringClientInner({
 
       {/* Score form -- show when we have an active participant + rubric */}
       {activeParticipant && rubric ? (
+        <>
+        {(selectedSessionRow?.agenda_type === "private_members_bills" ||
+          selectedSessionRow?.session_key === "private_members_bills") && (
+          <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Private Members&apos; Bills: mark only the students presenting a
+            bill, on every point. Don&apos;t mark anyone else in this session —
+            members not marked here are averaged over their other sessions.
+          </p>
+        )}
         <ScoreForm
           key={`${activeParticipant.id}-${scoreKey}`}
           participant={activeParticipant}
@@ -1589,6 +1598,7 @@ function JuryScoringClientInner({
           flags={flags}
           onSubmit={handleSubmit}
         />
+        </>
       ) : (
         /* Waiting state -- no current speaker */
         <div className="flex flex-col items-center justify-center py-16 text-center px-4 landscape-compact">

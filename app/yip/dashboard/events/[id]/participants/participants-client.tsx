@@ -1220,6 +1220,23 @@ export function ParticipantsClient({
         </div>
       </div>
 
+      {/* Organiser help notes — text only. Two-day rule mirrors the
+          dayComplete gate in app/yip/actions/results.ts; Email Codes is scoped
+          to displayedParticipants; Delete all deletes every row for the event. */}
+      <div className="space-y-0.5 text-xs text-[#1a1a3e]/50">
+        <p>
+          Check students in on each day they attend. If Day 2 has scored
+          sessions, a student must be checked in on both Day 1 and Day 2 to be
+          ranked or win an award.
+        </p>
+        <p>
+          Email Codes emails only the students currently shown below — clear the
+          search and filters to email everyone.
+          {canDelete && !allocationLocked && initialParticipants.length > 0 &&
+            " Delete all removes every registrant at once, whatever is filtered."}
+        </p>
+      </div>
+
       {/* Search bar + check-in filter */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative max-w-sm flex-1 basis-64">

@@ -1241,6 +1241,24 @@ export function ResultsClient({
               result and survives every recompute. Clear it to restore the
               computed winner.
             </p>
+            <ul className="list-disc space-y-1 pl-5 text-xs text-gray-600">
+              <li>
+                A student holds one award. Pinning someone who already won
+                another award takes that award away from them, and it is NOT
+                passed on automatically — pin it to the next name on its list
+                who has no award yet.
+              </li>
+              <li>
+                A pick follows the same rules as the computed winner (marks,
+                attendance, who the award is for). If it is refused, the message
+                says why.
+              </li>
+              <li>
+                Best Private Member&apos;s Bill: before announcing, check the
+                winner actually presented their bill on the floor. If not, pin
+                the next name who did.
+              </li>
+            </ul>
 
             {awardOverrides.length > 0 && (
               <div className="space-y-2">

@@ -509,7 +509,15 @@ export function ControlPanel({
     setConfirmDialog({
       open: true,
       title: label,
-      description: `Are you sure you want to ${label.toLowerCase()}? This action changes the event status and affects all connected clients.`,
+      description:
+        `Are you sure you want to ${label.toLowerCase()}? This action changes the event status and affects all connected clients.` +
+        (newStatus === "day1_complete"
+          ? " Only press this after the last Day 1 session has finished."
+          : newStatus === "day2_live"
+            ? " This puts Day 2's first session live — it is not a way to fix a Day 1 mistake. Check everyone in for Day 2 first."
+            : newStatus === "completed"
+              ? " Only press this after the awards have been announced."
+              : ""),
       warning,
       action: () => {
         startTransition(async () => {

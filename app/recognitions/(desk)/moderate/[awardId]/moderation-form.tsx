@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { CATEGORIES, CATEGORY_LABEL, RANK_LABEL, WORDS, type Category } from "@/lib/recognitions/constants";
 import { categoryRankingProblem, type RankingRuleRow } from "@/lib/recognitions/moderation-rules";
+import { countWords } from "@/lib/recognitions/words";
 import { ConfirmDialog, ResultLine, WordField } from "@/app/recognitions/_ui/client";
 import { saveModerationDraft, submitModeration } from "@/app/recognitions/actions/moderation";
 import type { ModerationInput } from "@/app/recognitions/_parts/shared";
@@ -80,6 +81,19 @@ export function ModerationForm({
       if (submit) {
         const problem = categoryRankingProblem(cat.label, ruleRows);
         if (problem) return problem;
+        // The finalists' texts, checked here too so a gap shows before the confirm box (server repeats it).
+        for (let place = 1; place <= Math.min(3, cat.rows.length); place++) {
+          const holder = cat.rows.find((r) => Number((ranks[r.nominationId] ?? "").trim()) === place);
+          if (!holder) continue;
+          const where = `${cat.label} ${RANK_LABEL[place as 1 | 2 | 3].toLowerCase()} (${holder.chapterName})`;
+          const t = textOf(holder.nominationId);
+          const rw = countWords(t.rationale);
+          const cw = countWords(t.citation);
+          if (rw === 0) return `Write "Why this finalist?" for the ${where}.`;
+          if (cw === 0) return `Write the citation for the ${where}.`;
+          if (rw > WORDS.top3Rationale) return `"Why this finalist?" for the ${where} is ${rw} words. Cut it to ${WORDS.top3Rationale} or fewer.`;
+          if (cw > WORDS.top3Citation) return `The citation for the ${where} is ${cw} words. Cut it to ${WORDS.top3Citation} or fewer.`;
+        }
       }
     }
     const textsOut = Object.entries(texts).map(([nomination_id, t]) => ({

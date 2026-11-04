@@ -21,7 +21,7 @@ export default async function PredictorBoardPage() {
     <div className="rx-stack-lg">
       <PageHead eyebrow={board.cycle.name} title="Recognitions predictor">
         <p className="rx-mute">
-          Which chapter the chapters expect to win each recognition, from the fun quiz. The number in brackets is the
+          The chapters expected to be recognised for each recognition, as picked by other chapters in the fun quiz. The number in brackets is the
           votes; the leader is on top and highlighted. Not used in scoring. {sightLine(gate.sight)}
         </p>
       </PageHead>

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { loadBoard, requireRxBoard, sightLine } from "@/lib/recognitions/board";
+import { IconDownload } from "../../_ui/icons";
 import { NoAccess, PageHead } from "../../_ui/primitives";
 import { BoardMatrix } from "./board-matrix";
 
@@ -27,6 +28,11 @@ export default async function NominationsBoardPage() {
         <p className="rx-small rx-num">
           {board.total} nomination{board.total === 1 ? "" : "s"} filed so far.
         </p>
+        <div>
+          <a className="rx-btn rx-btn-quiet" href="/api/recognitions/boards?kind=nominations">
+            <IconDownload size={16} /> Download Excel
+          </a>
+        </div>
       </PageHead>
       <BoardMatrix board={board} empty="None yet" />
     </div>

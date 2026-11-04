@@ -1,7 +1,7 @@
 /**
  * GET /api/recognitions/boards?kind=nominations|predictions
  *
- * Excel download of the Nominations board or the Winner predictor board
+ * Excel download of the Nominations board or the Recognitions predictor board
  * (Piyush, 3 Nov 2026: "download the matrix for nominations and predictions
  * later when we want to"). Same gate and same region filter as the pages:
  * requireRxBoard + loadBoard(kind, sight), so a Regional Mentor's file holds
@@ -81,7 +81,7 @@ export async function GET(req: Request) {
   const board = await loadBoard(kind, gate.sight);
   if (!board) return json(404, "No cycle is open yet, so there is nothing to download.");
 
-  const title = kind === "predictions" ? "Winner predictor" : "Nominations board";
+  const title = kind === "predictions" ? "Recognitions predictor" : "Nominations board";
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, boardSheet(board, kind, title, sightLine(gate.sight)), "Board");
   XLSX.utils.book_append_sheet(wb, listSheet(board, kind), "List");

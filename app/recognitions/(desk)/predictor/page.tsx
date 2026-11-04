@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { loadBoard, requireRxBoard, sightLine } from "@/lib/recognitions/board";
+import { IconDownload } from "../../_ui/icons";
 import { NoAccess, PageHead } from "../../_ui/primitives";
 import { BoardMatrix } from "../board/board-matrix";
 
@@ -24,6 +25,11 @@ export default async function PredictorBoardPage() {
           Which chapter the chapters expect to win each recognition, from the fun quiz. The number in brackets is the
           votes; the leader is on top and highlighted. Not used in scoring. {sightLine(gate.sight)}
         </p>
+        <div>
+          <a className="rx-btn rx-btn-quiet" href="/api/recognitions/boards?kind=predictions">
+            <IconDownload size={16} /> Download Excel
+          </a>
+        </div>
       </PageHead>
       <BoardMatrix board={board} empty="No votes yet" />
     </div>

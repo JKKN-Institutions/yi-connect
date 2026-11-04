@@ -12,7 +12,7 @@ export function PredictionsBoard({ view }: { view: PredictionsView }) {
     <section className="rx-stack" aria-labelledby="rx-p-predictions">
       <h2 className="rx-h2" id="rx-p-predictions">Chapter sentiment &amp; predictions</h2>
       <p className="rx-small rx-mute">
-        Which chapter other chapters expect to win. This is the fun quiz from the nomination stage; it does not count
+        Which chapters other chapters expect to be recognised. This is the fun quiz from the nomination stage; it does not count
         towards any score.
       </p>
       {total === 0 ? (

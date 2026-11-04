@@ -13,15 +13,15 @@ import type { AwardRow } from "./types";
  * and a missing column, a null kind or an unmapped kind all mean table A.
  *
  * Layer 1 for a chapter = sum(weight * score) / sum(weight) over its table's
- * measures — a 0-100 number; the cycle's weight_layer1 then applies in
- * computeMatrix exactly as before.
+ * measures — a 0-100 number. Since the 30 Oct model this is REFERENCE only:
+ * the matrix's weight_layer1 share comes from the RMs' and NMT's own Part A
+ * marks on these same measures (scoring.ts partAFraction), not from here.
  *   - all measures scored            -> that weighted average  (source "measures")
  *   - some but not all measures      -> NO Layer 1 (missing), shown as incomplete
  *   - no measure scored at all       -> the old single score in
  *                                       recognition_layer1, if any ("excel"/"manual")
  *   - nothing anywhere               -> NO Layer 1 (missing): "No Health Card data"
- * A missing Layer 1 is what it always was: absent from the map, so the
- * matrix counts it as 0 in the total and flags "Health Card" as missing.
+ * A missing Layer 1 is absent from the map.
  */
 
 export type HcTableKey = "A" | "B";
@@ -197,7 +197,18 @@ export async function loadAwardHealthCard(award: AwardRow): Promise<AwardHealthC
   return { tableKey, measures, byChapter };
 }
 
-/** chapter_id -> Layer 1 (0-100) for every chapter that has one. Feeds computeMatrix. */
+/**
+ * The award's Part A questions (30 Oct model): the measures of its table, in
+ * sort order. Every RM and NMT member marks each one 0-10 on their sheet.
+ */
+export async function partAMeasuresForAward(award: AwardRow): Promise<HcMeasure[]> {
+  return listHealthCardMeasures(award.cycle_id, await healthCardTableFor(award));
+}
+
+/**
+ * chapter_id -> Layer 1 (0-100) for every chapter that has one. Reference
+ * only since the 30 Oct model: the matrix total uses Part A instead.
+ */
 export async function layer1ForAward(award: AwardRow): Promise<Map<string, number>> {
   const hc = await loadAwardHealthCard(award);
   const out = new Map<string, number>();

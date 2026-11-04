@@ -139,7 +139,10 @@ export type NominationOrigin = "chapter" | "nl_added" | "rm_added" | "nmt_added"
  */
 export type NominationStatus = "draft" | "submitted" | "returned" | "checked" | "excluded";
 
-export type ScoreParams = Partial<Record<"p1" | "p2" | "p3" | "p4" | "p5", number>>;
+/** Part B marks p1..p5, plus Part A marks keyed `a_<measure_key>` (30 Oct model). */
+export type ScoreParams = Partial<Record<"p1" | "p2" | "p3" | "p4" | "p5", number>> & {
+  [partA: `a_${string}`]: number | undefined;
+};
 
 export type ScoreRow = {
   id: string;

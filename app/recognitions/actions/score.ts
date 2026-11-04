@@ -4,9 +4,10 @@ import { revalidatePath } from "next/cache";
 import { requireRxDuty, type RxDuty } from "@/lib/recognitions/auth";
 import { audit, getAwardState, type AwardState } from "@/lib/recognitions/data";
 import { rxService } from "@/lib/recognitions/supabase";
-import { dutySeesNomination } from "@/lib/recognitions/scoring";
+import { dutySeesNomination, isMark, partAKey } from "@/lib/recognitions/scoring";
+import { partAMeasuresForAward, type HcMeasure } from "@/lib/recognitions/health-card";
 import { countWords } from "@/lib/recognitions/words";
-import { PARAM_KEYS, WORDS } from "@/lib/recognitions/constants";
+import { MAX_PARAM, PARAM_KEYS, PART_A_MAX, WORDS } from "@/lib/recognitions/constants";
 import type { ActionResult, NominationRow, ScoreParams, ScoreRow } from "@/lib/recognitions/types";
 import { formatWhen } from "@/app/recognitions/_ui/primitives";
 import { dutyScoringWindow, scoringDeadlineFor } from "@/app/recognitions/(desk)/score/score-rules";
@@ -73,25 +74,54 @@ export async function saveScore(input: SaveScoreInput): Promise<ActionResult> {
   const { duty, personId, state, nomination } = loaded.ctx;
   const submit = input.submit === true;
 
-  // ---- parameters: integers 0-5, only p1..p5; drafts may be partial ----
+  // ---- Part A: the award's Health Card measures, read HERE (never the client's list) ----
+  let measures: HcMeasure[];
+  try {
+    measures = await partAMeasuresForAward(state.award);
+  } catch (e) {
+    console.error(JSON.stringify({ tag: "recognitions_score_measures_failed", error: e instanceof Error ? e.message : String(e) }));
+    return { success: false, error: "Couldn't load the Health Card measures for this recognition. Try again in a moment." };
+  }
+  const partAKeys = measures.map((m) => partAKey(m.key));
+
+  // ---- marks: whole numbers 0-10, only p1..p5 and this award's a_<measure>; drafts may be partial ----
   const params: ScoreParams = {};
   const raw = input.params && typeof input.params === "object" ? input.params : {};
   for (const key of Object.keys(raw)) {
-    if (!(PARAM_KEYS as readonly string[]).includes(key)) {
+    if (!(PARAM_KEYS as readonly string[]).includes(key) && !(partAKeys as string[]).includes(key)) {
       return { success: false, error: "The sheet sent a mark the matrix doesn't have. Reload the page and try again." };
     }
+  }
+  for (const key of partAKeys) {
+    const v = raw[key];
+    if (v === null || v === undefined) continue;
+    if (!isMark(v, PART_A_MAX)) {
+      return { success: false, error: `Each Part A mark must be a whole number from 0 to ${PART_A_MAX}.` };
+    }
+    params[key] = v;
   }
   for (const key of PARAM_KEYS) {
     const v = raw[key];
     if (v === null || v === undefined) continue;
-    if (typeof v !== "number" || !Number.isInteger(v) || v < 0 || v > 5) {
-      return { success: false, error: "Each mark must be a whole number from 0 to 5." };
+    if (!isMark(v, MAX_PARAM)) {
+      return { success: false, error: `Each Part B mark must be a whole number from 0 to ${MAX_PARAM}.` };
     }
     params[key] = v;
   }
+  if (submit && measures.length === 0) {
+    // Fail closed: a chapter counts as submitted only with every Part A mark, and there are none to give.
+    return {
+      success: false,
+      error: "This recognition has no Health Card measures set up, so Part A can't be marked yet. Ask the Recognitions super admin to set them up.",
+    };
+  }
+  if (submit && partAKeys.some((k) => params[k] === undefined)) {
+    const missing = partAKeys.filter((k) => params[k] === undefined).length;
+    return { success: false, error: `Mark every Part A measure before submitting (${missing} still unmarked).` };
+  }
   if (submit && PARAM_KEYS.some((k) => params[k] === undefined)) {
     const missing = PARAM_KEYS.filter((k) => params[k] === undefined).length;
-    return { success: false, error: `Mark all five parameters before submitting (${missing} still unmarked).` };
+    return { success: false, error: `Mark all five Part B parameters before submitting (${missing} still unmarked).` };
   }
 
   // ---- justification: always five boxes, 50 words each ----

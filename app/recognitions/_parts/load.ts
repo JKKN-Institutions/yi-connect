@@ -2,7 +2,7 @@ import "server-only";
 
 import {
   chapterMap,
-  getLayer1,
+  getPartAMeasures,
   getPeople,
   listEvaluators,
   listPredictionsForAward,
@@ -30,16 +30,18 @@ export async function loadStage2(
 ): Promise<{
   chapters: Map<string, ChapterRow>;
   scores: ScoreRow[];
+  /** The award's Part A questions (Health Card measures). */
+  partAMeasures: Array<{ key: string; weight: number }>;
   matrix: MatrixView;
   predictions: PredictionsView;
   history: HistoryView;
   evaluatorNames: Record<string, string>;
 }> {
   const awardId = state.award.id;
-  const [chapters, scores, layer1, predictions, allDuties] = await Promise.all([
+  const [chapters, scores, partAMeasures, predictions, allDuties] = await Promise.all([
     chapterMap(),
     listScoresForAward(awardId),
-    getLayer1(awardId),
+    getPartAMeasures(awardId),
     listPredictionsForAward(awardId),
     opts.withNames ? listEvaluators(awardId, true) : Promise.resolve([]),
   ]);
@@ -64,11 +66,12 @@ export async function loadStage2(
   return {
     chapters,
     scores,
+    partAMeasures,
     matrix: buildMatrixView({
       cycle: state.cycle,
       nominations: state.nominations,
       scores,
-      layer1,
+      partAMeasures,
       chapters,
       names: opts.withNames ? evaluatorNames : undefined,
     }),

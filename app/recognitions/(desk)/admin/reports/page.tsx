@@ -66,7 +66,7 @@ export default async function ReportsPage() {
       <section className="rx-plate rx-stack">
         <h2 className="rx-h2">Recognition-wise report</h2>
         <p className="rx-small">
-          One sheet per recognition: the full combined matrix — Layer 1, every Regional Mentor&apos;s and NMT member&apos;s total with their name, the
+          One sheet per recognition: the full combined matrix — Part A (the Health Card marks of the RMs and the NMT), every Regional Mentor&apos;s and NMT member&apos;s total with their name, the
           counted layers, the combined total, the NMT leader&apos;s final score and rank, and the recognition&apos;s phase.
         </p>
         <div>

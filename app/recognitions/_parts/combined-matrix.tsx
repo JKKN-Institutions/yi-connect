@@ -1,5 +1,5 @@
 import "./parts.css";
-import { CHECK_STEP_ENABLED } from "@/lib/recognitions/constants";
+import { CHECK_STEP_ENABLED, MAX_LAYER_TOTAL } from "@/lib/recognitions/constants";
 import type { DossierView, MatrixView, MatrixViewRow, RationaleView } from "./shared";
 import { HomeNote, type HomeNotes } from "./home-note";
 import { CategoryPanel } from "./category-tabs";
@@ -11,7 +11,8 @@ export function fmt(n: number | null | undefined, dp = 2): string {
 }
 
 /**
- * The combined ("clubbed") matrix: Health Card, every RM and NMT total,
+ * The combined ("clubbed") matrix: Part A (the Health Card marks of the
+ * RMs and the NMT), every RM and NMT Part B total,
  * both averages, the weighted total and the provisional rank, per category.
  * Read-only. Plain props: pass the output of buildMatrixView.
  */
@@ -22,17 +23,19 @@ export function CombinedMatrix({ view, home }: { view: MatrixView; home?: HomeNo
       <div className="rx-spread">
         <h2 className="rx-h2" id="rx-p-matrix">Combined matrix</h2>
         <span className="rx-small rx-mute rx-num">
-          Health Card {view.weights.l1}% · RM {view.weights.l2}% · NMT {view.weights.l3}%
+          Part A · Health Card (RM+NMT) {view.weights.l1}% · RM {view.weights.l2}% · NMT {view.weights.l3}%
         </span>
       </div>
       <p className="rx-small rx-mute">
-        Weighted total = {view.weights.l1} × Health Card ÷ 100 + {view.weights.l2} × RM layer + {view.weights.l3} × NMT
-        layer. RM layer is{" "}
+        Weighted total = {view.weights.l1} × Part A ÷ 100 + {view.weights.l2} × RM layer + {view.weights.l3} × NMT
+        layer. Part A is the Health Card activity score the Regional Mentors and the NMT marked (0 to 10 per measure),
+        out of 100: the RM side and the NMT side count half each, or one side alone if only it has marked. RM layer
+        is{" "}
         {view.layer2Mode === "percentile"
           ? "the percentile of the RM average among nominations in the same region"
-          : "the RM average out of 25"}
-        ; NMT layer is the NMT average out of 25. A missing layer counts as zero and is flagged. Ties share a
-        provisional rank.
+          : `the RM average out of ${MAX_LAYER_TOTAL}`}
+        ; NMT layer is the NMT average out of {MAX_LAYER_TOTAL}. A missing part counts as zero and is flagged. Ties
+        share a provisional rank.
       </p>
       {!anyRows ? (
         <p className="rx-mute">No nomination for this recognition is in the race.</p>
@@ -56,7 +59,7 @@ export function CombinedMatrix({ view, home }: { view: MatrixView; home?: HomeNo
                     <th className="rx-num">Rank</th>
                     <th>Chapter</th>
                     <th>Region</th>
-                    <th className="rx-num">Health Card</th>
+                    <th className="rx-num">Part A · Health Card (RM+NMT)</th>
                     {cat.rmColumns.map((c) => (
                       <th key={c.evaluatorId} className="rx-num">{c.label}</th>
                     ))}
@@ -84,7 +87,7 @@ export function CombinedMatrix({ view, home }: { view: MatrixView; home?: HomeNo
                       </td>
                       <td>{r.region}</td>
                       <td className="rx-num">
-                        {r.l1 === null ? <span className="rx-p-flag">missing</span> : fmt(r.l1)}
+                        {r.partA === null ? <span className="rx-p-flag">missing</span> : fmt(r.partA)}
                       </td>
                       {cat.rmColumns.map((c) => (
                         <td key={c.evaluatorId} className="rx-num">{fmt(r.perEvaluator[c.evaluatorId])}</td>
@@ -101,7 +104,7 @@ export function CombinedMatrix({ view, home }: { view: MatrixView; home?: HomeNo
               </table>
             </div>
             <p className="rx-small rx-mute">
-              Evaluator totals are out of 25. A dash means that evaluator did not score the chapter (another region, or
+              Evaluator totals are their Part B marks, out of {MAX_LAYER_TOTAL}. A dash means that evaluator did not score the chapter (another region, or
               no marks submitted).
             </p>
             <div>
@@ -210,7 +213,7 @@ export function Rationales({ items }: { items: RationaleView[] }) {
         <div key={i} className="rx-stack" style={{ gap: 6 }}>
           <div className="rx-row" style={{ gap: 8 }}>
             <strong>{it.label}</strong>
-            <span className="rx-num rx-small rx-mute">{fmt(it.total)} / 25</span>
+            <span className="rx-num rx-small rx-mute">{fmt(it.total)} / {MAX_LAYER_TOTAL}</span>
           </div>
           {it.reasons.length > 0 ? (
             <ol className="rx-p-list rx-small">

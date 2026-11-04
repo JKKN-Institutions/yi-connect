@@ -20,7 +20,7 @@ import { HOME_CHAPTER_BLOCKS_SCORING, type Category } from "./constants";
 import { computeCompleteness, dutySeesNomination, type Completeness } from "./scoring";
 import { computePhase, latestDecisionFor, type Phase } from "./phase";
 import { inRace, isAddedForChapter } from "./check-rules";
-import { layer1ForAward } from "./health-card";
+import { layer1ForAward, partAMeasuresForAward } from "./health-card";
 
 /**
  * Read layer for Yi Recognitions. NO function here checks permissions —
@@ -274,6 +274,13 @@ export async function getLayer1(awardId: string): Promise<Map<string, number>> {
   const award = await getAward(awardId);
   if (!award) return new Map();
   return layer1ForAward(award);
+}
+
+/** The award's Part A questions (Health Card measures), as plain { key, weight } for computeMatrix. */
+export async function getPartAMeasures(awardId: string): Promise<Array<{ key: string; weight: number }>> {
+  const award = await getAward(awardId);
+  if (!award) return [];
+  return (await partAMeasuresForAward(award)).map((m) => ({ key: m.key, weight: m.weight }));
 }
 
 export async function listHealthCardFiles(awardId: string) {

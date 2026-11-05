@@ -9,7 +9,8 @@ import type { ChapterRow, EvaluatorRow, NominationRow } from "./types";
 /**
  * The NMT puts forward a chapter that did not apply. Piyush, 28 Oct 2026,
  * replaces the 15 Oct window below: only the NMT adds, and only in the
- * NMT_ADD_DAYS days after nominations close (8 to 10 Nov 2026). Regional
+ * NMT_ADD_DAYS days after nominations close (8 to 9 Nov 2026; Piyush moved
+ * the end from 10 to 9 Nov on 5 Nov). Regional
  * Mentors and Regional Chairs tell the NMT instead. A Mentor's addition from
  * before this change still waits for, and can get, an NMT approval.
  *
@@ -40,8 +41,8 @@ const sameRegion = (a: string | null | undefined, b: string | null | undefined) 
 
 export type AddWindow = { open: true } | { open: false; reason: string };
 
-/** Days after the nomination deadline in which the NMT may add a missed chapter (Piyush, 28 Oct 2026). */
-export const NMT_ADD_DAYS = 3;
+/** Days after the nomination deadline in which the NMT may add a missed chapter (Piyush, 28 Oct 2026: 3; 5 Nov 2026: until 9 Nov, so 2). */
+export const NMT_ADD_DAYS = 2;
 
 /** When the NMT's add window closes: the nomination deadline plus NMT_ADD_DAYS. Null without a deadline. */
 export function nmtAddCloses(cycle: { nomination_deadline: string | null }): string | null {

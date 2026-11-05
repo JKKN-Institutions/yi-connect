@@ -16,8 +16,13 @@ import { getCurrentCycle } from "./data";
  *   Chapter               app='yi' chapter_chair / chapter_co_chair for the
  *                         chapter (the directory IS who chairs a chapter), or
  *                         app='recognitions' chapter_rep for that chapter.
- *   Regional Mentor       duty row (layer rm, region R) AND directory role
- *                         app='recognitions' rm with yi_zone = R.
+ *   Regional Mentor       duty row (layer rm, region R, R not blank) AND an
+ *                         active directory role app='recognitions' rm with a
+ *                         non-blank yi_zone. The duty row carries the region:
+ *                         one person may hold one RM duty per region
+ *                         (recognitions_07, Director 5 Nov), while the
+ *                         directory key allows one rm row per person per year,
+ *                         so its zone can't list both regions.
  *   NMT                   duty row (layer nmt) AND directory role nmt or
  *                         nmt_leader. The leader duty needs nmt_leader.
  *   Regional Chair        app='recognitions' regional_chair with yi_zone = R:
@@ -110,12 +115,14 @@ export const getRxViewer = cache(async (): Promise<RxViewer | null> => {
       .eq("award.cycle_id", cycle.id)
       .eq("award.is_active", true);
 
-    const rmZones = activeRx(me, RX_ROLES.rm).map((a) => a.yi_zone);
+    // FAIL CLOSED: an rm role with a blank zone backs nothing.
+    const holdsRm = activeRx(me, RX_ROLES.rm).some((a) => norm(a.yi_zone) !== "");
     const holdsNmt = activeRx(me, RX_ROLES.nmt).length > 0;
     const holdsLeader = activeRx(me, RX_ROLES.nmtLeader).length > 0;
 
     duties = ((data ?? []) as RxDuty[]).filter((d) => {
-      if (d.layer === "rm") return rmZones.some((z) => same(z, d.region));
+      // recognitions_07: one RM duty per region. A blank duty region denies.
+      if (d.layer === "rm") return holdsRm && norm(d.region) !== "";
       if (d.is_nmt_leader) return holdsLeader;
       return holdsNmt || holdsLeader;
     });

@@ -64,27 +64,24 @@ export async function assignEvaluator(input: {
   const person = found.person;
   const svc = rxService();
 
-  // The Yi directory holds one RM row per person per year (its unique key has
-  // no zone), so a person can mentor one region a year. Move the zone only
-  // when no active duty still depends on the old one.
+  // The Yi directory holds one rm row per person per year (its unique key has
+  // no zone), so its zone can name only one region. A person may still mentor
+  // several regions (recognitions_07: one duty row per region; the gate reads
+  // the region from the duty). Keep the directory zone while an active duty
+  // still uses it; move it only when none does.
+  let directoryZone = region;
   if (input.layer === "rm") {
     const row = await findRoleRow({ personId: person.id, role: RX_ROLES.rm, yiYear: cycle.yi_year, yiChapter: null });
     if (row && row.is_active !== false && norm(row.yi_zone) !== "" && norm(row.yi_zone) !== norm(region)) {
       const { data: others } = await svc
         .from("recognition_evaluators")
-        .select("id, region, award:recognition_awards!inner(cycle_id, title)")
+        .select("id, region, award:recognition_awards!inner(cycle_id)")
         .eq("person_id", person.id)
         .eq("layer", "rm")
         .eq("is_active", true)
         .eq("award.cycle_id", cycle.id);
-      const blocking = ((others ?? []) as unknown as Array<{ region: string | null; award: { title: string } }>).filter(
-        (o) => norm(o.region) === norm(row.yi_zone)
-      );
-      if (blocking.length > 0)
-        return {
-          success: false,
-          error: `${person.full_name} is already the Regional Mentor for ${row.yi_zone} (${blocking.map((b) => b.award.title).join(", ")}). The Yi directory allows one RM region per person per year. Remove those duties first, or choose someone else.`,
-        };
+      const inUse = ((others ?? []) as Array<{ region: string | null }>).some((o) => norm(o.region) === norm(row.yi_zone));
+      if (inUse) directoryZone = row.yi_zone;
     }
   }
 
@@ -101,16 +98,24 @@ export async function assignEvaluator(input: {
       return { success: false, error: "This recognition already has an NMT leader. Remove that leader's duty first." };
   }
 
-  const { data: existing } = await svc
+  const existingBase = svc
     .from("recognition_evaluators")
     .select("id, is_active")
     .eq("award_id", award.id)
     .eq("person_id", person.id)
-    .eq("layer", input.layer)
-    .maybeSingle();
+    .eq("layer", input.layer);
+  // recognitions_07: an RM holds one row per region, an NMT member one row (region null).
+  const existingQ = input.layer === "rm" ? existingBase.eq("region", region) : existingBase.is("region", null);
+  const { data: existing } = await existingQ.maybeSingle();
   const ex = existing as { id: string; is_active: boolean } | null;
   if (ex?.is_active)
-    return { success: false, error: `${person.full_name} already has this duty on ${award.title}. Remove it first to change region or leader.` };
+    return {
+      success: false,
+      error:
+        input.layer === "rm"
+          ? `${person.full_name} is already the Regional Mentor for ${region} on ${award.title}.`
+          : `${person.full_name} already has this duty on ${award.title}. Remove it first to change leader.`,
+    };
 
   let evaluatorId: string;
   const row = { region, is_nmt_leader: isLeader, conflict_chapter_ids: conflicts, is_active: true };
@@ -129,7 +134,7 @@ export async function assignEvaluator(input: {
   }
 
   const role = input.layer === "rm" ? RX_ROLES.rm : isLeader ? RX_ROLES.nmtLeader : RX_ROLES.nmt;
-  const ensured = await ensureRole({ personId: person.id, role, yiYear: cycle.yi_year, yiChapter: null, yiZone: region });
+  const ensured = await ensureRole({ personId: person.id, role, yiYear: cycle.yi_year, yiChapter: null, yiZone: directoryZone });
   if (!ensured.ok)
     return { success: false, error: `The duty was saved, but ${ensured.error.charAt(0).toLowerCase()}${ensured.error.slice(1)} Until then they can't open it.` };
 

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getRxViewer } from "@/lib/recognitions/auth";
+import { getRxViewer, norm } from "@/lib/recognitions/auth";
 import {
   chapterMap,
   getAwardState,
@@ -87,7 +87,13 @@ export default async function MySheetsPage() {
       const addNote =
         !addWin.open && (state.phase === "nominations" || state.phase === "stage1") ? addWin.reason : null;
       const pending = pendingApprovalsFor(state, duty);
-      const mineAdded = state.nominations.filter((n) => n.added_by === viewer.personId && (n.origin === "rm_added" || n.origin === "nmt_added"));
+      // recognitions_07: an RM may hold one sheet per region; each sheet lists only that region's additions.
+      const mineAdded = state.nominations.filter(
+        (n) =>
+          n.added_by === viewer.personId &&
+          (n.origin === "rm_added" || n.origin === "nmt_added") &&
+          (duty.layer !== "rm" || norm(n.region) === norm(duty.region))
+      );
       const people = await getPeople(pending.map((p) => p.nomination.added_by).filter((x): x is string => !!x));
       const pendingItems: PendingItem[] = pending.map((p) => ({
         nominationId: p.nomination.id,

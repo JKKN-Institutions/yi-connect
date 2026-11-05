@@ -18,10 +18,8 @@ import type { AwardRow, CycleRow } from "./types";
  *              recognitions they evaluate. An NMT duty shows that
  *              recognition for every region; an RM duty shows it for the
  *              duty's region only.
- *   role only  no duty yet: the nmt or nmt_leader role sees every
- *              recognition and region; an rm role zone sees every
- *              recognition for that region.
- * Anyone else (chapter logins included) gets an explicit deny.
+ * Anyone else gets an explicit deny: chapter logins, and an rm, nmt or
+ * nmt_leader role with no evaluator duty yet.
  */
 
 /** Which chapters of a recognition are shown: every region, or the listed regions only. */
@@ -59,10 +57,9 @@ export function boardSight(v: RxViewer): BoardSight | null {
     return { national: false, regions, awards };
   }
 
-  // No duty yet: the directory role alone, every recognition.
-  if (v.holdsNmtRole) return { national: true };
-  const regions = [...new Set(v.rmRoleZones.map(up).filter((z) => z !== ""))];
-  return regions.length > 0 ? { national: false, regions } : null;
+  // No duty: nothing to show. A directory role alone no longer opens the
+  // boards (fail closed; on 5 Nov every rm, nmt and nmt_leader role had a duty).
+  return null;
 }
 
 /** One plain line under each board's title. */
@@ -92,7 +89,10 @@ export async function requireRxBoard(): Promise<BoardGate> {
     console.log(JSON.stringify({ tag: "recognitions_gate", gate: "board", verdict: "deny", person: v.personId }));
     return {
       ok: false,
-      error: "The boards are for National Leadership, the NMT and Regional Mentors. Ask the Recognitions super admin if you should have access.",
+      error:
+        v.holdsNmtRole || v.rmRoleZones.length > 0
+          ? "The boards show the recognitions you evaluate, and none is assigned to you yet. Ask the Recognitions super admin to assign you."
+          : "The boards are for National Leadership, the NMT and Regional Mentors. Ask the Recognitions super admin if you should have access.",
     };
   }
   return { ok: true, viewer: v, sight };

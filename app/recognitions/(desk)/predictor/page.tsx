@@ -21,6 +21,7 @@ export default async function PredictorBoardPage() {
   return (
     <div className="rx-stack-lg">
       <PageHead eyebrow={board.cycle.name} title="Recognitions predictor">
+        <p>Identify the most vibrant chapter within each vertical, category-wise.</p>
         <p className="rx-mute">
           The chapters expected to be recognised for each recognition, as picked by other chapters in the fun quiz. The number in brackets is the
           votes; the leader is on top and highlighted. Not used in scoring. {sightLine(gate.sight)}

@@ -18,7 +18,7 @@ import type {
 } from "./types";
 import { HOME_CHAPTER_BLOCKS_SCORING, type Category } from "./constants";
 import { computeCompleteness, dutySeesNomination, type Completeness } from "./scoring";
-import { computePhase, latestDecisionFor, type Phase } from "./phase";
+import { computePhase, isPast, latestDecisionFor, type Phase } from "./phase";
 import { inRace, isAddedForChapter } from "./check-rules";
 import { layer1ForAward, partAMeasuresForAward } from "./health-card";
 
@@ -403,7 +403,8 @@ export async function listAudit(opts: { awardId?: string; cycleId?: string; limi
 export async function audit(entry: {
   cycleId?: string | null;
   awardId?: string | null;
-  actorPersonId: string;
+  /** null = the system did it (shown as "System" on the audit page). */
+  actorPersonId: string | null;
   action: string;
   entity: string;
   entityId?: string | null;
@@ -419,6 +420,93 @@ export async function audit(entry: {
     detail: entry.detail ?? {},
   });
   if (error) console.error(JSON.stringify({ tag: "recognitions_audit_write_failed", error: error.message, entry }));
+}
+
+// ---------------------------------------------------------------------------
+// Stage 2 unlock: the one write that opens Stage 2 by itself.
+// ---------------------------------------------------------------------------
+
+/** Reason + audit label when every Regional Mentor and NMT mark is in (mail 1, Phase 3). */
+export const STAGE2_REASON_ALL_SUBMITTED = "All Regional Mentor and NMT marks submitted";
+/** Reason + audit label when scoring closed with only Regional Mentor marks missing (Director, 5 Nov). */
+export const STAGE2_REASON_RM_MISSING =
+  "Opened automatically: scoring closed with Regional Mentor marks missing; NMT marks stand in.";
+export const STAGE2_AUTO_OPEN_RM_MISSING_ACTION = "stage2_auto_opened_rm_missing";
+
+/**
+ * Open Stage 2 for one recognition with no person's tap. Only the first
+ * caller records the unlock (the `is null` guard), so racing callers are
+ * safe. Returns the unlock moment when THIS call opened it, else null.
+ * The super admin's force-open (actions/admin-setup.ts) stays separate
+ * because it records who opened it and their reason.
+ */
+export async function openStage2Automatically(input: {
+  cycleId: string;
+  awardId: string;
+  reason: string;
+  action: string;
+  /** Who triggered it, when a person's action did; null for the system. */
+  actorPersonId: string | null;
+  detail?: Record<string, unknown>;
+}): Promise<string | null> {
+  const now = new Date().toISOString();
+  const { data, error } = await rxService()
+    .from("recognition_awards")
+    .update({ stage2_unlocked_at: now, stage2_unlock_reason: input.reason, stage2_unlocked_by: null })
+    .eq("id", input.awardId)
+    .is("stage2_unlocked_at", null)
+    .select("id");
+  if (error) {
+    console.error(JSON.stringify({ tag: "recognitions_stage2_unlock_failed", awardId: input.awardId, error: error.message }));
+    return null;
+  }
+  if ((data ?? []).length === 0) return null;
+  await audit({
+    cycleId: input.cycleId,
+    awardId: input.awardId,
+    actorPersonId: input.actorPersonId,
+    action: input.action,
+    entity: "recognition_awards",
+    entityId: input.awardId,
+    detail: { automatic: true, reason: input.reason, ...(input.detail ?? {}) },
+  });
+  return now;
+}
+
+/** Uncached award read (getAward is cached per request, so it can't see a write made in this request). */
+async function rereadAward(awardId: string): Promise<AwardRow | null> {
+  const { data, error } = await rxService().from("recognition_awards").select("*").eq("id", awardId).maybeSingle();
+  if (error) {
+    console.error(JSON.stringify({ tag: "recognitions_award_reread_failed", awardId, error: error.message }));
+    return null;
+  }
+  return (data as AwardRow | null) ?? null;
+}
+
+/**
+ * Director, 5 Nov: once the Stage 1 scoring deadline has passed, a
+ * recognition whose NMT marks are all in opens Stage 2 by itself even when
+ * Regional Mentor marks are missing (the NMT stands in at 50%). Not while
+ * the Mentors are re-scoring after an NMT leader's send-back: that waits for
+ * them, or for the super admin's force-open.
+ */
+function stage2DueWithRmMissing(input: {
+  phase: Phase;
+  award: AwardRow;
+  cycle: CycleRow;
+  completeness: Completeness;
+  sendBacks: MentorSendBackRow[];
+  now?: Date;
+}): boolean {
+  const { rm } = input.completeness;
+  return (
+    input.phase === "stage1" &&
+    !input.award.stage2_unlocked_at &&
+    isPast(input.cycle.stage1_deadline, input.now) &&
+    input.completeness.nmtComplete &&
+    !(rm.required > 0 && rm.submitted >= rm.required) &&
+    input.sendBacks.length === 0
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -451,7 +539,7 @@ export type AwardState = {
  * separately through the read their role allows.
  */
 export async function getAwardState(awardId: string): Promise<AwardState | null> {
-  const award = await getAward(awardId);
+  let award = await getAward(awardId);
   if (!award) return null;
   const cycle = await getCycle(award.cycle_id);
   if (!cycle) return null;
@@ -468,13 +556,33 @@ export async function getAwardState(awardId: string): Promise<AwardState | null>
   const completeness = computeCompleteness({ cycle, nominations, duties, conflictsByDuty, scores });
   const latestVersion = versions[0] ?? null;
   const latestSubmittedVersion = versions.find((v) => v.status === "submitted") ?? null;
-  const phase = computePhase({
+  let phase = computePhase({
     cycle,
     award,
     stage1Complete: completeness.complete,
     latestVersion,
     decisions,
   });
+
+  // Every desk page and every action reads the award through here, so the
+  // first read after the Stage 1 deadline opens Stage 2 when it is due —
+  // before anyone can moderate, score late, or see a stale phase.
+  if (stage2DueWithRmMissing({ phase, award, cycle, completeness, sendBacks })) {
+    const openedAt = await openStage2Automatically({
+      cycleId: cycle.id,
+      awardId: award.id,
+      reason: STAGE2_REASON_RM_MISSING,
+      action: STAGE2_AUTO_OPEN_RM_MISSING_ACTION,
+      actorPersonId: null,
+      detail: { rm_submitted: completeness.rm.submitted, rm_required: completeness.rm.required, nmt_submitted: completeness.nmt.submitted, nmt_required: completeness.nmt.required },
+    });
+    // A racing reader may have opened it first: re-read so this state shows the real row.
+    const fresh = openedAt ? { ...award, stage2_unlocked_at: openedAt, stage2_unlock_reason: STAGE2_REASON_RM_MISSING, stage2_unlocked_by: null } : await rereadAward(award.id);
+    if (fresh) {
+      award = fresh;
+      phase = computePhase({ cycle, award, stage1Complete: completeness.complete, latestVersion, decisions });
+    }
+  }
 
   return {
     award,

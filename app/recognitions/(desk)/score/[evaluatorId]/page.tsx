@@ -296,7 +296,11 @@ export default async function ScoringSheetPage({
             mode.
           </Notice>
         ) : curWin.state === "over" ? (
-          <Notice>Stage 1 is over for this recognition. Read-only mode.</Notice>
+          <Notice>
+            {award.stage2_unlocked_at
+              ? "Scoring for this recognition has closed; Stage 2 has started. Read-only mode."
+              : "Stage 1 is over for this recognition. Read-only mode."}
+          </Notice>
         ) : submitted ? (
           <Notice tone="ok">
             <span className="rx-row" style={{ gap: 8 }}>

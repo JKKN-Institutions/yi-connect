@@ -6,9 +6,10 @@ import { ConfirmDialog, ResultLine } from "../../_ui/client";
 import { useAction } from "./_lib/use-action";
 
 /**
- * Escape hatch. The spec unlocks Stage 2 only at 100% RM + NMT submission
- * and is silent on a missed Stage 1 deadline; this opens it anyway, with a
- * reason kept on the record.
+ * Escape hatch. Stage 2 opens by itself at 100% RM + NMT submission, and
+ * (Director, 5 Nov) once the Stage 1 deadline passes with every NMT mark in
+ * but Regional Mentor marks missing. This opens it in any other case, such
+ * as NMT marks also missing, with a reason kept on the record.
  */
 export function ForceOpenStage2({
   awardId,
@@ -31,7 +32,10 @@ export function ForceOpenStage2({
         <button type="button" className="rx-btn rx-btn-quiet rx-btn-sm" onClick={() => setOpen(true)}>
           Force-open Stage 2 (escape hatch)
         </button>
-        <span className="rx-ad-mini">Only for a missed deadline. Normally Stage 2 opens by itself at 100%.</span>
+        <span className="rx-ad-mini">
+          Normally Stage 2 opens by itself: at 100%, or once scoring closes with every NMT mark in and only Regional Mentor
+          marks missing. Use this only when NMT marks are missing too.
+        </span>
       </div>
       <ResultLine result={result} />
       <ConfirmDialog

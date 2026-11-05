@@ -188,9 +188,13 @@ export default async function ScoringSheetPage({
   const score = mine.get(current.id) ?? null;
   const submitted = score?.status === "submitted";
   // Per chapter: one National Leadership added is scored during re-evaluation (recognitions_03).
-  const curWin = dutyScoringWindow(state.phase, cycle, current, duty, rescore);
-  const open = curWin.state === "open";
   const added = isNlAdded(current);
+  // Late marks locked (Director, 5 Nov): same rule as loadContext in actions/score.ts.
+  const curWin =
+    award.stage2_unlocked_at && !added
+      ? ({ state: "over" } as const)
+      : dutyScoringWindow(state.phase, cycle, current, duty, rescore);
+  const open = curWin.state === "open";
   // Any chapter someone else put forward (National Leadership, a Mentor or the NMT): a reason, not a form.
   const addedFor = isAddedForChapter(current);
   const addedBy = current.origin !== "chapter" && current.origin ? ADDED_BY_LABEL[current.origin] : null;

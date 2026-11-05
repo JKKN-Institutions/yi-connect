@@ -164,6 +164,31 @@ export async function removeEvaluator(evaluatorId: string): Promise<ActionResult
   const award = await getAward(ev.award_id);
   const { error } = await svc.from("recognition_evaluators").update({ is_active: false, is_nmt_leader: false }).eq("id", ev.id);
   if (error) return { success: false, error: "Couldn't remove the duty. Try again." };
+  // recognitions_07: the gate needs one RM duty to match the directory zone.
+  // If this duty was that one and the person still mentors another region,
+  // move the zone there so their other sheets stay open.
+  let zoneNote = "";
+  if (ev.layer === "rm" && award) {
+    const { data: cyc } = await svc.from("recognition_cycles").select("yi_year").eq("id", award.cycle_id).maybeSingle();
+    const yiYear = (cyc as { yi_year: number } | null)?.yi_year;
+    const role = yiYear ? await findRoleRow({ personId: ev.person_id, role: RX_ROLES.rm, yiYear, yiChapter: null }) : null;
+    if (yiYear && role && role.is_active !== false && norm(role.yi_zone) === norm(ev.region)) {
+      const { data: rest } = await svc
+        .from("recognition_evaluators")
+        .select("region, award:recognition_awards!inner(cycle_id)")
+        .eq("person_id", ev.person_id)
+        .eq("layer", "rm")
+        .eq("is_active", true)
+        .eq("award.cycle_id", award.cycle_id);
+      const regions = [...new Set(((rest ?? []) as Array<{ region: string | null }>).map((r) => (r.region ?? "").trim()).filter((r) => r !== ""))];
+      if (regions.length > 0 && !regions.some((r) => norm(r) === norm(role.yi_zone))) {
+        const moved = await ensureRole({ personId: ev.person_id, role: RX_ROLES.rm, yiYear, yiChapter: null, yiZone: regions[0] });
+        zoneNote = moved.ok
+          ? ` Their Regional Mentor region in the directory moved to ${regions[0]}, so their other sheets stay open.`
+          : ` Their other Regional Mentor sheets may not open until their directory region is set to ${regions[0]}.`;
+      }
+    }
+  }
   await audit({
     cycleId: award?.cycle_id ?? null,
     awardId: ev.award_id,
@@ -174,7 +199,7 @@ export async function removeEvaluator(evaluatorId: string): Promise<ActionResult
     detail: { person_id: ev.person_id, layer: ev.layer, region: ev.region },
   });
   done();
-  return { success: true, message: "Duty removed. Their saved scores stay on record." };
+  return { success: true, message: `Duty removed. Their saved scores stay on record.${zoneNote}` };
 }
 
 export async function updateEvaluatorConflicts(input: { evaluatorId: string; conflictChapterIds: string[] }): Promise<ActionResult> {

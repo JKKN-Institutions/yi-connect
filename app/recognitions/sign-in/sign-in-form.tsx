@@ -7,12 +7,17 @@ import { ResultLine } from "../_ui/client";
 /**
  * Sign-in for Yi Recognitions. Google or an emailed link, both landing on
  * /auth/callback so the PKCE code is exchanged before the session is used.
+ * The same email also carries a code (6 Nov 2026): company mail systems such
+ * as Outlook 365 open links to scan them, which uses up the one-time link
+ * before the person clicks it. Typing the code works on any device.
  * The password form exists ONLY in local development, for testing.
  */
 export function SignInForm({ next, devPassword }: { next: string; devPassword: boolean }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState<"google" | "link" | "password" | null>(null);
+  const [busy, setBusy] = useState<"google" | "link" | "password" | "code" | null>(null);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [code, setCode] = useState("");
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   const client = () =>
@@ -39,11 +44,30 @@ export function SignInForm({ next, devPassword }: { next: string; devPassword: b
       options: { emailRedirectTo: callback(), shouldCreateUser: false },
     });
     setBusy(null);
+    if (!error) setSentTo(email.trim());
     setResult(
       error
         ? { ok: false, text: "We couldn't send a link to that address. Use the email your Yi account is under." }
-        : { ok: true, text: `Link sent to ${email.trim()}. Open it on this device to sign in.` }
+        : {
+            ok: true,
+            text: `Email sent to ${email.trim()}. Open the link on this device, or type the code from the email below. If the link takes you back without signing in, use the code.`,
+          }
     );
+  }
+
+  async function withCode(e: React.FormEvent) {
+    e.preventDefault();
+    const token = code.replace(/\s+/g, "");
+    if (!sentTo || !token) return;
+    setBusy("code");
+    setResult(null);
+    const { error } = await client().auth.verifyOtp({ email: sentTo, token, type: "email" });
+    if (error) {
+      setResult({ ok: false, text: "That code didn't work. Check it, or ask for a new email. Codes last one hour; only the newest one works." });
+      setBusy(null);
+      return;
+    }
+    window.location.assign(next);
   }
 
   async function withPassword(e: React.FormEvent) {
@@ -104,6 +128,25 @@ export function SignInForm({ next, devPassword }: { next: string; devPassword: b
             : busy === "link" ? "Sending…" : "Email me a sign-in link"}
         </button>
       </form>
+      {sentTo && !devPassword ? (
+        <form onSubmit={withCode} className="rx-stack">
+          <div>
+            <label htmlFor="rx-code" className="rx-label">Code from the email</label>
+            <input
+              id="rx-code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              className="rx-input"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              required
+            />
+          </div>
+          <button type="submit" className="rx-btn" style={{ width: "100%" }} disabled={busy !== null}>
+            {busy === "code" ? "Signing in…" : "Sign in with the code"}
+          </button>
+        </form>
+      ) : null}
       <ResultLine result={result} />
     </div>
   );

@@ -40,6 +40,10 @@ export default async function SignInPage({
           <div className="rx-plate">
             <ResultLine result={errorText ? { ok: false, text: errorText } : null} />
             <SignInForm next={safeNext(next)} devPassword={process.env.NODE_ENV === "development"} />
+            <p className="rx-mute rx-small" style={{ marginTop: 16 }}>
+              The emailed link works only on the device and browser you asked for it from. If the link does not sign
+              you in, type the code from the same email instead; the code box appears here after you ask for the email.
+            </p>
           </div>
         </div>
       </main>

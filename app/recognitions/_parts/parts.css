@@ -60,6 +60,13 @@
   padding: 12px 0;
   z-index: 2;
 }
+/* The bug-report button (JKKN Bug Reporter SDK) sits 16-64px from the bottom
+   right on phones; keep this bar's buttons clear of it. */
+@media (max-width: 640px) {
+  .rx-p-sticky-actions {
+    padding-right: 72px;
+  }
+}
 
 @media (max-width: 640px) {
   .rx-p-dl { grid-template-columns: 1fr; gap: 2px; }

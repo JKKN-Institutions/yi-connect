@@ -5,7 +5,7 @@
  *   setup         no nomination deadline set yet
  *   nominations   until the nomination deadline (Phase 1)
  *   stage1        nominations locked; RM + NMT blind scoring (Phase 2)
- *   stage2        100% scored (or force-unlocked); NMT leader moderates (Phase 3)
+ *   stage2        100% scored, auto-opened with only RM marks missing, or force-unlocked; NMT leader moderates (Phase 3)
  *   governance    moderation submitted; National Leadership decides (Phase 4)
  *   reevaluation  sent back; NMT leader revises (Phase 5)
  *   finalized     approved

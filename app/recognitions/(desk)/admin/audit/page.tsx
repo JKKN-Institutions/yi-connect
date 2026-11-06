@@ -21,6 +21,7 @@ const ACTION_WORD: Record<string, string> = {
   apply_health_card_measures: "applied Health Card measure scores from",
   edit_health_card_measure: "edited a Health Card measure:",
   force_open_stage2: "forced Stage 2 open on",
+  stage2_auto_opened_rm_missing: "opened Stage 2 automatically (Regional Mentor marks missing) on",
   edit: "edited",
   submit: "submitted",
   lock: "locked",

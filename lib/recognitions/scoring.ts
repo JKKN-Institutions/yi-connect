@@ -239,6 +239,13 @@ export type Completeness = {
   /** Plain-English reasons Stage 2 cannot open yet beyond missing scores. */
   blockers: string[];
   complete: boolean;
+  /**
+   * The NMT layer alone is complete: every NMT sheet submitted, at least one
+   * NMT mark required, and no blocker other than "no Regional Mentor can score
+   * them". Used to open Stage 2 by itself once scoring closes with only
+   * Regional Mentor marks missing (Director, 5 Nov).
+   */
+  nmtComplete: boolean;
 };
 
 /**
@@ -305,6 +312,7 @@ export function computeCompleteness(input: {
       `${awaitingApproval.length} chapter(s) a Regional Mentor added are waiting for an NMT member to approve or decline them.`
     );
   }
+  let rmOrphanBlockers = 0;
   for (const layer of ["rm", "nmt"] as const) {
     const orphaned = nominations.filter(
       (n) =>
@@ -313,6 +321,7 @@ export function computeCompleteness(input: {
         )
     );
     if (orphaned.length > 0) {
+      if (layer === "rm") rmOrphanBlockers++;
       const regions = [...new Set(orphaned.map((n) => n.region))].sort().join(", ");
       blockers.push(
         layer === "rm"
@@ -340,6 +349,10 @@ export function computeCompleteness(input: {
     complete:
       blockers.length === 0 &&
       perDuty.every((p) => p.submitted >= p.required),
+    nmtComplete:
+      blockers.length - rmOrphanBlockers === 0 &&
+      nmt.required > 0 &&
+      perDuty.filter((p) => p.layer === "nmt").every((p) => p.submitted >= p.required),
   };
 }
 

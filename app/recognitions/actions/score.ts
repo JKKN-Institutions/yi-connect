@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { requireRxDuty, type RxDuty } from "@/lib/recognitions/auth";
-import { audit, getAwardState, type AwardState } from "@/lib/recognitions/data";
+import { STAGE2_REASON_ALL_SUBMITTED, audit, getAwardState, openStage2Automatically, type AwardState } from "@/lib/recognitions/data";
+import { isNlAdded } from "@/lib/recognitions/check-rules";
 import { rxService } from "@/lib/recognitions/supabase";
 import { dutySeesNomination, isMark, partAKey } from "@/lib/recognitions/scoring";
 import { partAMeasuresForAward, type HcMeasure } from "@/lib/recognitions/health-card";
@@ -36,6 +37,13 @@ async function loadContext(evaluatorId: string, nominationId: string): Promise<
   if (!state) return { ok: false, error: "This recognition no longer exists. Go back to your sheets and reload." };
 
   const nomination = state.nominations.find((n) => n.id === nominationId);
+  // Late marks locked (Director, 5 Nov): once Stage 2 is open, no Stage 1 mark
+  // or flag may be written or changed, even on a Mentor sheet reopened by a
+  // send-back. A chapter National Leadership added is scored in re-evaluation,
+  // after Stage 2, so it is not a Stage 1 mark and keeps its own window.
+  if (state.award.stage2_unlocked_at && !(nomination && isNlAdded(nomination))) {
+    return { ok: false, error: "Scoring for this recognition has closed; Stage 2 has started." };
+  }
   // Per nomination: a chapter National Leadership added is scored during
   // re-evaluation (recognitions_03); everything else in Stage 1 only.
   // recognitions_05: a Mentor's sheet reopens after the NMT leader's send-back.
@@ -213,30 +221,15 @@ export async function saveScore(input: SaveScoreInput): Promise<ActionResult> {
   if (submit) {
     const after = await getAwardState(duty.award_id);
     if (after && after.completeness.complete) {
-      const { data: unlocked, error: unlockErr } = await svc
-        .from("recognition_awards")
-        .update({
-          stage2_unlocked_at: new Date().toISOString(),
-          stage2_unlock_reason: "All Regional Mentor and NMT marks submitted",
-          stage2_unlocked_by: null,
-        })
-        .eq("id", duty.award_id)
-        .is("stage2_unlocked_at", null) // only the first finisher records the unlock
-        .select("id");
-      if (unlockErr) {
-        console.error(JSON.stringify({ tag: "recognitions_stage2_unlock_failed", error: unlockErr.message }));
-      } else if ((unlocked ?? []).length > 0) {
-        // audit() needs an actor: the submitter whose marks completed the set; the unlock itself is automatic.
-        await audit({
-          cycleId: state.cycle.id,
-          awardId: duty.award_id,
-          actorPersonId: personId,
-          action: "stage2_unlocked",
-          entity: "recognition_awards",
-          entityId: duty.award_id,
-          detail: { automatic: true, reason: "All Regional Mentor and NMT marks submitted" },
-        });
-      }
+      // Only the first finisher records the unlock. The actor is the submitter
+      // whose marks completed the set; the unlock itself is automatic.
+      await openStage2Automatically({
+        cycleId: state.cycle.id,
+        awardId: duty.award_id,
+        reason: STAGE2_REASON_ALL_SUBMITTED,
+        action: "stage2_unlocked",
+        actorPersonId: personId,
+      });
     }
   }
 

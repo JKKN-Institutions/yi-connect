@@ -149,6 +149,7 @@ export function AssignEvaluatorForm({ awardId, hasLeader, chapters }: { awardId:
                   <option key={r} value={r}>{r}</option>
                 ))}
               </select>
+              <div className="rx-ad-mini">Mentors two regions? Assign them once for each region.</div>
             </div>
           ) : (
             <label className="rx-row" style={{ gap: 8 }}>

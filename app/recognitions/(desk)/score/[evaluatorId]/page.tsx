@@ -344,7 +344,8 @@ export default async function ScoringSheetPage({
             ) : (current.justification ?? "").trim() !== "" || !legacyNomination(current) ? (
               // recognitions_04: the nomination is the chapter's one "why".
               <section className="rx-stack" style={{ gap: 8 }}>
-                <h3 className="rx-h3">Why they should get this recognition</h3>
+                <h3 className="rx-h3">Why they should get this recognition, in the chapter's own words</h3>
+                <p className="rx-mute rx-small">This is the justification the chapter submitted with its nomination. It is not an analysis from the Health Card.</p>
                 <p className="rx-sheet-field" style={{ whiteSpace: "pre-line" }}>
                   {(current.justification ?? "").trim() || <span className="rx-mute">Left blank</span>}
                 </p>
@@ -354,7 +355,8 @@ export default async function ScoringSheetPage({
               <>
                 {current.reasons.some((r) => r.trim() !== "") ? (
                   <section className="rx-stack" style={{ gap: 8 }}>
-                    <h3 className="rx-h3">Why they should get this recognition</h3>
+                    <h3 className="rx-h3">Why they should get this recognition, in the chapter's own words</h3>
+                    <p className="rx-mute rx-small">These are the reasons the chapter submitted with its nomination. They are not an analysis from the Health Card.</p>
                     <ol className="rx-sheet-reasons">
                       {current.reasons
                         .filter((r) => r.trim() !== "")

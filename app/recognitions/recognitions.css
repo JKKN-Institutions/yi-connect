@@ -115,6 +115,11 @@
 .rx-who { display: flex; align-items: center; gap: 10px; font-size: 0.82rem; color: var(--rx-mute); }
 
 .rx-main { max-width: 1120px; margin: 0 auto; padding: 28px 16px 72px; }
+/* Phones: the bug-report button and its "My Bugs" pill float 16-116px above
+   the bottom edge; let the last line of a page scroll clear of them. */
+@media (max-width: 640px) {
+  .rx-main { padding-bottom: 136px; }
+}
 .rx-narrow { max-width: 760px; margin: 0 auto; }
 
 /* ------------------------------------------------------------- plates */

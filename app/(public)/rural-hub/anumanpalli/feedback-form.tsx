@@ -199,7 +199,6 @@ export function FeedbackForm() {
               <label key={p.key} className={`${chip} ${panchayat === p.key ? chipOn : chipOff}`}>
                 <input
                   type="radio"
-                  name="panchayat"
                   value={p.key}
                   checked={panchayat === p.key}
                   onChange={() => setPanchayat(p.key)}
@@ -212,6 +211,8 @@ export function FeedbackForm() {
               </label>
             ))}
           </div>
+          {/* Sent from state: React resets native radios after a refused send. */}
+          <input type="hidden" name="panchayat" value={panchayat} />
         </fieldset>
 
         <label className="mt-4 block">

@@ -41,6 +41,8 @@ export function InstallPrompt() {
   // shared Yi Connect prompt is suppressed there too. Yi Recognitions
   // (/recognitions/…) is a separately branded app with its own manifest.
   // Take Pride 2026 (/take-pride/…) is its own branded event app too.
+  // Yi Rural Hub (/rural-hub/…) is a one-time village feedback form opened
+  // from a WhatsApp link; on a phone the prompt covered its Send button.
   const pathname = usePathname()
   const suppressedRoute =
     !!pathname &&
@@ -48,7 +50,8 @@ export function InstallPrompt() {
       pathname.startsWith('/yip/r/') ||
       pathname.startsWith('/varnam-vizha') ||
       pathname.startsWith('/recognitions') ||
-      pathname.startsWith('/take-pride'))
+      pathname.startsWith('/take-pride') ||
+      pathname.startsWith('/rural-hub'))
 
   useEffect(() => {
     // Check if already dismissed in this session

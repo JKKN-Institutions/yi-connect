@@ -43,6 +43,7 @@ export default async function SignInPage({
             <p className="rx-mute rx-small" style={{ marginTop: 16 }}>
               The emailed link works only on the device and browser you asked for it from. If the link does not sign
               you in, type the code from the same email instead; the code box appears here after you ask for the email.
+              Still stuck? Message Piyush Garg on WhatsApp, +91 94340 39292.
             </p>
           </div>
         </div>

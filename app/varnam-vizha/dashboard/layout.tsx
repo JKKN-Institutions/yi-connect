@@ -17,7 +17,6 @@ const TABS = [
   { href: "/varnam-vizha/dashboard/sponsors", label: "Sponsors" },
   { href: "/varnam-vizha/dashboard/budget", label: "Budget" },
   { href: "/varnam-vizha/dashboard/reports", label: "Reports" },
-  { href: "/varnam-vizha/dashboard/rural-feedback", label: "Rural Hub" },
   { href: "/varnam-vizha/dashboard/assets", label: "Assets" },
   { href: "/varnam-vizha/dashboard/digest", label: "Digest" },
   { href: "/varnam-vizha/dashboard/team", label: "Team" },

@@ -5,6 +5,10 @@
 
 export const SURVEY_KEY = "anumanpalli-2026" as const;
 
+/** The Yi chapter that owns this survey. Only that chapter's Chair and Co-Chair
+ *  (yi_directory roles, app='yi') may read the answers. */
+export const SURVEY_CHAPTER = "Erode" as const;
+
 /** Flip to true once a native Tamil speaker has read every string on the page. */
 export const TAMIL_REVIEWED = false;
 
@@ -225,7 +229,11 @@ export const LABELS = {
   aboutYou: { ta: "உங்களைப் பற்றி", en: "About you" },
   name: { ta: "பெயர்", en: "Your name" },
   panchayat: { ta: "உங்கள் ஊராட்சி", en: "Your panchayat" },
-  phone: { ta: "தொலைபேசி (விருப்பம்)", en: "Phone (optional)" },
+  // Phone is now required: it is how a second send replaces the first (Director, 9 Nov).
+  // The Tamil is the projected label with "(optional)" removed.
+  phone: { ta: "தொலைபேசி", en: "Phone number" },
+  // [TAMIL_TBD] needs a Tamil line from a native speaker; English only for now.
+  phoneNote: { ta: "", en: "One answer per phone. If you send again from the same phone, your new answers replace the old ones." },
   anyElse: { ta: "வேறு ஏதாவது", en: "Anything else you want to tell us" },
   submit: { ta: "அனுப்புங்கள்", en: "Send" },
   thanks: { ta: "நன்றி!", en: "Thank you. Your answers are saved." },

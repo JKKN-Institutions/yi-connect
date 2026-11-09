@@ -4,8 +4,8 @@
  * Public by design: lib/supabase/middleware.ts protects an allowlist of
  * prefixes and /rural-hub is not one of them, so villagers open it from a
  * shared link without signing in. Answers are stored by sendRuralFeedback
- * (./actions.ts); the Varnam Vizha committee reads them at
- * /varnam-vizha/dashboard/rural-feedback.
+ * (./actions.ts); only the Yi Erode Chapter Chair and Co-Chair read them, at
+ * /rural-hub/anumanpalli/results.
  *
  * Content is the page projected at the launch on 2 Oct 2026, Tamil first with
  * the English line under it. Tamil NEEDS NATIVE REVIEW (TAMIL_REVIEWED flag).

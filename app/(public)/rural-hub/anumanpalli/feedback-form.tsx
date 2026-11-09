@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { startTransition, useActionState, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import {
   CLOSING,
@@ -17,9 +17,11 @@ import { Step } from "./step";
 const INITIAL: FeedbackState = { ok: false, message: "" };
 
 /**
- * Every answer is held in React state, not left to the browser: React 19
- * resets a form after a server action runs, which would wipe a villager's
- * ticks whenever the server refused the send. Hidden inputs carry the state.
+ * Every answer is held in React state, not left to the browser, and hidden
+ * inputs carry it. The form is sent from onSubmit, not through the `action`
+ * prop: with `action`, React 19 resets the form after every send, and on a
+ * refused send (say, a missing phone) the boxes LOOKED unticked while the
+ * answers were still held, so a villager re-ticking a box would remove it.
  */
 type Answers = Record<string, string[]>;
 
@@ -71,7 +73,15 @@ export function FeedbackForm() {
   }
 
   return (
-    <form action={action} className="mt-12" noValidate>
+    <form
+      className="mt-12"
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
+        startTransition(() => action(fd));
+      }}
+    >
       {/* Honeypot: hidden from people, filled by bots that fill every field. */}
       <div aria-hidden className="absolute -left-[9999px] h-px w-px overflow-hidden">
         <label>
@@ -218,11 +228,14 @@ export function FeedbackForm() {
         <label className="mt-4 block">
           <span>
             {LABELS.phone.ta} <span className="text-sm text-[#4F5866]">{LABELS.phone.en}</span>
+            <span className="text-[#9C2F28]"> *</span>
           </span>
+          <span className="block text-sm text-[#4F5866]">{LABELS.phoneNote.en}</span>
           <input
             name="phone"
             type="tel"
             inputMode="tel"
+            required
             maxLength={20}
             autoComplete="tel"
             value={phone}

@@ -1,7 +1,12 @@
 /**
- * Read side of the village feedback: every row for one survey, plus a tally
- * per question and option. Read through the admin client; the only caller is
- * the committee results page, which gates on getVarnamAccess first.
+ * Read side of the village feedback: every row for one survey, then one row
+ * per phone (the newest), then a tally per question and option. Read through
+ * the admin client; the only caller is the results page, which gates on
+ * getRuralResultsAccess (chapter Chair and Co-Chair) first.
+ *
+ * Every send is kept in the table. "A second send from the same phone replaces
+ * the first" (Director, 9 Nov 2026) is applied here, when reading: nothing is
+ * overwritten or deleted, so a mistaken or mischievous resend can be traced.
  */
 import { createAdminSupabaseClient } from "@/lib/supabase/server";
 import { ruralFeedbackTable } from "./guard";
@@ -11,7 +16,7 @@ export type FeedbackRecord = {
   id: string;
   respondent_name: string;
   panchayat: string;
-  phone: string | null;
+  phone: string;
   answers: Record<string, string | string[]>;
   comment: string | null;
   created_at: string;
@@ -35,11 +40,27 @@ export async function getFeedback(surveyKey: string): Promise<FeedbackRecord[]> 
       .select("id, respondent_name, panchayat, phone, answers, comment, created_at")
       .eq("survey_key", surveyKey)
       .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
       .range(from, from + PAGE - 1);
     if (error) throw new Error(`Could not read village feedback: ${error.message}`);
     out.push(...((data ?? []) as FeedbackRecord[]));
     if (!data || data.length < PAGE) return out;
   }
+}
+
+/** Keeps the newest send per phone. `rows` must be newest first (getFeedback's order). */
+export function latestPerPhone(rows: FeedbackRecord[]): {
+  people: FeedbackRecord[];
+  replaced: number;
+} {
+  const seen = new Set<string>();
+  const people: FeedbackRecord[] = [];
+  for (const r of rows) {
+    if (seen.has(r.phone)) continue;
+    seen.add(r.phone);
+    people.push(r);
+  }
+  return { people, replaced: rows.length - people.length };
 }
 
 export function tally(rows: FeedbackRecord[]): QuestionTally[] {

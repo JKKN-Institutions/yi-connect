@@ -10,12 +10,25 @@ import { PANCHAYATS, QUESTIONS } from "./anumanpalli-survey";
 export type FeedbackRow = {
   respondent_name: string;
   panchayat: string;
-  phone: string | null;
+  /** Ten-digit Indian mobile number, digits only (see normalizePhone). */
+  phone: string;
   answers: Record<string, string | string[]>;
   comment: string | null;
 };
 
-const PHONE_RE = /^[0-9+ -]{6,20}$/;
+/**
+ * The phone is the person's identity on this form: a second send from the same
+ * phone replaces the first (Director, 9 Nov 2026). So every way of writing one
+ * number must land on the same ten digits: "+91 98765 43210", "098765 43210" and
+ * "9876543210" are one person. Returns null if it is not an Indian mobile.
+ */
+export function normalizePhone(raw: string): string | null {
+  if (!/^[0-9+ ()-]{10,20}$/.test(raw)) return null;
+  let d = raw.replace(/\D/g, "");
+  if (d.length === 12 && d.startsWith("91")) d = d.slice(2);
+  else if (d.length === 11 && d.startsWith("0")) d = d.slice(1);
+  return /^[6-9][0-9]{9}$/.test(d) ? d : null;
+}
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
 
@@ -32,8 +45,12 @@ export function parseFeedback(
   }
 
   const phoneRaw = str(fd, "phone");
-  if (phoneRaw && !PHONE_RE.test(phoneRaw)) {
-    return { ok: false, error: "Please check the phone number." };
+  if (!phoneRaw) {
+    return { ok: false, error: "Please write your phone number. · தொலைபேசி" };
+  }
+  const phone = normalizePhone(phoneRaw);
+  if (!phone) {
+    return { ok: false, error: "Please check the phone number: 10 digits. · தொலைபேசி" };
   }
 
   const answers: Record<string, string | string[]> = {};
@@ -74,7 +91,7 @@ export function parseFeedback(
     row: {
       respondent_name: name,
       panchayat,
-      phone: phoneRaw || null,
+      phone,
       answers,
       comment: comment || null,
     },

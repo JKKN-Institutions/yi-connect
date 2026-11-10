@@ -435,7 +435,7 @@ export default async function ScoringSheetPage({
 
             <section className="rx-stack" style={{ gap: 8 }}>
               <h3 className="rx-h3">National Health Card · reference for Part A</h3>
-              <HealthCardPanel tableKey={hc.tableKey} measures={hc.measures} card={hcCard} weightLayer1={cycle.weight_layer1} />
+              <HealthCardPanel tableKey={hc.tableKey} measures={hc.measures} card={hcCard} weightLayer1={cycle.weight_layer1} sheetUploaded={files.length > 0} />
               {files.length === 0 ? (
                 <p className="rx-small rx-mute">The National Health Card for this recognition hasn&apos;t been uploaded yet.</p>
               ) : (

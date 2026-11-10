@@ -453,7 +453,7 @@ export function HealthCardDesk({
         </section>
       ) : null}
 
-      <ManualScores awardId={awardId} chapters={chapters} scored={scored} />
+      <ManualScores awardId={awardId} chapters={chapters} scored={scored} sheetUploaded={files.length > 0} />
     </div>
   );
 }
@@ -586,7 +586,17 @@ function MeasurePreviewView({ p }: { p: MeasurePreview }) {
   );
 }
 
-function ManualScores({ awardId, chapters, scored }: { awardId: string; chapters: ChapterScore[]; scored: number }) {
+function ManualScores({
+  awardId,
+  chapters,
+  scored,
+  sheetUploaded,
+}: {
+  awardId: string;
+  chapters: ChapterScore[];
+  scored: number;
+  sheetUploaded: boolean;
+}) {
   const [chapterId, setChapterId] = useState("");
   const [score, setScore] = useState("");
   const [filter, setFilter] = useState("");
@@ -669,7 +679,7 @@ function ManualScores({ awardId, chapters, scored }: { awardId: string; chapters
                   ) : c.incomplete ? (
                     <span className="rx-mute">Some measure scores missing</span>
                   ) : (
-                    <span className="rx-mute">No Health Card data</span>
+                    <span className="rx-mute">{sheetUploaded ? "Sheet uploaded, no scores read" : "No Health Card data"}</span>
                   )}
                   {c.when ? <div className="rx-ad-mini">{c.when}</div> : null}
                 </td>

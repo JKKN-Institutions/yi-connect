@@ -15,15 +15,26 @@ export function HealthCardPanel({
   measures,
   card,
   weightLayer1,
+  sheetUploaded = false,
 }: {
   tableKey: HcTableKey;
   measures: HcMeasure[];
   card: ChapterHealthCard | null;
   weightLayer1: number;
+  /** A Health Card sheet is uploaded for this recognition (downloadable below). */
+  sheetUploaded?: boolean;
 }) {
   const hasMeasureScores = !!card && card.scores.some((s) => s.score !== null);
   const showTable = !!card && (hasMeasureScores || card.source === "measures");
   const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0$/, ""));
+
+  if (!card && sheetUploaded) {
+    return (
+      <div className="rx-notice" data-hc="sheet">
+        The Health Card sheet for this recognition is uploaded. Download it below and use it for Part A.
+      </div>
+    );
+  }
 
   if (!card) {
     return (

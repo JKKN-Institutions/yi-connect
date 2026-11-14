@@ -11,7 +11,7 @@ import { Seal } from "../../_ui/primitives";
  * re-derived here.
  */
 
-/** "never": has a login but has never signed in. "no-login": no login linked to the person, so they cannot sign in. */
+/** "never": has a login but has never signed in. "no-login": no login is linked to the person. */
 export type SignInGap = "never" | "no-login";
 
 export type EvaluatorProgressRow = {
@@ -94,7 +94,7 @@ export function EvaluatorProgress({
                 <strong>{r.name}</strong> <span className="rx-mute">· {r.role}</span>
                 {gap ? (
                   <span className="rx-ad-mini" style={{ display: "block" }}>
-                    {gap === "never" ? "Never signed in" : "No login linked, so they cannot sign in"}
+                    {gap === "never" ? "Never signed in" : "No login linked"}
                   </span>
                 ) : null}
               </span>

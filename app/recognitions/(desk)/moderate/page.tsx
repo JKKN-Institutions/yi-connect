@@ -20,7 +20,7 @@ function waiting(
 ): { text: string; locked: boolean } {
   const { phase, cycle } = state;
   // recognitions_08: the super admin hid the marks from this plain NMT seat, so the room never opens for them.
-  if (marksHidden && (phase === "setup" || phase === "nominations" || phase === "stage1" || phase === "stage2")) {
+  if (marksHidden) {
     return { text: MARKS_HIDDEN_REASON, locked: true };
   }
   if (isMentor && phase !== "setup" && phase !== "nominations" && phase !== "stage1") {

@@ -19,6 +19,10 @@ function waiting(
   marksHidden = false
 ): { text: string; locked: boolean } {
   const { phase, cycle } = state;
+  // recognitions_08: the super admin hid the marks from this plain NMT seat, so the room never opens for them.
+  if (marksHidden && (phase === "setup" || phase === "nominations" || phase === "stage1" || phase === "stage2")) {
+    return { text: MARKS_HIDDEN_REASON, locked: true };
+  }
   if (isMentor && phase !== "setup" && phase !== "nominations" && phase !== "stage1") {
     return { text: "Read-only: the round-1 leaderboard and every mark, for the joint call.", locked: false };
   }
@@ -36,9 +40,7 @@ function waiting(
               : "Enter the final ranking and the top three texts.",
             locked: false,
           }
-        : marksHidden
-          ? { text: MARKS_HIDDEN_REASON, locked: true }
-          : { text: "The combined matrix is open. The NMT leader is entering the final ranking.", locked: false };
+        : { text: "The combined matrix is open. The NMT leader is entering the final ranking.", locked: false };
     case "governance":
       return { text: "Moderation submitted. Waiting for National Leadership.", locked: false };
     case "reevaluation": {

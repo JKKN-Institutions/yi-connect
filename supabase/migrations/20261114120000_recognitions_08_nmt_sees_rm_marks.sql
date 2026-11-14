@@ -15,7 +15,7 @@
 --         the Regional Mentors keep today's rule.
 --
 -- ADD-ONLY. One column with a default; no row is changed in meaning.
--- NOT APPLIED to production by the build. Apply it before the PR is merged.
+-- Applied to production on 14 Nov 2026, 10:3x IST (add-only, value true).
 -- =====================================================================
 
 alter table yi_connect.recognition_cycles

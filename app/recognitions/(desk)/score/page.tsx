@@ -9,7 +9,7 @@ import {
   nominationsForDuty,
   type AwardState,
 } from "@/lib/recognitions/data";
-import { mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
+import { marksHiddenFrom, marksPrivacyText, mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
 import {
   addableForDuty,
   askNmtToAddNote,
@@ -122,8 +122,7 @@ export default async function MySheetsPage() {
         <div className="rx-row rx-small rx-mute" style={{ gap: 8 }}>
           <IconEyeOff size={16} />
           <span>
-            Your marks are private. Other evaluators can&apos;t see them, and you see theirs only after you submit every
-            chapter on your sheet.
+            {marksPrivacyText([...states.values()].some((st) => !!st && marksHiddenFrom(st, viewer.duties)))}
           </span>
         </div>
       </PageHead>

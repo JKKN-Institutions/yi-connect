@@ -2,7 +2,8 @@ import { requireRxSuperAdmin } from "@/lib/recognitions/auth";
 import { getCurrentCycle, listCycles } from "@/lib/recognitions/data";
 import { NoAccess, PageHead, Seal, formatWhen } from "../../../_ui/primitives";
 import { isoToIstInput } from "../_lib/ist";
-import { CreateCycleForm, CycleSettingsForm, MakeCurrentButton } from "./timeline-forms";
+import { nmtSeesRmMarks } from "@/lib/recognitions/sight";
+import { CreateCycleForm, CycleSettingsForm, MakeCurrentButton, NmtSeesRmMarksSwitch } from "./timeline-forms";
 
 export const metadata = { title: "Timeline" };
 
@@ -43,6 +44,9 @@ export default async function TimelinePage() {
               quizOpen: cycle.quiz_open,
             }}
           />
+          <hr className="rx-rule" />
+          <div className="rx-h3">Who sees the marks</div>
+          <NmtSeesRmMarksSwitch cycleId={cycle.id} on={nmtSeesRmMarks(cycle)} />
         </section>
       ) : (
         <section className="rx-plate">

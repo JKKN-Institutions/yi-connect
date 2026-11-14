@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireRxSuperAdmin } from "@/lib/recognitions/auth";
-import { getAwardState, getCurrentCycle, listAwards } from "@/lib/recognitions/data";
+import { getAwardState, getCurrentCycle, getPeople, listAwards, type PersonLite } from "@/lib/recognitions/data";
+import { rxService } from "@/lib/recognitions/supabase";
 import { PHASE_LABEL, earlyTestOpen } from "@/lib/recognitions/phase";
 import { effectiveStatus } from "@/lib/recognitions/check-rules";
 import { CHECK_STEP_ENABLED } from "@/lib/recognitions/constants";
@@ -8,6 +9,7 @@ import type { NominationStatus } from "@/lib/recognitions/types";
 import { Ribbon } from "../../_ui/ribbon";
 import { Deadline, NoAccess, Notice, PageHead, PhaseSeal, formatWhen } from "../../_ui/primitives";
 import { ForceOpenStage2 } from "./force-open";
+import { EvaluatorProgress, buildEvaluatorRows, evaluatorStatus, type SignInGap } from "./evaluator-progress";
 
 export const metadata = { title: "Control room" };
 
@@ -26,6 +28,28 @@ function Progress({ label, submitted, required }: { label: string; submitted: nu
       </div>
     </div>
   );
+}
+
+/**
+ * For pending evaluators only: no login linked, or a login never used.
+ * One auth lookup per person; a failed lookup shows nothing.
+ */
+async function signInGapsFor(people: Map<string, PersonLite>, personIds: string[]): Promise<Map<string, SignInGap>> {
+  const out = new Map<string, SignInGap>();
+  const withLogin: Array<[string, string]> = [];
+  for (const id of new Set(personIds)) {
+    const p = people.get(id);
+    if (!p) continue;
+    if (!p.user_id) out.set(id, "no-login");
+    else withLogin.push([id, p.user_id]);
+  }
+  const auth = rxService().auth.admin;
+  const results = await Promise.allSettled(withLogin.map(([, userId]) => auth.getUserById(userId)));
+  results.forEach((r, i) => {
+    if (r.status !== "fulfilled" || r.value.error || !r.value.data.user) return;
+    if (!r.value.data.user.last_sign_in_at) out.set(withLogin[i][0], "never");
+  });
+  return out;
 }
 
 export default async function ControlRoomOverview() {
@@ -49,6 +73,14 @@ export default async function ControlRoomOverview() {
 
   const awards = await listAwards(cycle.id);
   const states = (await Promise.all(awards.map((a) => getAwardState(a.id)))).filter((s) => s !== null);
+  const people = await getPeople(states.flatMap((s) => s.duties.map((d) => d.person_id)));
+  const rowsByAward = new Map(
+    states.map((s) => [s.award.id, buildEvaluatorRows(s.duties, s.completeness.perDuty, people)])
+  );
+  const signInGaps = await signInGapsFor(
+    people,
+    [...rowsByAward.values()].flat().filter((r) => evaluatorStatus(r) === "pending").map((r) => r.personId)
+  );
 
   return (
     <div className="rx-stack-lg">
@@ -115,6 +147,7 @@ export default async function ControlRoomOverview() {
                   <Progress label="Regional Mentors" submitted={c.rm.submitted} required={c.rm.required} />
                   <Progress label="NMT" submitted={c.nmt.submitted} required={c.nmt.required} />
                 </div>
+                <EvaluatorProgress rows={rowsByAward.get(award.id) ?? []} signInGaps={signInGaps} />
                 {c.blockers.length > 0 && (st.phase === "stage1" || st.phase === "nominations" || st.phase === "setup") ? (
                   <Notice tone="alert">
                     <strong>Stage 2 can&apos;t open yet:</strong>

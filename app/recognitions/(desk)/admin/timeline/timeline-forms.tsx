@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createCycle, makeCycleCurrent, updateCycleSettings } from "../../../actions/admin-setup";
+import { createCycle, makeCycleCurrent, setNmtSeesRmMarks, updateCycleSettings } from "../../../actions/admin-setup";
 import { ConfirmDialog, ResultLine } from "../../../_ui/client";
 import { useAction } from "../_lib/use-action";
 
@@ -210,5 +210,37 @@ export function MakeCurrentButton({ cycleId, name }: { cycleId: string; name: st
         <p>Every desk switches to this cycle&apos;s recognitions and deadlines. The present cycle stays saved and can be made current again.</p>
       </ConfirmDialog>
     </>
+  );
+}
+
+/** recognitions_08: the super admin's switch for the NMT seeing the Regional Mentors' marks. */
+export function NmtSeesRmMarksSwitch({ cycleId, on }: { cycleId: string; on: boolean }) {
+  const { pending, result, run } = useAction();
+  return (
+    <div className="rx-stack">
+      <label className="rx-row" style={{ gap: 10, alignItems: "flex-start" }}>
+        <input
+          type="checkbox"
+          className="rx-ad-check"
+          checked={on}
+          disabled={pending}
+          onChange={(e) => {
+            const next = e.target.checked;
+            run(() => setNmtSeesRmMarks({ cycleId, on: next }));
+          }}
+        />
+        <span>
+          <strong>NMT members can see the Regional Mentors&apos; marks</strong>
+          <br />
+          <span className="rx-help">
+            {on
+              ? "On (as before): an NMT member sees every evaluator's marks, read-only, once they have submitted their own sheet, and everyone sees them from Stage 2."
+              : "Off: NMT members who are not the NMT leader never see the other evaluators' marks, the Regional Mentors' included, not even in Stage 2. They see only their own sheet. The NMT leader still sees everything and enters the final ranking. Regional Mentors are not affected."}
+          </span>
+        </span>
+      </label>
+      {pending ? <p className="rx-small rx-mute">Saving…</p> : null}
+      <ResultLine result={result} />
+    </div>
   );
 }

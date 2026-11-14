@@ -13,7 +13,7 @@ import { IconArrowLeft, IconArrowRight, IconDownload, IconEyeOff, IconLock } fro
 import { Deadline, NoAccess, Notice, PageHead, Seal, formatWhen } from "../../../_ui/primitives";
 import { dutyLayerLabel, dutyScoringWindow, scoringDeadlineFor, scoringWindow } from "../score-rules";
 import { ADDED_BY_LABEL, isAddedForChapter, isNlAdded } from "@/lib/recognitions/check-rules";
-import { mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
+import { marksHiddenFrom, marksPrivacyText, mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
 import { ScoreSheet } from "./sheet";
 import { FlagToggle } from "./flags";
 import { HealthCardPanel } from "./health-card-panel";
@@ -105,10 +105,7 @@ export default async function ScoringSheetPage({
         <div className="rx-notice">
           <div className="rx-row" style={{ gap: 8, flexWrap: "nowrap", alignItems: "flex-start" }}>
             <IconEyeOff size={18} />
-            <span>
-              Your marks are private. Other evaluators can&apos;t see them, and you see theirs only after you submit every
-              chapter on your sheet.
-            </span>
+            <span>{marksPrivacyText(marksHiddenFrom(state, gate.viewer.duties))}</span>
           </div>
         </div>
       )}

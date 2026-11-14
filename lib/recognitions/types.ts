@@ -24,6 +24,12 @@ export type CycleRow = {
   weight_layer3: number;
   layer2_mode: "raw" | "percentile";
   quiz_open: boolean;
+  /**
+   * recognitions_08: may NMT members other than the NMT leader see the
+   * Regional Mentors' marks? Default true (unchanged). Read it through
+   * nmtSeesRmMarks() in sight.ts, never directly.
+   */
+  nmt_sees_rm_marks: boolean;
   is_current: boolean;
   created_at: string;
 };

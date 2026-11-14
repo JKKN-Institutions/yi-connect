@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { getRxViewer } from "@/lib/recognitions/auth";
 import { getAwardState, getCurrentCycle, latestDecisionFor, type AwardState } from "@/lib/recognitions/data";
 import { isPast } from "@/lib/recognitions/phase";
+import { MARKS_HIDDEN_REASON, marksHiddenFrom } from "@/lib/recognitions/sight";
 import { Ribbon } from "@/app/recognitions/_ui/ribbon";
 import { IconArrowRight, IconLock } from "@/app/recognitions/_ui/icons";
 import { NoAccess, PageHead, PhaseSeal, formatWhen } from "@/app/recognitions/_ui/primitives";
@@ -11,7 +12,12 @@ import { STAGE2_LOCKED } from "./copy";
 export const metadata: Metadata = { title: "Stage 2" };
 
 /** What this NMT member should know about the award right now. Never a count of others' progress. */
-function waiting(state: AwardState, isLeader: boolean, isMentor = false): { text: string; locked: boolean } {
+function waiting(
+  state: AwardState,
+  isLeader: boolean,
+  isMentor = false,
+  marksHidden = false
+): { text: string; locked: boolean } {
   const { phase, cycle } = state;
   if (isMentor && phase !== "setup" && phase !== "nominations" && phase !== "stage1") {
     return { text: "Read-only: the round-1 leaderboard and every mark, for the joint call.", locked: false };
@@ -30,7 +36,9 @@ function waiting(state: AwardState, isLeader: boolean, isMentor = false): { text
               : "Enter the final ranking and the top three texts.",
             locked: false,
           }
-        : { text: "The combined matrix is open. The NMT leader is entering the final ranking.", locked: false };
+        : marksHidden
+          ? { text: MARKS_HIDDEN_REASON, locked: true }
+          : { text: "The combined matrix is open. The NMT leader is entering the final ranking.", locked: false };
     case "governance":
       return { text: "Moderation submitted. Waiting for National Leadership.", locked: false };
     case "reevaluation": {
@@ -82,7 +90,7 @@ export default async function ModerateList() {
       </PageHead>
       <div className="rx-stack">
         {rows.map(({ duty, state }) => {
-          const w = waiting(state, duty.is_nmt_leader, duty.layer === "rm");
+          const w = waiting(state, duty.is_nmt_leader, duty.layer === "rm", marksHiddenFrom(state, viewer.duties));
           return (
             <Link
               key={duty.id}

@@ -51,8 +51,10 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
   // Blind scoring beats oversight: someone who is BOTH leadership/admin and an
   // evaluator on this recognition must not see colleagues' marks until they
   // have submitted their own sheet (recognitions_05: "blind until YOU submit").
+  // The recognitions_08 NMT switch does not apply here: oversight must still
+  // review and decide on the ranking.
   const myDuties = gate.viewer.duties.filter((d) => d.award_id === award.id);
-  const evaluatorSight = myDuties.length > 0 ? scoreSight(state, myDuties) : null;
+  const evaluatorSight = myDuties.length > 0 ? scoreSight(state, myDuties, { oversight: true }) : null;
   if (evaluatorSight && !evaluatorSight.sees) {
     return (
       <NoAccess

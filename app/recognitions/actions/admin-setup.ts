@@ -163,6 +163,50 @@ export async function updateCycleSettings(input: {
   return { success: true, message: Object.keys(changed).length ? "Timeline and weights saved." : "Nothing changed." };
 }
 
+/**
+ * recognitions_08: may NMT members other than the NMT leader see the Regional
+ * Mentors' marks? Its own action, not part of updateCycleSettings, so a save of
+ * the timeline never depends on this column.
+ */
+export async function setNmtSeesRmMarks(input: { cycleId: string; on: boolean }): Promise<ActionResult> {
+  const gate = await requireRxSuperAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
+  if (typeof input.on !== "boolean") return { success: false, error: "Choose on or off." };
+
+  const svc = rxService();
+  const { data: before, error: readErr } = await svc
+    .from("recognition_cycles")
+    .select("id, nmt_sees_rm_marks")
+    .eq("id", input.cycleId)
+    .maybeSingle();
+  if (readErr) return { success: false, error: plainDbError(readErr.message, "Couldn't read the cycle. Try again.") };
+  if (!before) return { success: false, error: "That cycle no longer exists." };
+  const was = (before as { nmt_sees_rm_marks: boolean | null }).nmt_sees_rm_marks !== false;
+  if (was === input.on) return { success: true, message: "Nothing changed." };
+
+  const { error } = await svc
+    .from("recognition_cycles")
+    .update({ nmt_sees_rm_marks: input.on, updated_at: new Date().toISOString() })
+    .eq("id", input.cycleId);
+  if (error) return { success: false, error: plainDbError(error.message, "Couldn't save the switch.") };
+
+  await audit({
+    cycleId: input.cycleId,
+    actorPersonId: gate.viewer.personId,
+    action: "update",
+    entity: "cycle",
+    entityId: input.cycleId,
+    detail: { nmt_sees_rm_marks: { from: was, to: input.on } },
+  });
+  done();
+  return {
+    success: true,
+    message: input.on
+      ? "NMT members now see the Regional Mentors' marks once they submit their own sheet, as before."
+      : "The Regional Mentors' marks are now hidden from NMT members other than the NMT leader.",
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Recognitions (recognition_awards). recognitions_04: any key matching
 // SLUG_RE, a kind, and a title the super admin can change at any time.

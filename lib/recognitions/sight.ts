@@ -129,11 +129,18 @@ export function scoreSight(state: State, duties: Duty[], opts?: { oversight?: bo
   if (mine.every((d) => dutySubmittedAll(state, d.id))) return { sees: true, why: "submitted" };
 
   // Director, 16 Nov: Stage 2 may open while Mentors re-score, so blind each
-  // Mentor who still holds a reopened mark (per duty, not the whole layer):
-  // a Mentor who has resubmitted (or only lacks marks they never
-  // gave, which the NMT stands in for) sees Stage 2 as without a send-back.
+  // Mentor who still holds a reopened mark (per duty, not the whole layer).
+  // Once Stage 2 is unlocked, a Mentor who has resubmitted (or only lacks
+  // marks they never gave, now locked: score-rules stage2LocksMark) sees
+  // Stage 2 as without a send-back. Without a recorded unlock those marks
+  // can still be given, so any Mentor with an unsubmitted mark stays blind.
   const sentBackToMe =
-    mentorRescoreOpen(state) && mine.some((d) => d.layer === "rm" && dutyStillRescoring(state, d.id));
+    mentorRescoreOpen(state) &&
+    mine.some(
+      (d) =>
+        d.layer === "rm" &&
+        (state.award.stage2_unlocked_at ? dutyStillRescoring(state, d.id) : !dutySubmittedAll(state, d.id))
+    );
   if (!BEFORE_STAGE2.has(state.phase) && !sentBackToMe) return { sees: true, why: "stage2" };
 
   return {

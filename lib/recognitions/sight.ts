@@ -11,8 +11,9 @@
  *   - The NMT the same: an NMT member sees the Mentors' marks only after
  *     submitting their own sheets for that recognition.
  *   - From Stage 2 on, every evaluator of the recognition sees the round-1
- *     leaderboard (the joint call), EXCEPT a Mentor whose sheet the NMT
- *     leader has sent back and who has not resubmitted it yet.
+ *     leaderboard (the joint call), EXCEPT, after the NMT leader's send-back,
+ *     a Mentor with any unsubmitted mark on it (reopened or never given),
+ *     until they submit everything or the Stage 2 deadline passes.
  *   - A duty with nothing on its sheet has submitted nothing: fail closed,
  *     it stays blind until Stage 2.
  *   - Director, 16 Nov 2026: a Mentor's earlier mark counts for Stage 2 while
@@ -32,10 +33,11 @@
  */
 
 import type { AwardState } from "./data";
+import { isPast } from "./phase";
 import type { CycleRow, EvaluatorRow } from "./types";
 
 type State = Pick<AwardState, "award" | "phase" | "completeness" | "sendBacks"> & {
-  cycle: Pick<CycleRow, "nmt_sees_rm_marks">;
+  cycle: Pick<CycleRow, "nmt_sees_rm_marks" | "stage2_deadline">;
 };
 type Duty = Pick<EvaluatorRow, "id" | "award_id" | "layer" | "is_nmt_leader">;
 
@@ -45,15 +47,6 @@ const BEFORE_STAGE2 = new Set(["setup", "nominations", "stage1"]);
 export function dutySubmittedAll(state: Pick<AwardState, "completeness">, dutyId: string): boolean {
   const p = state.completeness.perDuty.find((d) => d.evaluatorId === dutyId);
   return !!p && p.required > 0 && p.submitted >= p.required;
-}
-
-/**
- * This duty still holds a Mentor mark a send-back reopened and it has not
- * resubmitted it (its earlier mark is standing in, or couldn't be read).
- */
-export function dutyStillRescoring(state: Pick<AwardState, "completeness">, dutyId: string): boolean {
-  const p = state.completeness.perDuty.find((d) => d.evaluatorId === dutyId);
-  return !!p && p.layer === "rm" && p.counted - p.submitted + p.earlierMissing > 0;
 }
 
 /**
@@ -128,25 +121,21 @@ export function scoreSight(state: State, duties: Duty[], opts?: { oversight?: bo
   if (!opts?.oversight && marksHiddenFrom(state, mine)) return { sees: false, reason: MARKS_HIDDEN_REASON };
   if (mine.every((d) => dutySubmittedAll(state, d.id))) return { sees: true, why: "submitted" };
 
-  // Director, 16 Nov: Stage 2 may open while Mentors re-score, so blind each
-  // Mentor who still holds a reopened mark (per duty, not the whole layer).
-  // Once Stage 2 is unlocked, a Mentor who has resubmitted (or only lacks
-  // marks they never gave, now locked: score-rules stage2LocksMark) sees
-  // Stage 2 as without a send-back. Without a recorded unlock those marks
-  // can still be given, so any Mentor with an unsubmitted mark stays blind.
+  // Director, 16 Nov 13:4x: after a send-back a Mentor can still give or
+  // resubmit any unsubmitted mark (reopened or never given) even in Stage 2,
+  // until the leader submits the ranking or the Stage 2 deadline passes. So a
+  // Mentor with any unsubmitted mark stays blind until they submit
+  // everything or the deadline passes.
   const sentBackToMe =
     mentorRescoreOpen(state) &&
-    mine.some(
-      (d) =>
-        d.layer === "rm" &&
-        (state.award.stage2_unlocked_at ? dutyStillRescoring(state, d.id) : !dutySubmittedAll(state, d.id))
-    );
+    !isPast(state.cycle.stage2_deadline) &&
+    mine.some((d) => d.layer === "rm" && !dutySubmittedAll(state, d.id));
   if (!BEFORE_STAGE2.has(state.phase) && !sentBackToMe) return { sees: true, why: "stage2" };
 
   return {
     sees: false,
     reason: sentBackToMe
-      ? "The NMT leader sent this recognition back to the Regional Mentors. You see every mark again once you resubmit your sheet."
+      ? "The NMT leader sent this recognition back to the Regional Mentors. You see every mark again once you have submitted every mark on your sheet, or once the Stage 2 deadline passes."
       : "Marks stay blind until you have submitted every chapter on your sheet for this recognition. Then you can see every evaluator's marks here, read-only.",
   };
 }

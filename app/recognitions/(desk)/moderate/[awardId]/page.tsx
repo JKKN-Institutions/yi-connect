@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requireRxEvaluatorOnAward } from "@/lib/recognitions/auth";
-import { getAwardState, getPeople, homeChapterNotes, latestDecisionFor } from "@/lib/recognitions/data";
+import { getAwardState, getPeople, homeChapterNotes, latestDecisionFor, nominationsForDuty } from "@/lib/recognitions/data";
 import { mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
 import { isPast } from "@/lib/recognitions/phase";
 import { Ribbon } from "@/app/recognitions/_ui/ribbon";
@@ -124,24 +124,63 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
   }
 
   const shownVersion = latestSubmitted ?? null;
-  // Director, 16 Nov 07:5x: Stage 2 doesn't wait for re-scoring Mentors; list
-  // the marks that are still their earlier ones so the leader can re-check.
+  // Director, 16 Nov 07:5x + 13:4x: Stage 2 doesn't wait for the Mentors after
+  // a send-back. List the marks that are still their earlier ones, and the
+  // marks not given yet that they can still give, so the leader can re-check.
   const rescoring = rescoringMarks(data.matrix);
+  const lateWindowOpen = rescore && !isPast(cycle.stage2_deadline);
+  const counted = new Set(
+    data.counted.filter((s) => s.status === "submitted").map((s) => `${s.evaluator_id}:${s.nomination_id}`)
+  );
+  const notGiven = lateWindowOpen
+    ? state.duties
+        .filter((d) => d.is_active && d.layer === "rm")
+        .flatMap((d) =>
+          nominationsForDuty(state, d)
+            .filter((n) => !counted.has(`${d.id}:${n.id}`))
+            .map((n) => ({ duty: d, n, chapterName: data.chapters.get(n.chapter_id)?.name ?? "Unknown chapter" }))
+        )
+        .sort(
+          (a, b) =>
+            CATEGORIES.indexOf(a.n.category) - CATEGORIES.indexOf(b.n.category) ||
+            a.chapterName.localeCompare(b.chapterName)
+        )
+    : [];
   const rescoringNotice =
-    rescoring.length > 0 && (phase === "stage1" || phase === "stage2") ? (
+    (rescoring.length > 0 || notGiven.length > 0) && (phase === "stage1" || phase === "stage2") ? (
       <Notice tone="alert">
-        <strong>
-          Still being re-scored: {rescoring.length} Regional Mentor mark{rescoring.length === 1 ? "" : "s"}.
-        </strong>{" "}
-        Their earlier submitted marks count for now. Totals change if a Mentor resubmits
+        {rescoring.length > 0 ? (
+          <>
+            <strong>
+              Still being re-scored: {rescoring.length} Regional Mentor mark{rescoring.length === 1 ? "" : "s"}.
+            </strong>{" "}
+            Their earlier submitted marks count for now.
+            <ul className="rx-small" style={{ margin: "6px 0 10px", paddingLeft: 18 }} data-testid="rescoring-marks">
+              {rescoring.map((m) => (
+                <li key={`${m.nominationId}:${m.evaluatorId}`}>
+                  {m.categoryLabel} · {m.chapterName} · {m.evaluatorLabel} (earlier mark {m.total}/{MAX_LAYER_TOTAL})
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+        {notGiven.length > 0 ? (
+          <>
+            <strong>
+              Not given yet: {notGiven.length} Regional Mentor mark{notGiven.length === 1 ? "" : "s"}.
+            </strong>{" "}
+            The Mentors can still give them until {formatWhen(cycle.stage2_deadline)}; until then the NMT marks stand in.
+            <ul className="rx-small" style={{ margin: "6px 0 10px", paddingLeft: 18 }} data-testid="not-given-marks">
+              {notGiven.map((m) => (
+                <li key={`${m.n.id}:${m.duty.id}`}>
+                  {CATEGORY_LABEL[m.n.category]} · {m.chapterName} · Regional Mentor, region {m.duty.region ?? "?"}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+        Totals change whenever a Mentor submits
         {isLeader ? ", so re-check the standings just before you submit the final ranking." : "."}
-        <ul className="rx-small" style={{ margin: "6px 0 0", paddingLeft: 18 }} data-testid="rescoring-marks">
-          {rescoring.map((m) => (
-            <li key={`${m.nominationId}:${m.evaluatorId}`}>
-              {m.categoryLabel} · {m.chapterName} · {m.evaluatorLabel} (earlier mark {m.total}/{MAX_LAYER_TOTAL})
-            </li>
-          ))}
-        </ul>
       </Notice>
     ) : null;
 

@@ -43,24 +43,19 @@ async function loadContext(
   // or flag may be written or changed, even on a Mentor sheet reopened by a
   // send-back. A chapter National Leadership added is scored in re-evaluation,
   // after Stage 2, so it is not a Stage 1 mark and keeps its own window.
-  // Director, 16 Nov 07:5x: a Mentor mark a send-back reopened stays
-  // writable (marks only, not flags) until the leader submits the ranking.
+  // Director, 16 Nov: after a send-back, a Mentor may still give or resubmit
+  // any unsubmitted mark (not flags) until the leader submits the ranking.
   const rescore = mentorRescoreOpen(state);
-  if (state.award.stage2_unlocked_at && !(nomination && isNlAdded(nomination))) {
-    let mark: Pick<ScoreRow, "layer" | "status" | "round"> | null = null;
-    if (opts.scoreWrite && duty.layer === "rm" && rescore && nomination) {
-      const { data, error } = await rxService()
-        .from("recognition_scores")
-        .select("layer, status, round")
-        .eq("evaluator_id", duty.id)
-        .eq("nomination_id", nomination.id)
-        .maybeSingle();
-      if (error) console.error(JSON.stringify({ tag: "recognitions_score_round_read_failed", error: error.message }));
-      mark = (data as Pick<ScoreRow, "layer" | "status" | "round"> | null) ?? null;
-    }
-    if (stage2LocksMark({ stage2UnlockedAt: state.award.stage2_unlocked_at, nomination: nomination ?? {}, duty, rescoreOpen: rescore, score: mark })) {
-      return { ok: false, error: "Scoring for this recognition has closed; Stage 2 has started." };
-    }
+  if (
+    stage2LocksMark({
+      stage2UnlockedAt: state.award.stage2_unlocked_at,
+      nomination: nomination ?? {},
+      duty,
+      rescoreOpen: rescore,
+      mark: opts.scoreWrite,
+    })
+  ) {
+    return { ok: false, error: "Scoring for this recognition has closed; Stage 2 has started." };
   }
   // Per nomination: a chapter National Leadership added is scored during
   // re-evaluation (recognitions_03); everything else in Stage 1 only.

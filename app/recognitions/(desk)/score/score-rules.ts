@@ -2,7 +2,6 @@ import type { Phase } from "@/lib/recognitions/phase";
 import { earlyTestOpen, isPast } from "@/lib/recognitions/phase";
 import type { CycleRow, NominationOrigin } from "@/lib/recognitions/types";
 import { isNlAdded } from "@/lib/recognitions/check-rules";
-import { isReopenedRmDraft } from "@/lib/recognitions/scoring";
 
 /**
  * When may an evaluator write Stage 1 marks or flags? Shared by the sheet
@@ -58,21 +57,25 @@ export function scoringDeadlineFor(
 
 /**
  * Late marks locked (Director, 5 Nov): once Stage 2 is unlocked, no Stage 1
- * mark may be written. Exception (Director, 16 Nov 07:5x): Stage 2 no longer
- * waits for Mentors re-scoring after a send-back, so a Mentor mark the
- * send-back reopened stays writable while the re-score window is open, that
- * is until the NMT leader submits the ranking. A mark never submitted stays
- * locked. A chapter National Leadership added keeps its own window.
+ * mark may be written. Exception after an NMT-leader send-back (Director,
+ * 16 Nov 07:5x and 13:4x): Stage 2 no longer waits for the Regional Mentors,
+ * so while their re-score window is open (until the leader submits the
+ * ranking, at the latest the Stage 2 deadline: dutyScoringWindow) a Mentor
+ * may still give or resubmit ANY mark they haven't submitted: a reopened one
+ * or one never given. A submitted mark stays frozen (actions/score.ts and the
+ * DB trigger). Flags stay locked. A chapter National Leadership added keeps
+ * its own window.
  */
 export function stage2LocksMark(input: {
   stage2UnlockedAt: string | null;
   nomination: { origin?: NominationOrigin | null };
   duty: { layer: "rm" | "nmt" };
   rescoreOpen: boolean;
-  score: Parameters<typeof isReopenedRmDraft>[0];
+  /** true for a mark; false for a flag (recommend / approve). */
+  mark: boolean;
 }): boolean {
   if (!input.stage2UnlockedAt || isNlAdded(input.nomination)) return false;
-  return !(input.duty.layer === "rm" && input.rescoreOpen && isReopenedRmDraft(input.score));
+  return !(input.mark && input.duty.layer === "rm" && input.rescoreOpen);
 }
 
 /** "Regional Mentor · region SRTN", "NMT" or "NMT leader". Region codes shown as-is. */

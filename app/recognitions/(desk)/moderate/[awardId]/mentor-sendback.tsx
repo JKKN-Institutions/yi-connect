@@ -42,7 +42,8 @@ export function MentorSendBackPanel({ awardId, closesAt }: { awardId: string; cl
       <p className="rx-small rx-mute">
         If the Mentors&apos; marks need another look, send this recognition back to them with a remark. Their marks
         reopen for re-scoring until you submit the final ranking (at the latest {closesAt}). Until a Mentor resubmits,
-        their earlier submitted marks still count; if they don&apos;t resubmit, the earlier marks stay. Stage 2
+        their earlier submitted marks still count; if they don&apos;t resubmit, the earlier marks stay. Until then they
+        can also give any mark they never gave (the NMT stands in meanwhile). Stage 2
         doesn&apos;t wait for them.
       </p>
       <WordField

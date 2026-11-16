@@ -187,12 +187,17 @@ export default async function ScoringSheetPage({
   const submitted = score?.status === "submitted";
   // Per chapter: one National Leadership added is scored during re-evaluation (recognitions_03).
   const added = isNlAdded(current);
-  // Late marks locked (Director, 5 Nov), except a reopened Mentor mark while
-  // re-scoring is open (Director, 16 Nov): same rule as loadContext in actions/score.ts.
-  const curWin = stage2LocksMark({ stage2UnlockedAt: award.stage2_unlocked_at, nomination: current, duty, rescoreOpen: rescore, score })
+  // Late marks locked (Director, 5 Nov), except a Mentor's unsubmitted marks
+  // while their re-score window is open after a send-back (Director, 16 Nov):
+  // same rule as loadContext in actions/score.ts. Flags stay locked.
+  const lockArgs = { stage2UnlockedAt: award.stage2_unlocked_at, nomination: current, duty, rescoreOpen: rescore };
+  const curWin = stage2LocksMark({ ...lockArgs, mark: true })
     ? ({ state: "over" } as const)
     : dutyScoringWindow(state.phase, cycle, current, duty, rescore);
   const open = curWin.state === "open";
+  const flagsOpen = open && !stage2LocksMark({ ...lockArgs, mark: false });
+  // Stage 2 has started but this Mentor's sheet is still open (Director, 16 Nov 13:4x).
+  const lateOpen = !!award.stage2_unlocked_at && !added && duty.layer === "rm" && open;
   // Any chapter someone else put forward (National Leadership, a Mentor or the NMT): a reason, not a form.
   const addedFor = isAddedForChapter(current);
   const addedBy = current.origin !== "chapter" && current.origin ? ADDED_BY_LABEL[current.origin] : null;
@@ -286,6 +291,12 @@ export default async function ScoringSheetPage({
           </div>
         </nav>
 
+        {lateOpen && !submitted ? (
+          <Notice tone="alert">
+            Stage 2 has started. You can still give these marks until {formatWhen(cycle.stage2_deadline)}; they count
+            once you submit. If the NMT leader submits the final ranking sooner, your sheet closes then.
+          </Notice>
+        ) : null}
         {added && open && !submitted ? (
           <Notice>
             National Leadership added this chapter during re-evaluation, and both checkers passed it. Score it by{" "}
@@ -400,7 +411,7 @@ export default async function ScoringSheetPage({
                 evaluatorId={duty.id}
                 nominationId={current.id}
                 on={!!current.rm_recommended_by}
-                disabled={!open || (!!current.rm_recommended_by && current.rm_recommended_by !== personId)}
+                disabled={!flagsOpen || (!!current.rm_recommended_by && current.rm_recommended_by !== personId)}
                 note={
                   current.rm_recommended_by
                     ? current.rm_recommended_by === personId
@@ -416,7 +427,7 @@ export default async function ScoringSheetPage({
                 evaluatorId={duty.id}
                 nominationId={current.id}
                 on={!!current.nmt_approved_by}
-                disabled={!open || (!!current.nmt_approved_by && current.nmt_approved_by !== personId)}
+                disabled={!flagsOpen || (!!current.nmt_approved_by && current.nmt_approved_by !== personId)}
                 note={
                   current.nmt_approved_by
                     ? current.nmt_approved_by === personId

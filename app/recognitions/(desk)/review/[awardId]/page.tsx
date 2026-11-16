@@ -92,6 +92,8 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
   );
   const nameOf = (id: string | null) => (id ? actors.get(id)?.full_name ?? "Unknown person" : null);
   const evaluatorLayer = new Map(state.duties.map((d) => [d.id, d.layer]));
+  // Director, 16 Nov: a reopened Mentor draft counts with its earlier submitted mark until resubmitted.
+  const earlierById = new Map(data.counted.filter((c) => c.earlier).map((c) => [c.id, c.earlier!]));
 
   const finalVersion = state.latestSubmittedVersion;
   const finalView = finalVersion
@@ -245,12 +247,16 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
                       .filter((s) => s.nomination_id === n.id)
                       .sort((a, b) => (a.layer === b.layer ? 0 : a.layer === "rm" ? -1 : 1));
                     const submittedCount = scores.filter((s) => s.status === "submitted").length;
+                    const earlierCount = scores.filter((s) => earlierById.has(s.id)).length;
                     return (
                       <details key={n.id} className="rx-p-fold">
                         <summary>
                           <span className="rx-h3">{chapterName(data.chapters, n.chapter_id)}</span>
                           <span className="rx-small rx-mute">
                             {n.region} · {submittedCount} submitted score{submittedCount === 1 ? "" : "s"}
+                            {earlierCount > 0
+                              ? ` · ${earlierCount} earlier Mentor mark${earlierCount === 1 ? "" : "s"} counting while being re-scored`
+                              : ""}
                           </span>
                         </summary>
                         <div className="rx-p-fold-body">
@@ -285,6 +291,12 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
                                         <Seal tone={s.status === "submitted" ? "laurel" : "gilt"}>
                                           {s.status === "submitted" ? "Submitted" : "Draft"}
                                         </Seal>
+                                        {earlierById.has(s.id) ? (
+                                          <div className="rx-small rx-p-flag">
+                                            Being re-scored: their round {earlierById.get(s.id)!.round} mark (below) counts
+                                            until they resubmit
+                                          </div>
+                                        ) : null}
                                       </td>
                                     </tr>
                                   ))}

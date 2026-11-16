@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   chapterMap,
+  countScores,
   getPartAMeasures,
   getPeople,
   listEvaluators,
@@ -10,6 +11,7 @@ import {
   type AwardState,
 } from "@/lib/recognitions/data";
 import type { ChapterRow, ScoreRow } from "@/lib/recognitions/types";
+import type { CountedScoreRow } from "@/lib/recognitions/scoring";
 import {
   buildHistoryView,
   buildMatrixView,
@@ -29,7 +31,10 @@ export async function loadStage2(
   opts: { withNames: boolean }
 ): Promise<{
   chapters: Map<string, ChapterRow>;
+  /** Every score as stored (a reopened Mentor sheet is a draft). For the sheet-status ledger only. */
   scores: ScoreRow[];
+  /** The marks that count (Director, 16 Nov): an earlier submitted Mentor mark stands in for a reopened draft. */
+  counted: CountedScoreRow[];
   /** The award's Part A questions (Health Card measures). */
   partAMeasures: Array<{ key: string; weight: number }>;
   matrix: MatrixView;
@@ -45,6 +50,7 @@ export async function loadStage2(
     listPredictionsForAward(awardId),
     opts.withNames ? listEvaluators(awardId, true) : Promise.resolve([]),
   ]);
+  const counted = await countScores(awardId, scores);
 
   const versionPeople = state.versions.flatMap((v) => {
     const extra = v as typeof v & { created_by?: string | null };
@@ -66,11 +72,12 @@ export async function loadStage2(
   return {
     chapters,
     scores,
+    counted,
     partAMeasures,
     matrix: buildMatrixView({
       cycle: state.cycle,
       nominations: state.nominations,
-      scores,
+      scores: counted,
       partAMeasures,
       chapters,
       names: opts.withNames ? evaluatorNames : undefined,

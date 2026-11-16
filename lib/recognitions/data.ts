@@ -17,7 +17,13 @@ import type {
   ScoreRow,
 } from "./types";
 import { HOME_CHAPTER_BLOCKS_SCORING, type Category } from "./constants";
-import { computeCompleteness, dutySeesNomination, type Completeness } from "./scoring";
+import {
+  computeCompleteness,
+  dutySeesNomination,
+  withEarlierMarks,
+  type Completeness,
+  type CountedScoreRow,
+} from "./scoring";
 import { computePhase, isPast, latestDecisionFor, type Phase } from "./phase";
 import { inRace, isAddedForChapter } from "./check-rules";
 import { layer1ForAward, partAMeasuresForAward } from "./health-card";
@@ -255,6 +261,34 @@ export async function listScoresForAward(awardId: string): Promise<ScoreRow[]> {
   return (data ?? []) as ScoreRow[];
 }
 
+/**
+ * The marks that COUNT on an award (Director, 16 Nov 2026): every score,
+ * with a Mentor's earlier submitted mark standing in for a draft a send-back
+ * reopened (scoring.ts withEarlierMarks). Same audience as
+ * listScoresForAward. Use it for every computed or shown mark (matrix,
+ * standings, reports); NOT for completeness, which reads raw scores.
+ * Fail closed: if the history can't be read, it logs and returns the raw
+ * scores, so a reopened draft is blank as before the rule.
+ */
+export async function listCountedScoresForAward(awardId: string): Promise<CountedScoreRow[]> {
+  return countScores(awardId, await listScoresForAward(awardId));
+}
+
+/** listCountedScoresForAward for scores already read with listScoresForAward. */
+export async function countScores(awardId: string, scores: ScoreRow[]): Promise<CountedScoreRow[]> {
+  let history: ScoreHistoryRow[] = [];
+  if (scores.some((s) => s.layer === "rm" && s.status === "draft" && (s.round ?? 1) > 1)) {
+    try {
+      history = await listScoreHistory(awardId);
+    } catch (e) {
+      console.error(
+        JSON.stringify({ tag: "recognitions_score_history_read_failed", awardId, error: e instanceof Error ? e.message : String(e) })
+      );
+    }
+  }
+  return withEarlierMarks(scores, history);
+}
+
 /** BLIND read: one evaluator duty's own scores, filtered in the query. */
 export async function listScoresForDuty(evaluatorId: string): Promise<ScoreRow[]> {
   const { data, error } = await rxService()
@@ -486,16 +520,17 @@ async function rereadAward(awardId: string): Promise<AwardRow | null> {
 /**
  * Director, 5 Nov: once the Stage 1 scoring deadline has passed, a
  * recognition whose NMT marks are all in opens Stage 2 by itself even when
- * Regional Mentor marks are missing (the NMT stands in at 50%). Not while
- * the Mentors are re-scoring after an NMT leader's send-back: that waits for
- * them, or for the super admin's force-open.
+ * Regional Mentor marks are missing (the NMT stands in at 50%).
+ * Director, 16 Nov 07:5x: a send-back no longer holds this up. A reopened
+ * Mentor draft counts as in through its earlier submitted mark (`counted`);
+ * only a reopened draft whose earlier mark can't be read holds it (fail
+ * closed). The Mentors keep re-scoring until the leader submits the ranking.
  */
 function stage2DueWithRmMissing(input: {
   phase: Phase;
   award: AwardRow;
   cycle: CycleRow;
   completeness: Completeness;
-  sendBacks: MentorSendBackRow[];
   now?: Date;
 }): boolean {
   const { rm } = input.completeness;
@@ -504,8 +539,8 @@ function stage2DueWithRmMissing(input: {
     !input.award.stage2_unlocked_at &&
     isPast(input.cycle.stage1_deadline, input.now) &&
     input.completeness.nmtComplete &&
-    !(rm.required > 0 && rm.submitted >= rm.required) &&
-    input.sendBacks.length === 0
+    !(rm.required > 0 && rm.counted >= rm.required) &&
+    rm.earlierMissing === 0
   );
 }
 
@@ -553,7 +588,8 @@ export async function getAwardState(awardId: string): Promise<AwardState | null>
     listMentorSendBacks(awardId),
   ]);
   const [conflictsByDuty, homeByDuty] = await Promise.all([conflictsForDuties(duties), homeChaptersForDuties(duties)]);
-  const completeness = computeCompleteness({ cycle, nominations, duties, conflictsByDuty, scores });
+  // Director, 16 Nov 07:5x: a reopened Mentor draft counts as in through its earlier submitted mark.
+  const completeness = computeCompleteness({ cycle, nominations, duties, conflictsByDuty, scores: await countScores(awardId, scores) });
   const latestVersion = versions[0] ?? null;
   const latestSubmittedVersion = versions.find((v) => v.status === "submitted") ?? null;
   let phase = computePhase({
@@ -567,14 +603,14 @@ export async function getAwardState(awardId: string): Promise<AwardState | null>
   // Every desk page and every action reads the award through here, so the
   // first read after the Stage 1 deadline opens Stage 2 when it is due —
   // before anyone can moderate, score late, or see a stale phase.
-  if (stage2DueWithRmMissing({ phase, award, cycle, completeness, sendBacks })) {
+  if (stage2DueWithRmMissing({ phase, award, cycle, completeness })) {
     const openedAt = await openStage2Automatically({
       cycleId: cycle.id,
       awardId: award.id,
       reason: STAGE2_REASON_RM_MISSING,
       action: STAGE2_AUTO_OPEN_RM_MISSING_ACTION,
       actorPersonId: null,
-      detail: { rm_submitted: completeness.rm.submitted, rm_required: completeness.rm.required, nmt_submitted: completeness.nmt.submitted, nmt_required: completeness.nmt.required },
+      detail: { rm_submitted: completeness.rm.submitted, rm_earlier_counted: completeness.rm.counted - completeness.rm.submitted, rm_required: completeness.rm.required, nmt_submitted: completeness.nmt.submitted, nmt_required: completeness.nmt.required },
     });
     // A racing reader may have opened it first: re-read so this state shows the real row.
     const fresh = openedAt ? { ...award, stage2_unlocked_at: openedAt, stage2_unlock_reason: STAGE2_REASON_RM_MISSING, stage2_unlocked_by: null } : await rereadAward(award.id);

@@ -9,8 +9,8 @@ import {
   homeChapterNotes,
   listAwards,
   listCitationEdits,
+  listCountedScoresForAward,
   listEvaluators,
-  listScoresForAward,
   effectiveText,
 } from "@/lib/recognitions/data";
 import { CATEGORIES, CATEGORY_LABEL, LAYER_LABEL, MAX_LAYER_TOTAL, RANK_LABEL, verticalLabel, type Category } from "@/lib/recognitions/constants";
@@ -153,7 +153,8 @@ export async function verticalReport(): Promise<{ cycle: CycleRow; sheets: Verti
     const state = await getAwardState(award.id);
     if (!state) continue;
     const [scores, partAMeasures, evaluators] = await Promise.all([
-      listScoresForAward(award.id),
+      // Director, 16 Nov: a reopened Mentor draft counts with its earlier submitted mark.
+      listCountedScoresForAward(award.id),
       getPartAMeasures(award.id),
       listEvaluators(award.id, true),
     ]);
@@ -206,6 +207,7 @@ export async function verticalReport(): Promise<{ cycle: CycleRow; sheets: Verti
         "Layer 3 counted (%)",
         "Combined total (/100)",
         "Missing layers",
+        "Earlier RM marks counted (being re-scored)",
         "Final score",
         "Final rank",
       ],
@@ -228,6 +230,13 @@ export async function verticalReport(): Promise<{ cycle: CycleRow; sheets: Verti
         pct(row.l3Fraction),
         row.total,
         row.missing.map((m) => MISSING_COL[m]).join(", "),
+        submitted
+          .filter((s) => s.earlier && s.nomination_id === row.nomination_id)
+          .map((s) => {
+            const c = cols.find((x) => x.id === s.evaluator_id);
+            return c ? name(c.person_id) : "A Regional Mentor";
+          })
+          .join(", "),
         fin?.final_score ?? null,
         fin?.final_rank ?? null,
       ]);

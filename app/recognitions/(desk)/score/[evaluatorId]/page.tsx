@@ -11,7 +11,7 @@ import { CATEGORIES, CATEGORY_LABEL, CHECK_STEP_ENABLED, PARAM_KEYS, PART_A_PREF
 import { Ribbon } from "../../../_ui/ribbon";
 import { IconArrowLeft, IconArrowRight, IconDownload, IconEyeOff, IconLock } from "../../../_ui/icons";
 import { Deadline, NoAccess, Notice, PageHead, Seal, formatWhen } from "../../../_ui/primitives";
-import { dutyLayerLabel, dutyScoringWindow, scoringDeadlineFor, scoringWindow } from "../score-rules";
+import { dutyLayerLabel, dutyScoringWindow, scoringDeadlineFor, scoringWindow, stage2LocksMark } from "../score-rules";
 import { ADDED_BY_LABEL, isAddedForChapter, isNlAdded } from "@/lib/recognitions/check-rules";
 import { marksHiddenFrom, marksPrivacyText, mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
 import { ScoreSheet } from "./sheet";
@@ -116,8 +116,8 @@ export default async function ScoringSheetPage({
           <br />
           <span className="rx-small">
             Your earlier marks are loaded below as a draft. Until you resubmit, your earlier submitted marks still
-            count; when you resubmit, your new marks replace them. Review and resubmit by{" "}
-            {formatWhen(cycle.stage2_deadline)}. If you don&apos;t, your earlier marks stay.
+            count; when you resubmit, your new marks replace them. Resubmit before the NMT leader submits the final
+            ranking, at the latest {formatWhen(cycle.stage2_deadline)}. If you don&apos;t, your earlier marks stay.
           </span>
         </Notice>
       ) : null}
@@ -187,11 +187,11 @@ export default async function ScoringSheetPage({
   const submitted = score?.status === "submitted";
   // Per chapter: one National Leadership added is scored during re-evaluation (recognitions_03).
   const added = isNlAdded(current);
-  // Late marks locked (Director, 5 Nov): same rule as loadContext in actions/score.ts.
-  const curWin =
-    award.stage2_unlocked_at && !added
-      ? ({ state: "over" } as const)
-      : dutyScoringWindow(state.phase, cycle, current, duty, rescore);
+  // Late marks locked (Director, 5 Nov), except a reopened Mentor mark while
+  // re-scoring is open (Director, 16 Nov): same rule as loadContext in actions/score.ts.
+  const curWin = stage2LocksMark({ stage2UnlockedAt: award.stage2_unlocked_at, nomination: current, duty, rescoreOpen: rescore, score })
+    ? ({ state: "over" } as const)
+    : dutyScoringWindow(state.phase, cycle, current, duty, rescore);
   const open = curWin.state === "open";
   // Any chapter someone else put forward (National Leadership, a Mentor or the NMT): a reason, not a form.
   const addedFor = isAddedForChapter(current);

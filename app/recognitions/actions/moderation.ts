@@ -7,11 +7,11 @@ import {
   chapterMap,
   getAwardState,
   latestDecisionFor,
-  listScoresForAward,
+  listCountedScoresForAward,
   type AwardState,
 } from "@/lib/recognitions/data";
 import { nlAddedBlockers } from "@/lib/recognitions/scoring";
-import { mentorRescoreOpen } from "@/lib/recognitions/sight";
+import { mentorRescoreBlocks } from "@/lib/recognitions/sight";
 import { isPast } from "@/lib/recognitions/phase";
 import { rxService } from "@/lib/recognitions/supabase";
 import type { ActionResult } from "@/lib/recognitions/types";
@@ -83,12 +83,13 @@ async function persist(awardId: string, input: ModerationInput, submit: boolean)
     return { success: false, error: "Press \"Reopen moderation\" first. It starts a new version for the re-evaluation." };
   }
 
-  // recognitions_05: while the Regional Mentors re-score after a send-back,
-  // the ranking may be drafted but not submitted.
-  if (submit && mentorRescoreOpen(state)) {
+  // Director, 16 Nov 07:5x: Mentors re-scoring after a send-back no longer
+  // hold the ranking back (their earlier marks count). Only a reopened mark
+  // whose earlier version can't be read does: fail closed.
+  if (submit && mentorRescoreBlocks(state)) {
     return {
       success: false,
-      error: "Not yet: the Regional Mentors are re-scoring after your send-back. Save a draft meanwhile; submit once every Mentor has resubmitted.",
+      error: "Not yet: some Regional Mentor marks reopened by your send-back couldn't be loaded. Save a draft, reload the page and try again; if it keeps happening, tell the Recognitions super admin.",
     };
   }
 
@@ -102,7 +103,8 @@ async function persist(awardId: string, input: ModerationInput, submit: boolean)
       nominations: state.nominations,
       duties: state.duties,
       conflictsByDuty: state.conflictsByDuty,
-      scores: await listScoresForAward(awardId),
+      // The marks that count: a re-scoring Mentor's earlier mark is in.
+      scores: await listCountedScoresForAward(awardId),
       nameOf: (n) => chapters.get(n.chapter_id)?.name ?? "A chapter",
     });
     if (blockers.length > 0) {

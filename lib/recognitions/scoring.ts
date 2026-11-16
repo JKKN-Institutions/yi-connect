@@ -26,7 +26,9 @@
  * Send-back (Director, 16 Nov 2026): when the NMT leader sends a recognition
  *   back, a Mentor's EARLIER SUBMITTED mark keeps counting until that Mentor
  *   resubmits, and stays counted if they never do (withEarlierMarks). A mark
- *   that was never submitted is still missing.
+ *   that was never submitted is still missing. For opening Stage 2 and for
+ *   submitting the final ranking such an earlier mark counts as in
+ *   (Director, 16 Nov 07:5x; computeCompleteness `counted`).
  */
 
 import { CHECK_STEP_ENABLED, MAX_LAYER_TOTAL, MAX_PARAM, PARAM_KEYS, PART_A_MAX, PART_A_PREFIX } from "./constants";
@@ -111,7 +113,7 @@ export type CountedScoreRow = ScoreRow & {
 export function withEarlierMarks(scores: ScoreRow[], history: ScoreHistoryRow[]): CountedScoreRow[] {
   return scores.map((s) => {
     const round = s.round ?? 1;
-    if (s.layer !== "rm" || s.status !== "draft" || round <= 1) return { ...s, earlier: null };
+    if (!isReopenedRmDraft(s)) return { ...s, earlier: null };
     let best: ScoreHistoryRow | null = null;
     for (const h of history) {
       if (
@@ -137,6 +139,11 @@ export function withEarlierMarks(scores: ScoreRow[], history: ScoreHistoryRow[])
       earlier: { round: best.round, submittedAt: best.submitted_at },
     };
   });
+}
+
+/** A Regional Mentor mark a send-back reopened that is not resubmitted yet (round > 1, still a draft). */
+export function isReopenedRmDraft(s: Pick<ScoreRow, "layer" | "status" | "round"> | null | undefined): boolean {
+  return !!s && s.layer === "rm" && s.status === "draft" && (s.round ?? 1) > 1;
 }
 
 export type MatrixRow = {
@@ -284,15 +291,23 @@ export type DutyProgress = {
   evaluatorId: string;
   layer: Layer;
   required: number;
+  /** Marks this duty has really submitted. Drives "blind until you submit" (sight.ts) and the re-score window. */
   submitted: number;
+  /** `submitted` plus earlier marks standing in for reopened drafts. Drives Stage 2 (Director, 16 Nov 07:5x). */
+  counted: number;
+  /** Reopened drafts whose earlier mark could not be found (history unreadable): never counted, block submit. */
+  earlierMissing: number;
 };
+
+type LayerProgress = { required: number; submitted: number; counted: number; earlierMissing: number };
 
 export type Completeness = {
   perDuty: DutyProgress[];
-  rm: { required: number; submitted: number };
-  nmt: { required: number; submitted: number };
+  rm: LayerProgress;
+  nmt: LayerProgress;
   /** Plain-English reasons Stage 2 cannot open yet beyond missing scores. */
   blockers: string[];
+  /** No blocker and every mark counted in (an earlier mark standing in for a reopened draft counts). */
   complete: boolean;
   /**
    * The NMT layer alone is complete: every NMT sheet submitted, at least one
@@ -323,7 +338,8 @@ export function computeCompleteness(input: {
   nominations: NominationRow[];
   duties: EvaluatorRow[];
   conflictsByDuty: Map<string, Set<string>>;
-  scores: ScoreRow[];
+  /** The counted scores (data.ts countScores): an earlier mark stands in as submitted, flagged `earlier`. */
+  scores: CountedScoreRow[];
   now?: Date;
 }): Completeness {
   const nominations = input.nominations.filter(inRace);
@@ -332,18 +348,22 @@ export function computeCompleteness(input: {
   const awaitingApproval = moving.filter(awaitingNmtApproval);
   const inCheck = moving.filter((n) => !awaitingNmtApproval(n));
   const duties = input.duties.filter((d) => d.is_active);
-  const submittedKey = new Set(
-    input.scores.filter((s) => s.status === "submitted").map((s) => `${s.evaluator_id}:${s.nomination_id}`)
-  );
+  const key = (s: Pick<ScoreRow, "evaluator_id" | "nomination_id">) => `${s.evaluator_id}:${s.nomination_id}`;
+  const countedKey = new Set(input.scores.filter((s) => s.status === "submitted").map(key));
+  const submittedKey = new Set(input.scores.filter((s) => s.status === "submitted" && !s.earlier).map(key));
+  const earlierMissingKey = new Set(input.scores.filter((s) => isReopenedRmDraft(s)).map(key));
 
   const perDuty: DutyProgress[] = duties.map((d) => {
     const conflicts = input.conflictsByDuty.get(d.id) ?? new Set<string>();
     const visible = nominations.filter((n) => dutySeesNomination(d, n, conflicts));
+    const has = (set: Set<string>) => visible.filter((n) => set.has(`${d.id}:${n.id}`)).length;
     return {
       evaluatorId: d.id,
       layer: d.layer,
       required: visible.length,
-      submitted: visible.filter((n) => submittedKey.has(`${d.id}:${n.id}`)).length,
+      submitted: has(submittedKey),
+      counted: has(countedKey),
+      earlierMissing: has(earlierMissingKey),
     };
   });
 
@@ -390,8 +410,13 @@ export function computeCompleteness(input: {
     perDuty
       .filter((p) => p.layer === layer)
       .reduce(
-        (acc, p) => ({ required: acc.required + p.required, submitted: acc.submitted + p.submitted }),
-        { required: 0, submitted: 0 }
+        (acc, p) => ({
+          required: acc.required + p.required,
+          submitted: acc.submitted + p.submitted,
+          counted: acc.counted + p.counted,
+          earlierMissing: acc.earlierMissing + p.earlierMissing,
+        }),
+        { required: 0, submitted: 0, counted: 0, earlierMissing: 0 }
       );
   const rm = sum("rm");
   const nmt = sum("nmt");
@@ -403,11 +428,11 @@ export function computeCompleteness(input: {
     blockers,
     complete:
       blockers.length === 0 &&
-      perDuty.every((p) => p.submitted >= p.required),
+      perDuty.every((p) => p.counted >= p.required),
     nmtComplete:
       blockers.length - rmOrphanBlockers === 0 &&
       nmt.required > 0 &&
-      perDuty.filter((p) => p.layer === "nmt").every((p) => p.submitted >= p.required),
+      perDuty.filter((p) => p.layer === "nmt").every((p) => p.counted >= p.required),
   };
 }
 

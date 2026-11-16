@@ -15,6 +15,10 @@
  *     leader has sent back and who has not resubmitted it yet.
  *   - A duty with nothing on its sheet has submitted nothing: fail closed,
  *     it stays blind until Stage 2.
+ *   - Director, 16 Nov 2026: a Mentor's earlier mark counts for Stage 2 while
+ *     they re-score, but NOT for sight. "Submitted" here means really
+ *     submitted (completeness `submitted`, never `counted`), so a Mentor
+ *     still re-scoring stays blind to everyone else's marks.
  *
  * recognitions_08 (Director, 14 Nov 2026): the super admin's switch
  * recognition_cycles.nmt_sees_rm_marks. ON (default) = everything above,
@@ -44,9 +48,20 @@ export function dutySubmittedAll(state: Pick<AwardState, "completeness">, dutyId
 }
 
 /**
+ * This duty still holds a Mentor mark a send-back reopened and it has not
+ * resubmitted it (its earlier mark is standing in, or couldn't be read).
+ */
+export function dutyStillRescoring(state: Pick<AwardState, "completeness">, dutyId: string): boolean {
+  const p = state.completeness.perDuty.find((d) => d.evaluatorId === dutyId);
+  return !!p && p.layer === "rm" && p.counted - p.submitted + p.earlierMissing > 0;
+}
+
+/**
  * The NMT leader sent this recognition back to its Regional Mentors and at
  * least one Mentor mark is still not resubmitted. Only while scoring or
- * moderation is under way (a submitted moderation ends it).
+ * moderation is under way (a submitted moderation ends it). This is the
+ * Mentors' re-score window; it no longer holds Stage 2 or the ranking back
+ * (see mentorRescoreBlocks).
  */
 export function mentorRescoreOpen(state: State): boolean {
   return (
@@ -54,6 +69,17 @@ export function mentorRescoreOpen(state: State): boolean {
     (state.phase === "stage1" || state.phase === "stage2") &&
     state.completeness.rm.submitted < state.completeness.rm.required
   );
+}
+
+/**
+ * Director, 16 Nov 07:5x: after a send-back, the leader does not wait for the
+ * Mentors. A reopened draft counts as in through its earlier submitted mark,
+ * so only a reopened draft whose earlier mark could not be read holds the
+ * ranking back (fail closed). Never-submitted marks never block here: the
+ * NMT stands in, as without a send-back.
+ */
+export function mentorRescoreBlocks(state: Pick<AwardState, "completeness" | "sendBacks">): boolean {
+  return state.sendBacks.length > 0 && state.completeness.rm.earlierMissing > 0;
 }
 
 export type Sight = { sees: true; why: "submitted" | "stage2" } | { sees: false; reason: string };
@@ -102,8 +128,12 @@ export function scoreSight(state: State, duties: Duty[], opts?: { oversight?: bo
   if (!opts?.oversight && marksHiddenFrom(state, mine)) return { sees: false, reason: MARKS_HIDDEN_REASON };
   if (mine.every((d) => dutySubmittedAll(state, d.id))) return { sees: true, why: "submitted" };
 
+  // Director, 16 Nov: Stage 2 may open while Mentors re-score, so blind each
+  // Mentor who still holds a reopened mark (per duty, not the whole layer):
+  // a Mentor who has resubmitted (or only lacks marks they never
+  // gave, which the NMT stands in for) sees Stage 2 as without a send-back.
   const sentBackToMe =
-    mentorRescoreOpen(state) && mine.some((d) => d.layer === "rm" && !dutySubmittedAll(state, d.id));
+    mentorRescoreOpen(state) && mine.some((d) => d.layer === "rm" && dutyStillRescoring(state, d.id));
   if (!BEFORE_STAGE2.has(state.phase) && !sentBackToMe) return { sees: true, why: "stage2" };
 
   return {

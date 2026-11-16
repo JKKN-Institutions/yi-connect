@@ -15,7 +15,7 @@ import { buildRankingView, prefillFromMatrix, type MatrixView, type Provisional 
 import { CategoryPanel, CategoryTabs } from "@/app/recognitions/_parts/category-tabs";
 import { StandingsTable, type StandingRow } from "@/app/recognitions/_parts/standings-table";
 import { HomeNote, type HomeNotes } from "@/app/recognitions/_parts/home-note";
-import { CATEGORIES, CATEGORY_LABEL } from "@/lib/recognitions/constants";
+import { CATEGORIES, CATEGORY_LABEL, MAX_LAYER_TOTAL } from "@/lib/recognitions/constants";
 import type { ChapterRow, ModerationVersionRow, NominationRow } from "@/lib/recognitions/types";
 import { STAGE2_LOCKED } from "../copy";
 import { ModerationForm, type FormCategory, type FormInitial } from "./moderation-form";
@@ -124,6 +124,26 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
   }
 
   const shownVersion = latestSubmitted ?? null;
+  // Director, 16 Nov 07:5x: Stage 2 doesn't wait for re-scoring Mentors; list
+  // the marks that are still their earlier ones so the leader can re-check.
+  const rescoring = rescoringMarks(data.matrix);
+  const rescoringNotice =
+    rescoring.length > 0 && (phase === "stage1" || phase === "stage2") ? (
+      <Notice tone="alert">
+        <strong>
+          Still being re-scored: {rescoring.length} Regional Mentor mark{rescoring.length === 1 ? "" : "s"}.
+        </strong>{" "}
+        Their earlier submitted marks count for now. Totals change if a Mentor resubmits
+        {isLeader ? ", so re-check the standings just before you submit the final ranking." : "."}
+        <ul className="rx-small" style={{ margin: "6px 0 0", paddingLeft: 18 }} data-testid="rescoring-marks">
+          {rescoring.map((m) => (
+            <li key={`${m.nominationId}:${m.evaluatorId}`}>
+              {m.categoryLabel} · {m.chapterName} · {m.evaluatorLabel} (earlier mark {m.total}/{MAX_LAYER_TOTAL})
+            </li>
+          ))}
+        </ul>
+      </Notice>
+    ) : null;
 
   return (
     <div className="rx-stack-lg">
@@ -136,10 +156,11 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
           </Notice>
         ) : null}
         {sendBackNotice}
+        {rescoringNotice}
         {beforeStage2 ? (
           <Notice>
             {state.sendBacks.length > 0
-              ? "Stage 2 isn't open yet. The leaderboard below counts the marks submitted so far. A Regional Mentor who was sent back and hasn't resubmitted counts with their earlier submitted mark, marked “earlier mark, being re-scored”."
+              ? "Stage 2 isn't open yet: the leaderboard below shows the marks counted so far."
               : "Round 1 is still being scored: the leaderboard below shows only the marks submitted so far."}
           </Notice>
         ) : null}
@@ -173,7 +194,10 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
         {!isLeader ? (
           <Notice>Only the NMT leader enters the final ranking.</Notice>
         ) : beforeStage2 ? (
-          <Notice>The final ranking opens in Stage 2, once every Regional Mentor and NMT mark is in.</Notice>
+          <Notice>
+            The final ranking opens in Stage 2: once every Regional Mentor and NMT mark is in, or once Stage 1 closes
+            with every NMT mark in. A Mentor re-scoring after a send-back counts with their earlier marks.
+          </Notice>
         ) : canEdit ? (
           <>
             <p className="rx-small rx-mute">
@@ -251,6 +275,29 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
 
       <VersionHistory history={data.history} />
     </div>
+  );
+}
+
+/** Every matrix cell that is a re-scoring Mentor's earlier mark (Director, 16 Nov), in table order. */
+function rescoringMarks(matrix: MatrixView): Array<{
+  nominationId: string;
+  evaluatorId: string;
+  categoryLabel: string;
+  chapterName: string;
+  evaluatorLabel: string;
+  total: number;
+}> {
+  return matrix.categories.flatMap((c) =>
+    c.rows.flatMap((r) =>
+      r.earlierEvaluators.map((evaluatorId) => ({
+        nominationId: r.nominationId,
+        evaluatorId,
+        categoryLabel: c.label,
+        chapterName: r.chapterName,
+        evaluatorLabel: c.rmColumns.find((x) => x.evaluatorId === evaluatorId)?.label ?? "A Regional Mentor",
+        total: r.perEvaluator[evaluatorId] ?? 0,
+      }))
+    )
   );
 }
 

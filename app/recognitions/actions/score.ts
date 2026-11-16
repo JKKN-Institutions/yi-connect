@@ -11,7 +11,7 @@ import { countWords } from "@/lib/recognitions/words";
 import { MAX_PARAM, PARAM_KEYS, PART_A_MAX, WORDS } from "@/lib/recognitions/constants";
 import type { ActionResult, NominationRow, ScoreParams, ScoreRow } from "@/lib/recognitions/types";
 import { formatWhen } from "@/app/recognitions/_ui/primitives";
-import { dutyScoringWindow, scoringDeadlineFor } from "@/app/recognitions/(desk)/score/score-rules";
+import { dutyScoringWindow, scoringDeadlineFor, stage2LocksMark } from "@/app/recognitions/(desk)/score/score-rules";
 import { mentorRescoreOpen } from "@/lib/recognitions/sight";
 import type { FlagInput, SaveScoreInput } from "@/app/recognitions/(desk)/score/score-types";
 
@@ -26,9 +26,11 @@ type Ctx = { duty: RxDuty; personId: string; state: AwardState; nomination: Nomi
  * scoring window is open, and the nomination is one this duty may see
  * (re-checked here — the client's id is never trusted).
  */
-async function loadContext(evaluatorId: string, nominationId: string): Promise<
-  { ok: true; ctx: Ctx } | { ok: false; error: string }
-> {
+async function loadContext(
+  evaluatorId: string,
+  nominationId: string,
+  opts: { scoreWrite: boolean }
+): Promise<{ ok: true; ctx: Ctx } | { ok: false; error: string }> {
   const gate = await requireRxDuty(evaluatorId);
   if (!gate.ok) return { ok: false, error: gate.error };
   const duty = gate.value;
@@ -41,13 +43,28 @@ async function loadContext(evaluatorId: string, nominationId: string): Promise<
   // or flag may be written or changed, even on a Mentor sheet reopened by a
   // send-back. A chapter National Leadership added is scored in re-evaluation,
   // after Stage 2, so it is not a Stage 1 mark and keeps its own window.
+  // Director, 16 Nov 07:5x: a Mentor mark a send-back reopened stays
+  // writable (marks only, not flags) until the leader submits the ranking.
+  const rescore = mentorRescoreOpen(state);
   if (state.award.stage2_unlocked_at && !(nomination && isNlAdded(nomination))) {
-    return { ok: false, error: "Scoring for this recognition has closed; Stage 2 has started." };
+    let mark: Pick<ScoreRow, "layer" | "status" | "round"> | null = null;
+    if (opts.scoreWrite && duty.layer === "rm" && rescore && nomination) {
+      const { data, error } = await rxService()
+        .from("recognition_scores")
+        .select("layer, status, round")
+        .eq("evaluator_id", duty.id)
+        .eq("nomination_id", nomination.id)
+        .maybeSingle();
+      if (error) console.error(JSON.stringify({ tag: "recognitions_score_round_read_failed", error: error.message }));
+      mark = (data as Pick<ScoreRow, "layer" | "status" | "round"> | null) ?? null;
+    }
+    if (stage2LocksMark({ stage2UnlockedAt: state.award.stage2_unlocked_at, nomination: nomination ?? {}, duty, rescoreOpen: rescore, score: mark })) {
+      return { ok: false, error: "Scoring for this recognition has closed; Stage 2 has started." };
+    }
   }
   // Per nomination: a chapter National Leadership added is scored during
   // re-evaluation (recognitions_03); everything else in Stage 1 only.
   // recognitions_05: a Mentor's sheet reopens after the NMT leader's send-back.
-  const rescore = mentorRescoreOpen(state);
   const win = dutyScoringWindow(state.phase, state.cycle, nomination ?? {}, duty, rescore);
   if (win.state === "notYet") {
     return {
@@ -77,7 +94,7 @@ async function loadContext(evaluatorId: string, nominationId: string): Promise<
 
 /** Save a draft or submit marks for one chapter on one duty's sheet. */
 export async function saveScore(input: SaveScoreInput): Promise<ActionResult> {
-  const loaded = await loadContext(input?.evaluatorId ?? "", input?.nominationId ?? "");
+  const loaded = await loadContext(input?.evaluatorId ?? "", input?.nominationId ?? "", { scoreWrite: true });
   if (!loaded.ok) return { success: false, error: loaded.error };
   const { duty, personId, state, nomination } = loaded.ctx;
   const submit = input.submit === true;
@@ -243,7 +260,7 @@ export async function saveScore(input: SaveScoreInput): Promise<ActionResult> {
  * withdrawing also clears any NMT approval of that recommendation.
  */
 export async function setRmRecommendation(input: FlagInput): Promise<ActionResult> {
-  const loaded = await loadContext(input?.evaluatorId ?? "", input?.nominationId ?? "");
+  const loaded = await loadContext(input?.evaluatorId ?? "", input?.nominationId ?? "", { scoreWrite: false });
   if (!loaded.ok) return { success: false, error: loaded.error };
   const { duty, personId, state, nomination } = loaded.ctx;
   if (duty.layer !== "rm") return { success: false, error: "Only a Regional Mentor can recommend a chapter to the NMT." };
@@ -298,7 +315,7 @@ export async function setRmRecommendation(input: FlagInput): Promise<ActionResul
  * approved can withdraw the approval.
  */
 export async function setNmtApproval(input: FlagInput): Promise<ActionResult> {
-  const loaded = await loadContext(input?.evaluatorId ?? "", input?.nominationId ?? "");
+  const loaded = await loadContext(input?.evaluatorId ?? "", input?.nominationId ?? "", { scoreWrite: false });
   if (!loaded.ok) return { success: false, error: loaded.error };
   const { duty, personId, state, nomination } = loaded.ctx;
   if (duty.layer !== "nmt") return { success: false, error: "Only the NMT can approve a Regional Mentor's recommendation." };

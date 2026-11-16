@@ -41,8 +41,9 @@ export function MentorSendBackPanel({ awardId, closesAt }: { awardId: string; cl
       <h2 className="rx-h2" id={`${id}-h`}>Send back to the Regional Mentors</h2>
       <p className="rx-small rx-mute">
         If the Mentors&apos; marks need another look, send this recognition back to them with a remark. Their marks
-        reopen for re-scoring until {closesAt}. Until a Mentor resubmits, their earlier submitted marks still count;
-        if they don&apos;t resubmit by then, the earlier marks stay. Stage 2 opens again once every Mentor resubmits.
+        reopen for re-scoring until you submit the final ranking (at the latest {closesAt}). Until a Mentor resubmits,
+        their earlier submitted marks still count; if they don&apos;t resubmit, the earlier marks stay. Stage 2
+        doesn&apos;t wait for them.
       </p>
       <WordField
         label="Remark for the Regional Mentors (required)"
@@ -70,12 +71,13 @@ export function MentorSendBackPanel({ awardId, closesAt }: { awardId: string; cl
           <p className="rx-small">
             Every submitted Mentor mark reopens for re-scoring, and the Mentors see your remark. Until a Mentor
             resubmits, their earlier marks still count in the leaderboard, marked &ldquo;earlier mark, being
-            re-scored&rdquo;. When they resubmit, the new marks replace them. If they don&apos;t resubmit by {closesAt},
-            the earlier marks stay as their marks.
+            re-scored&rdquo;. When they resubmit, the new marks replace them. If they don&apos;t resubmit before you
+            submit the final ranking (at the latest {closesAt}), the earlier marks stay as their marks.
           </p>
           <p className="rx-small">
-            Stage 2 closes again until every Mentor has resubmitted. The earlier marks are never deleted: they stay in
-            the history.
+            Stage 2 doesn&apos;t wait for them: you can moderate and submit the ranking meanwhile, but totals change
+            whenever a Mentor resubmits, so re-check before you submit. The earlier marks are never deleted: they stay
+            in the history.
           </p>
           <p className="rx-p-quote rx-small">{remark.trim()}</p>
           <ResultLine result={result} />

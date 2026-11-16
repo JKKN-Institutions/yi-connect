@@ -232,6 +232,8 @@ export type ModerationVersionRow = {
   created_at: string;
   submitted_by: string | null;
   submitted_at: string | null;
+  /** recognitions_09: who attended the Stage 2 meeting (lib/recognitions/attendance.ts). NULL = not recorded. */
+  attendance?: unknown;
 };
 
 export type DecisionRow = {

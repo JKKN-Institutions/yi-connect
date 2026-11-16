@@ -18,6 +18,7 @@ import type { ActionResult } from "@/lib/recognitions/types";
 import { formatWhen } from "@/app/recognitions/_ui/primitives";
 import { prefillFromMatrix, validateModeration, type ModerationInput } from "@/app/recognitions/_parts/shared";
 import { loadStage2 } from "@/app/recognitions/_parts/load";
+import { checkAttendance } from "@/lib/recognitions/attendance";
 
 /**
  * Stage 2 moderation and Stage 3 re-evaluation (mail 1, Phases 3 and 5).
@@ -63,7 +64,7 @@ function windowClosed(state: AwardState): string | null {
   return null;
 }
 
-async function persist(awardId: string, input: ModerationInput, submit: boolean): Promise<ActionResult> {
+async function persist(awardId: string, input: ModerationInput, submit: boolean, attendance?: unknown): Promise<ActionResult> {
   const gate = await requireRxNmtLeader(awardId);
   if (!gate.ok) return { success: false, error: gate.error };
   const personId = gate.viewer.personId;
@@ -116,6 +117,10 @@ async function persist(awardId: string, input: ModerationInput, submit: boolean)
   const provisional = prefillFromMatrix((await loadStage2(state, { withNames: false })).matrix);
   const checked = validateModeration(input, state.checkedNominations, chapters, submit, provisional);
   if (!checked.ok) return { success: false, error: checked.error };
+  // recognitions_09: who attended the Stage 2 meeting; required on submit. No attendance sent = keep the draft's.
+  const att = checkAttendance(attendance, new Set(state.duties.map((d) => d.id)), submit);
+  if (!att.ok) return { success: false, error: att.error };
+  const attendanceFields = att.value === undefined ? {} : { attendance: att.value };
 
   const svc = rxService();
   const now = new Date().toISOString();
@@ -127,7 +132,7 @@ async function persist(awardId: string, input: ModerationInput, submit: boolean)
     // The last allowed write to this row when submit=true: the trigger freezes it after.
     const { data, error } = await svc
       .from(TABLE)
-      .update({ rankings: checked.rankings, top3: checked.top3, ...submitFields })
+      .update({ rankings: checked.rankings, top3: checked.top3, ...attendanceFields, ...submitFields })
       .eq("id", draft.id)
       .eq("status", "draft")
       .select("id, version");
@@ -151,6 +156,7 @@ async function persist(awardId: string, input: ModerationInput, submit: boolean)
         top3: checked.top3,
         responds_to_decision_id: null,
         created_by: personId,
+        ...attendanceFields,
         ...submitFields,
       })
       .select("id, version")
@@ -184,13 +190,13 @@ async function persist(awardId: string, input: ModerationInput, submit: boolean)
 }
 
 /** Save the NMT leader's working ranking without submitting it. */
-export async function saveModerationDraft(awardId: string, input: ModerationInput): Promise<ActionResult> {
-  return persist(awardId, input, false);
+export async function saveModerationDraft(awardId: string, input: ModerationInput, attendance?: unknown): Promise<ActionResult> {
+  return persist(awardId, input, false, attendance);
 }
 
 /** Submit the final ranking + podium texts. Freezes the version. */
-export async function submitModeration(awardId: string, input: ModerationInput): Promise<ActionResult> {
-  return persist(awardId, input, true);
+export async function submitModeration(awardId: string, input: ModerationInput, attendance?: unknown): Promise<ActionResult> {
+  return persist(awardId, input, true, attendance);
 }
 
 /**

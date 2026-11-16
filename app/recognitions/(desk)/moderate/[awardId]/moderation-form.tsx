@@ -10,6 +10,8 @@ import type { ModerationInput } from "@/app/recognitions/_parts/shared";
 import { HomeNote, type HomeNotes } from "@/app/recognitions/_parts/home-note";
 import { CategoryPanel } from "@/app/recognitions/_parts/category-tabs";
 import { StandingsTable, type StandingRow } from "@/app/recognitions/_parts/standings-table";
+import { AttendanceFields, EMPTY_ATTENDANCE } from "@/app/recognitions/_parts/attendance-fields";
+import { ATTENDANCE_REQUIRED, attendanceConfirmed, type Attendance, type AttendanceOption } from "@/lib/recognitions/attendance";
 
 /** One chapter on the form: the Stage 2 table row (scores, matrix rank and tie size). */
 export type FormRow = StandingRow;
@@ -40,6 +42,7 @@ export function ModerationForm({
   initial,
   mode,
   home,
+  attendance: attendanceData,
 }: {
   awardId: string;
   categories: FormCategory[];
@@ -47,6 +50,8 @@ export function ModerationForm({
   initial: FormInitial;
   mode: "stage2" | "reevaluation";
   home?: HomeNotes;
+  /** recognitions_09: who attended the Stage 2 meeting (Piyush, 16 Nov 2026). */
+  attendance: { options: AttendanceOption[]; initial: Attendance | null };
 }) {
   const [ranks, setRanks] = useState(initial.ranks);
   const [reasons, setReasons] = useState(initial.reasons);
@@ -54,6 +59,7 @@ export function ModerationForm({
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [pending, start] = useTransition();
+  const [attendance, setAttendance] = useState<Attendance>(attendanceData.initial ?? EMPTY_ATTENDANCE);
 
   const textOf = (id: string) => texts[id] ?? { rationale: "", citation: "" };
   const setText = (id: string, field: "rationale" | "citation", v: string) =>
@@ -96,6 +102,7 @@ export function ModerationForm({
         }
       }
     }
+    if (submit && !attendanceConfirmed(attendance)) return ATTENDANCE_REQUIRED;
     const textsOut = Object.entries(texts).map(([nomination_id, t]) => ({
       nomination_id,
       rationale: t.rationale,
@@ -113,7 +120,9 @@ export function ModerationForm({
     }
     setResult(null);
     start(async () => {
-      const res = submit ? await submitModeration(awardId, input) : await saveModerationDraft(awardId, input);
+      const res = submit
+        ? await submitModeration(awardId, input, attendance)
+        : await saveModerationDraft(awardId, input, attendance);
       setConfirm(false);
       setResult(res.success ? { ok: true, text: res.message ?? "Saved." } : { ok: false, text: res.error });
     });
@@ -200,6 +209,8 @@ export function ModerationForm({
         );
       })}
 
+      <AttendanceFields options={attendanceData.options} value={attendance} onChange={setAttendance} disabled={pending} />
+
       <div className="rx-p-sticky-actions rx-stack" style={{ gap: 8 }}>
         <ResultLine result={result} />
         <div className="rx-row">
@@ -234,7 +245,7 @@ export function ModerationForm({
         onClose={() => setConfirm(false)}
       >
         <p>
-          The final ranks, the reasons and the finalists&apos; texts go to National Leadership for approval. Once submitted this version
+          The final ranks, the reasons, the finalists&apos; texts and the meeting attendance go to National Leadership for approval. Once submitted this version
           cannot be edited; if National Leadership sends it back, you will start a new version.
         </p>
       </ConfirmDialog>

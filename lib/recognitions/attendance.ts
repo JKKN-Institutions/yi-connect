@@ -78,6 +78,16 @@ export function readAttendance(raw: unknown): Attendance | null {
   return { evaluator_ids: ids, nem: r.nem === true, nobody: r.nobody === true };
 }
 
+/**
+ * A saved draft's attendance, trimmed to the award's ACTIVE duties, for the
+ * form's starting state: a tick for an evaluator removed since would have no
+ * box and the server would refuse every save.
+ */
+export function draftAttendance(raw: unknown, activeDutyIds: Set<string>): Attendance | null {
+  const a = readAttendance(raw);
+  return a ? { ...a, evaluator_ids: a.evaluator_ids.filter((id) => activeDutyIds.has(id)) } : null;
+}
+
 /** True once the leader has said who attended: at least one box (NEM counts), or "nobody attended". */
 export function attendanceConfirmed(a: Attendance | null): boolean {
   if (!a) return false;

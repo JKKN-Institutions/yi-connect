@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getPeople, listEvaluators } from "./data";
-import { attendanceLines, attendanceOptions, readAttendance, type Attendance, type AttendanceLine, type AttendanceOption } from "./attendance";
+import { attendanceLines, attendanceOptions, draftAttendance, readAttendance, type Attendance, type AttendanceLine, type AttendanceOption } from "./attendance";
 import type { EvaluatorRow, ModerationVersionRow } from "./types";
 
 /** The leader's form: one checkbox per active evaluator (by name), and what the open draft already holds. */
@@ -12,7 +12,7 @@ export async function attendanceFormData(
   const people = await getPeople(activeDuties.map((d) => d.person_id));
   return {
     options: attendanceOptions(activeDuties, (id) => people.get(id)?.full_name ?? ""),
-    initial: draft ? readAttendance(draft.attendance) : null,
+    initial: draft ? draftAttendance(draft.attendance, new Set(activeDuties.map((d) => d.id))) : null,
   };
 }
 

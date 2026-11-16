@@ -11,7 +11,8 @@ const REMARK_WORDS = 100;
 /**
  * NMT leader: send this recognition back to its Regional Mentors with a
  * compulsory remark (recognitions_05). The Mentors' marks reopen as drafts
- * of a new round; the earlier marks stay in the history.
+ * of a new round; the earlier marks stay in the history and keep counting
+ * until each Mentor resubmits, or for good if they don't (Director, 16 Nov).
  */
 export function MentorSendBackPanel({ awardId, closesAt }: { awardId: string; closesAt: string }) {
   const id = useId();
@@ -40,8 +41,8 @@ export function MentorSendBackPanel({ awardId, closesAt }: { awardId: string; cl
       <h2 className="rx-h2" id={`${id}-h`}>Send back to the Regional Mentors</h2>
       <p className="rx-small rx-mute">
         If the Mentors&apos; marks need another look, send this recognition back to them with a remark. Their marks
-        reopen as drafts (their earlier marks stay in the history) until {closesAt}. Stage 2 opens again once every
-        Mentor resubmits.
+        reopen for re-scoring until {closesAt}. Until a Mentor resubmits, their earlier submitted marks still count;
+        if they don&apos;t resubmit by then, the earlier marks stay. Stage 2 opens again once every Mentor resubmits.
       </p>
       <WordField
         label="Remark for the Regional Mentors (required)"
@@ -67,8 +68,14 @@ export function MentorSendBackPanel({ awardId, closesAt }: { awardId: string; cl
       >
         <div className="rx-stack" style={{ gap: 8 }}>
           <p className="rx-small">
-            Every submitted Mentor mark reopens as a draft. The Mentors see your remark. Their earlier marks are kept and
-            can&apos;t be lost.
+            Every submitted Mentor mark reopens for re-scoring, and the Mentors see your remark. Until a Mentor
+            resubmits, their earlier marks still count in the leaderboard, marked &ldquo;earlier mark, being
+            re-scored&rdquo;. When they resubmit, the new marks replace them. If they don&apos;t resubmit by {closesAt},
+            the earlier marks stay as their marks.
+          </p>
+          <p className="rx-small">
+            Stage 2 closes again until every Mentor has resubmitted. The earlier marks are never deleted: they stay in
+            the history.
           </p>
           <p className="rx-p-quote rx-small">{remark.trim()}</p>
           <ResultLine result={result} />

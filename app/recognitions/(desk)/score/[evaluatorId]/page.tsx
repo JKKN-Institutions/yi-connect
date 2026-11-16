@@ -115,8 +115,9 @@ export default async function ScoringSheetPage({
           <span className="rx-p-text">{latestSendBack.remark}</span>
           <br />
           <span className="rx-small">
-            Your earlier marks are kept in the history and loaded below as a draft. Review and resubmit by{" "}
-            {formatWhen(cycle.stage2_deadline)}.
+            Your earlier marks are loaded below as a draft. Until you resubmit, your earlier submitted marks still
+            count; when you resubmit, your new marks replace them. Review and resubmit by{" "}
+            {formatWhen(cycle.stage2_deadline)}. If you don&apos;t, your earlier marks stay.
           </span>
         </Notice>
       ) : null}

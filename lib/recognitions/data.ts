@@ -17,7 +17,13 @@ import type {
   ScoreRow,
 } from "./types";
 import { HOME_CHAPTER_BLOCKS_SCORING, type Category } from "./constants";
-import { computeCompleteness, dutySeesNomination, type Completeness } from "./scoring";
+import {
+  computeCompleteness,
+  dutySeesNomination,
+  withEarlierMarks,
+  type Completeness,
+  type CountedScoreRow,
+} from "./scoring";
 import { computePhase, isPast, latestDecisionFor, type Phase } from "./phase";
 import { inRace, isAddedForChapter } from "./check-rules";
 import { layer1ForAward, partAMeasuresForAward } from "./health-card";
@@ -253,6 +259,34 @@ export async function listScoresForAward(awardId: string): Promise<ScoreRow[]> {
   const { data, error } = await rxService().from("recognition_scores").select("*").in("nomination_id", ids);
   if (error) fail("list scores", error);
   return (data ?? []) as ScoreRow[];
+}
+
+/**
+ * The marks that COUNT on an award (Director, 16 Nov 2026): every score,
+ * with a Mentor's earlier submitted mark standing in for a draft a send-back
+ * reopened (scoring.ts withEarlierMarks). Same audience as
+ * listScoresForAward. Use it for every computed or shown mark (matrix,
+ * standings, reports); NOT for completeness, which reads raw scores.
+ * Fail closed: if the history can't be read, it logs and returns the raw
+ * scores, so a reopened draft is blank as before the rule.
+ */
+export async function listCountedScoresForAward(awardId: string): Promise<CountedScoreRow[]> {
+  return countScores(awardId, await listScoresForAward(awardId));
+}
+
+/** listCountedScoresForAward for scores already read with listScoresForAward. */
+export async function countScores(awardId: string, scores: ScoreRow[]): Promise<CountedScoreRow[]> {
+  let history: ScoreHistoryRow[] = [];
+  if (scores.some((s) => s.layer === "rm" && s.status === "draft" && (s.round ?? 1) > 1)) {
+    try {
+      history = await listScoreHistory(awardId);
+    } catch (e) {
+      console.error(
+        JSON.stringify({ tag: "recognitions_score_history_read_failed", awardId, error: e instanceof Error ? e.message : String(e) })
+      );
+    }
+  }
+  return withEarlierMarks(scores, history);
 }
 
 /** BLIND read: one evaluator duty's own scores, filtered in the query. */

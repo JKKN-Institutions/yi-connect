@@ -16,7 +16,9 @@ import { formatWhen } from "../_ui/primitives";
  * Mentor mark is copied into the score history and reopened as a draft of
  * the next round (marks kept as the starting point); Stage 2 re-opens
  * itself once every Mentor resubmits. Nothing is deleted. The reopened
- * round runs until the cycle's Stage 2 deadline.
+ * round runs until the cycle's Stage 2 deadline. Until a Mentor resubmits,
+ * their earlier submitted mark counts, and it stays counted if they never
+ * do (Director, 16 Nov 2026; lib/recognitions/scoring.ts withEarlierMarks).
  */
 
 const REMARK_WORDS = 100;
@@ -79,6 +81,6 @@ export async function sendBackToMentors(awardId: string, remark: string): Promis
   revalidatePath("/recognitions", "layout");
   return {
     success: true,
-    message: `Sent back. ${out.reopened} Mentor mark${out.reopened === 1 ? " is" : "s are"} open again as round ${out.round}, until ${formatWhen(state.cycle.stage2_deadline)}. The earlier marks are kept in the history.`,
+    message: `Sent back. ${out.reopened} Mentor mark${out.reopened === 1 ? " is" : "s are"} open again as round ${out.round}, until ${formatWhen(state.cycle.stage2_deadline)}. Until a Mentor resubmits, their earlier marks still count; if they don't resubmit by then, the earlier marks stay.`,
   };
 }

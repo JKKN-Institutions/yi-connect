@@ -23,11 +23,15 @@
  *   Part B fraction stands in for the RM's, so the total is Health Card 50%
  *   + NMT 50%. Part A already uses whichever side has marks.
  * Any other missing part counts as 0 and is flagged on the row, never hidden.
+ * Send-back (Director, 16 Nov 2026): when the NMT leader sends a recognition
+ *   back, a Mentor's EARLIER SUBMITTED mark keeps counting until that Mentor
+ *   resubmits, and stays counted if they never do (withEarlierMarks). A mark
+ *   that was never submitted is still missing.
  */
 
 import { CHECK_STEP_ENABLED, MAX_LAYER_TOTAL, MAX_PARAM, PARAM_KEYS, PART_A_MAX, PART_A_PREFIX } from "./constants";
 import type { Category, Layer } from "./constants";
-import type { CycleRow, EvaluatorRow, NominationRow, ScoreParams, ScoreRow } from "./types";
+import type { CycleRow, EvaluatorRow, NominationRow, ScoreHistoryRow, ScoreParams, ScoreRow } from "./types";
 import { awaitingNmtApproval, inRace, isNlAdded, stillInCheck } from "./check-rules";
 
 const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
@@ -82,6 +86,57 @@ export function percentileRank(value: number, peers: number[]): number {
   const below = peers.filter((p) => p < value).length;
   const equal = peers.filter((p) => p === value).length;
   return (below + 0.5 * (equal - 1)) / (peers.length - 1);
+}
+
+/** A mark as it COUNTS. `earlier` is set when it is a Mentor's earlier submitted mark standing in for a reopened draft. */
+export type CountedScoreRow = ScoreRow & {
+  earlier: { round: number; submittedAt: string | null } | null;
+};
+
+/**
+ * Director, 16 Nov 2026: after the NMT leader's send-back, a Regional
+ * Mentor's earlier SUBMITTED mark counts until that Mentor resubmits, and
+ * keeps counting if they never do. For each Mentor score that a send-back
+ * reopened and that is still a draft (layer rm, status draft, round > 1),
+ * the latest history snapshot below its round (same score, evaluator and
+ * nomination) stands in, as submitted, flagged `earlier`. Its marks,
+ * reasons and comments are the history's, never the draft's (the Mentor
+ * may be editing the draft). Once the Mentor resubmits, the row is
+ * submitted again and counts as itself. A mark that was never submitted
+ * (a round-1 draft, or no snapshot) is left as it is: missing.
+ *
+ * For maths and display only. Completeness, the re-score gate and the
+ * Stage 2 unlock keep reading the raw scores.
+ */
+export function withEarlierMarks(scores: ScoreRow[], history: ScoreHistoryRow[]): CountedScoreRow[] {
+  return scores.map((s) => {
+    const round = s.round ?? 1;
+    if (s.layer !== "rm" || s.status !== "draft" || round <= 1) return { ...s, earlier: null };
+    let best: ScoreHistoryRow | null = null;
+    for (const h of history) {
+      if (
+        h.score_id === s.id &&
+        h.layer === "rm" &&
+        h.evaluator_id === s.evaluator_id &&
+        h.nomination_id === s.nomination_id &&
+        h.round < round &&
+        (!best || h.round > best.round)
+      ) {
+        best = h;
+      }
+    }
+    if (!best) return { ...s, earlier: null };
+    return {
+      ...s,
+      status: "submitted",
+      params: best.params,
+      reasons: best.reasons,
+      additional_comments: best.additional_comments,
+      submitted_at: best.submitted_at,
+      round: best.round,
+      earlier: { round: best.round, submittedAt: best.submitted_at },
+    };
+  });
 }
 
 export type MatrixRow = {

@@ -172,7 +172,8 @@ export default async function MySheetsPage() {
                       <span className="rx-p-text">{state.sendBacks[0].remark}</span>
                       <br />
                       <span className="rx-small">
-                        Your marks are open again as drafts. Review and resubmit by {formatWhen(state.cycle.stage2_deadline)}.
+                        Your marks are open again as drafts. Your earlier submitted marks count until you resubmit, and
+                        stay if you don&apos;t. Review and resubmit by {formatWhen(state.cycle.stage2_deadline)}.
                       </span>
                     </Notice>
                   ) : win?.state === "closed" ? (

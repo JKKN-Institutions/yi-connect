@@ -138,7 +138,9 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
         {sendBackNotice}
         {beforeStage2 ? (
           <Notice>
-            Round 1 is still being scored: the leaderboard below shows only the marks submitted so far.
+            {state.sendBacks.length > 0
+              ? "Stage 2 isn't open yet. The leaderboard below counts the marks submitted so far. A Regional Mentor who was sent back and hasn't resubmitted counts with their earlier submitted mark, marked “earlier mark, being re-scored”."
+              : "Round 1 is still being scored: the leaderboard below shows only the marks submitted so far."}
           </Notice>
         ) : null}
         {phase === "stage2" || phase === "reevaluation" ? (
@@ -274,6 +276,7 @@ function standingCategories(
         matrixRank: prefill[r.nominationId]?.matrixRank ?? r.rank,
         tieSize: prefill[r.nominationId]?.tieSize ?? 1,
         missing: r.missing,
+        earlierNote: r.earlierNote,
       })),
     }));
 }

@@ -11,9 +11,9 @@ import { CATEGORIES, CATEGORY_LABEL, CHECK_STEP_ENABLED, PARAM_KEYS, PART_A_PREF
 import { Ribbon } from "../../../_ui/ribbon";
 import { IconArrowLeft, IconArrowRight, IconDownload, IconEyeOff, IconLock } from "../../../_ui/icons";
 import { Deadline, NoAccess, Notice, PageHead, Seal, formatWhen } from "../../../_ui/primitives";
-import { dutyLayerLabel, dutyScoringWindow, scoringDeadlineFor, scoringWindow } from "../score-rules";
+import { dutyLayerLabel, dutyScoringWindow, scoringDeadlineFor, scoringWindow, stage2LocksMark } from "../score-rules";
 import { ADDED_BY_LABEL, isAddedForChapter, isNlAdded } from "@/lib/recognitions/check-rules";
-import { marksHiddenFrom, marksPrivacyText, mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
+import { marksHiddenFrom, marksPrivacyText, mentorMarksOpen, mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
 import { ScoreSheet } from "./sheet";
 import { FlagToggle } from "./flags";
 import { HealthCardPanel } from "./health-card-panel";
@@ -59,6 +59,8 @@ export default async function ScoringSheetPage({
   const win = scoringWindow(state.phase, cycle);
   // recognitions_05: the NMT leader's send-back reopens a Mentor's sheet; blind until you submit.
   const rescore = mentorRescoreOpen(state) && duty.layer === "rm";
+  // Director, 16 Nov 15:1x: every recognition, not only after a send-back.
+  const marksOpen = mentorMarksOpen(state) && duty.layer === "rm";
   const sight = scoreSight(state, gate.viewer.duties);
   const latestSendBack = state.sendBacks[0] ?? null;
 
@@ -115,8 +117,9 @@ export default async function ScoringSheetPage({
           <span className="rx-p-text">{latestSendBack.remark}</span>
           <br />
           <span className="rx-small">
-            Your earlier marks are kept in the history and loaded below as a draft. Review and resubmit by{" "}
-            {formatWhen(cycle.stage2_deadline)}.
+            Your earlier marks are loaded below as a draft. Until you resubmit, your earlier submitted marks still
+            count; when you resubmit, your new marks replace them. Resubmit before the NMT leader submits the final
+            ranking, at the latest {formatWhen(cycle.stage2_deadline)}. If you don&apos;t, your earlier marks stay.
           </span>
         </Notice>
       ) : null}
@@ -186,12 +189,17 @@ export default async function ScoringSheetPage({
   const submitted = score?.status === "submitted";
   // Per chapter: one National Leadership added is scored during re-evaluation (recognitions_03).
   const added = isNlAdded(current);
-  // Late marks locked (Director, 5 Nov): same rule as loadContext in actions/score.ts.
-  const curWin =
-    award.stage2_unlocked_at && !added
-      ? ({ state: "over" } as const)
-      : dutyScoringWindow(state.phase, cycle, current, duty, rescore);
+  // Late marks locked (Director, 5 Nov), except a Mentor's unsubmitted marks
+  // while their window is open, on every recognition (Director, 16 Nov 15:1x):
+  // same rule as loadContext in actions/score.ts. Flags stay locked.
+  const lockArgs = { stage2UnlockedAt: award.stage2_unlocked_at, nomination: current, duty, rescoreOpen: marksOpen };
+  const curWin = stage2LocksMark({ ...lockArgs, mark: true })
+    ? ({ state: "over" } as const)
+    : dutyScoringWindow(state.phase, cycle, current, duty, marksOpen);
   const open = curWin.state === "open";
+  const flagsOpen = open && !stage2LocksMark({ ...lockArgs, mark: false });
+  // Stage 2 has started but this Mentor's sheet is still open (Director, 16 Nov 13:4x).
+  const lateOpen = !!award.stage2_unlocked_at && !added && duty.layer === "rm" && open;
   // Any chapter someone else put forward (National Leadership, a Mentor or the NMT): a reason, not a form.
   const addedFor = isAddedForChapter(current);
   const addedBy = current.origin !== "chapter" && current.origin ? ADDED_BY_LABEL[current.origin] : null;
@@ -285,6 +293,12 @@ export default async function ScoringSheetPage({
           </div>
         </nav>
 
+        {lateOpen && !submitted ? (
+          <Notice tone="alert">
+            Stage 2 has started. You can still give these marks until {formatWhen(cycle.stage2_deadline)}; they count
+            once you submit. If the NMT leader submits the final ranking sooner, your sheet closes then.
+          </Notice>
+        ) : null}
         {added && open && !submitted ? (
           <Notice>
             National Leadership added this chapter during re-evaluation, and both checkers passed it. Score it by{" "}
@@ -293,7 +307,7 @@ export default async function ScoringSheetPage({
         ) : null}
         {curWin.state === "closed" ? (
           <Notice>
-            Scoring closed on {formatWhen(rescore ? cycle.stage2_deadline : scoringDeadlineFor(cycle, current))}. Read-only
+            Scoring closed on {formatWhen(marksOpen ? cycle.stage2_deadline : scoringDeadlineFor(cycle, current))}. Read-only
             mode.
           </Notice>
         ) : curWin.state === "over" ? (
@@ -399,7 +413,7 @@ export default async function ScoringSheetPage({
                 evaluatorId={duty.id}
                 nominationId={current.id}
                 on={!!current.rm_recommended_by}
-                disabled={!open || (!!current.rm_recommended_by && current.rm_recommended_by !== personId)}
+                disabled={!flagsOpen || (!!current.rm_recommended_by && current.rm_recommended_by !== personId)}
                 note={
                   current.rm_recommended_by
                     ? current.rm_recommended_by === personId
@@ -415,7 +429,7 @@ export default async function ScoringSheetPage({
                 evaluatorId={duty.id}
                 nominationId={current.id}
                 on={!!current.nmt_approved_by}
-                disabled={!open || (!!current.nmt_approved_by && current.nmt_approved_by !== personId)}
+                disabled={!flagsOpen || (!!current.nmt_approved_by && current.nmt_approved_by !== personId)}
                 note={
                   current.nmt_approved_by
                     ? current.nmt_approved_by === personId

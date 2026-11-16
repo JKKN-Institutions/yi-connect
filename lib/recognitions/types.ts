@@ -160,6 +160,11 @@ export type ScoreRow = {
   additional_comments: string | null;
   status: "draft" | "submitted";
   submitted_at: string | null;
+  /**
+   * recognitions_05: the Mentor round. 1 until an NMT-leader send-back
+   * reopens the mark, then 2, 3... Read as 1 when absent (no fallback).
+   */
+  round?: number;
 };
 
 /** recognitions_05: one NMT-leader send-back to a recognition's Regional Mentors. Append-only. */

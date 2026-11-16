@@ -1,6 +1,6 @@
 import "./parts.css";
 import { CHECK_STEP_ENABLED, MAX_LAYER_TOTAL } from "@/lib/recognitions/constants";
-import type { DossierView, MatrixView, MatrixViewRow, RationaleView } from "./shared";
+import { EARLIER_MARK_LABEL, type DossierView, type MatrixView, type MatrixViewRow, type RationaleView } from "./shared";
 import { HomeNote, type HomeNotes } from "./home-note";
 import { CategoryPanel } from "./category-tabs";
 
@@ -84,13 +84,19 @@ export function CombinedMatrix({ view, home }: { view: MatrixView; home?: HomeNo
                         {r.missing.length > 0 ? (
                           <div className="rx-small rx-p-flag">Missing: {r.missing.join(", ")}</div>
                         ) : null}
+                        {r.earlierNote ? <div className="rx-small rx-p-flag">{r.earlierNote}</div> : null}
                       </td>
                       <td>{r.region}</td>
                       <td className="rx-num">
                         {r.partA === null ? <span className="rx-p-flag">missing</span> : fmt(r.partA)}
                       </td>
                       {cat.rmColumns.map((c) => (
-                        <td key={c.evaluatorId} className="rx-num">{fmt(r.perEvaluator[c.evaluatorId])}</td>
+                        <td key={c.evaluatorId} className="rx-num">
+                          {fmt(r.perEvaluator[c.evaluatorId])}
+                          {r.earlierEvaluators.includes(c.evaluatorId) ? (
+                            <div className="rx-small rx-p-flag">{EARLIER_MARK_LABEL}</div>
+                          ) : null}
+                        </td>
                       ))}
                       <td className="rx-num rx-p-avg">{fmt(r.rmAvg)}</td>
                       {cat.nmtColumns.map((c) => (
@@ -106,6 +112,13 @@ export function CombinedMatrix({ view, home }: { view: MatrixView; home?: HomeNo
             <p className="rx-small rx-mute">
               Evaluator totals are their Part B marks, out of {MAX_LAYER_TOTAL}. A dash means that evaluator did not score the chapter (another region, or
               no marks submitted).
+              {cat.rows.some((r) => r.earlierEvaluators.length > 0) ? (
+                <>
+                  {" "}&ldquo;{EARLIER_MARK_LABEL}&rdquo;: the NMT leader sent this recognition back and that Regional
+                  Mentor hasn&apos;t resubmitted yet, so their earlier submitted mark counts. It is replaced when they
+                  resubmit, and stays if they don&apos;t.
+                </>
+              ) : null}
             </p>
             <div>
               {cat.rows.map((r) => (
@@ -214,6 +227,7 @@ export function Rationales({ items }: { items: RationaleView[] }) {
           <div className="rx-row" style={{ gap: 8 }}>
             <strong>{it.label}</strong>
             <span className="rx-num rx-small rx-mute">{fmt(it.total)} / {MAX_LAYER_TOTAL}</span>
+            {it.earlier ? <span className="rx-small rx-p-flag">{EARLIER_MARK_LABEL}</span> : null}
           </div>
           {it.reasons.length > 0 ? (
             <ol className="rx-p-list rx-small">

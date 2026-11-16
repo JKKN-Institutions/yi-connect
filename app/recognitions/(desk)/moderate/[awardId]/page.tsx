@@ -1,8 +1,8 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requireRxEvaluatorOnAward } from "@/lib/recognitions/auth";
-import { getAwardState, getPeople, homeChapterNotes, latestDecisionFor } from "@/lib/recognitions/data";
-import { mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
+import { getAwardState, getPeople, homeChapterNotes, latestDecisionFor, nominationsForDuty } from "@/lib/recognitions/data";
+import { mentorMarksOpen, mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
 import { isPast } from "@/lib/recognitions/phase";
 import { Ribbon } from "@/app/recognitions/_ui/ribbon";
 import { IconArrowLeft } from "@/app/recognitions/_ui/icons";
@@ -15,7 +15,7 @@ import { buildRankingView, prefillFromMatrix, type MatrixView, type Provisional 
 import { CategoryPanel, CategoryTabs } from "@/app/recognitions/_parts/category-tabs";
 import { StandingsTable, type StandingRow } from "@/app/recognitions/_parts/standings-table";
 import { HomeNote, type HomeNotes } from "@/app/recognitions/_parts/home-note";
-import { CATEGORIES, CATEGORY_LABEL } from "@/lib/recognitions/constants";
+import { CATEGORIES, CATEGORY_LABEL, MAX_LAYER_TOTAL } from "@/lib/recognitions/constants";
 import type { ChapterRow, ModerationVersionRow, NominationRow } from "@/lib/recognitions/types";
 import { STAGE2_LOCKED } from "../copy";
 import { ModerationForm, type FormCategory, type FormInitial } from "./moderation-form";
@@ -124,6 +124,66 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
   }
 
   const shownVersion = latestSubmitted ?? null;
+  // Director, 16 Nov 07:5x, 13:4x, 15:1x: Stage 2 doesn't wait for the
+  // Mentors. List the marks that are still their earlier ones, and (on every
+  // recognition) the marks not given yet that they can still give, so the
+  // leader can re-check.
+  const rescoring = rescoringMarks(data.matrix);
+  const lateWindowOpen = mentorMarksOpen(state) && !isPast(cycle.stage2_deadline);
+  const counted = new Set(
+    data.counted.filter((s) => s.status === "submitted").map((s) => `${s.evaluator_id}:${s.nomination_id}`)
+  );
+  const notGiven = lateWindowOpen
+    ? state.duties
+        .filter((d) => d.is_active && d.layer === "rm")
+        .flatMap((d) =>
+          nominationsForDuty(state, d)
+            .filter((n) => !counted.has(`${d.id}:${n.id}`))
+            .map((n) => ({ duty: d, n, chapterName: data.chapters.get(n.chapter_id)?.name ?? "Unknown chapter" }))
+        )
+        .sort(
+          (a, b) =>
+            CATEGORIES.indexOf(a.n.category) - CATEGORIES.indexOf(b.n.category) ||
+            a.chapterName.localeCompare(b.chapterName)
+        )
+    : [];
+  const rescoringNotice =
+    (rescoring.length > 0 || notGiven.length > 0) && (phase === "stage1" || phase === "stage2") ? (
+      <Notice tone="alert">
+        {rescoring.length > 0 ? (
+          <>
+            <strong>
+              Still being re-scored: {rescoring.length} Regional Mentor mark{rescoring.length === 1 ? "" : "s"}.
+            </strong>{" "}
+            Their earlier submitted marks count for now.
+            <ul className="rx-small" style={{ margin: "6px 0 10px", paddingLeft: 18 }} data-testid="rescoring-marks">
+              {rescoring.map((m) => (
+                <li key={`${m.nominationId}:${m.evaluatorId}`}>
+                  {m.categoryLabel} · {m.chapterName} · {m.evaluatorLabel} (earlier mark {m.total}/{MAX_LAYER_TOTAL})
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+        {notGiven.length > 0 ? (
+          <>
+            <strong>
+              Not given yet: {notGiven.length} Regional Mentor mark{notGiven.length === 1 ? "" : "s"}.
+            </strong>{" "}
+            The Mentors can still give them until {formatWhen(cycle.stage2_deadline)}; until then the NMT marks stand in.
+            <ul className="rx-small" style={{ margin: "6px 0 10px", paddingLeft: 18 }} data-testid="not-given-marks">
+              {notGiven.map((m) => (
+                <li key={`${m.n.id}:${m.duty.id}`}>
+                  {CATEGORY_LABEL[m.n.category]} · {m.chapterName} · Regional Mentor, region {m.duty.region ?? "?"}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+        Totals change whenever a Mentor submits
+        {isLeader ? ", so re-check the standings just before you submit the final ranking." : "."}
+      </Notice>
+    ) : null;
 
   return (
     <div className="rx-stack-lg">
@@ -136,9 +196,12 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
           </Notice>
         ) : null}
         {sendBackNotice}
+        {rescoringNotice}
         {beforeStage2 ? (
           <Notice>
-            Round 1 is still being scored: the leaderboard below shows only the marks submitted so far.
+            {state.sendBacks.length > 0
+              ? "Stage 2 isn't open yet: the leaderboard below shows the marks counted so far."
+              : "Round 1 is still being scored: the leaderboard below shows only the marks submitted so far."}
           </Notice>
         ) : null}
         {phase === "stage2" || phase === "reevaluation" ? (
@@ -171,7 +234,10 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
         {!isLeader ? (
           <Notice>Only the NMT leader enters the final ranking.</Notice>
         ) : beforeStage2 ? (
-          <Notice>The final ranking opens in Stage 2, once every Regional Mentor and NMT mark is in.</Notice>
+          <Notice>
+            The final ranking opens in Stage 2: once every Regional Mentor and NMT mark is in, or once Stage 1 closes
+            with every NMT mark in. A Mentor re-scoring after a send-back counts with their earlier marks.
+          </Notice>
         ) : canEdit ? (
           <>
             <p className="rx-small rx-mute">
@@ -252,6 +318,29 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
   );
 }
 
+/** Every matrix cell that is a re-scoring Mentor's earlier mark (Director, 16 Nov), in table order. */
+function rescoringMarks(matrix: MatrixView): Array<{
+  nominationId: string;
+  evaluatorId: string;
+  categoryLabel: string;
+  chapterName: string;
+  evaluatorLabel: string;
+  total: number;
+}> {
+  return matrix.categories.flatMap((c) =>
+    c.rows.flatMap((r) =>
+      r.earlierEvaluators.map((evaluatorId) => ({
+        nominationId: r.nominationId,
+        evaluatorId,
+        categoryLabel: c.label,
+        chapterName: r.chapterName,
+        evaluatorLabel: c.rmColumns.find((x) => x.evaluatorId === evaluatorId)?.label ?? "A Regional Mentor",
+        total: r.perEvaluator[evaluatorId] ?? 0,
+      }))
+    )
+  );
+}
+
 /** The Stage 2 table's rows per category, from the combined matrix (matrix rank and tie size from prefill). */
 function standingCategories(
   matrix: MatrixView,
@@ -274,6 +363,7 @@ function standingCategories(
         matrixRank: prefill[r.nominationId]?.matrixRank ?? r.rank,
         tieSize: prefill[r.nominationId]?.tieSize ?? 1,
         missing: r.missing,
+        earlierNote: r.earlierNote,
       })),
     }));
 }

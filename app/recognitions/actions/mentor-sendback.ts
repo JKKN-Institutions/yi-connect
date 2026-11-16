@@ -14,9 +14,12 @@ import { formatWhen } from "../_ui/primitives";
  * The NMT leader sends a recognition back to its Regional Mentors with a
  * compulsory remark (recognitions_05, Piyush 15 Oct 2026). Every submitted
  * Mentor mark is copied into the score history and reopened as a draft of
- * the next round (marks kept as the starting point); Stage 2 re-opens
- * itself once every Mentor resubmits. Nothing is deleted. The reopened
- * round runs until the cycle's Stage 2 deadline.
+ * the next round (marks kept as the starting point). Nothing is deleted.
+ * Director, 16 Nov 2026: until a Mentor resubmits, their earlier submitted
+ * mark counts, and it stays counted if they never do
+ * (lib/recognitions/scoring.ts withEarlierMarks). It counts as in for Stage 2
+ * too, so Stage 2 doesn't wait for the Mentors; they can re-score until the
+ * leader submits the ranking, at the latest the cycle's Stage 2 deadline.
  */
 
 const REMARK_WORDS = 100;
@@ -79,6 +82,6 @@ export async function sendBackToMentors(awardId: string, remark: string): Promis
   revalidatePath("/recognitions", "layout");
   return {
     success: true,
-    message: `Sent back. ${out.reopened} Mentor mark${out.reopened === 1 ? " is" : "s are"} open again as round ${out.round}, until ${formatWhen(state.cycle.stage2_deadline)}. The earlier marks are kept in the history.`,
+    message: `Sent back. ${out.reopened} Mentor mark${out.reopened === 1 ? " is" : "s are"} open again as round ${out.round}, until you submit the final ranking (at the latest ${formatWhen(state.cycle.stage2_deadline)}). Until a Mentor resubmits, their earlier marks still count; if they don't resubmit, the earlier marks stay. Stage 2 doesn't wait for them.`,
   };
 }

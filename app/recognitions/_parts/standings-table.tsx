@@ -23,6 +23,8 @@ export type StandingRow = {
   tieSize: number;
   /** Plain-English names of the parts with no marks yet. */
   missing: string[];
+  /** Set when an RM mark here is an earlier one, counted while the Mentor re-scores (Director, 16 Nov). */
+  earlierNote: string | null;
 };
 
 /**
@@ -102,6 +104,7 @@ export function StandingsTable({
                   <div className="rx-small rx-mute">{r.region}</div>
                   <HomeNote names={home?.[r.chapterName]} />
                   {r.missing.length > 0 ? <div className="rx-small rx-p-flag">Missing: {r.missing.join(", ")}</div> : null}
+                  {r.earlierNote ? <div className="rx-small rx-p-flag">{r.earlierNote}</div> : null}
                 </td>
                 <td className="rx-num">{fmt(r.partAPoints)}</td>
                 <td className="rx-num">{fmt(r.rmPoints)}</td>

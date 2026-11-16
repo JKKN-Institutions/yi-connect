@@ -15,10 +15,9 @@ import type {
   NominationRow,
   PredictionRow,
   RankingEntry,
-  ScoreRow,
   Top3Entry,
 } from "@/lib/recognitions/types";
-import { computeMatrix, paramsTotal, type PartAMeasure } from "@/lib/recognitions/scoring";
+import { computeMatrix, paramsTotal, type CountedScoreRow, type PartAMeasure } from "@/lib/recognitions/scoring";
 import { categoryRankingProblem } from "@/lib/recognitions/moderation-rules";
 import { countWords } from "@/lib/recognitions/words";
 import { ADDED_BY_LABEL, isAddedForChapter } from "@/lib/recognitions/check-rules";
@@ -54,6 +53,8 @@ export type RationaleView = {
   total: number;
   reasons: string[];
   comments: string | null;
+  /** An earlier submitted Mentor mark standing in while the Mentor re-scores (Director, 16 Nov). */
+  earlier: boolean;
 };
 
 export type MatrixViewRow = {
@@ -68,6 +69,10 @@ export type MatrixViewRow = {
   nmtPoints: number;
   /** evaluatorId -> that evaluator's submitted Part B total (/50). */
   perEvaluator: Record<string, number>;
+  /** Evaluators whose mark here is their earlier submitted one, counted while they re-score after a send-back. */
+  earlierEvaluators: string[];
+  /** Plain-English line when any mark here is such an earlier mark, else null. */
+  earlierNote: string | null;
   rmAvg: number | null;
   nmtAvg: number | null;
   total: number;
@@ -125,7 +130,8 @@ export function dossierOf(n: NominationRow): DossierView {
 export function buildMatrixView(input: {
   cycle: Pick<CycleRow, "weight_layer1" | "weight_layer2" | "weight_layer3" | "layer2_mode">;
   nominations: NominationRow[];
-  scores: ScoreRow[];
+  /** The marks that count (listCountedScoresForAward / countScores), not the raw scores. */
+  scores: CountedScoreRow[];
   /** The award's Health Card measures: the Part A questions. */
   partAMeasures: PartAMeasure[];
   chapters: Map<string, ChapterRow>;
@@ -166,6 +172,7 @@ export function buildMatrixView(input: {
           .sort((a, b) => order(a.evaluator_id) - order(b.evaluator_id));
         const perEvaluator: Record<string, number> = {};
         for (const s of mine) perEvaluator[s.evaluator_id] = paramsTotal(s.params);
+        const earlierEvaluators = mine.filter((s) => s.earlier).map((s) => s.evaluator_id);
         const n = nomById.get(r.nomination_id)!;
         return {
           nominationId: r.nomination_id,
@@ -176,6 +183,8 @@ export function buildMatrixView(input: {
           rmPoints: r.rmPoints,
           nmtPoints: r.nmtPoints,
           perEvaluator,
+          earlierEvaluators,
+          earlierNote: earlierNote(earlierEvaluators.length),
           rmAvg: r.l2Avg,
           nmtAvg: r.l3Avg,
           total: r.total,
@@ -190,6 +199,7 @@ export function buildMatrixView(input: {
             total: paramsTotal(s.params),
             reasons: (s.reasons ?? []).filter((x) => (x ?? "").trim() !== ""),
             comments: s.layer === "nmt" && (s.additional_comments ?? "").trim() !== "" ? s.additional_comments : null,
+            earlier: !!s.earlier,
           })),
         };
       }),
@@ -201,6 +211,14 @@ export function buildMatrixView(input: {
     layer2Mode: cycle.layer2_mode,
     categories,
   };
+}
+
+/** The label for a score that includes earlier Mentor marks (Director, 16 Nov 2026). */
+export const EARLIER_MARK_LABEL = "earlier mark, being re-scored";
+
+export function earlierNote(count: number): string | null {
+  if (count === 0) return null;
+  return `${count === 1 ? "1 Regional Mentor mark is" : `${count} Regional Mentor marks are`} the earlier mark, being re-scored: it counts until the Mentor resubmits, so this total may change.`;
 }
 
 export type Provisional = {

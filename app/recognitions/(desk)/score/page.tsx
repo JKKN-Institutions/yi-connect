@@ -9,7 +9,7 @@ import {
   nominationsForDuty,
   type AwardState,
 } from "@/lib/recognitions/data";
-import { marksHiddenFrom, marksPrivacyText, mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
+import { marksHiddenFrom, marksPrivacyText, mentorMarksOpen, mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
 import {
   addableForDuty,
   askNmtToAddNote,
@@ -81,6 +81,8 @@ export default async function MySheetsPage() {
       // recognitions_05: blind until you submit, the Mentors' send-back, and chapters added by evaluators.
       const sight = scoreSight(state, viewer.duties);
       const rescore = mentorRescoreOpen(state);
+      // Director, 16 Nov 15:1x: a Mentor's unsubmitted marks stay open in Stage 2 on every recognition.
+      const marksOpen = mentorMarksOpen(state) && !isPast(state.cycle.stage2_deadline);
       const addWin = evaluatorAddWindow(state, formatWhen, duty.layer);
       const addable = addWin.open ? await addableForDuty(state, duty) : null;
       // Who can add a missed chapter, and when (Piyush 28 Oct): said plainly while it still matters.
@@ -111,7 +113,7 @@ export default async function MySheetsPage() {
         total: visible.length,
         submitted: submittedIds.size,
         nlOpen,
-        extra: { sight, rescore, addable, addNote, pendingItems, mineAdded },
+        extra: { sight, rescore, marksOpen, addable, addNote, pendingItems, mineAdded },
       };
     })
   );
@@ -186,7 +188,12 @@ export default async function MySheetsPage() {
                       re-evaluation {nlOpen === 1 ? "is" : "are"} waiting for your marks. Score by{" "}
                       {formatWhen(state.cycle.reevaluation_deadline)}.
                     </Notice>
-                  ) : win?.state === "over" && !(extra?.rescore && duty.layer === "rm") ? (
+                  ) : extra?.marksOpen && duty.layer === "rm" && submitted < total && state.phase === "stage2" ? (
+                    <Notice tone="alert">
+                      Stage 2 has started. You can still give the marks missing from your sheet until{" "}
+                      {formatWhen(state.cycle.stage2_deadline)}; they count once you submit.
+                    </Notice>
+                  ) : win?.state === "over" && !(extra?.marksOpen && duty.layer === "rm" && submitted < total) ? (
                     <Notice>Stage 1 is over for this recognition. Your sheet is read-only.</Notice>
                   ) : null}
                   {total === 0 ? (
@@ -194,7 +201,7 @@ export default async function MySheetsPage() {
                   ) : null}
                   <div>
                     <Link href={`/recognitions/score/${duty.id}`} className="rx-btn">
-                      {(win?.state === "open" && submitted < total) || nlOpen > 0 || (extra?.rescore && duty.layer === "rm")
+                      {(win?.state === "open" && submitted < total) || nlOpen > 0 || (extra?.marksOpen && duty.layer === "rm" && submitted < total)
                         ? "Open my sheet"
                         : "View my sheet"}{" "}
                       <IconArrowRight size={16} />

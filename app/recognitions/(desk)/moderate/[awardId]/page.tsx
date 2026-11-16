@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { requireRxEvaluatorOnAward } from "@/lib/recognitions/auth";
 import { getAwardState, getPeople, homeChapterNotes, latestDecisionFor, nominationsForDuty } from "@/lib/recognitions/data";
-import { mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
+import { mentorMarksOpen, mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
 import { isPast } from "@/lib/recognitions/phase";
 import { Ribbon } from "@/app/recognitions/_ui/ribbon";
 import { IconArrowLeft } from "@/app/recognitions/_ui/icons";
@@ -124,11 +124,12 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
   }
 
   const shownVersion = latestSubmitted ?? null;
-  // Director, 16 Nov 07:5x + 13:4x: Stage 2 doesn't wait for the Mentors after
-  // a send-back. List the marks that are still their earlier ones, and the
-  // marks not given yet that they can still give, so the leader can re-check.
+  // Director, 16 Nov 07:5x, 13:4x, 15:1x: Stage 2 doesn't wait for the
+  // Mentors. List the marks that are still their earlier ones, and (on every
+  // recognition) the marks not given yet that they can still give, so the
+  // leader can re-check.
   const rescoring = rescoringMarks(data.matrix);
-  const lateWindowOpen = rescore && !isPast(cycle.stage2_deadline);
+  const lateWindowOpen = mentorMarksOpen(state) && !isPast(cycle.stage2_deadline);
   const counted = new Set(
     data.counted.filter((s) => s.status === "submitted").map((s) => `${s.evaluator_id}:${s.nomination_id}`)
   );

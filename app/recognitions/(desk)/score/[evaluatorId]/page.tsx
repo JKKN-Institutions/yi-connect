@@ -13,7 +13,7 @@ import { IconArrowLeft, IconArrowRight, IconDownload, IconEyeOff, IconLock } fro
 import { Deadline, NoAccess, Notice, PageHead, Seal, formatWhen } from "../../../_ui/primitives";
 import { dutyLayerLabel, dutyScoringWindow, scoringDeadlineFor, scoringWindow, stage2LocksMark } from "../score-rules";
 import { ADDED_BY_LABEL, isAddedForChapter, isNlAdded } from "@/lib/recognitions/check-rules";
-import { marksHiddenFrom, marksPrivacyText, mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
+import { marksHiddenFrom, marksPrivacyText, mentorMarksOpen, mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
 import { ScoreSheet } from "./sheet";
 import { FlagToggle } from "./flags";
 import { HealthCardPanel } from "./health-card-panel";
@@ -59,6 +59,8 @@ export default async function ScoringSheetPage({
   const win = scoringWindow(state.phase, cycle);
   // recognitions_05: the NMT leader's send-back reopens a Mentor's sheet; blind until you submit.
   const rescore = mentorRescoreOpen(state) && duty.layer === "rm";
+  // Director, 16 Nov 15:1x: every recognition, not only after a send-back.
+  const marksOpen = mentorMarksOpen(state) && duty.layer === "rm";
   const sight = scoreSight(state, gate.viewer.duties);
   const latestSendBack = state.sendBacks[0] ?? null;
 
@@ -188,12 +190,12 @@ export default async function ScoringSheetPage({
   // Per chapter: one National Leadership added is scored during re-evaluation (recognitions_03).
   const added = isNlAdded(current);
   // Late marks locked (Director, 5 Nov), except a Mentor's unsubmitted marks
-  // while their re-score window is open after a send-back (Director, 16 Nov):
+  // while their window is open, on every recognition (Director, 16 Nov 15:1x):
   // same rule as loadContext in actions/score.ts. Flags stay locked.
-  const lockArgs = { stage2UnlockedAt: award.stage2_unlocked_at, nomination: current, duty, rescoreOpen: rescore };
+  const lockArgs = { stage2UnlockedAt: award.stage2_unlocked_at, nomination: current, duty, rescoreOpen: marksOpen };
   const curWin = stage2LocksMark({ ...lockArgs, mark: true })
     ? ({ state: "over" } as const)
-    : dutyScoringWindow(state.phase, cycle, current, duty, rescore);
+    : dutyScoringWindow(state.phase, cycle, current, duty, marksOpen);
   const open = curWin.state === "open";
   const flagsOpen = open && !stage2LocksMark({ ...lockArgs, mark: false });
   // Stage 2 has started but this Mentor's sheet is still open (Director, 16 Nov 13:4x).
@@ -305,7 +307,7 @@ export default async function ScoringSheetPage({
         ) : null}
         {curWin.state === "closed" ? (
           <Notice>
-            Scoring closed on {formatWhen(rescore ? cycle.stage2_deadline : scoringDeadlineFor(cycle, current))}. Read-only
+            Scoring closed on {formatWhen(marksOpen ? cycle.stage2_deadline : scoringDeadlineFor(cycle, current))}. Read-only
             mode.
           </Notice>
         ) : curWin.state === "over" ? (

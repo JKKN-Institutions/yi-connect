@@ -12,7 +12,7 @@ import { MAX_PARAM, PARAM_KEYS, PART_A_MAX, WORDS } from "@/lib/recognitions/con
 import type { ActionResult, NominationRow, ScoreParams, ScoreRow } from "@/lib/recognitions/types";
 import { formatWhen } from "@/app/recognitions/_ui/primitives";
 import { dutyScoringWindow, scoringDeadlineFor, stage2LocksMark } from "@/app/recognitions/(desk)/score/score-rules";
-import { mentorRescoreOpen } from "@/lib/recognitions/sight";
+import { mentorMarksOpen } from "@/lib/recognitions/sight";
 import type { FlagInput, SaveScoreInput } from "@/app/recognitions/(desk)/score/score-types";
 
 // Hard character caps so a single giant "word" can't slip past the word count.
@@ -43,9 +43,10 @@ async function loadContext(
   // or flag may be written or changed, even on a Mentor sheet reopened by a
   // send-back. A chapter National Leadership added is scored in re-evaluation,
   // after Stage 2, so it is not a Stage 1 mark and keeps its own window.
-  // Director, 16 Nov: after a send-back, a Mentor may still give or resubmit
-  // any unsubmitted mark (not flags) until the leader submits the ranking.
-  const rescore = mentorRescoreOpen(state);
+  // Director, 16 Nov 13:4x + 15:1x: on every recognition, a Mentor may still
+  // give or resubmit any unsubmitted mark (not flags) in Stage 2 (and after a
+  // send-back) until the leader submits the ranking or the Stage 2 deadline.
+  const rescore = mentorMarksOpen(state);
   if (
     stage2LocksMark({
       stage2UnlockedAt: state.award.stage2_unlocked_at,

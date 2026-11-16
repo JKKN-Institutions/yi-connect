@@ -11,9 +11,10 @@
  *   - The NMT the same: an NMT member sees the Mentors' marks only after
  *     submitting their own sheets for that recognition.
  *   - From Stage 2 on, every evaluator of the recognition sees the round-1
- *     leaderboard (the joint call), EXCEPT, after the NMT leader's send-back,
- *     a Mentor with any unsubmitted mark on it (reopened or never given),
- *     until they submit everything or the Stage 2 deadline passes.
+ *     leaderboard (the joint call), EXCEPT a Regional Mentor with any
+ *     unsubmitted mark on it (never given, a draft, or reopened by a
+ *     send-back), until they submit everything or the Stage 2 deadline
+ *     passes (Director, 16 Nov 15:1x: every recognition).
  *   - A duty with nothing on its sheet has submitted nothing: fail closed,
  *     it stays blind until Stage 2.
  *   - Director, 16 Nov 2026: a Mentor's earlier mark counts for Stage 2 while
@@ -62,6 +63,28 @@ export function mentorRescoreOpen(state: State): boolean {
     (state.phase === "stage1" || state.phase === "stage2") &&
     state.completeness.rm.submitted < state.completeness.rm.required
   );
+}
+
+/**
+ * Director, 16 Nov 13:4x + 15:1x: a Regional Mentor may still give or submit
+ * ANY mark they haven't submitted (never given, a round-1 draft, or reopened
+ * by a send-back) once Stage 2 is open, on EVERY recognition; and, after a
+ * send-back, already in Stage 1. It ends when the leader submits the ranking
+ * (the phase leaves stage2) or, through dutyScoringWindow, at the cycle's
+ * Stage 2 deadline. NMT marks are not covered. A mark counts once submitted;
+ * until then the NMT stands in.
+ */
+export function mentorMarksOpen(state: State): boolean {
+  return (
+    state.completeness.rm.submitted < state.completeness.rm.required &&
+    (state.phase === "stage2" || mentorRescoreOpen(state))
+  );
+}
+
+/** This duty has at least one mark on its sheet it hasn't submitted. */
+function dutyHasOpenMark(state: Pick<AwardState, "completeness">, dutyId: string): boolean {
+  const p = state.completeness.perDuty.find((d) => d.evaluatorId === dutyId);
+  return !!p && p.submitted < p.required;
 }
 
 /**
@@ -121,21 +144,22 @@ export function scoreSight(state: State, duties: Duty[], opts?: { oversight?: bo
   if (!opts?.oversight && marksHiddenFrom(state, mine)) return { sees: false, reason: MARKS_HIDDEN_REASON };
   if (mine.every((d) => dutySubmittedAll(state, d.id))) return { sees: true, why: "submitted" };
 
-  // Director, 16 Nov 13:4x: after a send-back a Mentor can still give or
-  // resubmit any unsubmitted mark (reopened or never given) even in Stage 2,
-  // until the leader submits the ranking or the Stage 2 deadline passes. So a
-  // Mentor with any unsubmitted mark stays blind until they submit
-  // everything or the deadline passes.
-  const sentBackToMe =
-    mentorRescoreOpen(state) &&
+  // Director, 16 Nov 13:4x + 15:1x: a Mentor can still give or resubmit any
+  // unsubmitted mark in Stage 2 (and after a send-back), so a Mentor with any
+  // unsubmitted mark stays blind until they submit everything or the Stage 2
+  // deadline passes. A Mentor with an empty sheet has nothing open.
+  const stillScoring =
+    mentorMarksOpen(state) &&
     !isPast(state.cycle.stage2_deadline) &&
-    mine.some((d) => d.layer === "rm" && !dutySubmittedAll(state, d.id));
-  if (!BEFORE_STAGE2.has(state.phase) && !sentBackToMe) return { sees: true, why: "stage2" };
+    mine.some((d) => d.layer === "rm" && dutyHasOpenMark(state, d.id));
+  if (!BEFORE_STAGE2.has(state.phase) && !stillScoring) return { sees: true, why: "stage2" };
 
   return {
     sees: false,
-    reason: sentBackToMe
-      ? "The NMT leader sent this recognition back to the Regional Mentors. You see every mark again once you have submitted every mark on your sheet, or once the Stage 2 deadline passes."
+    reason: stillScoring
+      ? state.sendBacks.length > 0
+        ? "The NMT leader sent this recognition back to the Regional Mentors. You see every mark again once you have submitted every mark on your sheet, or once the Stage 2 deadline passes."
+        : "You can still give the marks missing from your sheet, so other evaluators' marks stay hidden from you until you have submitted every mark on it, or until the Stage 2 deadline passes."
       : "Marks stay blind until you have submitted every chapter on your sheet for this recognition. Then you can see every evaluator's marks here, read-only.",
   };
 }

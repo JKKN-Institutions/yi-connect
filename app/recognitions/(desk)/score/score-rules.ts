@@ -57,14 +57,14 @@ export function scoringDeadlineFor(
 
 /**
  * Late marks locked (Director, 5 Nov): once Stage 2 is unlocked, no Stage 1
- * mark may be written. Exception after an NMT-leader send-back (Director,
- * 16 Nov 07:5x and 13:4x): Stage 2 no longer waits for the Regional Mentors,
- * so while their re-score window is open (until the leader submits the
- * ranking, at the latest the Stage 2 deadline: dutyScoringWindow) a Mentor
- * may still give or resubmit ANY mark they haven't submitted: a reopened one
- * or one never given. A submitted mark stays frozen (actions/score.ts and the
- * DB trigger). Flags stay locked. A chapter National Leadership added keeps
- * its own window.
+ * mark may be written. Exception for Regional Mentors on every recognition
+ * (Director, 16 Nov 13:4x + 15:1x): while their window is open (sight.ts
+ * mentorMarksOpen: until the leader submits the ranking, at the latest the
+ * Stage 2 deadline via dutyScoringWindow) a Mentor may still give or
+ * resubmit ANY mark they haven't submitted: never given, a draft, or one a
+ * send-back reopened. A submitted mark stays frozen (actions/score.ts and
+ * the DB trigger). NMT marks and flags stay locked. A chapter National
+ * Leadership added keeps its own window.
  */
 export function stage2LocksMark(input: {
   stage2UnlockedAt: string | null;
@@ -85,9 +85,9 @@ export function dutyLayerLabel(duty: { layer: "rm" | "nmt"; region: string | nul
 }
 
 /**
- * recognitions_05: after the NMT leader sends a recognition back to its
- * Regional Mentors, a Mentor's sheet reopens even though Stage 1 has closed
- * or Stage 2 has started. It stays open until the cycle's Stage 2 deadline.
+ * A Regional Mentor's sheet stays open past Stage 1 while `rescoreOpen`
+ * (sight.ts mentorMarksOpen: after a send-back, and in Stage 2 on every
+ * recognition, Director 16 Nov 15:1x), until the cycle's Stage 2 deadline.
  * Every other duty and nomination follows nominationScoringWindow.
  */
 export function dutyScoringWindow(

@@ -18,6 +18,7 @@ import { computeMatrix, paramsTotal } from "@/lib/recognitions/scoring";
 import { PHASE_LABEL } from "@/lib/recognitions/phase";
 import { ADDED_BY_LABEL, isAddedForChapter } from "@/lib/recognitions/check-rules";
 import type { CycleRow } from "@/lib/recognitions/types";
+import { attendanceReportRows } from "@/lib/recognitions/attendance";
 
 /**
  * Data for the super-admin reports. Callers MUST pass requireRxSuperAdmin
@@ -232,6 +233,8 @@ export async function verticalReport(): Promise<{ cycle: CycleRow; sheets: Verti
       ]);
     }
     if (matrix.length === 0) aoa.push(["No chapter is in the race for this recognition."]);
+    // recognitions_09: who attended the Stage 2 meeting, from the same submitted version as the final ranks.
+    aoa.push([], ...attendanceReportRows(version, evaluators, (id) => people.get(id)?.full_name ?? ""));
     sheets.push({ title: award.title, aoa });
   }
   return { cycle, sheets };

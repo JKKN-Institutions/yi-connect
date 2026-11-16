@@ -21,6 +21,7 @@ import { STAGE2_LOCKED } from "../copy";
 import { ModerationForm, type FormCategory, type FormInitial } from "./moderation-form";
 import { ReopenButton } from "./reopen-button";
 import { MentorSendBackPanel, SendBackHistory } from "./mentor-sendback";
+import { attendanceFormData } from "@/lib/recognitions/attendance-data";
 
 export const metadata: Metadata = { title: "Stage 2 room" };
 
@@ -124,6 +125,8 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
   }
 
   const shownVersion = latestSubmitted ?? null;
+  // recognitions_09: the leader's attendance checkboxes (names of this recognition's active evaluators).
+  const attendanceForm = canEdit ? await attendanceFormData(state.duties, draftOpen ? latest : null) : null;
 
   return (
     <div className="rx-stack-lg">
@@ -190,6 +193,7 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
                 initial={initial}
                 mode={phase === "reevaluation" ? "reevaluation" : "stage2"}
                 home={home}
+                attendance={attendanceForm ?? { options: [], initial: null }}
               />
             )}
           </>

@@ -15,6 +15,8 @@ import { loadStage2 } from "@/app/recognitions/_parts/load";
 import { buildRankingView, chapterName, dossierOf, prefillFromMatrix } from "@/app/recognitions/_parts/shared";
 import { CategoryPanel, CategoryTabs } from "@/app/recognitions/_parts/category-tabs";
 import { DecisionPanel } from "./decision-panel";
+import { AttendanceView } from "@/app/recognitions/_parts/attendance-view";
+import { attendanceSummary } from "@/lib/recognitions/attendance-data";
 import { AddChapterPanel, AddedFixForm } from "./add-chapter";
 import { addableChapters, addWindow } from "@/lib/recognitions/nl-add";
 import {
@@ -101,6 +103,8 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
         prefillFromMatrix(data.matrix)
       )
     : [];
+  // recognitions_09: who attended the Stage 2 meeting, as confirmed with the submitted version.
+  const attendance = finalVersion ? await attendanceSummary(award.id, finalVersion) : null;
   const counts = Object.fromEntries(
     CATEGORIES.map((c) => [c, state.checkedNominations.filter((n) => n.category === c).length])
   );
@@ -427,6 +431,7 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
                 Citations show the super admin&apos;s polished text where there is one.
               </p>
               <RankingTable view={finalView} home={home} />
+              {attendance ? <AttendanceView summary={attendance} version={finalVersion.version} /> : null}
             </>
           ) : (
             <p className="rx-mute">The NMT leader hasn&apos;t submitted a moderation yet.</p>

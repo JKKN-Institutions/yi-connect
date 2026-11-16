@@ -16,7 +16,7 @@
 -- so the attendance is frozen with the ranking. No new trigger needed.
 --
 -- ADD-ONLY. No default, no row changed, nothing dropped.
--- NOT APPLIED. Apply before the code that writes it is merged: the
+-- Applied to production on 16 Nov 2026, 15:4x IST (add-only, empty). Apply before the code that writes it is merged: the
 -- moderation draft/submit actions write this column, so they fail until it
 -- exists.
 -- =====================================================================

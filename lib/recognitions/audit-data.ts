@@ -38,12 +38,14 @@ export async function loadCycleAudit(cycleId: string): Promise<AuditRow[]> {
     if (expected === null) expected = count ?? 0;
     const page = (data ?? []) as AuditRow[];
     if (page.length === 0) break;
+    const before = rows.length;
     for (const r of page) {
       if (!seen.has(r.id)) {
         seen.add(r.id);
         rows.push(r);
       }
     }
+    if (rows.length === before) break; // a page of only repeats: stop, the count check below reports the gap
     if (rows.length >= expected) break;
   }
   if (rows.length < (expected ?? 0)) fail(`read audit (got ${rows.length} of ${expected} rows)`, null);
@@ -64,7 +66,9 @@ async function nominationChapters(): Promise<Map<string, string>> {
     if (expected === null) expected = count ?? 0;
     const page = (data ?? []) as Array<{ id: string; chapter_id: string }>;
     if (page.length === 0) break;
+    const before = out.size;
     for (const n of page) out.set(n.id.toLowerCase(), n.chapter_id.toLowerCase());
+    if (out.size === before) break; // a page of only repeats: stop, the count check below reports the gap
     if (out.size >= expected) break;
   }
   if (out.size < (expected ?? 0)) fail(`read nominations (got ${out.size} of ${expected})`, null);

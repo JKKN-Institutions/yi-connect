@@ -71,19 +71,40 @@ async function nominationChapters(): Promise<Map<string, string>> {
   return out;
 }
 
+/** evaluator id -> "RM WR", "NMT" or "NMT leader", for every evaluator duty (all cycles; a few hundred rows). */
+async function evaluatorLabels(): Promise<Map<string, string>> {
+  const { data, error, count } = await rxService()
+    .from("recognition_evaluators")
+    .select("id, layer, region, is_nmt_leader", { count: "exact" })
+    .range(0, PAGE - 1);
+  if (error) fail("read evaluators", error);
+  const rows = (data ?? []) as Array<{ id: string; layer: string; region: string | null; is_nmt_leader: boolean | null }>;
+  if (rows.length < (count ?? 0)) fail(`read evaluators (got ${rows.length} of ${count})`, null);
+  return new Map(
+    rows.map((e) => [
+      e.id.toLowerCase(),
+      e.layer === "rm" ? `RM${e.region ? ` ${e.region}` : ""}` : e.is_nmt_leader ? "NMT leader" : "NMT",
+    ])
+  );
+}
+
 function chunks<T>(xs: T[], n = 100): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < xs.length; i += n) out.push(xs.slice(i, i + n));
   return out;
 }
 
-/** Names of everyone who acted in the rows, and the nomination -> chapter map. */
+/** Names of everyone who acted in the rows, the nomination -> chapter map, and evaluator labels. */
 export async function auditLookups(rows: AuditRow[]): Promise<AuditLookups> {
   const ids = [...new Set(rows.map((r) => r.actor_person_id ?? "").filter(Boolean))];
-  const [maps, nominationChapter] = await Promise.all([Promise.all(chunks(ids).map((c) => getPeople(c))), nominationChapters()]);
+  const [maps, nominationChapter, evaluatorLabel] = await Promise.all([
+    Promise.all(chunks(ids).map((c) => getPeople(c))),
+    nominationChapters(),
+    evaluatorLabels(),
+  ]);
   const personName = new Map<string, string>();
   for (const m of maps) for (const [id, p] of m) personName.set(id, p.full_name);
-  return { personName, nominationChapter };
+  return { personName, nominationChapter, evaluatorLabel };
 }
 
 const ROLE_LABEL: Record<string, string> = {

@@ -41,9 +41,85 @@ export function words(s: string) {
   return s.replace(/_/g, " ").replace(/\bawards?\b/g, (m) => (m === "award" ? "recognition" : "recognitions"));
 }
 
-/** "submitted recognition scores", "created recognition", … as the page has always shown it. */
+/**
+ * Plain-English labels for every action code in the live log (17 Nov 2026).
+ * Keyed "action|entity" where the same action means different things on
+ * different records, else by action alone. Codes not listed here fall back to
+ * ACTION_WORD + entity, as before.
+ */
+export const ACTION_LABEL: Record<string, string> = {
+  score_submitted: "Submitted marks",
+  nomination_draft_saved: "Saved a nomination draft",
+  nomination_submitted: "Submitted a nomination",
+  nomination_draft_deleted: "Deleted a nomination draft",
+  rm_recommended: "Mentor recommended a chapter",
+  rm_recommendation_withdrawn: "Mentor withdrew a recommendation",
+  nmt_approved_recommendation: "NMT approved a Mentor's recommendation",
+  nmt_approval_withdrawn: "NMT withdrew an approval",
+  predictions_submitted: "Submitted predictions",
+  force_open_stage2: "Opened Stage 2 early by hand",
+  stage2_unlocked: "Opened Stage 2",
+  stage2_auto_opened_rm_missing: "Stage 2 opened by itself (Mentor marks missing)",
+  sent_back_to_mentors: "Sent a recognition back to its Mentors",
+  edit_health_card_measure: "Edited a Health Card mark",
+  remove_test_logins: "Removed test logins",
+  "upload|health_card_file": "Uploaded a Health Card file",
+  "assign|evaluator": "Added an evaluator",
+  "remove|evaluator": "Removed an evaluator",
+  "update|evaluator": "Changed an evaluator",
+  "create|award": "Created a recognition",
+  "update|award": "Changed a recognition's settings",
+  "create|cycle": "Created a cycle",
+  "update|cycle": "Changed the cycle's settings",
+  "make_current|cycle": "Made this the current cycle",
+  "grant|role": "Gave someone a role",
+  "revoke|role": "Took away a role",
+  "create|person": "Added a person",
+  "update|person": "Changed a person's details",
+  "update|person_email": "Changed a person's email",
+  "create|test_logins": "Created test logins",
+  "bulk_load|sheet": "Loaded a sheet in bulk",
+  "paste|chapter_categories": "Pasted chapter categories",
+  "test_data_wipe|cycle": "Cleared test data from the cycle",
+  "test_data_wipe|recognition_nominations": "Cleared test nominations",
+};
+
+/** "Submitted marks", "Created a recognition", …; unknown codes read as before. */
 export function actionText(r: Pick<AuditRow, "action" | "entity">): string {
-  return `${ACTION_WORD[r.action] ?? words(r.action)} ${words(r.entity)}`;
+  return (
+    ACTION_LABEL[`${r.action}|${r.entity}`] ??
+    ACTION_LABEL[r.action] ??
+    `${ACTION_WORD[r.action] ?? words(r.action)} ${words(r.entity)}`
+  );
+}
+
+/** Readable stand-ins for ids in the detail, e.g. evaluator_id -> "RM WR". */
+export type DetailNames = {
+  /** evaluator id -> "RM WR" / "NMT" / "NMT leader". */
+  evaluatorLabel: Map<string, string>;
+  nominationChapter: Map<string, string>;
+  /** chapter id (lower case) -> name. */
+  chapterName: Map<string, string>;
+};
+
+/** Replaces evaluator_id and nomination_id with names where they are known; other keys pass through. */
+export function readableDetail(d: Record<string, unknown>, names: DetailNames): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(d ?? {})) {
+    const id = str(v);
+    if (k === "evaluator_id" && id && names.evaluatorLabel.has(id)) {
+      out.evaluator = names.evaluatorLabel.get(id);
+      // "layer: rm" only repeats what the evaluator label says.
+      delete out.layer;
+    } else if (k === "layer" && "evaluator" in out) {
+      continue;
+    } else if (k === "nomination_id" && id && names.nominationChapter.has(id)) {
+      out.nomination = names.chapterName.get(names.nominationChapter.get(id)!) ?? "Chapter not found";
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
 }
 
 /** The detail jsonb as "key: value · key: value". The page shortens it; the export keeps everything. */
@@ -128,6 +204,8 @@ export type AuditLookups = {
   personName: Map<string, string>;
   /** nomination id -> chapter id. */
   nominationChapter: Map<string, string>;
+  /** evaluator id -> "RM WR" / "NMT" / "NMT leader". */
+  evaluatorLabel: Map<string, string>;
 };
 
 const str = (v: unknown) => (typeof v === "string" && v !== "" ? v.toLowerCase() : null);
@@ -211,7 +289,7 @@ export function auditExportRows(
       r.award_id ? look.awardTitle.get(r.award_id) ?? "A recognition no longer listed" : "",
       chapters.map((c) => look.chapterName.get(c) ?? "Chapter not found").join(", "),
       // The chapter has its own column, so its id is left out of the details.
-      detailText(r.detail, { skip: ["chapter_id"] }),
+      detailText(readableDetail(r.detail, look), { skip: ["chapter_id"] }),
     ]);
   }
   return out;

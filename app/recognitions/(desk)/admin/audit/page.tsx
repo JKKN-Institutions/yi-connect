@@ -10,6 +10,7 @@ import {
   filterAuditRows,
   isFiltered,
   parseAuditFilter,
+  readableDetail,
   words,
 } from "@/lib/recognitions/audit-log";
 import { IconDownload } from "../../../_ui/icons";
@@ -155,7 +156,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
                       {actionText(r)}
                       {about ? <div className="rx-ad-mini">{about}</div> : null}
                     </td>
-                    <td className="rx-small rx-ad-pre" style={{ minWidth: 240 }}>{detailText(r.detail, { maxParts: 6, maxChars: 160, skip: ["chapter_id"] })}</td>
+                    <td className="rx-small rx-ad-pre" style={{ minWidth: 240 }}>{detailText(readableDetail(r.detail, { ...look, chapterName }), { maxParts: 6, maxChars: 160, skip: ["chapter_id"] })}</td>
                   </tr>
                 );
               })}

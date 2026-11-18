@@ -231,7 +231,13 @@ export async function updateEvaluatorConflicts(input: { evaluatorId: string; con
 // Recognitions team (directory roles only)
 // ---------------------------------------------------------------------------
 
-const TEAM_ROLES = [RX_ROLES.superAdmin, RX_ROLES.nationalLeadership, RX_ROLES.regionalChair, RX_ROLES.chapterRep] as const;
+const TEAM_ROLES = [
+  RX_ROLES.superAdmin,
+  RX_ROLES.nationalLeadership,
+  RX_ROLES.nationalLeadershipView,
+  RX_ROLES.regionalChair,
+  RX_ROLES.chapterRep,
+] as const;
 type TeamRole = (typeof TEAM_ROLES)[number];
 
 async function teamYear(): Promise<{ year: number; cycleId: string | null }> {

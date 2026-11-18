@@ -245,6 +245,8 @@ export const RX_APP = "recognitions";
 export const RX_ROLES = {
   superAdmin: "recognitions_super_admin",
   nationalLeadership: "national_leadership",
+  /** National Leadership with view rights only: reads everything National Leadership reads, decides nothing (Piyush, 18 Nov). */
+  nationalLeadershipView: "national_leadership_view",
   chapterRep: "chapter_rep",
   rm: "rm",
   /** Checks nominations from one region (yi_zone). Piyush's 2026 deck. */

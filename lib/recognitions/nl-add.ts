@@ -24,7 +24,7 @@ import type { ChapterRow } from "./types";
  * NMT evaluator, none of them linked to the chapter (the same conflict rule
  * the check desk and scoring sheets apply).
  *
- * No permission check here: callers pass requireRxOversight first.
+ * No permission check here: callers pass requireRxNlAction first.
  */
 
 const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();

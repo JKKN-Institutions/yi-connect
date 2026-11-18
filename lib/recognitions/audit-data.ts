@@ -114,6 +114,7 @@ export async function auditLookups(rows: AuditRow[]): Promise<AuditLookups> {
 const ROLE_LABEL: Record<string, string> = {
   [RX_ROLES.superAdmin]: "Recognitions super admin",
   [RX_ROLES.nationalLeadership]: "National Leadership",
+  [RX_ROLES.nationalLeadershipView]: "National Leadership (view only)",
   [RX_ROLES.chapterRep]: "Chapter representative",
   [RX_ROLES.rm]: "Regional Mentor",
   [RX_ROLES.regionalChair]: "Regional Chair",

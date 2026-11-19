@@ -1,5 +1,6 @@
 -- Yi Erode Enablers of Change (EC) 2027: member Expression of Interest (EOI)
--- Add-only: five new tables + one function in yi_connect. Nothing existing changes.
+-- Add-only: three new tables + one function in yi_connect. (Admin access uses Yi Connect
+-- logins via yi_directory.role_assignments; see lib/ec-eoi/access-rule.ts.) Nothing existing changes.
 -- All access goes through the server with the service role. Members and the
 -- browser never read these tables directly (RLS on, no policies, grants revoked).
 
@@ -31,40 +32,15 @@ create table if not exists yi_connect.ec_eoi_proposals (
   primary key (application_id, role_id)
 );
 
--- Admin login (username Yierode). The password hash is set by the chapter owner
--- himself with scripts/ec-eoi-set-admin-password.mjs; it never appears in code.
-create table if not exists yi_connect.ec_eoi_admin_credentials (
-  username text primary key,
-  password_hash text not null,
-  updated_at timestamptz not null default now()
-);
-
-create table if not exists yi_connect.ec_eoi_admin_sessions (
-  token_hash text primary key,
-  username text not null,
-  created_at timestamptz not null default now(),
-  expires_at timestamptz not null,
-  revoked_at timestamptz
-);
-
-create table if not exists yi_connect.ec_eoi_login_attempts (
-  id bigserial primary key,
-  username text not null,
-  succeeded boolean not null,
-  attempted_at timestamptz not null default now()
-);
-create index if not exists ec_eoi_login_attempts_at_idx on yi_connect.ec_eoi_login_attempts (attempted_at);
-
 do $$
 declare t text;
 begin
-  foreach t in array array['ec_eoi_settings','ec_eoi_applications','ec_eoi_proposals','ec_eoi_admin_credentials','ec_eoi_admin_sessions','ec_eoi_login_attempts'] loop
+  foreach t in array array['ec_eoi_settings','ec_eoi_applications','ec_eoi_proposals'] loop
     execute format('alter table yi_connect.%I enable row level security', t);
     execute format('revoke all on yi_connect.%I from anon, authenticated', t);
     execute format('grant all on yi_connect.%I to service_role', t);
   end loop;
 end $$;
-grant usage, select on sequence yi_connect.ec_eoi_login_attempts_id_seq to service_role;
 
 -- Saves one EOI and its proposals in a single transaction. If the same
 -- request_key arrives again (a retry), returns the first save instead.

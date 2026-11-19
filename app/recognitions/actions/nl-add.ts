@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireRxOversight } from "@/lib/recognitions/auth";
+import { requireRxNlAction } from "@/lib/recognitions/auth";
 import { audit, getAward, getAwardState, getCurrentCycle } from "@/lib/recognitions/data";
 import { recordDecision } from "@/lib/recognitions/governance";
 import { addWindow, chapterAddRefusal } from "@/lib/recognitions/nl-add";
@@ -51,7 +51,7 @@ function writeFailed(what: string, message: string, code?: string): ActionResult
 
 /** Add a chapter that did not nominate to an award, with National Leadership's reason. */
 export async function addChapterToAward(awardId: string, chapterId: string, reason: string): Promise<ActionResult> {
-  const gate = await requireRxOversight();
+  const gate = await requireRxNlAction();
   if (!gate.ok) return { success: false, error: gate.error };
   const personId = gate.viewer.personId;
 
@@ -150,7 +150,7 @@ type FixCtx = { personId: string; nomination: NominationRow; title: string; cycl
 
 /** Shared preconditions for editing / resubmitting a sent-back NL-added nomination. */
 async function fixContext(nominationId: string): Promise<{ ok: true; ctx: FixCtx } | { ok: false; error: string }> {
-  const gate = await requireRxOversight();
+  const gate = await requireRxNlAction();
   if (!gate.ok) return { ok: false, error: gate.error };
   if (typeof nominationId !== "string" || nominationId === "") {
     return { ok: false, error: "No nomination was chosen. Reload the page and try again." };

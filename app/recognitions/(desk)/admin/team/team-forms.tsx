@@ -10,6 +10,7 @@ import { useAction } from "../_lib/use-action";
 type TeamRole =
   | typeof RX_ROLES.superAdmin
   | typeof RX_ROLES.nationalLeadership
+  | typeof RX_ROLES.nationalLeadershipView
   | typeof RX_ROLES.regionalChair
   | typeof RX_ROLES.chapterRep;
 

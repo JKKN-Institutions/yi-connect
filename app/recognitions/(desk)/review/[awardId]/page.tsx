@@ -83,7 +83,9 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
     .filter(isNlAdded)
     .sort((a, b) => Date.parse(b.added_at ?? "") - Date.parse(a.added_at ?? ""));
   const addWin = addWindow(state);
-  const addable = addWin.open ? await addableChapters(state) : null;
+  // View-only National Leadership (Piyush, 18 Nov) sees what was added but gets no add or fix controls.
+  const canAct = gate.viewer.isSuperAdmin || gate.viewer.isNationalDecider;
+  const addable = addWin.open && canAct ? await addableChapters(state) : null;
   const actors = await getPeople(
     [
       ...auditRows.map((a) => a.actor_person_id),
@@ -129,8 +131,9 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
             <DecisionPanel awardId={award.id} version={finalVersion.version} />
           ) : (
             <Notice>
-              Version {finalVersion.version} is waiting for a decision. Only National Leadership can approve it or send
-              it back; you can read both summaries below.
+              {gate.viewer.isNationalLeadership
+                ? `Version ${finalVersion.version} is waiting for a decision. Your login has view rights only: the deciding member of National Leadership approves it or sends it back. You can read both summaries below.`
+                : `Version ${finalVersion.version} is waiting for a decision. Only National Leadership can approve it or send it back; you can read both summaries below.`}
             </Notice>
           )
         ) : null}
@@ -195,7 +198,7 @@ export default async function AwardReview({ params }: { params: Promise<{ awardI
                   </div>
                 ) : null}
                 {st === "excluded" ? <p className="rx-small rx-mute">{exclusionReason(n, cycle)}</p> : null}
-                {canFix(n, cycle) ? (
+                {canAct && canFix(n, cycle) ? (
                   <AddedFixForm nominationId={n.id} chapterName={chapter} initial={n.added_reason ?? ""} />
                 ) : (
                   <div>

@@ -28,7 +28,10 @@ import { getCurrentCycle } from "./data";
  *   Regional Chair        app='recognitions' regional_chair with yi_zone = R:
  *                         checks region R's nominations (with an RM) before
  *                         they are scored. No duty row.
- *   National Leadership   app='recognitions' national_leadership.
+ *   National Leadership   app='recognitions' national_leadership: reads the
+ *                         summaries and decides (approve / send back / add a
+ *                         chapter). national_leadership_view: reads the same,
+ *                         decides nothing (Piyush, 18 Nov 2026).
  *   Super admin           app='recognitions' recognitions_super_admin, or any
  *                         platform_super_admin.
  *
@@ -50,7 +53,10 @@ export type RxViewer = {
   personId: string;
   email: string | null;
   isSuperAdmin: boolean;
+  /** Any National Leadership role, deciding or view only: everything National Leadership may READ. */
   isNationalLeadership: boolean;
+  /** The deciding National Leadership role: approve, send back, add a chapter. */
+  isNationalDecider: boolean;
   /** Chapters this person may file nominations and predictions for. */
   chapters: ChapterRow[];
   /** Active evaluator duties in the current cycle that the directory backs. */
@@ -77,7 +83,8 @@ export const getRxViewer = cache(async (): Promise<RxViewer | null> => {
   const isSuperAdmin =
     me.assignments.some((a) => a.is_active && PLATFORM_SUPER.has(a.role)) ||
     activeRx(me, RX_ROLES.superAdmin).length > 0;
-  const isNationalLeadership = activeRx(me, RX_ROLES.nationalLeadership).length > 0;
+  const isNationalDecider = activeRx(me, RX_ROLES.nationalLeadership).length > 0;
+  const isNationalLeadership = isNationalDecider || activeRx(me, RX_ROLES.nationalLeadershipView).length > 0;
 
   // ---- Chapter login ---------------------------------------------------
   const chapterNames = new Set(
@@ -161,6 +168,7 @@ export const getRxViewer = cache(async (): Promise<RxViewer | null> => {
     email: me.email,
     isSuperAdmin,
     isNationalLeadership,
+    isNationalDecider,
     chapters,
     duties,
     regionalChairZones,
@@ -223,9 +231,34 @@ export async function requireRxSuperAdmin(): Promise<Gate<null>> {
 export async function requireRxNationalLeadership(): Promise<Gate<null>> {
   const v = await getRxViewer();
   if (!v) return { ok: false, error: NOT_SIGNED_IN };
-  if (!v.isNationalLeadership) {
-    log("gate", { gate: "national_leadership", verdict: "deny", person: v.personId });
-    return { ok: false, error: "Only National Leadership can approve or send a recognition back." };
+  if (!v.isNationalDecider) {
+    log("gate", { gate: "national_leadership", verdict: "deny", person: v.personId, viewOnly: v.isNationalLeadership });
+    return {
+      ok: false,
+      error: v.isNationalLeadership
+        ? "Your National Leadership login has view rights only. Approving or sending a recognition back is done by the deciding member of National Leadership."
+        : "Only National Leadership can approve or send a recognition back.",
+    };
+  }
+  return { ok: true, viewer: v, value: null };
+}
+
+/**
+ * Adding a chapter that did not nominate, and fixing one that was added: the
+ * deciding member of National Leadership or the Recognitions super admin
+ * (Director 2026-10-10). View-only National Leadership is refused (Piyush, 18 Nov).
+ */
+export async function requireRxNlAction(): Promise<Gate<null>> {
+  const v = await getRxViewer();
+  if (!v) return { ok: false, error: NOT_SIGNED_IN };
+  if (!v.isSuperAdmin && !v.isNationalDecider) {
+    log("gate", { gate: "nl_action", verdict: "deny", person: v.personId, viewOnly: v.isNationalLeadership });
+    return {
+      ok: false,
+      error: v.isNationalLeadership
+        ? "Your National Leadership login has view rights only. Adding or fixing a chapter is done by the deciding member of National Leadership or the Recognitions super admin."
+        : "Only National Leadership and the Recognitions super admin can do this.",
+    };
   }
   return { ok: true, viewer: v, value: null };
 }

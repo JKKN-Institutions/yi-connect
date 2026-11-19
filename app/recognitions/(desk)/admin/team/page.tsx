@@ -11,6 +11,10 @@ export const metadata = { title: "Team" };
 const ROLE_COPY: Record<string, { label: string; what: string }> = {
   [RX_ROLES.superAdmin]: { label: "Recognitions super admin", what: "Runs this control room: timelines, recognitions, evaluators, citations, reports." },
   [RX_ROLES.nationalLeadership]: { label: "National Leadership", what: "Reads the Stage 1 and Stage 2 summaries; approves a recognition or sends it back." },
+  [RX_ROLES.nationalLeadershipView]: {
+    label: "National Leadership (view only)",
+    what: "Reads everything National Leadership reads; cannot approve, send back, or add a chapter.",
+  },
   // The Regional Chair has no part in 2026 (client, 2026-10-27): listed only when the check step is on.
   ...(CHECK_STEP_ENABLED
     ? {

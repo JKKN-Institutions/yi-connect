@@ -48,7 +48,7 @@ function AwardLine({ state }: { state: AwardState }) {
 export default async function ReviewList() {
   const gate = await requireRxOversight();
   if (!gate.ok) return <NoAccess reason={gate.error} />;
-  const decides = gate.viewer.isNationalLeadership;
+  const decides = gate.viewer.isNationalDecider;
 
   const cycle = await getCurrentCycle();
   if (!cycle) {

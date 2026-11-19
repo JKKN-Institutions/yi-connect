@@ -1,0 +1,153 @@
+// Yi Erode EC 2027 EOI: rule tests. Run: node --test tests/ec-eoi/
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { inflateRawSync } from 'node:zlib'
+import { EOI_ROLES, EOI_ROLE_IDS, EOI_COMMITMENTS, EOI_ROLE_UPDATE_NOTE } from '../../lib/ec-eoi/catalog.ts'
+import { countSentences, normalisePhone, validateSubmission, isValidName } from '../../lib/ec-eoi/validation.ts'
+import { createWorkbook, createAreaZip, areaFilename } from '../../lib/ec-eoi/workbook.ts'
+
+const IDS = EOI_ROLES.map(r => r.id)
+
+test('role ids are pinned to role names (reordering must never move a proposal)', () => {
+  const pinned = {
+    'vertical-0': 'Membership', 'vertical-1': 'Thalir', 'vertical-2': 'Yuva', 'vertical-3': 'Rural Initiatives',
+    'vertical-4': 'Health', 'vertical-5': 'Road Safety', 'vertical-6': 'Masoom', 'vertical-7': 'Sense', 'vertical-8': 'Climate Change',
+    'vertical-9': 'Entrepreneurship', 'vertical-10': 'Innovation', 'vertical-11': 'Learning', 'vertical-12': 'Sports', 'vertical-13': 'Branding',
+  }
+  assert.equal(EOI_ROLES.length, 14)
+  assert.equal(EOI_ROLE_IDS.size, 14)
+  for (const r of EOI_ROLES) assert.equal(pinned[r.id], r.name, r.id)
+  assert.deepEqual(EOI_ROLES.filter(r => r.category === 'Stakeholders').length, 4)
+  assert.deepEqual(EOI_ROLES.filter(r => r.category === 'Projects').length, 5)
+  assert.deepEqual(EOI_ROLES.filter(r => r.category === 'Initiatives').length, 5)
+  for (const r of EOI_ROLES) assert.ok(r.responsibilities.length > 0, r.name + ' has responsibilities')
+  assert.deepEqual(EOI_COMMITMENTS.map(c => c.title), ['Pathfinder', 'EC Leader Academy (EC LA)', 'Regional Council Meeting 2027 (RCM)', 'EC Meetings'])
+  assert.match(EOI_ROLE_UPDATE_NOTE, /^Any new programmes or responsibilities introduced for 2027/)
+})
+
+test('sentence counter matches the design', () => {
+  assert.equal(countSentences(''), 0)
+  assert.equal(countSentences('   '), 0)
+  assert.equal(countSentences('One idea.'), 1)
+  assert.equal(countSentences('One idea. Two ideas.'), 2)
+  assert.equal(countSentences('One idea. Then a second without a stop'), 2)
+  assert.equal(countSentences('One line\nsecond line'), 1, 'line breaks alone are not sentences')
+  assert.equal(countSentences('A. B. C. D. E. F.'), 6)
+  assert.equal(countSentences('Wow!! Really?'), 2)
+  assert.equal(countSentences('... !!!'), 0)
+})
+
+test('name and phone rules', () => {
+  assert.ok(isValidName('Ab'))
+  assert.ok(!isValidName(' A '))
+  assert.ok(!isValidName('12'))
+  assert.ok(!isValidName('x'.repeat(101)))
+  assert.equal(normalisePhone('9876543210'), '9876543210')
+  assert.equal(normalisePhone('+91 98765 43210'), '9876543210')
+  assert.equal(normalisePhone('(987) 654-3210'), '9876543210')
+  assert.equal(normalisePhone('+91-98765-43210'), '9876543210')
+  assert.equal(normalisePhone('5876543210'), null)
+  assert.equal(normalisePhone('919876543210'), null)
+  assert.equal(normalisePhone('98765432'), null)
+  assert.equal(normalisePhone('+1 9876543210'), null)
+})
+
+const key = '0f8fad5b-d9cb-469f-a165-70867728950e'
+const two = 'Erode needs this. I will act.'
+const base = (selections, extra = {}) => ({ requestKey: key, name: ' Test Member ', phone: '+91 98765 43210', ack: true, selections, ...extra })
+
+test('server validation: roles, sentences, acknowledgement', () => {
+  const ok = validateSubmission(base([{ roleId: 'vertical-11', answer: two }, { roleId: 'vertical-4', answer: two }]), IDS)
+  assert.equal(ok.ok, true)
+  assert.equal(ok.value.name, 'Test Member')
+  assert.equal(ok.value.phone, '9876543210')
+  assert.deepEqual(ok.value.selections.map(s => s.roleId), ['vertical-4', 'vertical-11'], 'catalogue order')
+
+  assert.equal(validateSubmission(base([]), IDS).ok, false, '0 roles fails')
+  assert.equal(validateSubmission(base([{ roleId: 'vertical-1', answer: two }]), IDS).ok, true, '1 role ok')
+  assert.equal(validateSubmission(base(['vertical-1', 'vertical-2', 'vertical-3'].map(roleId => ({ roleId, answer: two }))), IDS).ok, true, '3 roles ok')
+  assert.equal(validateSubmission(base(['vertical-1', 'vertical-2', 'vertical-3', 'vertical-4'].map(roleId => ({ roleId, answer: two }))), IDS).ok, false, '4 roles fails')
+  assert.equal(validateSubmission(base([{ roleId: 'vertical-1', answer: two }, { roleId: 'vertical-1', answer: two }]), IDS).ok, false, 'duplicate role fails')
+  assert.equal(validateSubmission(base([{ roleId: 'vertical-99', answer: two }]), IDS).ok, false, 'unknown role fails')
+  assert.equal(validateSubmission(base([{ roleId: 'vertical-1', answer: 'Just one sentence.' }]), IDS).ok, false, '1 sentence fails')
+  assert.equal(validateSubmission(base([{ roleId: 'vertical-1', answer: 'A. B. C. D. E. F. G.' }]), IDS).ok, true, 'more than 5 accepted')
+  assert.equal(validateSubmission(base([{ roleId: 'vertical-1', answer: 'A. B. ' + 'x'.repeat(3000) }]), IDS).ok, false, 'over 3000 chars fails')
+  assert.equal(validateSubmission(base([{ roleId: 'vertical-1', answer: two }], { ack: false }), IDS).ok, false, 'ack required')
+  assert.equal(validateSubmission(base([{ roleId: 'vertical-1', answer: two }], { ack: 'true' }), IDS).ok, false, 'ack must be a real true')
+  assert.equal(validateSubmission(base([{ roleId: 'vertical-1', answer: two }], { phone: '12345' }), IDS).ok, false)
+  assert.equal(validateSubmission(base([{ roleId: 'vertical-1', answer: two }], { requestKey: 'x' }), IDS).ok, false)
+  assert.equal(validateSubmission(null, IDS).ok, false)
+  assert.equal(validateSubmission(base([{ roleId: 'vertical-1', answer: 42 }]), IDS).ok, false)
+})
+
+// tiny unzip for checking our own output
+function unzip(buf) {
+  const files = {}
+  let p = 0
+  while (buf.readUInt32LE(p) === 0x04034b50) {
+    const method = buf.readUInt16LE(p + 8), size = buf.readUInt32LE(p + 18), nameLen = buf.readUInt16LE(p + 26), extra = buf.readUInt16LE(p + 28)
+    const name = buf.subarray(p + 30, p + 30 + nameLen).toString('utf8')
+    const data = buf.subarray(p + 30 + nameLen + extra, p + 30 + nameLen + extra + size)
+    files[name] = method === 8 ? inflateRawSync(data) : data
+    p += 30 + nameLen + extra + size
+  }
+  return files
+}
+const rows = (xml) => [...xml.matchAll(/<row [^>]*>([\s\S]*?)<\/row>/g)].map(m => [...m[1].matchAll(/<t xml:space="preserve">([\s\S]*?)<\/t>/g)].map(c => c[1]))
+
+const sel = (id, answer) => { const r = EOI_ROLES.find(r => r.id === id); return { id, name: r.name, category: r.category, answer } }
+const A = { id: 'a-1', submittedAt: '2026-11-19T08:30:00.000Z', name: 'Member A', phone: '9876543210', recordType: 'Submitted', selections: [sel('vertical-4', 'A health idea.'), sel('vertical-11', 'A learning idea.')] }
+const B = { id: 'b-2', submittedAt: '2026-11-19T09:00:00.000Z', name: 'Member B', phone: '9123456780', recordType: 'Submitted', selections: [sel('vertical-11', '=HYPERLINK("http://x","click") & <b>"quotes"</b>')] }
+
+test('PDF page 7 example: all, per-area and ZIP separation', () => {
+  const all = unzip(createWorkbook([A, B]))
+  const m = rows(all['xl/worksheets/sheet1.xml'].toString()), pr = rows(all['xl/worksheets/sheet2.xml'].toString())
+  assert.equal(m.length - 1, 2, 'two member rows')
+  assert.equal(pr.length - 1, 3, 'three proposal rows')
+  assert.equal(m[1][3], '+91 9876543210')
+  assert.equal(m[1][4], 'Health\nLearning')
+
+  const health = unzip(createWorkbook([A, B], 'vertical-4'))
+  const hm = rows(health['xl/worksheets/sheet1.xml'].toString()), hp = rows(health['xl/worksheets/sheet2.xml'].toString())
+  assert.deepEqual(hm.slice(1).map(r => r[2]), ['Member A'])
+  assert.equal(hm[1][5], '1', 'count describes the exported subset')
+  assert.deepEqual(hp.slice(1).map(r => r[5]), ['Health'])
+
+  const learning = unzip(createWorkbook([A, B], 'vertical-11'))
+  const lp = rows(learning['xl/worksheets/sheet2.xml'].toString())
+  assert.deepEqual(lp.slice(1).map(r => r[2] + ':' + r[5]), ['Member A:Learning', 'Member B:Learning'])
+
+  const zip = unzip(createAreaZip([A, B], EOI_ROLES))
+  assert.deepEqual(Object.keys(zip).sort(), [areaFilename('Health'), areaFilename('Learning')].sort(), 'empty areas left out')
+})
+
+test('member text is stored as plain text, never a formula', () => {
+  const sheet2 = unzip(createWorkbook([B]))['xl/worksheets/sheet2.xml'].toString()
+  assert.ok(!sheet2.includes('<f>'), 'no formula cells')
+  assert.ok(sheet2.includes('t="inlineStr"'))
+  assert.ok(sheet2.includes('=HYPERLINK(&quot;http://x&quot;,&quot;click&quot;) &amp; &lt;b&gt;'), 'escaped literally')
+})
+
+test('zip checksum matches the table fallback', async () => {
+  const zlib = await import('node:zlib')
+  let c = 0xffffffff
+  const table = Array.from({ length: 256 }, (_, n) => { let x = n; for (let k = 0; k < 8; k++) x = x & 1 ? 0xedb88320 ^ (x >>> 1) : x >>> 1; return x >>> 0 })
+  const data = Buffer.from('Yi Erode EC 2027 தமிழ்')
+  for (const b of data) c = table[(c ^ b) & 0xff] ^ (c >>> 8)
+  assert.equal((c ^ 0xffffffff) >>> 0, zlib.crc32(data) >>> 0)
+})
+
+test('desk access rule (Yi Connect roles)', async () => {
+  const { eoiAccessAllowed } = await import('../../lib/ec-eoi/access-rule.ts')
+  const r = (app, role, yi_chapter, is_active = true) => ({ app, role, yi_chapter, is_active })
+  assert.ok(eoiAccessAllowed([r('yi', 'chapter_chair', 'Erode')]), 'Erode chair')
+  assert.ok(eoiAccessAllowed([r('yi', 'chapter_co_chair', 'Erode')]), 'Erode co-chair')
+  assert.ok(eoiAccessAllowed([r('ec_eoi', 'reviewer', 'Erode')]), 'added reviewer')
+  assert.ok(eoiAccessAllowed([r('yi', 'platform_super_admin', null)]), 'platform super')
+  assert.ok(!eoiAccessAllowed([]), 'no roles')
+  assert.ok(!eoiAccessAllowed([r('yi', 'chapter_chair', 'Salem')]), 'other chapter chair')
+  assert.ok(!eoiAccessAllowed([r('yi', 'chapter_chair', 'Erode', false)]), 'inactive')
+  assert.ok(!eoiAccessAllowed([r('ec_eoi', 'reviewer', null)]), 'blank chapter fails closed')
+  assert.ok(!eoiAccessAllowed([r('ec_eoi', 'reviewer', ' ')]), 'blank chapter fails closed')
+  assert.ok(!eoiAccessAllowed([r('yip', 'chapter_admin', 'Erode')]), 'YIP organiser is not enough')
+})

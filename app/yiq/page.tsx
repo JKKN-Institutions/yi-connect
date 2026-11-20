@@ -105,19 +105,23 @@ export default async function YiqLandingPage() {
               style={{ color: DIM }}
             >
               YIQ is the Young Indians Quiz — a national championship for
-              Classes 9 to 12. Your school team competes in the chapter online
-              round, the top ten meet on the chapter stage, and one champion
-              team from every chapter goes to the National Grand Finale.
+              Classes 9 to 12.
+            </p>
+
+            {/* YIQ 2026 registration and the chapter round run outside this
+                platform (Director, 10 Oct 2026), so this page no longer
+                invites schools to register here. Restore the register
+                button if a future edition runs on the platform. */}
+            <p
+              className="mt-6 max-w-lg rounded-2xl border px-5 py-4 text-[1rem] leading-relaxed"
+              style={{ borderColor: SAFFRON, color: PAPER }}
+            >
+              YIQ 2026 registration and the chapter round are run through your
+              Yi chapter. Contact your chapter&apos;s YIQ organiser to enter
+              your school team.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link
-                href="/yiq/register"
-                className="rounded-full px-6 py-3.5 text-[0.9375rem] font-bold transition-transform active:translate-y-px"
-                style={{ background: SAFFRON, color: INK }}
-              >
-                Register your school team
-              </Link>
               <Link
                 href="/yiq/login"
                 className="rounded-full border px-6 py-3.5 text-[0.9375rem] font-semibold transition-colors hover:bg-white/5"
@@ -339,9 +343,6 @@ export default async function YiqLandingPage() {
             </p>
           </div>
           <nav className="flex flex-wrap gap-x-6 gap-y-2 text-[0.875rem]">
-            <Link href="/yiq/register" style={{ color: DIM }}>
-              Register
-            </Link>
             <Link href="/yiq/login" style={{ color: DIM }}>
               Access code
             </Link>

@@ -279,7 +279,7 @@ export const MENTOR_SENDBACK_ENABLED = false;
 
 /** What the NMT leader is told when the send-back to the Mentors is closed. */
 export const MENTOR_SENDBACK_CLOSED =
-  "Sending marks back to the Regional Mentors is closed. National Leadership asked for this on 20 Nov 2026. Marks already sent back stay as they are.";
+  "Sending marks back to the Regional Mentors is closed from 20 Nov 2026. Marks already sent back stay as they are.";
 
 /**
  * Piyush, 28 Oct 11:05: an evaluator's home chapter is recorded and flagged

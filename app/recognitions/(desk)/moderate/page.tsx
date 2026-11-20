@@ -103,7 +103,13 @@ export default async function ModerateList() {
         {rows.map(({ duty, state }) => {
           const w = duty
             ? waiting(state, duty.is_nmt_leader, duty.layer === "rm", marksHiddenFrom(state, viewer.duties))
-            : { text: `View only. ${waiting(state, false).text}`, locked: false };
+            : {
+                text:
+                  state.phase === "setup" || state.phase === "nominations" || state.phase === "stage1"
+                    ? "View only. Stage 2 hasn't opened yet: the room shows the marks submitted so far."
+                    : `View only. ${waiting(state, false).text}`,
+                locked: false,
+              };
           return (
             <Link
               key={state.award.id}

@@ -1,19 +1,49 @@
 import Link from "next/link";
 import { requireRxSuperAdmin } from "@/lib/recognitions/auth";
-import { getAwardState, getCurrentCycle, getPeople, listAwards, type PersonLite } from "@/lib/recognitions/data";
+import {
+  chapterMap,
+  countScores,
+  getAwardState,
+  getCurrentCycle,
+  getPeople,
+  listAwards,
+  listScoreHistory,
+  listScoresForAward,
+  type AwardState,
+  type PersonLite,
+} from "@/lib/recognitions/data";
 import { rxService } from "@/lib/recognitions/supabase";
-import { PHASE_LABEL, earlyTestOpen } from "@/lib/recognitions/phase";
+import { PHASE_LABEL, earlyTestOpen, isPast } from "@/lib/recognitions/phase";
+import { mentorMarksOpen, scoreSight } from "@/lib/recognitions/sight";
 import { effectiveStatus } from "@/lib/recognitions/check-rules";
 import { CHECK_STEP_ENABLED } from "@/lib/recognitions/constants";
 import type { NominationStatus } from "@/lib/recognitions/types";
 import { Ribbon } from "../../_ui/ribbon";
 import { Deadline, NoAccess, Notice, PageHead, PhaseSeal, formatWhen } from "../../_ui/primitives";
 import { ForceOpenStage2 } from "./force-open";
-import { EvaluatorProgress, buildEvaluatorRows, evaluatorStatus, type SignInGap } from "./evaluator-progress";
+import {
+  EvaluatorProgress,
+  buildEvaluatorRows,
+  buildReevalByDuty,
+  evaluatorStatus,
+  type ReevalSummary,
+  type SignInGap,
+} from "./evaluator-progress";
 
 export const metadata = { title: "Control room" };
 
-function Progress({ label, submitted, required }: { label: string; submitted: number; required: number }) {
+function Progress({
+  label,
+  submitted,
+  required,
+  earlier = 0,
+}: {
+  label: string;
+  submitted: number;
+  required: number;
+  /** Of `submitted`: earlier marks counting for reopened drafts not re-scored yet. */
+  earlier?: number;
+}) {
   const pctDone = required === 0 ? 0 : Math.round((submitted / required) * 100);
   return (
     <div>
@@ -21,6 +51,7 @@ function Progress({ label, submitted, required }: { label: string; submitted: nu
         <span>{label}</span>
         <span className="rx-num">
           {submitted} / {required} sheets submitted
+          {earlier > 0 ? ` (${earlier} of them earlier marks, sent back and not re-scored)` : ""}
         </span>
       </div>
       <div className="rx-ad-bar" data-done={required > 0 && submitted >= required}>
@@ -28,6 +59,33 @@ function Progress({ label, submitted, required }: { label: string; submitted: nu
       </div>
     </div>
   );
+}
+
+/**
+ * Re-evaluation per Regional Mentor duty, only for a recognition with a
+ * send-back to the Mentors. Reads every score on it plus the history (the
+ * super admin's oversight read, as on the Review page). A failed read shows
+ * no re-evaluation layer rather than breaking the page.
+ */
+async function reevalFor(state: AwardState, chapterNames: Map<string, string>): Promise<Map<string, ReevalSummary>> {
+  if (state.sendBacks.length === 0) return new Map();
+  try {
+    const [scores, history] = await Promise.all([listScoresForAward(state.award.id), listScoreHistory(state.award.id)]);
+    const counted = await countScores(state.award.id, scores);
+    const nominations = new Map(state.nominations.map((n) => [n.id, n.chapter_id]));
+    return buildReevalByDuty({
+      scores,
+      counted,
+      history,
+      sendBacks: state.sendBacks,
+      chapterOf: (id) => chapterNames.get(nominations.get(id) ?? "") ?? "Unknown chapter",
+    });
+  } catch (e) {
+    console.error(
+      JSON.stringify({ tag: "recognitions_overview_reeval_failed", awardId: state.award.id, error: e instanceof Error ? e.message : String(e) })
+    );
+    return new Map();
+  }
 }
 
 /**
@@ -74,9 +132,25 @@ export default async function ControlRoomOverview() {
   const awards = await listAwards(cycle.id);
   const states = (await Promise.all(awards.map((a) => getAwardState(a.id)))).filter((s) => s !== null);
   const people = await getPeople(states.flatMap((s) => s.duties.map((d) => d.person_id)));
-  const rowsByAward = new Map(
-    states.map((s) => [s.award.id, buildEvaluatorRows(s.duties, s.completeness.perDuty, people)])
+  const chapterNames = new Map([...(await chapterMap()).values()].map((c) => [c.id, c.name]));
+  const reevalByAward = new Map(
+    await Promise.all(states.map(async (s) => [s.award.id, await reevalFor(s, chapterNames)] as const))
   );
+  const rowsByAward = new Map(
+    states.map((s) => [
+      s.award.id,
+      buildEvaluatorRows(s.duties, s.completeness.perDuty, people, reevalByAward.get(s.award.id)),
+    ])
+  );
+  // "Blind until you submit" (recognitions_05) holds for a super admin who also
+  // scores a recognition: as on the Review page, its totals stay hidden from
+  // them until they have submitted their own sheet. Statuses still show.
+  const blindReason = (st: AwardState): string | null => {
+    const mine = gate.viewer.duties.filter((d) => d.award_id === st.award.id);
+    if (mine.length === 0) return null;
+    const sight = scoreSight(st, mine, { oversight: true });
+    return sight.sees ? null : "You also score this recognition, so the Mentors' totals stay hidden here until you submit your own sheet.";
+  };
   const signInGaps = await signInGapsFor(
     people,
     [...rowsByAward.values()].flat().filter((r) => evaluatorStatus(r) === "pending").map((r) => r.personId)
@@ -144,10 +218,21 @@ export default async function ControlRoomOverview() {
                   {st.duties.filter((d) => d.layer === "rm").length} RM · {st.duties.filter((d) => d.layer === "nmt").length} NMT
                 </p>
                 <div className="rx-stack" style={{ gap: 10 }}>
-                  <Progress label="Regional Mentors" submitted={c.rm.submitted} required={c.rm.required} />
-                  <Progress label="NMT" submitted={c.nmt.submitted} required={c.nmt.required} />
+                  {/* The marks that count, as in the Excel report: a sent-back mark not re-scored counts through its earlier mark. */}
+                  <Progress
+                    label="Regional Mentors"
+                    submitted={c.rm.counted}
+                    required={c.rm.required}
+                    earlier={c.rm.counted - c.rm.submitted}
+                  />
+                  <Progress label="NMT" submitted={c.nmt.counted} required={c.nmt.required} />
                 </div>
-                <EvaluatorProgress rows={rowsByAward.get(award.id) ?? []} signInGaps={signInGaps} />
+                <EvaluatorProgress
+                  rows={rowsByAward.get(award.id) ?? []}
+                  signInGaps={signInGaps}
+                  rescoreOpen={mentorMarksOpen(st) && !isPast(cycle.stage2_deadline)}
+                  marksHiddenReason={blindReason(st)}
+                />
                 {c.blockers.length > 0 && (st.phase === "stage1" || st.phase === "nominations" || st.phase === "setup") ? (
                   <Notice tone="alert">
                     <strong>Stage 2 can&apos;t open yet:</strong>

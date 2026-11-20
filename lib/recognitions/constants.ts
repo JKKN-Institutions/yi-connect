@@ -267,6 +267,21 @@ export const JUSTIFICATION_MAX_CHARS = 2000;
 export const CHECK_STEP_ENABLED = false;
 
 /**
+ * The NMT leader's send-back to the Regional Mentors (recognitions_05).
+ * Closed from 20 Nov 2026 (Piyush, national lead, approved by the Director):
+ * no NMT may send marks back to the Mentors any more. The server action
+ * refuses and the Stage 2 room shows a one-line notice instead of the
+ * button. Earlier send-backs, their history and the Mentors' open re-score
+ * window (until the Stage 2 deadline) are untouched. Hidden, not deleted:
+ * set this back to true to bring the button and the action back.
+ */
+export const MENTOR_SENDBACK_ENABLED = false;
+
+/** What the NMT leader is told when the send-back to the Mentors is closed. */
+export const MENTOR_SENDBACK_CLOSED =
+  "Sending marks back to the Regional Mentors is closed. National Leadership asked for this on 20 Nov 2026. Marks already sent back stay as they are.";
+
+/**
  * Piyush, 28 Oct 11:05: an evaluator's home chapter is recorded and flagged
  * wherever their marks appear, but they still score it. False = home
  * chapters never hide a nomination; true restores the old rule that an

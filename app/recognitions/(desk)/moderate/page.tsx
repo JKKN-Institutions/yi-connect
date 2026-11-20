@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { getRxViewer } from "@/lib/recognitions/auth";
-import { getAwardState, getCurrentCycle, latestDecisionFor, type AwardState } from "@/lib/recognitions/data";
+import { getAwardState, getCurrentCycle, latestDecisionFor, listAwards, type AwardState } from "@/lib/recognitions/data";
 import { isPast } from "@/lib/recognitions/phase";
 import { MARKS_HIDDEN_REASON, marksHiddenFrom } from "@/lib/recognitions/sight";
 import { Ribbon } from "@/app/recognitions/_ui/ribbon";
@@ -72,30 +72,41 @@ export default async function ModerateList() {
   const nmtDuties = viewer.duties
     .filter((d) => d.layer === "nmt" || !viewer.duties.some((x) => x.layer === "nmt" && x.award_id === d.award_id))
     .filter((d, i, all) => all.findIndex((x) => x.award_id === d.award_id) === i);
-  if (nmtDuties.length === 0) {
+  // 20 Nov 2026: the super admin and National Leadership open EVERY recognition's room, view only.
+  const oversight = viewer.isSuperAdmin || viewer.isNationalLeadership;
+  if (nmtDuties.length === 0 && !oversight) {
     return <NoAccess reason="You are not a Regional Mentor or on the National Management Team of any recognition this year." />;
   }
   const cycle = await getCurrentCycle();
+  const awardIds = oversight && cycle ? (await listAwards(cycle.id)).map((a) => a.id) : nmtDuties.map((d) => d.award_id);
   const rows = (
-    await Promise.all(nmtDuties.map(async (d) => ({ duty: d, state: await getAwardState(d.award_id) })))
+    await Promise.all(
+      awardIds.map(async (id) => ({
+        duty: nmtDuties.find((d) => d.award_id === id) ?? null,
+        state: await getAwardState(id),
+      }))
+    )
   )
-    .filter((r): r is { duty: (typeof nmtDuties)[number]; state: AwardState } => r.state !== null)
+    .filter((r): r is { duty: (typeof nmtDuties)[number] | null; state: AwardState } => r.state !== null)
     .sort((a, b) => a.state.award.sort_order - b.state.award.sort_order || a.state.award.title.localeCompare(b.state.award.title));
 
   return (
     <div className="rx-stack-lg">
       <PageHead eyebrow={cycle?.name ?? "Stage 2"} title="Stage 2 · moderation">
         <p className="rx-mute">
-          The recognitions you moderate as part of the National Management Team. Each room opens once every Regional Mentor
-          and NMT score for that recognition is in.
+          {oversight
+            ? "Every recognition's Stage 2 room. Where you hold no NMT or Regional Mentor seat, you see the room view only: the marks, the standings and the ranking, with nothing to change."
+            : "The recognitions you moderate as part of the National Management Team. Each room opens once every Regional Mentor and NMT score for that recognition is in."}
         </p>
       </PageHead>
       <div className="rx-stack">
         {rows.map(({ duty, state }) => {
-          const w = waiting(state, duty.is_nmt_leader, duty.layer === "rm", marksHiddenFrom(state, viewer.duties));
+          const w = duty
+            ? waiting(state, duty.is_nmt_leader, duty.layer === "rm", marksHiddenFrom(state, viewer.duties))
+            : { text: `View only. ${waiting(state, false).text}`, locked: false };
           return (
             <Link
-              key={duty.id}
+              key={state.award.id}
               href={`/recognitions/moderate/${state.award.id}`}
               className="rx-plate rx-stack"
               style={{ textDecoration: "none", color: "inherit", display: "block" }}
@@ -106,8 +117,9 @@ export default async function ModerateList() {
                   <h2 className="rx-h2">{state.award.title}</h2>
                 </div>
                 <div className="rx-row" style={{ gap: 8 }}>
-                  {duty.is_nmt_leader ? <span className="rx-eyebrow">NMT leader</span> : null}
-                  {duty.layer === "rm" ? <span className="rx-eyebrow">Regional Mentor · read-only</span> : null}
+                  {duty?.is_nmt_leader ? <span className="rx-eyebrow">NMT leader</span> : null}
+                  {duty?.layer === "rm" ? <span className="rx-eyebrow">Regional Mentor · read-only</span> : null}
+                  {!duty ? <span className="rx-eyebrow">View only</span> : null}
                   <PhaseSeal phase={state.phase} />
                 </div>
               </div>

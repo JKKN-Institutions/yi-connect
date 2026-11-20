@@ -7,6 +7,7 @@ import { mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
 import { isPast } from "@/lib/recognitions/phase";
 import { rxService } from "@/lib/recognitions/supabase";
 import { countWords } from "@/lib/recognitions/words";
+import { MENTOR_SENDBACK_CLOSED, MENTOR_SENDBACK_ENABLED } from "@/lib/recognitions/constants";
 import type { ActionResult } from "@/lib/recognitions/types";
 import { formatWhen } from "../_ui/primitives";
 
@@ -28,6 +29,11 @@ const REMARK_CHARS = 2000;
 export async function sendBackToMentors(awardId: string, remark: string): Promise<ActionResult> {
   const gate = await requireRxNmtLeader(typeof awardId === "string" ? awardId : "");
   if (!gate.ok) return { success: false, error: gate.error };
+  // 20 Nov 2026 (Piyush, approved by the Director): no NMT may send marks back to the Mentors any more.
+  if (!MENTOR_SENDBACK_ENABLED) {
+    console.log(JSON.stringify({ tag: "recognitions_mentor_sendback_refused", reason: "closed", person: gate.viewer.personId, awardId }));
+    return { success: false, error: MENTOR_SENDBACK_CLOSED };
+  }
   const personId = gate.viewer.personId;
 
   const text = typeof remark === "string" ? remark.trim() : "";

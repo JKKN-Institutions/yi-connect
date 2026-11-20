@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { requireRxEvaluatorOnAward } from "@/lib/recognitions/auth";
+import { requireRxEvaluatorOnAward, requireRxOversight } from "@/lib/recognitions/auth";
 import { getAwardState, getPeople, homeChapterNotes, latestDecisionFor, nominationsForDuty } from "@/lib/recognitions/data";
 import { mentorMarksOpen, mentorRescoreOpen, scoreSight } from "@/lib/recognitions/sight";
 import { isPast } from "@/lib/recognitions/phase";
@@ -15,7 +15,7 @@ import { buildRankingView, prefillFromMatrix, type MatrixView, type Provisional 
 import { CategoryPanel, CategoryTabs } from "@/app/recognitions/_parts/category-tabs";
 import { StandingsTable, type StandingRow } from "@/app/recognitions/_parts/standings-table";
 import { HomeNote, type HomeNotes } from "@/app/recognitions/_parts/home-note";
-import { CATEGORIES, CATEGORY_LABEL, MAX_LAYER_TOTAL } from "@/lib/recognitions/constants";
+import { CATEGORIES, CATEGORY_LABEL, MAX_LAYER_TOTAL, MENTOR_SENDBACK_CLOSED, MENTOR_SENDBACK_ENABLED } from "@/lib/recognitions/constants";
 import type { ChapterRow, ModerationVersionRow, NominationRow } from "@/lib/recognitions/types";
 import { STAGE2_LOCKED } from "../copy";
 import { ModerationForm, type FormCategory, type FormInitial } from "./moderation-form";
@@ -28,9 +28,18 @@ export const metadata: Metadata = { title: "Stage 2 room" };
 export default async function Stage2Room({ params }: { params: Promise<{ awardId: string }> }) {
   const { awardId } = await params;
   // recognitions_05: Regional Mentors open this room too, read-only.
-  const gate = await requireRxEvaluatorOnAward(awardId);
-  if (!gate.ok) return <NoAccess reason={gate.error} />;
-  const nmtDuty = gate.value.find((d) => d.layer === "nmt") ?? null;
+  // 20 Nov 2026 (Piyush, approved by the Director): the Recognitions super
+  // admin and every National Leadership login (deciding or view only) open
+  // every recognition's room VIEW ONLY. They hold no duty here, so isLeader
+  // below stays false and no NMT action is offered; every NMT action on the
+  // server needs this recognition's NMT leader duty (requireRxNmtLeader).
+  const evaluatorGate = await requireRxEvaluatorOnAward(awardId);
+  const oversightGate = evaluatorGate.ok ? null : await requireRxOversight();
+  if (!evaluatorGate.ok && !oversightGate?.ok) return <NoAccess reason={evaluatorGate.error} />;
+  const myDuties = evaluatorGate.ok ? evaluatorGate.value : [];
+  const viewer = evaluatorGate.ok ? evaluatorGate.viewer : oversightGate!.ok ? oversightGate!.viewer : null;
+  const oversight = !!viewer && (viewer.isSuperAdmin || viewer.isNationalLeadership);
+  const nmtDuty = myDuties.find((d) => d.layer === "nmt") ?? null;
 
   const state = await getAwardState(awardId);
   if (!state) return <NoAccess reason="This recognition does not exist or was removed." contact={false} />;
@@ -54,7 +63,13 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
   // BLIND until YOU submit (recognitions_05): no scores, matrix, predictions
   // or progress until this person has submitted every sheet they hold for
   // this recognition, or Stage 2 has opened (and their sheet isn't sent back).
-  const sight = scoreSight(state, gate.value);
+  // Oversight with no duty here sees everything (as on the Review page). Anyone
+  // with a duty here keeps "blind until you submit"; if they also have
+  // oversight, the recognitions_08 NMT switch does not lock them out (as on Review).
+  const sight =
+    myDuties.length === 0
+      ? ({ sees: true, why: "stage2" } as const)
+      : scoreSight(state, myDuties, { oversight });
   const rescore = mentorRescoreOpen(state);
   const latestSendBack = state.sendBacks[0] ?? null;
   const sendBackNotice =
@@ -87,7 +102,14 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
   const beforeStage2 = phase === "setup" || phase === "nominations" || phase === "stage1";
   const sendBackPeople = await getPeople(state.sendBacks.map((b) => b.sent_by));
   const canSendBack =
-    isLeader && (phase === "stage1" || phase === "stage2") && !rescore && !isPast(cycle.stage2_deadline);
+    MENTOR_SENDBACK_ENABLED &&
+    isLeader &&
+    (phase === "stage1" || phase === "stage2") &&
+    !rescore &&
+    !isPast(cycle.stage2_deadline);
+  // Where the send-back button used to be, the leader gets one line saying it is closed.
+  const sendBackClosedNote =
+    !MENTOR_SENDBACK_ENABLED && isLeader && (phase === "stage1" || phase === "stage2");
   const data = await loadStage2(state, { withNames: false });
   const latest = state.latestVersion;
   const latestSubmitted = state.latestSubmittedVersion;
@@ -192,7 +214,13 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
     <div className="rx-stack-lg">
       <div className="rx-stack">
         {head}
-        {!isLeader ? (
+        {!isLeader && myDuties.length === 0 ? (
+          <Notice>
+            View only. You see this Stage 2 room as{" "}
+            {viewer?.isSuperAdmin ? "the Recognitions super admin" : "National Leadership"}: every evaluator&apos;s
+            marks, the standings and the ranking. Nothing here can be changed; the NMT leader enters the ranking.
+          </Notice>
+        ) : !isLeader ? (
           <Notice>
             Read-only. You see every evaluator&apos;s marks for this recognition
             {sight.why === "submitted" ? " because you have submitted your own sheet" : ""}. Nothing here can be changed.
@@ -306,6 +334,7 @@ export default async function Stage2Room({ params }: { params: Promise<{ awardId
       </CategoryTabs>
 
       {canSendBack ? <MentorSendBackPanel awardId={award.id} closesAt={formatWhen(cycle.stage2_deadline)} /> : null}
+      {sendBackClosedNote ? <Notice>{MENTOR_SENDBACK_CLOSED}</Notice> : null}
       <SendBackHistory
         items={state.sendBacks.map((b) => ({
           id: b.id,

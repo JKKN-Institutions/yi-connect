@@ -11,7 +11,10 @@ export function desksFor(v: RxViewer): DeskLink[] {
   // Not used in 2026 (Director, 2026-10-15): hidden behind CHECK_STEP_ENABLED, not deleted.
   if (CHECK_STEP_ENABLED && isChecker(v)) desks.push({ href: "/recognitions/check", label: "Check" });
   if (v.duties.length > 0) desks.push({ href: "/recognitions/score", label: "Scoring" });
-  if (v.duties.some((d) => d.layer === "nmt")) desks.push({ href: "/recognitions/moderate", label: "Stage 2" });
+  // 20 Nov 2026: the super admin and National Leadership open every Stage 2 room, view only.
+  if (v.duties.some((d) => d.layer === "nmt") || v.isSuperAdmin || v.isNationalLeadership) {
+    desks.push({ href: "/recognitions/moderate", label: "Stage 2" });
+  }
   // The two boards (27 Oct): National Leadership, the NMT and Regional Mentors (their region only).
   if (canSeeBoards(v)) {
     desks.push({ href: "/recognitions/board", label: "Board" });

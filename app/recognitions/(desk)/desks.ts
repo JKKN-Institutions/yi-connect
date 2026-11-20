@@ -18,6 +18,10 @@ export function desksFor(v: RxViewer): DeskLink[] {
     desks.push({ href: "/recognitions/predictor", label: "Predictor" });
   }
   if (v.isNationalLeadership || v.isSuperAdmin) desks.push({ href: "/recognitions/review", label: "Review" });
+  // 20 Nov 2026: the super admin and National Leadership open every Stage 2 room, view only (after Review).
+  if ((v.isNationalLeadership || v.isSuperAdmin) && !v.duties.some((d) => d.layer === "nmt")) {
+    desks.push({ href: "/recognitions/moderate", label: "Stage 2" });
+  }
   if (v.isSuperAdmin) desks.push({ href: "/recognitions/admin", label: "Control room" });
   return desks;
 }

@@ -92,8 +92,8 @@ export function MemberApp({ roles, commitments, updateNote }: Props) {
             .join('')}</div><p class="micro-note">The leadership team will share confirmed dates, venues, and joining details.</p><label class="ack"><input type="checkbox" id="ack" ${state.ack ? 'checked' : ''}><span>I understand the attendance requirements and commit to participating in Pathfinder, EC Leader Academy, the Regional Council Meeting, and the recurring EC meetings if selected.</span></label><p class="error" id="ack-error" role="alert"></p>${buttons('Choose your interests')}</form>`
       if (state.step === 2)
         app!.innerHTML =
-          heading('Where would you like to contribute?', 'Choose two or three areas where you can make a meaningful contribution, in order of preference. The first area you tick is your 1st choice. Explore the descriptions before making your selection.') +
-          `<div class="selection-purpose"><strong>Focus on what matters to Erode</strong><p>These descriptions are a guide to help you explore each role; you are not expected to carry out every activity listed. Focus on the needs you see in Erode and where you can make a meaningful contribution. Success is measured by the impact you create, rather than the number of events you organise. Even a small, positive change matters.</p></div><form id="interests-form"><div class="selection-summary"><strong id="selected-count" aria-live="polite">${state.selected.size} of 3 selected</strong><span>Choose 2–3 areas, in order</span></div><p class="selection-guidance" id="selection-guidance" aria-live="polite">Tick your 1st choice first, then your 2nd, then your 3rd if you want one. To change the order, untick an area and tick it again. Open a role to learn more before choosing.</p>${['Stakeholders', 'Projects', 'Initiatives']
+          heading('Where would you like to contribute?', 'Choose two or three areas where you can make a meaningful contribution, then rank them in your order of preference. Explore the descriptions before making your selection.') +
+          `<div class="selection-purpose"><strong>Focus on what matters to Erode</strong><p>These descriptions are a guide to help you explore each role; you are not expected to carry out every activity listed. Focus on the needs you see in Erode and where you can make a meaningful contribution. Success is measured by the impact you create, rather than the number of events you organise. Even a small, positive change matters.</p></div><form id="interests-form"><div class="selection-summary"><strong id="selected-count" aria-live="polite">${state.selected.size} of 3 selected</strong><span>Choose 2–3 areas, then rank them</span></div><p class="selection-guidance" id="selection-guidance" aria-live="polite">Tick two or three areas. Then put them in your order of preference in the box below the list. Open a role to learn more before choosing.</p>${['Stakeholders', 'Projects', 'Initiatives']
             .map(
               cat =>
                 `<h3 class="section-heading">${cat.toUpperCase()}<span>${verticals.filter(v => v.category === cat).length} options</span></h3>${verticals
@@ -104,7 +104,7 @@ export function MemberApp({ roles, commitments, updateNote }: Props) {
                   )
                   .join('')}`
             )
-            .join('')}<p class="error" id="selection-error" role="alert"></p>${buttons('Share your ideas')}</form>`
+            .join('')}<div class="rank-box" id="rank-box" hidden></div><p class="error" id="selection-error" role="alert"></p>${buttons('Share your ideas')}</form>`
       if (state.step === 3)
         app!.innerHTML =
           heading('Your ideas. Erode’s possibilities.', 'Aim for <strong>3–5 sentences for each selection</strong> about what you would like to do specifically in Erode. <strong>At least 2 sentences are required.</strong> Think local needs, practical actions, and the difference you hope to make.') +
@@ -147,10 +147,23 @@ export function MemberApp({ roles, commitments, updateNote }: Props) {
         document.querySelector(`[data-expand="${v.id}"]`)!.setAttribute('aria-expanded', String(state.open === v.id))
       })
       $('selected-count')!.textContent = state.selected.size + ' of 3 selected'
+      // Sharabhesh / Director 23 Nov 2026: an explicit order box. Starts in tick order; ↑ ↓ change it.
+      const picked = [...state.selected]
+      const box = $('rank-box')!
+      box.hidden = picked.length < 2
+      box.innerHTML =
+        picked.length < 2
+          ? ''
+          : `<p class="rank-title">Your preference order</p><p class="rank-hint">1 is the area you want most. Use the arrows to change the order before you continue.</p><ol>${picked
+              .map((id, i) => {
+                const n = verticals.find(v => v.id === id)!.name
+                return `<li><span class="rank-num">${i + 1}</span><span class="rank-name">${n}</span><button type="button" class="rank-move" data-move="${id}" data-dir="-1" aria-label="Move ${n} up" ${i === 0 ? 'disabled' : ''}>↑</button><button type="button" class="rank-move" data-move="${id}" data-dir="1" aria-label="Move ${n} down" ${i === picked.length - 1 ? 'disabled' : ''}>↓</button></li>`
+              })
+              .join('')}</ol>`
       $('selection-guidance')!.textContent =
         state.selected.size >= 3
-          ? 'Three areas selected. Deselect one to choose a different area or change the order. You can still explore every role.'
-          : 'Tick your 1st choice first, then your 2nd, then your 3rd if you want one. To change the order, untick an area and tick it again. Open a role to learn more before choosing.'
+          ? 'Three areas selected. Deselect one to choose a different area. Set your order of preference in the box below the list.'
+          : 'Tick two or three areas. Then put them in your order of preference in the box below the list. Open a role to learn more before choosing.'
     }
 
     function bind() {
@@ -212,6 +225,19 @@ export function MemberApp({ roles, commitments, updateNote }: Props) {
           error('selection-error', '')
         })
       )
+      $('rank-box')?.addEventListener('click', e => {
+        const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-move]')
+        if (!btn || btn.disabled) return
+        const order = [...state.selected]
+        const from = order.indexOf(btn.dataset.move!)
+        const to = from + Number(btn.dataset.dir)
+        if (from < 0 || to < 0 || to >= order.length) return
+        ;[order[from], order[to]] = [order[to], order[from]]
+        state.selected = new Set(order)
+        updateChoices()
+        const again = document.querySelector<HTMLButtonElement>(`[data-move="${btn.dataset.move}"][data-dir="${btn.dataset.dir}"]`)
+        ;(again && !again.disabled ? again : document.querySelector<HTMLButtonElement>(`[data-move="${btn.dataset.move}"]:not([disabled])`))?.focus()
+      })
       document.querySelectorAll<HTMLElement>('[data-expand]').forEach(el =>
         el.addEventListener('click', () => {
           state.open = state.open === el.dataset.expand ? null : el.dataset.expand!

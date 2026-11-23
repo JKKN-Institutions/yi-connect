@@ -49,8 +49,8 @@ export function AdminApp({ gate, email, areas }: Props) {
         .map(
           e =>
             `<tr><td>${esc(e.name)}${e.recordType.includes('repeat') ? `<br><span class="table-chip">${esc(e.recordType.replace('Submitted · ', ''))}</span>` : ''}</td><td>+91 ${esc(e.phone)}</td><td>${e.selections
-              .map(s => `<span class="table-chip">${esc(s.name)}</span>`)
-              .join('')}</td><td>${esc(date(e.submittedAt))}</td><td>${
+              .map(s => `<span class="table-chip">${s.choice == null ? '' : s.choice + '. '}${esc(s.name)}</span>`)
+              .join('')}${e.ranked ? '' : '<br><span class="table-chip">Not ranked</span>'}</td><td>${esc(date(e.submittedAt))}</td><td>${
               area ? `<p class="area-answer">${esc(e.selections.find(s => s.id === area)!.answer)}</p>` : ''
             }<button class="outline-button" data-view="${esc(e.id)}" aria-label="View responses from ${esc(e.name)}">View responses →</button></td></tr>`
         )
@@ -127,10 +127,12 @@ export function AdminApp({ gate, email, areas }: Props) {
         if (!entry) return
         const area = $<HTMLSelectElement>('area-filter').value
         $('entry-detail').innerHTML = `<h2>${esc(entry.name)}</h2><p class="member-meta">+91 ${esc(entry.phone)}<br>Submitted ${esc(date(entry.submittedAt))} IST<br>All four mandatory commitments acknowledged.${
+          entry.ranked ? '' : '<br>Not ranked: sent before members could rank their choices.'
+        }${
           entry.recordType.includes('repeat') ? '<br>' + esc(entry.recordType.replace('Submitted · ', 'This entry is ')) + '.' : ''
         }</p><p class="receipt">Entry ID: ${esc(entry.id)}</p>${entry.selections
           .filter(s => !area || s.id === area)
-          .map(s => `<section class="proposal"><span class="category-tag">${esc(s.category)}</span><h3>${esc(s.name)}</h3><p>${esc(s.answer)}</p></section>`)
+          .map(s => `<section class="proposal"><span class="category-tag">${s.choice == null ? '' : ['1st', '2nd', '3rd'][s.choice - 1] + ' choice · '}${esc(s.category)}</span><h3>${esc(s.name)}</h3><p>${esc(s.answer)}</p></section>`)
           .join('')}`
         $<HTMLDialogElement>('entry-dialog').showModal()
       }],

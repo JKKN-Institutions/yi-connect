@@ -11,3 +11,6 @@
 }
 
 
+/* 23 Nov 2026 (Director): members rank their picks; the badge shows 1st / 2nd / 3rd. */
+.eoi-root .rank-badge{font-size:11px;font-weight:700;color:#fff;background:var(--green);border-radius:999px;padding:3px 9px;margin-right:4px;white-space:nowrap}
+.eoi-root .rank-badge:empty{display:none}

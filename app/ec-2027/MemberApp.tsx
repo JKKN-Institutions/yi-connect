@@ -33,6 +33,7 @@ interface FormState {
 }
 
 const fresh = (): FormState => ({ step: 0, name: '', phone: '', ack: false, selected: new Set(), open: null, answers: {}, requestKey: null, receipt: null, submitting: false })
+const RANK = ['1st', '2nd', '3rd']
 const steps = ['Your details', 'Your commitment', 'Your interests', 'Your ideas']
 const escapeHTML = (s: unknown) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 const ist = (iso: string) => new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso))
@@ -91,15 +92,15 @@ export function MemberApp({ roles, commitments, updateNote }: Props) {
             .join('')}</div><p class="micro-note">The leadership team will share confirmed dates, venues, and joining details.</p><label class="ack"><input type="checkbox" id="ack" ${state.ack ? 'checked' : ''}><span>I understand the attendance requirements and commit to participating in Pathfinder, EC Leader Academy, the Regional Council Meeting, and the recurring EC meetings if selected.</span></label><p class="error" id="ack-error" role="alert"></p>${buttons('Choose your interests')}</form>`
       if (state.step === 2)
         app!.innerHTML =
-          heading('Where would you like to contribute?', 'Choose one to three areas where you can make a meaningful contribution. Explore the descriptions before making your selection.') +
-          `<div class="selection-purpose"><strong>Focus on what matters to Erode</strong><p>These descriptions are a guide to help you explore each role; you are not expected to carry out every activity listed. Focus on the needs you see in Erode and where you can make a meaningful contribution. Success is measured by the impact you create, rather than the number of events you organise. Even a small, positive change matters.</p></div><form id="interests-form"><div class="selection-summary"><strong id="selected-count" aria-live="polite">${state.selected.size} of 3 selected</strong><span>Choose 1–3 areas</span></div><p class="selection-guidance" id="selection-guidance" aria-live="polite">Select one, two, or three areas. Open a role to learn more before choosing.</p>${['Stakeholders', 'Projects', 'Initiatives']
+          heading('Where would you like to contribute?', 'Choose two or three areas where you can make a meaningful contribution, in order of preference. The first area you tick is your 1st choice. Explore the descriptions before making your selection.') +
+          `<div class="selection-purpose"><strong>Focus on what matters to Erode</strong><p>These descriptions are a guide to help you explore each role; you are not expected to carry out every activity listed. Focus on the needs you see in Erode and where you can make a meaningful contribution. Success is measured by the impact you create, rather than the number of events you organise. Even a small, positive change matters.</p></div><form id="interests-form"><div class="selection-summary"><strong id="selected-count" aria-live="polite">${state.selected.size} of 3 selected</strong><span>Choose 2–3 areas, in order</span></div><p class="selection-guidance" id="selection-guidance" aria-live="polite">Tick your 1st choice first, then your 2nd, then your 3rd if you want one. To change the order, untick an area and tick it again. Open a role to learn more before choosing.</p>${['Stakeholders', 'Projects', 'Initiatives']
             .map(
               cat =>
                 `<h3 class="section-heading">${cat.toUpperCase()}<span>${verticals.filter(v => v.category === cat).length} options</span></h3>${verticals
                   .filter(v => v.category === cat)
                   .map(
                     v =>
-                      `<div class="choice ${state.selected.has(v.id) ? 'selected' : ''}" id="choice-${v.id}"><div class="choice-row"><label for="${v.id}"><input type="checkbox" id="${v.id}" data-choice="${v.id}" ${state.selected.has(v.id) ? 'checked' : ''}><span>${v.name}</span></label><button type="button" class="disclosure" data-expand="${v.id}" aria-label="Show ${v.name} responsibilities" aria-expanded="${state.open === v.id}" aria-controls="detail-${v.id}">⌄</button></div><div class="details" id="detail-${v.id}" ${state.open === v.id ? '' : 'hidden'}>${roleDetails(v)}</div></div>`
+                      `<div class="choice ${state.selected.has(v.id) ? 'selected' : ''}" id="choice-${v.id}"><div class="choice-row"><label for="${v.id}"><input type="checkbox" id="${v.id}" data-choice="${v.id}" ${state.selected.has(v.id) ? 'checked' : ''}><span>${v.name}</span></label><span class="rank-badge" id="rank-${v.id}" aria-hidden="true"></span><button type="button" class="disclosure" data-expand="${v.id}" aria-label="Show ${v.name} responsibilities" aria-expanded="${state.open === v.id}" aria-controls="detail-${v.id}">⌄</button></div><div class="details" id="detail-${v.id}" ${state.open === v.id ? '' : 'hidden'}>${roleDetails(v)}</div></div>`
                   )
                   .join('')}`
             )
@@ -107,17 +108,15 @@ export function MemberApp({ roles, commitments, updateNote }: Props) {
       if (state.step === 3)
         app!.innerHTML =
           heading('Your ideas. Erode’s possibilities.', 'Aim for <strong>3–5 sentences for each selection</strong> about what you would like to do specifically in Erode. <strong>At least 2 sentences are required.</strong> Think local needs, practical actions, and the difference you hope to make.') +
-          `<form id="ideas-form" novalidate>${verticals
-            .filter(v => state.selected.has(v.id))
+          `<form id="ideas-form" novalidate>${[...state.selected].map(id => verticals.find(v => v.id === id)!)
             .map(
               (v, i) =>
-                `<div class="card writing-card"><div class="writing-head"><label for="answer-${v.id}">${String(i + 1).padStart(2, '0')}. ${v.name}</label><span class="category-tag">${v.category}</span></div><p id="prompt-${v.id}">What would you like to do for ${v.name} in Erode?</p><textarea id="answer-${v.id}" data-answer="${v.id}" maxlength="3000" required aria-describedby="prompt-${v.id} count-${v.id} error-${v.id}" placeholder="Share the local need, your proposed action, and the impact you want to create…">${escapeHTML(state.answers[v.id] || '')}</textarea><div class="writing-meta"><span>3–5 sentences recommended · Minimum 2 required.</span><span class="count" id="count-${v.id}">${countSentences(state.answers[v.id] || '')} sentences · Minimum 2</span></div><div class="error" id="error-${v.id}" role="alert"></div></div>`
+                `<div class="card writing-card"><div class="writing-head"><label for="answer-${v.id}">${RANK[i]} choice · ${v.name}</label><span class="category-tag">${v.category}</span></div><p id="prompt-${v.id}">What would you like to do for ${v.name} in Erode?</p><textarea id="answer-${v.id}" data-answer="${v.id}" maxlength="3000" required aria-describedby="prompt-${v.id} count-${v.id} error-${v.id}" placeholder="Share the local need, your proposed action, and the impact you want to create…">${escapeHTML(state.answers[v.id] || '')}</textarea><div class="writing-meta"><span>3–5 sentences recommended · Minimum 2 required.</span><span class="count" id="count-${v.id}">${countSentences(state.answers[v.id] || '')} sentences · Minimum 2</span></div><div class="error" id="error-${v.id}" role="alert"></div></div>`
             )
             .join('')}<p class="micro-note">Submitting an EOI expresses your interest; it does not confirm an EC appointment.</p><p class="error" id="submit-error" role="alert"></p>${buttons('Submit EOI')}</form>`
       if (state.step === 4)
-        app!.innerHTML = `<div class="card success"><div class="success-symbol" aria-hidden="true">✓</div><div class="step-label">A STEP TOWARDS SOMETHING BIGGER</div><h2 tabindex="-1">Your first step to<br><em>nation building.</em></h2><p>Thank you, <strong>${escapeHTML(state.name)}</strong>, for stepping forward for Erode. Your willingness to contribute is where meaningful change begins.</p><p>The leadership team will get back to you after discussions on the formation of the EC Team.</p><div class="chips">${verticals
-          .filter(v => state.selected.has(v.id))
-          .map(v => `<span class="chip">${v.name}</span>`)
+        app!.innerHTML = `<div class="card success"><div class="success-symbol" aria-hidden="true">✓</div><div class="step-label">A STEP TOWARDS SOMETHING BIGGER</div><h2 tabindex="-1">Your first step to<br><em>nation building.</em></h2><p>Thank you, <strong>${escapeHTML(state.name)}</strong>, for stepping forward for Erode. Your willingness to contribute is where meaningful change begins.</p><p>The leadership team will get back to you after discussions on the formation of the EC Team.</p><div class="chips">${[...state.selected].map(id => verticals.find(v => v.id === id)!)
+          .map((v, i) => `<span class="chip">${RANK[i]} · ${v.name}</span>`)
           .join('')}</div><p class="sample-result"><strong>Your EOI has been received.</strong><br>Reference ${escapeHTML(shortRef(state.receipt!.id))} · ${escapeHTML(ist(state.receipt!.submittedAt))} IST. Keep this for your records.</p><div class="success-actions"><button class="primary" id="download">Download your EOI <span aria-hidden="true">↓</span></button><button class="secondary" id="restart">Start another entry</button></div></div>`
       bind()
       if (state.step === 2) updateChoices()
@@ -141,14 +140,17 @@ export function MemberApp({ roles, commitments, updateNote }: Props) {
         $('choice-' + v.id)!.classList.toggle('selected', selected)
         ;($(v.id) as HTMLInputElement).disabled = unavailable
         $('choice-' + v.id)!.classList.toggle('at-limit', unavailable)
+        const rank = [...state.selected].indexOf(v.id)
+        $('rank-' + v.id)!.textContent = rank < 0 ? '' : RANK[rank]
+        $(v.id)!.setAttribute('aria-label', rank < 0 ? v.name : `${v.name}, your ${RANK[rank]} choice`)
         ;($('detail-' + v.id) as HTMLElement).hidden = state.open !== v.id
         document.querySelector(`[data-expand="${v.id}"]`)!.setAttribute('aria-expanded', String(state.open === v.id))
       })
       $('selected-count')!.textContent = state.selected.size + ' of 3 selected'
       $('selection-guidance')!.textContent =
         state.selected.size >= 3
-          ? 'Three areas selected. Deselect one to choose a different area. You can still explore every role.'
-          : 'Select one, two, or three areas. Open a role to learn more before choosing.'
+          ? 'Three areas selected. Deselect one to choose a different area or change the order. You can still explore every role.'
+          : 'Tick your 1st choice first, then your 2nd, then your 3rd if you want one. To change the order, untick an area and tick it again. Open a role to learn more before choosing.'
     }
 
     function bind() {
@@ -218,8 +220,8 @@ export function MemberApp({ roles, commitments, updateNote }: Props) {
       )
       $('interests-form')?.addEventListener('submit', e => {
         e.preventDefault()
-        if (state.selected.size < 1 || state.selected.size > 3) {
-          error('selection-error', 'Choose between one and three areas where you would like to contribute.')
+        if (state.selected.size < 2 || state.selected.size > 3) {
+          error('selection-error', 'Choose two or three areas where you would like to contribute, so the team has a 2nd choice for you.')
           document.querySelector<HTMLInputElement>('[data-choice]')!.focus()
           return
         }
@@ -264,7 +266,9 @@ export function MemberApp({ roles, commitments, updateNote }: Props) {
             name: state.name,
             phone: state.phone,
             ack: state.ack,
-            selections: verticals.filter(v => state.selected.has(v.id)).map(v => ({ roleId: v.id, answer: state.answers[v.id] || '' })),
+            // state.selected is a Set: it keeps tap order, so this is 1st, 2nd, 3rd choice.
+            selections: [...state.selected].map(id => ({ roleId: id, answer: state.answers[id] || '' })),
+            ranked: true,
           })
         } catch {
           result = { ok: false, message: 'We could not save your EOI. Your answers are still here. Please check your connection and press Submit EOI again.' }
@@ -291,9 +295,8 @@ export function MemberApp({ roles, commitments, updateNote }: Props) {
         const r = state.receipt!
         const text =
           `YI ERODE — EC 2027\nEXPRESSION OF INTEREST — SUBMITTED\nReference: ${shortRef(r.id)} (${r.id})\nSubmitted: ${ist(r.submittedAt)} IST\n\nName: ${state.name}\nContact: +91 ${state.phone}\nMandatory commitments: Acknowledged\n\n` +
-          verticals
-            .filter(v => state.selected.has(v.id))
-            .map(v => `${v.category} / ${v.name}\n${(state.answers[v.id] || '').trim()}`)
+          [...state.selected].map(id => verticals.find(v => v.id === id)!)
+            .map((v, i) => `${RANK[i]} choice: ${v.category} / ${v.name}\n${(state.answers[v.id] || '').trim()}`)
             .join('\n\n')
         const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }))
         const a = document.createElement('a')

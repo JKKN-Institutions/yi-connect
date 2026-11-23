@@ -5,6 +5,7 @@ import { inflateRawSync } from 'node:zlib'
 import { EOI_ROLES, EOI_ROLE_IDS, EOI_COMMITMENTS, EOI_ROLE_UPDATE_NOTE } from '../../lib/ec-eoi/catalog.ts'
 import { countSentences, normalisePhone, validateSubmission, isValidName } from '../../lib/ec-eoi/validation.ts'
 import { createWorkbook, createAreaZip, areaFilename } from '../../lib/ec-eoi/workbook.ts'
+import { readRanking, withRanking } from '../../lib/ec-eoi/ranking.ts'
 
 const IDS = EOI_ROLES.map(r => r.id)
 
@@ -61,16 +62,19 @@ test('server validation: roles, sentences, acknowledgement', () => {
   assert.equal(ok.ok, true)
   assert.equal(ok.value.name, 'Test Member')
   assert.equal(ok.value.phone, '9876543210')
-  assert.deepEqual(ok.value.selections.map(s => s.roleId), ['vertical-4', 'vertical-11'], 'catalogue order')
+  assert.deepEqual(ok.value.selections.map(s => s.roleId), ['vertical-11', 'vertical-4'], 'member order kept (1st choice first)')
+  assert.equal(ok.value.ranked, false, 'no ranked flag from an old form')
+  assert.equal(validateSubmission(base([{ roleId: 'vertical-11', answer: two }, { roleId: 'vertical-4', answer: two }], { ranked: true }), IDS).value.ranked, true, 'ranked form')
 
   assert.equal(validateSubmission(base([]), IDS).ok, false, '0 roles fails')
-  assert.equal(validateSubmission(base([{ roleId: 'vertical-1', answer: two }]), IDS).ok, true, '1 role ok')
+  assert.equal(validateSubmission(base([{ roleId: 'vertical-1', answer: two }]), IDS).ok, false, '1 role fails (Director 23 Nov: minimum 2)')
+  assert.equal(validateSubmission(base(['vertical-1', 'vertical-2'].map(roleId => ({ roleId, answer: two }))), IDS).ok, true, '2 roles ok')
   assert.equal(validateSubmission(base(['vertical-1', 'vertical-2', 'vertical-3'].map(roleId => ({ roleId, answer: two }))), IDS).ok, true, '3 roles ok')
   assert.equal(validateSubmission(base(['vertical-1', 'vertical-2', 'vertical-3', 'vertical-4'].map(roleId => ({ roleId, answer: two }))), IDS).ok, false, '4 roles fails')
   assert.equal(validateSubmission(base([{ roleId: 'vertical-1', answer: two }, { roleId: 'vertical-1', answer: two }]), IDS).ok, false, 'duplicate role fails')
   assert.equal(validateSubmission(base([{ roleId: 'vertical-99', answer: two }]), IDS).ok, false, 'unknown role fails')
   assert.equal(validateSubmission(base([{ roleId: 'vertical-1', answer: 'Just one sentence.' }]), IDS).ok, false, '1 sentence fails')
-  assert.equal(validateSubmission(base([{ roleId: 'vertical-1', answer: 'A. B. C. D. E. F. G.' }]), IDS).ok, true, 'more than 5 accepted')
+  assert.equal(validateSubmission(base([{ roleId: 'vertical-1', answer: 'A. B. C. D. E. F. G.' }, { roleId: 'vertical-2', answer: two }]), IDS).ok, true, 'more than 5 accepted')
   assert.equal(validateSubmission(base([{ roleId: 'vertical-1', answer: 'A. B. ' + 'x'.repeat(3000) }]), IDS).ok, false, 'over 3000 chars fails')
   assert.equal(validateSubmission(base([{ roleId: 'vertical-1', answer: two }], { ack: false }), IDS).ok, false, 'ack required')
   assert.equal(validateSubmission(base([{ roleId: 'vertical-1', answer: two }], { ack: 'true' }), IDS).ok, false, 'ack must be a real true')
@@ -95,9 +99,9 @@ function unzip(buf) {
 }
 const rows = (xml) => [...xml.matchAll(/<row [^>]*>([\s\S]*?)<\/row>/g)].map(m => [...m[1].matchAll(/<t xml:space="preserve">([\s\S]*?)<\/t>/g)].map(c => c[1]))
 
-const sel = (id, answer) => { const r = EOI_ROLES.find(r => r.id === id); return { id, name: r.name, category: r.category, answer } }
-const A = { id: 'a-1', submittedAt: '2026-11-19T08:30:00.000Z', name: 'Member A', phone: '9876543210', recordType: 'Submitted', selections: [sel('vertical-4', 'A health idea.'), sel('vertical-11', 'A learning idea.')] }
-const B = { id: 'b-2', submittedAt: '2026-11-19T09:00:00.000Z', name: 'Member B', phone: '9123456780', recordType: 'Submitted', selections: [sel('vertical-11', '=HYPERLINK("http://x","click") & <b>"quotes"</b>')] }
+const sel = (id, answer) => { const r = EOI_ROLES.find(r => r.id === id); return { id, name: r.name, category: r.category, answer, choice: null } }
+const A = { id: 'a-1', submittedAt: '2026-11-19T08:30:00.000Z', name: 'Member A', phone: '9876543210', recordType: 'Submitted', ranked: false, selections: [sel('vertical-4', 'A health idea.'), sel('vertical-11', 'A learning idea.')] }
+const B = { id: 'b-2', submittedAt: '2026-11-19T09:00:00.000Z', name: 'Member B', phone: '9123456780', recordType: 'Submitted', ranked: false, selections: [sel('vertical-11', '=HYPERLINK("http://x","click") & <b>"quotes"</b>')] }
 
 test('PDF page 7 example: all, per-area and ZIP separation', () => {
   const all = unzip(createWorkbook([A, B]))
@@ -106,16 +110,18 @@ test('PDF page 7 example: all, per-area and ZIP separation', () => {
   assert.equal(pr.length - 1, 3, 'three proposal rows')
   assert.equal(m[1][3], '+91 9876543210')
   assert.equal(m[1][4], 'Health\nLearning')
+  assert.equal(m[1][6], 'Not ranked (sent before ranking was added)')
+  assert.equal(pr[1][4], 'Not ranked')
 
   const health = unzip(createWorkbook([A, B], 'vertical-4'))
   const hm = rows(health['xl/worksheets/sheet1.xml'].toString()), hp = rows(health['xl/worksheets/sheet2.xml'].toString())
   assert.deepEqual(hm.slice(1).map(r => r[2]), ['Member A'])
   assert.equal(hm[1][5], '1', 'count describes the exported subset')
-  assert.deepEqual(hp.slice(1).map(r => r[5]), ['Health'])
+  assert.deepEqual(hp.slice(1).map(r => r[6]), ['Health'])
 
   const learning = unzip(createWorkbook([A, B], 'vertical-11'))
   const lp = rows(learning['xl/worksheets/sheet2.xml'].toString())
-  assert.deepEqual(lp.slice(1).map(r => r[2] + ':' + r[5]), ['Member A:Learning', 'Member B:Learning'])
+  assert.deepEqual(lp.slice(1).map(r => r[2] + ':' + r[6]), ['Member A:Learning', 'Member B:Learning'])
 
   const zip = unzip(createAreaZip([A, B], EOI_ROLES))
   assert.deepEqual(Object.keys(zip).sort(), [areaFilename('Health'), areaFilename('Learning')].sort(), 'empty areas left out')
@@ -150,4 +156,23 @@ test('desk access rule (Yi Connect roles)', async () => {
   assert.ok(!eoiAccessAllowed([r('ec_eoi', 'reviewer', null)]), 'blank chapter fails closed')
   assert.ok(!eoiAccessAllowed([r('ec_eoi', 'reviewer', ' ')]), 'blank chapter fails closed')
   assert.ok(!eoiAccessAllowed([r('yip', 'chapter_admin', 'Erode')]), 'YIP organiser is not enough')
+})
+
+test('ranked entries: Excel shows 1st / 2nd choice in member order (Director 23 Nov)', () => {
+  const C = { ...A, id: 'c-3', ranked: true, selections: [{ ...sel('vertical-11', 'L.'), choice: 1 }, { ...sel('vertical-4', 'H.'), choice: 2 }] }
+  const wb = unzip(createWorkbook([C]))
+  const m = rows(wb['xl/worksheets/sheet1.xml'].toString()), pr = rows(wb['xl/worksheets/sheet2.xml'].toString())
+  assert.equal(m[1][4], '1. Learning\n2. Health')
+  assert.equal(m[1][6], 'Ranked by member')
+  assert.deepEqual(pr.slice(1).map(r => r[4] + ':' + r[6]), ['1st choice:Learning', '2nd choice:Health'])
+})
+
+test('ranking round-trip; old entries read as not ranked', () => {
+  const v = withRanking('2026-11-17', ['vertical-9', 'vertical-1', 'vertical-6'])
+  assert.equal(v, '2026-11-17;ranked=vertical-9,vertical-1,vertical-6')
+  assert.deepEqual(readRanking(v, new Set(['vertical-1', 'vertical-6', 'vertical-9'])), ['vertical-9', 'vertical-1', 'vertical-6'])
+  assert.equal(readRanking('2026-11-17', new Set(['vertical-1'])), null, 'old entry: not ranked')
+  assert.equal(readRanking(null, new Set(['vertical-1'])), null)
+  assert.equal(readRanking(v, new Set(['vertical-1', 'vertical-6'])), null, 'mismatch with answers: not ranked')
+  assert.equal(readRanking('2026-11-17;ranked=vertical-1,vertical-1', new Set(['vertical-1'])), null, 'duplicate ids rejected')
 })

@@ -10,7 +10,7 @@ export const EOI_LIMITS = {
   nameMin: 2,
   nameMax: 100,
   phoneInputMax: 18,
-  minRoles: 1,
+  minRoles: 2,
   maxRoles: 3,
   minSentences: 2,
   answerMax: 3000,
@@ -47,6 +47,8 @@ export interface EoiSubmissionInput {
   phone: string
   ack: boolean
   selections: { roleId: string; answer: string }[]
+  /** Sent by the ranked form (23 Nov 2026): selections are in preference order. */
+  ranked?: boolean
 }
 
 export interface EoiCleanSubmission {
@@ -54,6 +56,7 @@ export interface EoiCleanSubmission {
   name: string
   phone: string
   selections: { roleId: string; answer: string }[]
+  ranked: boolean
 }
 
 export type EoiValidationResult =
@@ -63,8 +66,8 @@ export type EoiValidationResult =
 const REQUEST_KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /**
- * Server-side gate. `knownRoleIds` is the catalogue's id list, in display
- * order; the cleaned selections come back in that order.
+ * Server-side gate. `knownRoleIds` is the catalogue's id list. The cleaned
+ * selections keep the member's order: 1st choice first (Director 23 Nov 2026).
  */
 export function validateSubmission(input: unknown, knownRoleIds: readonly string[]): EoiValidationResult {
   const errors: Record<string, string> = {}
@@ -93,12 +96,11 @@ export function validateSubmission(input: unknown, knownRoleIds: readonly string
     byId.set(roleId, answer)
   }
   if (badShape || byId.size < EOI_LIMITS.minRoles || byId.size > EOI_LIMITS.maxRoles) {
-    errors.selections = 'Choose between one and three areas where you would like to contribute.'
+    errors.selections = 'Choose two or three areas where you would like to contribute.'
   }
 
   const selections: { roleId: string; answer: string }[] = []
-  for (const roleId of knownRoleIds) {
-    if (!byId.has(roleId)) continue
+  for (const roleId of byId.keys()) {
     const answer = byId.get(roleId)!.trim()
     if (answer.length > EOI_LIMITS.answerMax) errors['answer-' + roleId] = `Please keep this answer within ${EOI_LIMITS.answerMax} characters.`
     else if (countSentences(answer) < EOI_LIMITS.minSentences) errors['answer-' + roleId] = 'Please write at least 2 sentences about your plans for this area in Erode.'
@@ -106,5 +108,5 @@ export function validateSubmission(input: unknown, knownRoleIds: readonly string
   }
 
   if (Object.keys(errors).length) return { ok: false, errors }
-  return { ok: true, value: { requestKey: requestKey.toLowerCase(), name, phone: phone!, selections } }
+  return { ok: true, value: { requestKey: requestKey.toLowerCase(), name, phone: phone!, selections, ranked: body.ranked === true } }
 }

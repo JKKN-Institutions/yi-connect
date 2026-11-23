@@ -6,6 +6,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase/server'
 import { EOI_COMMITMENT_VERSION, EOI_ROLES, EOI_TEAM_YEAR, eoiRoleById } from '../catalog'
 import type { EoiCleanSubmission } from '../validation'
 import type { EoiExportEntry } from '../workbook'
+import { readRanking, withRanking } from '../ranking'
 
 const db = () => createAdminSupabaseClient()
 const SETTINGS_KEY = 'ec-2027'
@@ -25,7 +26,9 @@ export async function saveSubmission(value: EoiCleanSubmission): Promise<EoiSave
       teamYear: EOI_TEAM_YEAR,
       name: value.name,
       phone: value.phone,
-      commitmentVersion: EOI_COMMITMENT_VERSION,
+      commitmentVersion: value.ranked
+        ? withRanking(EOI_COMMITMENT_VERSION, value.selections.map(s => s.roleId))
+        : EOI_COMMITMENT_VERSION,
       selections: value.selections,
     },
   })
@@ -43,6 +46,7 @@ interface AppRow {
   member_name: string
   phone: string
   role_ids: string[]
+  commitment_version: string
   ec_eoi_proposals: { role_id: string; response: string }[]
 }
 
@@ -56,7 +60,7 @@ export async function listEntries(): Promise<EoiExportEntry[]> {
   for (let from = 0; ; from += page) {
     const { data, error } = await db()
       .from('ec_eoi_applications')
-      .select('id, submitted_at, member_name, phone, role_ids, ec_eoi_proposals(role_id, response)')
+      .select('id, submitted_at, member_name, phone, role_ids, commitment_version, ec_eoi_proposals(role_id, response)')
       .eq('team_year', EOI_TEAM_YEAR)
       .order('submitted_at', { ascending: true })
       .range(from, from + page - 1)
@@ -75,17 +79,18 @@ export async function listEntries(): Promise<EoiExportEntry[]> {
     seenByPhone.set(r.phone, nth)
     const total = totalByPhone.get(r.phone)!
     const answers = new Map(r.ec_eoi_proposals.map(p => [p.role_id, p.response]))
-    const selections = order
-      .filter(id => answers.has(id))
-      .map(id => {
-        const role = eoiRoleById(id)!
-        return { id, name: role.name, category: role.category, answer: answers.get(id)! }
-      })
+    const rankedIds = readRanking(r.commitment_version, new Set(answers.keys()))
+    const ranked = rankedIds !== null
+    const selections = (rankedIds ?? order.filter(id => answers.has(id))).map((id, i) => {
+      const role = eoiRoleById(id)!
+      return { id, name: role.name, category: role.category, answer: answers.get(id)!, choice: ranked ? i + 1 : null }
+    })
     return {
       id: r.id,
       submittedAt: r.submitted_at,
       name: r.member_name,
       phone: r.phone,
+      ranked,
       recordType: total > 1 ? `Submitted · repeat ${nth} of ${total} from this number` : 'Submitted',
       selections,
     }

@@ -41,6 +41,8 @@ export function InstallPrompt() {
   // shared Yi Connect prompt is suppressed there too. Yi Recognitions
   // (/recognitions/…) is a separately branded app with its own manifest.
   // Take Pride 2026 (/take-pride/…) is its own branded event app too.
+  // The EC 2027 EOI form (/ec-2027) is a member form: on iPhone the card
+  // covered the role checkboxes and members got stuck choosing (23 Nov 2026).
   const pathname = usePathname()
   const suppressedRoute =
     !!pathname &&
@@ -48,7 +50,8 @@ export function InstallPrompt() {
       pathname.startsWith('/yip/r/') ||
       pathname.startsWith('/varnam-vizha') ||
       pathname.startsWith('/recognitions') ||
-      pathname.startsWith('/take-pride'))
+      pathname.startsWith('/take-pride') ||
+      pathname.startsWith('/ec-2027'))
 
   useEffect(() => {
     // Check if already dismissed in this session

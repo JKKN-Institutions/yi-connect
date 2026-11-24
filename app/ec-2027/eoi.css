@@ -23,3 +23,6 @@
 .eoi-root .rank-name{flex:1;min-width:0;font-size:14px;font-weight:600}
 .eoi-root .rank-move{width:44px;height:44px;border:1px solid #bdcdbf;border-radius:7px;background:#fff;color:var(--green);font-size:18px;cursor:pointer}
 .eoi-root .rank-move:disabled{opacity:.3;cursor:default}
+/* 24 Nov 2026 (Director): under-chosen areas get a tag so members spread their picks. */
+.eoi-root .needs-tag{display:inline-block;margin-left:8px;font-size:10px;font-weight:700;letter-spacing:.3px;color:#8b4515;background:#fff0dd;border:1px solid #f2c99f;border-radius:999px;padding:2px 8px;white-space:nowrap;vertical-align:middle}
+.eoi-root .choice-row label{flex-wrap:wrap}

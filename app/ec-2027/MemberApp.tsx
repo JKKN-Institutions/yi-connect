@@ -11,12 +11,15 @@
 import { useEffect, useRef } from 'react'
 import type { EoiCommitment, EoiRole } from '@/lib/ec-eoi/catalog'
 import { countSentences, isValidName, normalisePhone } from '@/lib/ec-eoi/validation'
+import { shuffled } from '@/lib/ec-eoi/spread'
 import { submitEoi } from './actions'
 
 interface Props {
   roles: readonly EoiRole[]
   commitments: readonly EoiCommitment[]
   updateNote: string
+  /** Areas with few picks so far (24 Nov 2026): tagged "Needs people". */
+  needsPeople?: readonly string[]
 }
 
 interface FormState {
@@ -39,13 +42,15 @@ const escapeHTML = (s: unknown) => String(s).replace(/[&<>"']/g, c => ({ '&': '&
 const ist = (iso: string) => new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso))
 const shortRef = (id: string) => id.slice(0, 8).toUpperCase()
 
-export function MemberApp({ roles, commitments, updateNote }: Props) {
+export function MemberApp({ roles, commitments, updateNote, needsPeople = [] }: Props) {
   const appRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const app = appRef.current
     if (!app) return
-    const verticals = roles
+    // Random order per visitor (Director 24 Nov 2026), so no area always sits at the top of its group.
+    const verticals = shuffled(roles)
+    const needs = new Set(needsPeople)
     const state = fresh()
     const $ = (id: string) => document.getElementById(id)
 
@@ -93,14 +98,14 @@ export function MemberApp({ roles, commitments, updateNote }: Props) {
       if (state.step === 2)
         app!.innerHTML =
           heading('Where would you like to contribute?', 'Choose two or three areas where you can make a meaningful contribution, then rank them in your order of preference. Explore the descriptions before making your selection.') +
-          `<div class="selection-purpose"><strong>Focus on what matters to Erode</strong><p>These descriptions are a guide to help you explore each role; you are not expected to carry out every activity listed. Focus on the needs you see in Erode and where you can make a meaningful contribution. Success is measured by the impact you create, rather than the number of events you organise. Even a small, positive change matters.</p></div><form id="interests-form"><div class="selection-summary"><strong id="selected-count" aria-live="polite">${state.selected.size} of 3 selected</strong><span>Choose 2–3 areas, then rank them</span></div><p class="selection-guidance" id="selection-guidance" aria-live="polite">Tick two or three areas. Then put them in your order of preference in the box below the list. Open a role to learn more before choosing.</p>${['Stakeholders', 'Projects', 'Initiatives']
+          `<div class="selection-purpose"><strong>Focus on what matters to Erode</strong><p>These descriptions are a guide to help you explore each role; you are not expected to carry out every activity listed. Focus on the needs you see in Erode and where you can make a meaningful contribution. Success is measured by the impact you create, rather than the number of events you organise. Even a small, positive change matters.</p></div><form id="interests-form"><div class="selection-summary"><strong id="selected-count" aria-live="polite">${state.selected.size} of 3 selected</strong><span>Choose 2–3 areas, then rank them</span></div><p class="selection-guidance" id="selection-guidance" aria-live="polite">Tick two or three areas. Then put them in your order of preference in the box below the list. Open a role to learn more before choosing.</p>${needs.size ? '<p class="selection-guidance">Areas marked <span class="needs-tag">Needs people</span> have few volunteers so far. Your energy would count most there.</p>' : ''}${['Stakeholders', 'Projects', 'Initiatives']
             .map(
               cat =>
                 `<h3 class="section-heading">${cat.toUpperCase()}<span>${verticals.filter(v => v.category === cat).length} options</span></h3>${verticals
                   .filter(v => v.category === cat)
                   .map(
                     v =>
-                      `<div class="choice ${state.selected.has(v.id) ? 'selected' : ''}" id="choice-${v.id}"><div class="choice-row"><label for="${v.id}"><input type="checkbox" id="${v.id}" data-choice="${v.id}" ${state.selected.has(v.id) ? 'checked' : ''}><span>${v.name}</span></label><span class="rank-badge" id="rank-${v.id}" aria-hidden="true"></span><button type="button" class="disclosure" data-expand="${v.id}" aria-label="Show ${v.name} responsibilities" aria-expanded="${state.open === v.id}" aria-controls="detail-${v.id}">⌄</button></div><div class="details" id="detail-${v.id}" ${state.open === v.id ? '' : 'hidden'}>${roleDetails(v)}</div></div>`
+                      `<div class="choice ${state.selected.has(v.id) ? 'selected' : ''}" id="choice-${v.id}"><div class="choice-row"><label for="${v.id}"><input type="checkbox" id="${v.id}" data-choice="${v.id}" ${state.selected.has(v.id) ? 'checked' : ''}><span>${v.name}</span>${needs.has(v.id) ? '<span class="needs-tag">Needs people</span>' : ''}</label><span class="rank-badge" id="rank-${v.id}" aria-hidden="true"></span><button type="button" class="disclosure" data-expand="${v.id}" aria-label="Show ${v.name} responsibilities" aria-expanded="${state.open === v.id}" aria-controls="detail-${v.id}">⌄</button></div><div class="details" id="detail-${v.id}" ${state.open === v.id ? '' : 'hidden'}>${roleDetails(v)}</div></div>`
                   )
                   .join('')}`
             )
@@ -154,7 +159,7 @@ export function MemberApp({ roles, commitments, updateNote }: Props) {
       box.innerHTML =
         picked.length < 2
           ? ''
-          : `<p class="rank-title">Your preference order</p><p class="rank-hint">1 is the area you want most. Use the arrows to change the order before you continue.</p><ol>${picked
+          : `<p class="rank-title">Your preference order</p><p class="rank-hint">1 is the area you want most. Use the arrows to change the order before you continue.</p>${needs.size ? '<p class="rank-hint">Popular areas fill fast. Picking an area marked <strong>Needs people</strong> as your 2nd or 3rd choice raises your chance of joining the team.</p>' : ''}<ol>${picked
               .map((id, i) => {
                 const n = verticals.find(v => v.id === id)!.name
                 return `<li><span class="rank-num">${i + 1}</span><span class="rank-name">${n}</span><button type="button" class="rank-move" data-move="${id}" data-dir="-1" aria-label="Move ${n} up" ${i === 0 ? 'disabled' : ''}>↑</button><button type="button" class="rank-move" data-move="${id}" data-dir="1" aria-label="Move ${n} down" ${i === picked.length - 1 ? 'disabled' : ''}>↓</button></li>`
@@ -334,7 +339,7 @@ export function MemberApp({ roles, commitments, updateNote }: Props) {
     }
 
     render(false)
-  }, [roles, commitments, updateNote])
+  }, [roles, commitments, updateNote, needsPeople])
 
   return <div id="app" ref={appRef} />
 }

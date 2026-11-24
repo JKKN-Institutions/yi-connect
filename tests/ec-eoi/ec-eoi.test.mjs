@@ -176,3 +176,16 @@ test('ranking round-trip; old entries read as not ranked', () => {
   assert.equal(readRanking(v, new Set(['vertical-1', 'vertical-6'])), null, 'mismatch with answers: not ranked')
   assert.equal(readRanking('2026-11-17;ranked=vertical-1,vertical-1', new Set(['vertical-1'])), null, 'duplicate ids rejected')
 })
+
+test('spread: needs-people tags and shuffle (Director 24 Nov)', async () => {
+  const { needsPeople, shuffled } = await import('../../lib/ec-eoi/spread.ts')
+  const ids = ['a', 'b', 'c', 'd']
+  assert.deepEqual(needsPeople(ids, []), [], 'no entries: no tags')
+  assert.deepEqual(needsPeople(ids, [['a', 'b'], ['a'], ['a', 'c']]), ['d'], 'small numbers: only zero-pick areas')
+  const many = Array.from({ length: 20 }, () => ['a']).concat([['b'], ['b'], ['c'], ['c'], ['c'], ['c'], ['c']])
+  assert.deepEqual(needsPeople(ids, many), ['b', 'd'], 'under a quarter of the top area')
+  assert.deepEqual(needsPeople(ids, [['a', 'a', 'x']]), ['b', 'c', 'd'], 'duplicates and unknown ids ignored')
+  const s = shuffled(ids, () => 0)
+  assert.deepEqual([...s].sort(), ids, 'same items')
+  assert.deepEqual(ids, ['a', 'b', 'c', 'd'], 'input untouched')
+})

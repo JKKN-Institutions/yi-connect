@@ -7,6 +7,7 @@ import { EOI_COMMITMENT_VERSION, EOI_ROLES, EOI_TEAM_YEAR, eoiRoleById } from '.
 import type { EoiCleanSubmission } from '../validation'
 import type { EoiExportEntry } from '../workbook'
 import { readRanking, withRanking } from '../ranking'
+import { needsPeople } from '../spread'
 
 const db = () => createAdminSupabaseClient()
 const SETTINGS_KEY = 'ec-2027'
@@ -15,6 +16,13 @@ const SETTINGS_KEY = 'ec-2027'
 export async function isFormOpen(): Promise<boolean> {
   const { data, error } = await db().from('ec_eoi_settings').select('is_open').eq('key', SETTINGS_KEY).maybeSingle()
   return !error && data?.is_open === true
+}
+
+/** Role ids to tag "Needs people". Fails quietly: on any read problem no tag is shown. */
+export async function needsPeopleIds(): Promise<string[]> {
+  const { data, error } = await db().from('ec_eoi_applications').select('role_ids').eq('team_year', EOI_TEAM_YEAR)
+  if (error || !data) return []
+  return needsPeople(EOI_ROLES.map(r => r.id), (data as { role_ids: string[] }[]).map(r => r.role_ids ?? []))
 }
 
 export type EoiSaveResult = { ok: true; id: string; submittedAt: string } | { ok: false }

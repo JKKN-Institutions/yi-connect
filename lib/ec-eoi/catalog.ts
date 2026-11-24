@@ -429,3 +429,27 @@ export const EOI_ROLE_IDS: ReadonlySet<string> = new Set(EOI_ROLES.map(r => r.id
 export function eoiRoleById(id: string): EoiRole | undefined {
   return EOI_ROLES.find(r => r.id === id)
 }
+
+/**
+ * Extra questions for crowded areas (Director 24 Nov 2026, wording as drafted).
+ * Members who pick one of these areas answer both questions (short, required).
+ * Keys are stored in yi_connect.ec_eoi_extra_answers: never rename a key.
+ */
+export interface EoiExtraQuestion {
+  key: string
+  label: string
+}
+export const EOI_EXTRA_QUESTIONS: Readonly<Record<string, readonly EoiExtraQuestion[]>> = {
+  'vertical-1': [
+    { key: 'schools', label: 'Which schools can you bring in, or already have links with?' },
+    { key: 'visits', label: 'How many school visits a month can you give?' },
+  ],
+  'vertical-3': [
+    { key: 'villages', label: 'Which villages or self-help groups do you already work with?' },
+    { key: 'travel', label: 'Can you travel outside Erode town on weekdays?' },
+  ],
+  'vertical-9': [
+    { key: 'business', label: 'What business have you built or run?' },
+    { key: 'founders', label: 'Which founders could you bring to a session?' },
+  ],
+}

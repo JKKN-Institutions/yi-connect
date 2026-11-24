@@ -3,10 +3,11 @@
  * Callers must check the open switch / admin session first.
  */
 import { createAdminSupabaseClient } from '@/lib/supabase/server'
-import { EOI_COMMITMENT_VERSION, EOI_ROLES, EOI_TEAM_YEAR, eoiRoleById } from '../catalog'
+import { EOI_COMMITMENT_VERSION, EOI_EXTRA_QUESTIONS, EOI_ROLES, EOI_TEAM_YEAR, eoiRoleById } from '../catalog'
 import type { EoiCleanSubmission } from '../validation'
 import type { EoiExportEntry } from '../workbook'
 import { readRanking, withRanking } from '../ranking'
+import { needsPeople } from '../spread'
 
 const db = () => createAdminSupabaseClient()
 const SETTINGS_KEY = 'ec-2027'
@@ -17,10 +18,17 @@ export async function isFormOpen(): Promise<boolean> {
   return !error && data?.is_open === true
 }
 
+/** Role ids to tag "Needs people". Fails quietly: on any read problem no tag is shown. */
+export async function needsPeopleIds(): Promise<string[]> {
+  const { data, error } = await db().from('ec_eoi_applications').select('role_ids').eq('team_year', EOI_TEAM_YEAR)
+  if (error || !data) return []
+  return needsPeople(EOI_ROLES.map(r => r.id), (data as { role_ids: string[] }[]).map(r => r.role_ids ?? []))
+}
+
 export type EoiSaveResult = { ok: true; id: string; submittedAt: string } | { ok: false }
 
 export async function saveSubmission(value: EoiCleanSubmission): Promise<EoiSaveResult> {
-  const { data, error } = await db().rpc('ec_eoi_submit', {
+  const { data, error } = await db().rpc('ec_eoi_submit_v2', {
     p: {
       requestKey: value.requestKey,
       teamYear: EOI_TEAM_YEAR,
@@ -48,6 +56,7 @@ interface AppRow {
   role_ids: string[]
   commitment_version: string
   ec_eoi_proposals: { role_id: string; response: string }[]
+  ec_eoi_extra_answers: { role_id: string; question_key: string; answer: string }[]
 }
 
 /**
@@ -60,7 +69,7 @@ export async function listEntries(): Promise<EoiExportEntry[]> {
   for (let from = 0; ; from += page) {
     const { data, error } = await db()
       .from('ec_eoi_applications')
-      .select('id, submitted_at, member_name, phone, role_ids, commitment_version, ec_eoi_proposals(role_id, response)')
+      .select('id, submitted_at, member_name, phone, role_ids, commitment_version, ec_eoi_proposals(role_id, response), ec_eoi_extra_answers(role_id, question_key, answer)')
       .eq('team_year', EOI_TEAM_YEAR)
       .order('submitted_at', { ascending: true })
       .range(from, from + page - 1)
@@ -83,7 +92,12 @@ export async function listEntries(): Promise<EoiExportEntry[]> {
     const ranked = rankedIds !== null
     const selections = (rankedIds ?? order.filter(id => answers.has(id))).map((id, i) => {
       const role = eoiRoleById(id)!
-      return { id, name: role.name, category: role.category, answer: answers.get(id)!, choice: ranked ? i + 1 : null }
+      const questions = EOI_EXTRA_QUESTIONS[id] ?? []
+      const given = (r.ec_eoi_extra_answers ?? []).filter(x => x.role_id === id)
+      const extras = questions
+        .map(q => ({ question: q.label, answer: given.find(x => x.question_key === q.key)?.answer ?? '' }))
+        .filter(x => x.answer)
+      return { id, name: role.name, category: role.category, answer: answers.get(id)!, choice: ranked ? i + 1 : null, extras, extrasNotAsked: questions.length > 0 && extras.length === 0 }
     })
     return {
       id: r.id,

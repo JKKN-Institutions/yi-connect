@@ -1,6 +1,6 @@
 'use server'
 
-import { EOI_ROLES } from '@/lib/ec-eoi/catalog'
+import { EOI_EXTRA_QUESTIONS, EOI_ROLES } from '@/lib/ec-eoi/catalog'
 import { validateSubmission } from '@/lib/ec-eoi/validation'
 import { isFormOpen, saveSubmission } from '@/lib/ec-eoi/server/data'
 import { hasAdminSession } from '@/lib/ec-eoi/server/admin-session'
@@ -15,7 +15,7 @@ export async function submitEoi(input: unknown): Promise<SubmitResult> {
   if (!open && !admin) {
     return { ok: false, message: 'The EC 2027 Expression of Interest is not open right now. Your answers are still here.' }
   }
-  const checked = validateSubmission(input, EOI_ROLES.map(r => r.id))
+  const checked = validateSubmission(input, EOI_ROLES.map(r => r.id), EOI_EXTRA_QUESTIONS)
   if (!checked.ok) {
     const first = Object.values(checked.errors)[0]
     return { ok: false, message: first || 'Please check your answers and try again.', errors: checked.errors }

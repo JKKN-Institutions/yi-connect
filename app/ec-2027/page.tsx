@@ -1,5 +1,5 @@
 import { EOI_COMMITMENTS, EOI_ROLES, EOI_ROLE_UPDATE_NOTE } from '@/lib/ec-eoi/catalog'
-import { isFormOpen } from '@/lib/ec-eoi/server/data'
+import { isFormOpen, needsPeopleIds } from '@/lib/ec-eoi/server/data'
 import { hasAdminSession } from '@/lib/ec-eoi/server/admin-session'
 import { EoiHeader } from './EoiHeader'
 import { MemberApp } from './MemberApp'
@@ -11,6 +11,7 @@ const STEPS = ['Your details', 'Your commitment', 'Your interests', 'Your ideas'
 export default async function EcEoiMemberPage() {
   const [open, admin] = await Promise.all([isFormOpen(), hasAdminSession()])
   const showForm = open || admin
+  const needs = showForm ? await needsPeopleIds() : []
   return (
     <>
       <EoiHeader />
@@ -69,7 +70,7 @@ export default async function EcEoiMemberPage() {
               </div>
             )}
             {showForm ? (
-              <MemberApp roles={EOI_ROLES} commitments={EOI_COMMITMENTS} updateNote={EOI_ROLE_UPDATE_NOTE} />
+              <MemberApp roles={EOI_ROLES} commitments={EOI_COMMITMENTS} updateNote={EOI_ROLE_UPDATE_NOTE} needsPeople={needs} />
             ) : (
               <div id="app">
                 <div className="card success">

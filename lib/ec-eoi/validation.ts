@@ -14,6 +14,7 @@ export const EOI_LIMITS = {
   maxRoles: 3,
   minSentences: 2,
   answerMax: 3000,
+  extraMax: 500,
 } as const
 
 /** Same counter as the design: punctuation-ended segments that contain a letter or number. */
@@ -41,21 +42,28 @@ export function normalisePhone(raw: string): string | null {
   return /^[6-9]\d{9}$/.test(digits) ? digits : null
 }
 
+export interface EoiExtraAnswer {
+  key: string
+  answer: string
+}
+
 export interface EoiSubmissionInput {
   requestKey: string
   name: string
   phone: string
   ack: boolean
-  selections: { roleId: string; answer: string }[]
+  selections: { roleId: string; answer: string; extras?: EoiExtraAnswer[] }[]
   /** Sent by the ranked form (23 Nov 2026): selections are in preference order. */
   ranked?: boolean
+  /** Sent by the form that shows extra questions (24 Nov 2026). A page loaded before that is not asked for them. */
+  extrasAsked?: boolean
 }
 
 export interface EoiCleanSubmission {
   requestKey: string
   name: string
   phone: string
-  selections: { roleId: string; answer: string }[]
+  selections: { roleId: string; answer: string; extras: EoiExtraAnswer[] }[]
   ranked: boolean
 }
 
@@ -69,7 +77,11 @@ const REQUEST_KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
  * Server-side gate. `knownRoleIds` is the catalogue's id list. The cleaned
  * selections keep the member's order: 1st choice first (Director 23 Nov 2026).
  */
-export function validateSubmission(input: unknown, knownRoleIds: readonly string[]): EoiValidationResult {
+export function validateSubmission(
+  input: unknown,
+  knownRoleIds: readonly string[],
+  extraQuestions: Readonly<Record<string, readonly { key: string }[]>> = {}
+): EoiValidationResult {
   const errors: Record<string, string> = {}
   const body = (input && typeof input === 'object' ? input : {}) as Partial<EoiSubmissionInput>
 
@@ -87,6 +99,7 @@ export function validateSubmission(input: unknown, knownRoleIds: readonly string
   const raw = Array.isArray(body.selections) ? body.selections : []
   const seen = new Set<string>()
   const byId = new Map<string, string>()
+  const extrasById = new Map<string, unknown>()
   let badShape = raw.length > EOI_LIMITS.maxRoles
   for (const item of raw) {
     const roleId = item && typeof item.roleId === 'string' ? item.roleId : ''
@@ -94,17 +107,29 @@ export function validateSubmission(input: unknown, knownRoleIds: readonly string
     if (!knownRoleIds.includes(roleId) || seen.has(roleId) || answer === null) { badShape = true; continue }
     seen.add(roleId)
     byId.set(roleId, answer)
+    extrasById.set(roleId, (item as { extras?: unknown }).extras)
   }
   if (badShape || byId.size < EOI_LIMITS.minRoles || byId.size > EOI_LIMITS.maxRoles) {
     errors.selections = 'Choose two or three areas where you would like to contribute.'
   }
 
-  const selections: { roleId: string; answer: string }[] = []
+  const askExtras = body.extrasAsked === true
+  const selections: { roleId: string; answer: string; extras: EoiExtraAnswer[] }[] = []
   for (const roleId of byId.keys()) {
     const answer = byId.get(roleId)!.trim()
     if (answer.length > EOI_LIMITS.answerMax) errors['answer-' + roleId] = `Please keep this answer within ${EOI_LIMITS.answerMax} characters.`
     else if (countSentences(answer) < EOI_LIMITS.minSentences) errors['answer-' + roleId] = 'Please write at least 2 sentences about your plans for this area in Erode.'
-    selections.push({ roleId, answer })
+    const questions = askExtras ? extraQuestions[roleId] ?? [] : []
+    const given = Array.isArray(extrasById.get(roleId)) ? (extrasById.get(roleId) as unknown[]) : []
+    const extras: EoiExtraAnswer[] = []
+    for (const q of questions) {
+      const hit = given.find(g => g && typeof g === 'object' && (g as EoiExtraAnswer).key === q.key) as EoiExtraAnswer | undefined
+      const text = typeof hit?.answer === 'string' ? hit.answer.trim() : ''
+      if (!text) errors[`extra-${roleId}-${q.key}`] = 'Please answer this question.'
+      else if (text.length > EOI_LIMITS.extraMax) errors[`extra-${roleId}-${q.key}`] = `Please keep this answer within ${EOI_LIMITS.extraMax} characters.`
+      extras.push({ key: q.key, answer: text })
+    }
+    selections.push({ roleId, answer, extras })
   }
 
   if (Object.keys(errors).length) return { ok: false, errors }

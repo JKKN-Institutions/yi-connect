@@ -37,6 +37,15 @@ export interface EoiExportSelection {
   answer: string
   /** 1 = member's 1st choice; null for entries saved before ranking. */
   choice: number | null
+  /** Extra questions for crowded areas (24 Nov 2026). */
+  extras?: { question: string; answer: string }[]
+  /** True when the area has extra questions but the entry was sent before they existed. */
+  extrasNotAsked?: boolean
+}
+
+export function extrasText(s: EoiExportSelection): string {
+  if (s.extrasNotAsked) return 'Not asked (sent before 24 Nov)'
+  return (s.extras ?? []).map(x => `${x.question}\n${x.answer}`).join('\n\n')
 }
 
 export interface EoiExportEntry {
@@ -174,8 +183,8 @@ export function createWorkbook(allEntries: EoiExportEntry[], areaId = '', teamYe
     ]),
   ]
   const ideas = [
-    ['Entry ID', 'Submitted (IST)', 'Member name', 'Contact number', 'Choice', 'Category', 'Selected area', 'Proposal for Erode'],
-    ...entries.flatMap(e => e.selections.map(s => [e.id, formatIst(e.submittedAt), e.name, '+91 ' + e.phone, choiceLabel(s.choice), s.category, s.name, s.answer])),
+    ['Entry ID', 'Submitted (IST)', 'Member name', 'Contact number', 'Choice', 'Category', 'Selected area', 'Proposal for Erode', 'Extra answers'],
+    ...entries.flatMap(e => e.selections.map(s => [e.id, formatIst(e.submittedAt), e.name, '+91 ' + e.phone, choiceLabel(s.choice), s.category, s.name, s.answer, extrasText(s)])),
   ]
   return buildZip([
     {
@@ -201,7 +210,7 @@ export function createWorkbook(allEntries: EoiExportEntry[], areaId = '', teamYe
       data: `<styleSheet xmlns="${ns}"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF146348"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`,
     },
     { name: 'xl/worksheets/sheet1.xml', data: sheet(members, [40, 24, 28, 22, 38, 16, 30, 44, 12, 26]) },
-    { name: 'xl/worksheets/sheet2.xml', data: sheet(ideas, [40, 24, 28, 22, 14, 20, 24, 100]) },
+    { name: 'xl/worksheets/sheet2.xml', data: sheet(ideas, [40, 24, 28, 22, 14, 20, 24, 100, 60]) },
   ])
 }
 

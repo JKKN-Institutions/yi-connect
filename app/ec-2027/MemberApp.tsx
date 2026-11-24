@@ -9,14 +9,17 @@
  * on failure the answers stay and Submit can be pressed again).
  */
 import { useEffect, useRef } from 'react'
-import type { EoiCommitment, EoiRole } from '@/lib/ec-eoi/catalog'
-import { countSentences, isValidName, normalisePhone } from '@/lib/ec-eoi/validation'
+import { EOI_EXTRA_QUESTIONS, type EoiCommitment, type EoiRole } from '@/lib/ec-eoi/catalog'
+import { EOI_LIMITS, countSentences, isValidName, normalisePhone } from '@/lib/ec-eoi/validation'
+import { shuffled } from '@/lib/ec-eoi/spread'
 import { submitEoi } from './actions'
 
 interface Props {
   roles: readonly EoiRole[]
   commitments: readonly EoiCommitment[]
   updateNote: string
+  /** Areas with few picks so far (24 Nov 2026): tagged "Needs people". */
+  needsPeople?: readonly string[]
 }
 
 interface FormState {
@@ -27,25 +30,29 @@ interface FormState {
   selected: Set<string>
   open: string | null
   answers: Record<string, string>
+  /** Extra-question answers keyed "<roleId>:<key>" (24 Nov 2026). */
+  extras: Record<string, string>
   requestKey: string | null
   receipt: { id: string; submittedAt: string } | null
   submitting: boolean
 }
 
-const fresh = (): FormState => ({ step: 0, name: '', phone: '', ack: false, selected: new Set(), open: null, answers: {}, requestKey: null, receipt: null, submitting: false })
+const fresh = (): FormState => ({ step: 0, name: '', phone: '', ack: false, selected: new Set(), open: null, answers: {}, extras: {}, requestKey: null, receipt: null, submitting: false })
 const RANK = ['1st', '2nd', '3rd']
 const steps = ['Your details', 'Your commitment', 'Your interests', 'Your ideas']
 const escapeHTML = (s: unknown) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 const ist = (iso: string) => new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso))
 const shortRef = (id: string) => id.slice(0, 8).toUpperCase()
 
-export function MemberApp({ roles, commitments, updateNote }: Props) {
+export function MemberApp({ roles, commitments, updateNote, needsPeople = [] }: Props) {
   const appRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const app = appRef.current
     if (!app) return
-    const verticals = roles
+    // Random order per visitor (Director 24 Nov 2026), so no area always sits at the top of its group.
+    const verticals = shuffled(roles)
+    const needs = new Set(needsPeople)
     const state = fresh()
     const $ = (id: string) => document.getElementById(id)
 
@@ -93,14 +100,14 @@ export function MemberApp({ roles, commitments, updateNote }: Props) {
       if (state.step === 2)
         app!.innerHTML =
           heading('Where would you like to contribute?', 'Choose two or three areas where you can make a meaningful contribution, then rank them in your order of preference. Explore the descriptions before making your selection.') +
-          `<div class="selection-purpose"><strong>Focus on what matters to Erode</strong><p>These descriptions are a guide to help you explore each role; you are not expected to carry out every activity listed. Focus on the needs you see in Erode and where you can make a meaningful contribution. Success is measured by the impact you create, rather than the number of events you organise. Even a small, positive change matters.</p></div><form id="interests-form"><div class="selection-summary"><strong id="selected-count" aria-live="polite">${state.selected.size} of 3 selected</strong><span>Choose 2–3 areas, then rank them</span></div><p class="selection-guidance" id="selection-guidance" aria-live="polite">Tick two or three areas. Then put them in your order of preference in the box below the list. Open a role to learn more before choosing.</p>${['Stakeholders', 'Projects', 'Initiatives']
+          `<div class="selection-purpose"><strong>Focus on what matters to Erode</strong><p>These descriptions are a guide to help you explore each role; you are not expected to carry out every activity listed. Focus on the needs you see in Erode and where you can make a meaningful contribution. Success is measured by the impact you create, rather than the number of events you organise. Even a small, positive change matters.</p></div><form id="interests-form"><div class="selection-summary"><strong id="selected-count" aria-live="polite">${state.selected.size} of 3 selected</strong><span>Choose 2–3 areas, then rank them</span></div><p class="selection-guidance" id="selection-guidance" aria-live="polite">Tick two or three areas. Then put them in your order of preference in the box below the list. Open a role to learn more before choosing.</p>${needs.size ? '<p class="selection-guidance">Areas marked <span class="needs-tag">Needs people</span> have few volunteers so far. Your energy would count most there.</p>' : ''}<p class="selection-guidance">Areas marked <span class="extra-tag">+2 questions</span> have many applicants, so they ask two short extra questions to help the team choose.</p>${['Stakeholders', 'Projects', 'Initiatives']
             .map(
               cat =>
                 `<h3 class="section-heading">${cat.toUpperCase()}<span>${verticals.filter(v => v.category === cat).length} options</span></h3>${verticals
                   .filter(v => v.category === cat)
                   .map(
                     v =>
-                      `<div class="choice ${state.selected.has(v.id) ? 'selected' : ''}" id="choice-${v.id}"><div class="choice-row"><label for="${v.id}"><input type="checkbox" id="${v.id}" data-choice="${v.id}" ${state.selected.has(v.id) ? 'checked' : ''}><span>${v.name}</span></label><span class="rank-badge" id="rank-${v.id}" aria-hidden="true"></span><button type="button" class="disclosure" data-expand="${v.id}" aria-label="Show ${v.name} responsibilities" aria-expanded="${state.open === v.id}" aria-controls="detail-${v.id}">⌄</button></div><div class="details" id="detail-${v.id}" ${state.open === v.id ? '' : 'hidden'}>${roleDetails(v)}</div></div>`
+                      `<div class="choice ${state.selected.has(v.id) ? 'selected' : ''}" id="choice-${v.id}"><div class="choice-row"><label for="${v.id}"><input type="checkbox" id="${v.id}" data-choice="${v.id}" ${state.selected.has(v.id) ? 'checked' : ''}><span>${v.name}</span>${needs.has(v.id) ? '<span class="needs-tag">Needs people</span>' : ''}${EOI_EXTRA_QUESTIONS[v.id] ? `<span class="extra-tag">+${EOI_EXTRA_QUESTIONS[v.id].length} questions</span>` : ''}</label><span class="rank-badge" id="rank-${v.id}" aria-hidden="true"></span><button type="button" class="disclosure" data-expand="${v.id}" aria-label="Show ${v.name} responsibilities" aria-expanded="${state.open === v.id}" aria-controls="detail-${v.id}">⌄</button></div><div class="details" id="detail-${v.id}" ${state.open === v.id ? '' : 'hidden'}>${roleDetails(v)}</div></div>`
                   )
                   .join('')}`
             )
@@ -111,7 +118,12 @@ export function MemberApp({ roles, commitments, updateNote }: Props) {
           `<form id="ideas-form" novalidate>${[...state.selected].map(id => verticals.find(v => v.id === id)!)
             .map(
               (v, i) =>
-                `<div class="card writing-card"><div class="writing-head"><label for="answer-${v.id}">${RANK[i]} choice · ${v.name}</label><span class="category-tag">${v.category}</span></div><p id="prompt-${v.id}">What would you like to do for ${v.name} in Erode?</p><textarea id="answer-${v.id}" data-answer="${v.id}" maxlength="3000" required aria-describedby="prompt-${v.id} count-${v.id} error-${v.id}" placeholder="Share the local need, your proposed action, and the impact you want to create…">${escapeHTML(state.answers[v.id] || '')}</textarea><div class="writing-meta"><span>3–5 sentences recommended · Minimum 2 required.</span><span class="count" id="count-${v.id}">${countSentences(state.answers[v.id] || '')} sentences · Minimum 2</span></div><div class="error" id="error-${v.id}" role="alert"></div></div>`
+                `<div class="card writing-card"><div class="writing-head"><label for="answer-${v.id}">${RANK[i]} choice · ${v.name}</label><span class="category-tag">${v.category}</span></div><p id="prompt-${v.id}">What would you like to do for ${v.name} in Erode?</p><textarea id="answer-${v.id}" data-answer="${v.id}" maxlength="3000" required aria-describedby="prompt-${v.id} count-${v.id} error-${v.id}" placeholder="Share the local need, your proposed action, and the impact you want to create…">${escapeHTML(state.answers[v.id] || '')}</textarea><div class="writing-meta"><span>3–5 sentences recommended · Minimum 2 required.</span><span class="count" id="count-${v.id}">${countSentences(state.answers[v.id] || '')} sentences · Minimum 2</span></div><div class="error" id="error-${v.id}" role="alert"></div>${(EOI_EXTRA_QUESTIONS[v.id] ?? [])
+                  .map(
+                    q =>
+                      `<div class="extra-field"><label for="extra-${v.id}-${q.key}">${q.label}<span class="required">*</span></label><textarea id="extra-${v.id}-${q.key}" data-extra="${v.id}:${q.key}" rows="2" maxlength="${EOI_LIMITS.extraMax}" required aria-describedby="xerror-${v.id}-${q.key}">${escapeHTML(state.extras[v.id + ':' + q.key] || '')}</textarea><div class="error" id="xerror-${v.id}-${q.key}" role="alert"></div></div>`
+                  )
+                  .join('')}</div>`
             )
             .join('')}<p class="micro-note">Submitting an EOI expresses your interest; it does not confirm an EC appointment.</p><p class="error" id="submit-error" role="alert"></p>${buttons('Submit EOI')}</form>`
       if (state.step === 4)
@@ -154,7 +166,7 @@ export function MemberApp({ roles, commitments, updateNote }: Props) {
       box.innerHTML =
         picked.length < 2
           ? ''
-          : `<p class="rank-title">Your preference order</p><p class="rank-hint">1 is the area you want most. Use the arrows to change the order before you continue.</p><ol>${picked
+          : `<p class="rank-title">Your preference order</p><p class="rank-hint">1 is the area you want most. Use the arrows to change the order before you continue.</p>${needs.size ? '<p class="rank-hint">Popular areas fill fast. Picking an area marked <strong>Needs people</strong> as your 2nd or 3rd choice raises your chance of joining the team.</p>' : ''}<ol>${picked
               .map((id, i) => {
                 const n = verticals.find(v => v.id === id)!.name
                 return `<li><span class="rank-num">${i + 1}</span><span class="rank-name">${n}</span><button type="button" class="rank-move" data-move="${id}" data-dir="-1" aria-label="Move ${n} up" ${i === 0 ? 'disabled' : ''}>↑</button><button type="button" class="rank-move" data-move="${id}" data-dir="1" aria-label="Move ${n} down" ${i === picked.length - 1 ? 'disabled' : ''}>↓</button></li>`
@@ -264,6 +276,12 @@ export function MemberApp({ roles, commitments, updateNote }: Props) {
           error('error-' + el.dataset.answer, '', el.id)
         })
       )
+      document.querySelectorAll<HTMLTextAreaElement>('[data-extra]').forEach(el =>
+        el.addEventListener('input', () => {
+          state.extras[el.dataset.extra!] = el.value
+          error('xerror-' + el.dataset.extra!.replace(':', '-'), '', el.id)
+        })
+      )
       $('ideas-form')?.addEventListener('submit', async e => {
         e.preventDefault()
         if (state.submitting) return
@@ -271,10 +289,17 @@ export function MemberApp({ roles, commitments, updateNote }: Props) {
         state.selected.forEach(id => {
           const valid = countSentences(state.answers[id] || '') >= 2
           error('error-' + id, valid ? '' : 'Please write at least 2 sentences about your plans for this area in Erode.', 'answer-' + id)
-          if (!valid && !first) first = id
+          if (!valid && !first) first = 'answer-' + id
         })
+        state.selected.forEach(id =>
+          (EOI_EXTRA_QUESTIONS[id] ?? []).forEach(q => {
+            const ok = (state.extras[id + ':' + q.key] || '').trim().length > 0
+            error(`xerror-${id}-${q.key}`, ok ? '' : 'Please answer this question.', `extra-${id}-${q.key}`)
+            if (!ok && !first) first = `extra-${id}-${q.key}`
+          })
+        )
         if (first) {
-          $('answer-' + first)!.focus()
+          $(first)!.focus()
           return
         }
         state.submitting = true
@@ -293,8 +318,13 @@ export function MemberApp({ roles, commitments, updateNote }: Props) {
             phone: state.phone,
             ack: state.ack,
             // state.selected is a Set: it keeps tap order, so this is 1st, 2nd, 3rd choice.
-            selections: [...state.selected].map(id => ({ roleId: id, answer: state.answers[id] || '' })),
+            selections: [...state.selected].map(id => ({
+              roleId: id,
+              answer: state.answers[id] || '',
+              extras: (EOI_EXTRA_QUESTIONS[id] ?? []).map(q => ({ key: q.key, answer: (state.extras[id + ':' + q.key] || '').trim() })),
+            })),
             ranked: true,
+            extrasAsked: true,
           })
         } catch {
           result = { ok: false, message: 'We could not save your EOI. Your answers are still here. Please check your connection and press Submit EOI again.' }
@@ -322,7 +352,11 @@ export function MemberApp({ roles, commitments, updateNote }: Props) {
         const text =
           `YI ERODE — EC 2027\nEXPRESSION OF INTEREST — SUBMITTED\nReference: ${shortRef(r.id)} (${r.id})\nSubmitted: ${ist(r.submittedAt)} IST\n\nName: ${state.name}\nContact: +91 ${state.phone}\nMandatory commitments: Acknowledged\n\n` +
           [...state.selected].map(id => verticals.find(v => v.id === id)!)
-            .map((v, i) => `${RANK[i]} choice: ${v.category} / ${v.name}\n${(state.answers[v.id] || '').trim()}`)
+            .map(
+              (v, i) =>
+                `${RANK[i]} choice: ${v.category} / ${v.name}\n${(state.answers[v.id] || '').trim()}` +
+                (EOI_EXTRA_QUESTIONS[v.id] ?? []).map(q => `\n\n${q.label}\n${(state.extras[v.id + ':' + q.key] || '').trim()}`).join('')
+            )
             .join('\n\n')
         const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }))
         const a = document.createElement('a')
@@ -334,7 +368,7 @@ export function MemberApp({ roles, commitments, updateNote }: Props) {
     }
 
     render(false)
-  }, [roles, commitments, updateNote])
+  }, [roles, commitments, updateNote, needsPeople])
 
   return <div id="app" ref={appRef} />
 }

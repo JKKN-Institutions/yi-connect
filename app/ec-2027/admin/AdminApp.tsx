@@ -132,7 +132,7 @@ export function AdminApp({ gate, email, areas }: Props) {
           entry.recordType.includes('repeat') ? '<br>' + esc(entry.recordType.replace('Submitted · ', 'This entry is ')) + '.' : ''
         }</p><p class="receipt">Entry ID: ${esc(entry.id)}</p>${entry.selections
           .filter(s => !area || s.id === area)
-          .map(s => `<section class="proposal"><span class="category-tag">${s.choice == null ? '' : ['1st', '2nd', '3rd'][s.choice - 1] + ' choice · '}${esc(s.category)}</span><h3>${esc(s.name)}</h3><p>${esc(s.answer)}</p>${(s.extras ?? []).map(x => `<p class="extra-qa"><strong>${esc(x.question)}</strong><br>${esc(x.answer)}</p>`).join('')}${s.extrasNotAsked ? '<p class="extra-qa">Extra questions not asked: sent before 24 Nov.</p>' : ''}</section>`)
+          .map(s => `<section class="proposal"><span class="category-tag">${s.choice == null ? '' : ['1st', '2nd', '3rd'][s.choice - 1] + ' choice · '}${esc(s.category)}</span><h3>${esc(s.name)}</h3><p>${esc(s.answer)}</p>${(s.extras ?? []).map(x => `<p class="extra-qa"><strong>${esc(x.question)}</strong><br>${esc(x.answer)}</p>`).join('')}${s.extrasNotAsked ? '<p class="extra-qa">Extra questions not asked: sent before they were added.</p>' : ''}</section>`)
           .join('')}`
         $<HTMLDialogElement>('entry-dialog').showModal()
       }],

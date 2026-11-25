@@ -282,6 +282,14 @@ export const MENTOR_SENDBACK_CLOSED =
   "Sending marks back to the Regional Mentors is closed from 20 Nov 2026. Marks already sent back stay as they are.";
 
 /**
+ * Piyush, 25 Nov 12:18: "RMs dont re-evaluate. only NMTs will do it. RM
+ * scores remain intact as before." The Regional Mentors' marks close for good
+ * at the original Stage 2 close, even if the Stage 2 deadline is moved later
+ * to reopen the NMT leader's ranking for recognitions not ranked in time.
+ */
+export const MENTOR_MARKS_CLOSE_AT = "2026-11-20T23:59:00+05:30";
+
+/**
  * Piyush, 28 Oct 11:05: an evaluator's home chapter is recorded and flagged
  * wherever their marks appear, but they still score it. False = home
  * chapters never hide a nomination; true restores the old rule that an

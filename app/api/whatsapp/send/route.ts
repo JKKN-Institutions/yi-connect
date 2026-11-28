@@ -8,7 +8,7 @@ import {
   isServiceConfigured,
   sendMessageAPI
 } from '@/lib/whatsapp/api-client';
-import { getCurrentUser } from '@/lib/auth';
+import { getWhatsAppAccess } from '@/lib/whatsapp/access';
 
 /**
  * Check if we're running on Vercel (serverless environment)
@@ -32,12 +32,13 @@ function isServerless(): boolean {
 
 export async function POST(request: NextRequest) {
   try {
-    // Require authentication — anon callers must not be able to send messages
-    const user = await getCurrentUser();
-    if (!user) {
+    // Require a leadership role (same rule as the WhatsApp pages) — a plain
+    // signed-in member must not be able to send from the chapter account.
+    const access = await getWhatsAppAccess();
+    if (!access.ok) {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized: Please log in' },
-        { status: 401 }
+        { success: false, error: access.error },
+        { status: access.status }
       );
     }
 

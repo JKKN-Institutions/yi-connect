@@ -8,13 +8,14 @@
  * (one registrant at a time, or an explicit "deliver all ready" the admin must
  * click). There is NO automatic / scheduled / bulk-blast path anywhere.
  *
- * Delivery is delegated to the repo's existing WhatsApp send path
- * (sendWhatsAppMessage in app/actions/whatsapp.ts) — the serverless-safe
+ * Delivery is delegated to the repo's existing WhatsApp send core
+ * (sendWhatsAppMessageCore in lib/whatsapp/service.ts — unguarded; the caller,
+ * deliverOneDossier, checks the YiFi 'dossiers' permission) — the serverless-safe
  * function that returns a structured { success, error } result and never
  * throws. We do NOT touch lib/whatsapp/** here.
  */
 
-import { sendWhatsAppMessage } from "@/app/actions/whatsapp";
+import { sendWhatsAppMessageCore } from "@/lib/whatsapp/service";
 import { createServiceClient } from "@/lib/yifi/supabase/server";
 import type { DeliverResult } from "./types";
 
@@ -69,7 +70,7 @@ export async function deliverDossierWhatsApp(
   // Send exactly one message via the repo's WhatsApp path.
   let sendResult: { success: boolean; error?: string };
   try {
-    sendResult = await sendWhatsAppMessage(trimmedPhone, message);
+    sendResult = await sendWhatsAppMessageCore(trimmedPhone, message);
   } catch (error) {
     const msg = error instanceof Error ? error.message : "WhatsApp send failed";
     return { ok: false, error: msg };

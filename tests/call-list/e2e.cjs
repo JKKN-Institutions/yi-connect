@@ -92,6 +92,18 @@ async function waitTotal(p, id, n) {
     await pick(L, 'Filter by result', 'All results')
     await shot(L, '02-leader-assigned')
 
+    // ---------- Meal switch ----------
+    check('meal totals hidden while the switch is off', (await L.locator('[data-testid="total-veg-plates"]').count()) === 0)
+    await L.getByTestId('meal-switch').click()
+    await L.locator('[data-testid="total-veg-plates"]').waitFor()
+    check('switch on shows Veg plates / Non-veg plates / Coming-meal-not-asked, all 0',
+      (await total(L, 'veg-plates')) === 0 && (await total(L, 'non-veg-plates')) === 0 && (await total(L, 'meal-not-asked')) === 0)
+    const settings = JSON.parse(execFileSync('node', [path.join(__dirname, 'fixtures.cjs'), 'event-settings']).toString())
+    const mealField = (settings.registration_form_fields || []).find(f => f.id === 'b1c2d3e4-0000-4000-8000-0000000000a1')
+    check('switch saved custom_fields.meal_choice = true and added an optional Veg / Non-veg question to the RSVP form',
+      settings.custom_fields?.meal_choice === true && !!mealField && mealField.required === false && JSON.stringify(mealField.options) === '["Veg","Non-veg"]',
+      JSON.stringify({ meal_choice: settings.custom_fields?.meal_choice, field: mealField?.label }))
+
     // ---------- Caller view on a phone (same leader, who gave himself 3 names) ----------
     const C = await contextAs(browser, 'demo-cochair@yi-demo.com', PHONE)
     await C.goto(`${BASE}/events/${EV}/my-calls`)
@@ -102,10 +114,22 @@ async function waitTotal(p, id, n) {
     await shot(C, '03-phone-my-calls-before')
     await one.getByRole('textbox').fill('Will come with spouse')
     await one.getByRole('button', { name: 'Coming', exact: true }).click()
-    await C.waitForFunction(() => document.querySelector('[data-testid="my-call"][data-name="Test Guest One"] [data-testid="my-call-result"]')?.textContent === 'Coming')
+    await one.getByTestId('meal-step').waitFor()
+    check('tapping Coming opens the meal step (head count 1 by default)', (await one.getByTestId('heads').textContent()) === '1')
+    await shot(C, '03b-phone-meal-step')
+    await one.getByRole('button', { name: 'One more person' }).click()
+    await one.getByRole('button', { name: 'One more person' }).click()
+    await one.getByRole('button', { name: 'Veg', exact: true }).click()
+    await C.waitForFunction(() => document.querySelector('[data-testid="my-call"][data-name="Test Guest One"] [data-testid="my-call-meal"]')?.textContent === 'Veg × 3')
+    check('caller saved Coming + Veg × 3 in one flow', (await one.getByTestId('my-call-result').textContent()) === 'Coming')
     const two = C.locator('[data-testid="my-call"][data-name="Test Guest Two"]')
     await two.getByRole('button', { name: 'Not coming', exact: true }).click()
     await C.waitForFunction(() => document.querySelector('[data-testid="my-call"][data-name="Test Guest Two"] [data-testid="my-call-result"]')?.textContent === 'Not coming')
+    const mem = C.locator('[data-testid="my-call"][data-name="Demo Regular Member"]')
+    await mem.getByRole('button', { name: 'Coming', exact: true }).click()
+    await mem.getByText('Save Coming now, ask the meal later').click()
+    await C.waitForFunction(() => document.querySelector('[data-testid="my-call"][data-name="Demo Regular Member"] [data-testid="my-call-result"]')?.textContent === 'Coming')
+    check('caller saved Coming without a meal ("ask later")', (await mem.getByTestId('my-call-meal').count()) === 0)
     check('caller saved Coming (with note) and Not coming from the phone', true)
     check('saved card shows who called and when', /Last saved .* by Demo Co-Chair/.test(await C.locator('[data-testid="my-call"][data-name="Test Guest One"]').innerText()))
     await shot(C, '04-phone-my-calls-after')
@@ -113,8 +137,18 @@ async function waitTotal(p, id, n) {
     await L.reload()
     await L.getByRole('heading', { name: 'Call list' }).waitFor()
     const t1 = { invited: await total(L, 'invited'), called: await total(L, 'called'), coming: await total(L, 'coming'), notComing: await total(L, 'not-coming'), noAnswer: await total(L, 'no-answer') }
-    check('leader totals moved: invited 4, called 3, coming 1, not coming 1, no answer 1',
-      t1.invited === 4 && t1.called === 3 && t1.coming === 1 && t1.notComing === 1 && t1.noAnswer === 1, JSON.stringify(t1))
+    check('leader totals moved: invited 4, called 4, coming 2, not coming 1, no answer 1',
+      t1.invited === 4 && t1.called === 4 && t1.coming === 2 && t1.notComing === 1 && t1.noAnswer === 1, JSON.stringify(t1))
+    const m1 = { veg: await total(L, 'veg-plates'), nonVeg: await total(L, 'non-veg-plates'), notAsked: await total(L, 'meal-not-asked') }
+    check('meal totals: Veg plates 3, Non-veg 0, Coming-meal-not-asked 1', m1.veg === 3 && m1.nonVeg === 0 && m1.notAsked === 1, JSON.stringify(m1))
+
+    await pick(L, 'Meal for Demo Regular Member', 'Non-veg')
+    await waitTotal(L, 'non-veg-plates', 1)
+    check('leader sets Non-veg on the list: Non-veg plates 1, not-asked 0', (await total(L, 'meal-not-asked')) === 0)
+    await L.getByRole('spinbutton', { name: 'People coming for Demo Regular Member' }).fill('2')
+    await row(L, 'Demo Regular Member').getByRole('button', { name: 'Save', exact: true }).click()
+    await waitTotal(L, 'non-veg-plates', 2)
+    check('leader changes head count to 2: Non-veg plates 2', (await total(L, 'veg-plates')) === 3)
     check('leader sees the caller note and "Called by"',
       (await row(L, 'Test Guest One').getByRole('textbox').inputValue()) === 'Will come with spouse' &&
       /Called by Demo Co-Chair/.test(await row(L, 'Test Guest One').innerText()))
@@ -137,13 +171,25 @@ async function waitTotal(p, id, n) {
 
     await L.reload()
     await L.getByRole('heading', { name: 'Call list' }).waitFor()
-    check('leader totals after member call: no answer 0, called 3',
-      (await total(L, 'no-answer')) === 0 && (await total(L, 'called')) === 3 && (await total(L, 'call-back')) === 1)
+    check('leader totals after member call: no answer 0, called 4, call back 1, plates unchanged (3 veg, 2 non-veg)',
+      (await total(L, 'no-answer')) === 0 && (await total(L, 'called')) === 4 && (await total(L, 'call-back')) === 1 &&
+      (await total(L, 'veg-plates')) === 3 && (await total(L, 'non-veg-plates')) === 2)
+
+    await pick(L, 'Result for Test Guest One', 'Not coming')
+    await waitTotal(L, 'veg-plates', 0)
+    check('Coming -> Not coming removes those 3 Veg plates', (await total(L, 'not-coming')) === 2)
+    await shot(L, '05b-leader-meal-totals')
+
+    await L.getByTestId('meal-switch').click()
+    await L.locator('[data-testid="total-veg-plates"]').waitFor({ state: 'detached' })
+    const off = JSON.parse(execFileSync('node', [path.join(__dirname, 'fixtures.cjs'), 'event-settings']).toString())
+    check('switch off: meal_choice false and the RSVP-form question removed again',
+      off.custom_fields?.meal_choice === false && !(off.registration_form_fields || []).some(f => f.id === 'b1c2d3e4-0000-4000-8000-0000000000a1'))
 
     // Event page entry points
     await L.goto(`${BASE}/events/${EV}`)
-    check('event page shows the Call list button to the leader', await L.getByRole('link', { name: 'Call list' }).isVisible())
-    check('event page shows "My calls (3)" to the leader', await L.getByRole('link', { name: 'My calls (3)' }).isVisible())
+    check('event page shows the Call list button to the leader', await L.getByRole('link', { name: 'Call list', exact: true }).isVisible())
+    check('event page shows "My calls (3)" to the leader', await L.getByRole('link', { name: 'My calls (3)', exact: true }).isVisible())
     await shot(L, '08-event-page-leader')
   } catch (e) {
     check('walk-through crashed', false, String(e && e.message).slice(0, 300))

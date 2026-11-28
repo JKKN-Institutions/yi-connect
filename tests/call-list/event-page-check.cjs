@@ -14,7 +14,7 @@ const EV = JSON.parse(fs.readFileSync(path.join(__dirname, '.created.json'), 'ut
     const p = await ctx.newPage(); p.setDefaultTimeout(120000)
     await p.goto(`${BASE}/events/${EV}`, { timeout: 300000 })
     await p.waitForLoadState('networkidle')
-    const cl = await p.getByRole('link', { name: 'Call list' }).count()
+    const cl = await p.getByRole('link', { name: 'Call list', exact: true }).count()
     const mine = await p.getByRole('link', { name: expectMine }).count()
     out.push(`${(cl > 0) === expectCallList ? 'PASS' : 'FAIL'} | ${email}: Call list button ${cl > 0 ? 'shown' : 'hidden'} (expected ${expectCallList ? 'shown' : 'hidden'})`)
     out.push(`${mine > 0 ? 'PASS' : 'FAIL'} | ${email}: "${expectMine}" button shown | url ${p.url().replace(BASE, '')}`)

@@ -10,6 +10,8 @@ import 'server-only';
 import { createAdminSupabaseClient } from '@/lib/supabase/server';
 import {
   isCallResult,
+  isMealChoice,
+  MEAL_FIELD_ID,
   type CallListRow,
   type CallerOption,
   type CallResult
@@ -23,6 +25,8 @@ export interface CallListEvent {
   chapter_id: string | null;
   organizer_id: string | null;
   co_organizers: string[] | null;
+  custom_fields: Record<string, unknown> | null;
+  registration_form_fields: unknown;
 }
 
 export interface CallListAccess {
@@ -42,7 +46,7 @@ export async function getCallListAccess(
   const { data: event } = await admin
     .schema('yi_connect')
     .from('events')
-    .select('id, title, start_date, status, chapter_id, organizer_id, co_organizers')
+    .select('id, title, start_date, status, chapter_id, organizer_id, co_organizers, custom_fields, registration_form_fields')
     .eq('id', eventId)
     .maybeSingle();
 
@@ -78,6 +82,14 @@ interface CallLogRecord {
   called_by_member_id: string | null;
   called_at: string | null;
   call_note: string | null;
+  meal_choice: string | null;
+  head_count: number | null;
+}
+
+function formMealAnswer(responses: unknown): string | null {
+  if (!responses || typeof responses !== 'object') return null;
+  const v = (responses as Record<string, unknown>)[MEAL_FIELD_ID];
+  return typeof v === 'string' && v.trim() ? v.trim() : null;
 }
 
 async function memberNames(ids: string[]): Promise<Map<string, string>> {
@@ -104,18 +116,18 @@ export async function getCallList(eventId: string): Promise<CallListRow[]> {
     admin
       .schema('yi_connect')
       .from('event_rsvps')
-      .select('id, member_id, status')
+      .select('id, member_id, status, custom_field_responses')
       .eq('event_id', eventId),
     admin
       .schema('yi_connect')
       .from('guest_rsvps')
-      .select('id, full_name, phone, status')
+      .select('id, full_name, phone, status, custom_field_responses')
       .eq('event_id', eventId),
     admin
       .schema('yi_connect')
       .from('event_call_list')
       .select(
-        'rsvp_id, guest_rsvp_id, assigned_caller_member_id, call_result, called_by_member_id, called_at, call_note'
+        'rsvp_id, guest_rsvp_id, assigned_caller_member_id, call_result, called_by_member_id, called_at, call_note, meal_choice, head_count'
       )
       .eq('event_id', eventId)
   ]);
@@ -150,7 +162,8 @@ export async function getCallList(eventId: string): Promise<CallListRow[]> {
     name: string,
     phone: string | null,
     rsvpStatus: string,
-    log: CallLogRecord | undefined
+    log: CallLogRecord | undefined,
+    formMeal: string | null
   ): CallListRow => {
     const result: CallResult = log && isCallResult(log.call_result) ? log.call_result : 'not_called';
     return {
@@ -166,7 +179,10 @@ export async function getCallList(eventId: string): Promise<CallListRow[]> {
       result,
       note: log?.call_note ?? null,
       calledByName: log?.called_by_member_id ? names.get(log.called_by_member_id) ?? 'Member' : null,
-      calledAt: log?.called_at ?? null
+      calledAt: log?.called_at ?? null,
+      meal: log && isMealChoice(log.meal_choice) ? log.meal_choice : null,
+      heads: log?.head_count ?? null,
+      formMeal
     };
   };
 
@@ -179,11 +195,12 @@ export async function getCallList(eventId: string): Promise<CallListRow[]> {
         p?.full_name || p?.email || 'Member',
         p?.phone || null,
         r.status,
-        logByRsvp.get(r.id)
+        logByRsvp.get(r.id),
+        formMealAnswer(r.custom_field_responses)
       );
     }),
     ...(guests || []).map((g) =>
-      toRow('guest', g.id, g.full_name, g.phone || null, g.status, logByGuest.get(g.id))
+      toRow('guest', g.id, g.full_name, g.phone || null, g.status, logByGuest.get(g.id), formMealAnswer(g.custom_field_responses))
     )
   ];
 

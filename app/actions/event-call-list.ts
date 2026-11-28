@@ -18,7 +18,14 @@ import { revalidatePath } from 'next/cache';
 import { getCurrentUser } from '@/lib/data/auth';
 import { createAdminSupabaseClient } from '@/lib/supabase/server';
 import { getCallListAccess } from '@/lib/data/event-call-list';
-import { isCallResult, type InviteeRef } from '@/lib/event-call-list';
+import {
+  eventServesMeal,
+  isCallResult,
+  isMealChoice,
+  MEAL_FIELD_ID,
+  MEAL_FIELD_OPTIONS,
+  type InviteeRef
+} from '@/lib/event-call-list';
 
 type Result<T = undefined> = { success: true; data?: T } | { success: false; error: string };
 
@@ -208,7 +215,8 @@ export async function recordCallResult(
   eventId: string,
   invitee: InviteeRef,
   result: string,
-  note?: string | null
+  note?: string | null,
+  meal?: { choice?: string | null; heads?: number | null }
 ): Promise<Result> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: 'Please sign in again.' };
@@ -237,9 +245,22 @@ export async function recordCallResult(
     return { success: false, error: 'This name is not on your call list.' };
   }
 
+  // Meal + head count only mean something when the event serves a meal and
+  // the person is coming; otherwise they are cleared.
+  const askMeal = result === 'coming' && eventServesMeal(access.event.custom_fields);
+  const mealChoice = askMeal && isMealChoice(meal?.choice) ? meal!.choice : null;
+  let heads: number | null = null;
+  if (askMeal) {
+    const n = Number(meal?.heads ?? 1);
+    if (!Number.isInteger(n) || n < 1 || n > 20) return { success: false, error: 'Head count must be 1 to 20.' };
+    heads = n;
+  }
+
   const now = new Date().toISOString();
   const fields = {
     call_result: result,
+    meal_choice: mealChoice,
+    head_count: heads,
     call_note: cleanNote || null,
     called_by_member_id: result === 'not_called' ? null : access.isMember ? user.id : null,
     called_at: result === 'not_called' ? null : now,
@@ -308,4 +329,57 @@ export async function addCallListGuest(
 
   revalidateCallPages(eventId);
   return { success: true, data: { id: data.id } };
+}
+
+/**
+ * Per-event switch: "This event serves a meal (ask veg / non-veg)".
+ * Stored as events.custom_fields.meal_choice (other keys there are kept).
+ * Turning it on also adds an optional "Meal preference" question (Veg /
+ * Non-veg) to the event's registration form, so members who RSVP themselves
+ * are asked too; turning it off removes that question again. The question is
+ * optional so the one-tap public RSVP is never blocked.
+ */
+export async function setEventMealChoice(eventId: string, on: boolean): Promise<Result> {
+  const user = await getCurrentUser();
+  if (!user) return { success: false, error: 'Please sign in again.' };
+  if (typeof on !== 'boolean') return { success: false, error: 'Invalid value.' };
+
+  const access = await getCallListAccess(eventId, user.id);
+  if (!access.event) return { success: false, error: 'Event not found.' };
+  if (!access.canManage) return { success: false, error: 'Only the chapter leaders of this event can change this.' };
+
+  const customFields = { ...(access.event.custom_fields ?? {}), meal_choice: on };
+
+  const existing = Array.isArray(access.event.registration_form_fields)
+    ? (access.event.registration_form_fields as Array<Record<string, unknown>>)
+    : [];
+  const withoutMeal = existing.filter((f) => f && f.id !== MEAL_FIELD_ID);
+  const formFields = on
+    ? [
+        ...withoutMeal,
+        {
+          id: MEAL_FIELD_ID,
+          type: 'select',
+          label: 'Meal preference',
+          help_text: 'So the caterer knows how many plates of each.',
+          required: false,
+          options: [...MEAL_FIELD_OPTIONS],
+          sort_order: withoutMeal.length
+        }
+      ]
+    : withoutMeal;
+
+  const admin = createAdminSupabaseClient();
+  const { error } = await admin
+    .schema('yi_connect')
+    .from('events')
+    .update({ custom_fields: customFields, registration_form_fields: formFields })
+    .eq('id', eventId);
+  if (error) {
+    console.error('[setEventMealChoice]', error);
+    return { success: false, error: 'Could not save the meal setting.' };
+  }
+
+  revalidateCallPages(eventId);
+  return { success: true };
 }

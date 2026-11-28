@@ -13,12 +13,15 @@ import {
   inviteAllChapterMembers,
   assignCaller,
   recordCallResult,
-  addCallListGuest
+  addCallListGuest,
+  setEventMealChoice
 } from '@/app/actions/event-call-list';
 import {
   CALL_RESULTS,
   CALL_RESULT_LABELS,
+  MEAL_LABELS,
   computeCallTotals,
+  type MealChoice,
   telHref,
   type CallListRow,
   type CallerOption,
@@ -29,6 +32,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -54,9 +58,13 @@ interface Props {
   eventId: string;
   rows: CallListRow[];
   callers: CallerOption[];
+  /** events.custom_fields.meal_choice */
+  mealOn: boolean;
 }
 
-export function CallListManager({ eventId, rows, callers }: Props) {
+const NOT_ASKED = '__not_asked__';
+
+export function CallListManager({ eventId, rows, callers, mealOn }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [callerFilter, setCallerFilter] = useState<string>(ALL);
@@ -159,6 +167,16 @@ export function CallListManager({ eventId, rows, callers }: Props) {
     );
   }
 
+  function onToggleMeal(on: boolean) {
+    run(
+      () => setEventMealChoice(eventId, on),
+      () =>
+        on
+          ? 'Meal is on: callers will ask veg / non-veg, and the RSVP form asks it too.'
+          : 'Meal is off for this event.'
+    );
+  }
+
   function copyCallerLink() {
     const url = `${window.location.origin}/events/${eventId}/my-calls`;
     navigator.clipboard?.writeText(url).then(
@@ -174,6 +192,11 @@ export function CallListManager({ eventId, rows, callers }: Props) {
     ['Not coming', totals.notComing, 'not-coming'],
     ['No answer', totals.noAnswer, 'no-answer'],
     ['Call back', totals.callBack, 'call-back']
+  ];
+  const mealStats: Array<[string, number, string]> = [
+    ['Veg plates', totals.vegPlates, 'veg-plates'],
+    ['Non-veg plates', totals.nonVegPlates, 'non-veg-plates'],
+    ['Coming, meal not asked', totals.comingMealNotAsked, 'meal-not-asked']
   ];
 
   return (
@@ -191,6 +214,35 @@ export function CallListManager({ eventId, rows, callers }: Props) {
           </Card>
         ))}
       </div>
+      {mealOn && (
+        <div className='grid grid-cols-3 gap-2'>
+          {mealStats.map(([label, value, id]) => (
+            <Card key={id} className='border border-amber-200 bg-amber-50/50 shadow-none dark:border-amber-900 dark:bg-amber-950/20'>
+              <CardContent className='p-3'>
+                <div className='text-xs text-muted-foreground'>{label}</div>
+                <div className='text-2xl font-semibold tabular-nums' data-testid={`total-${id}`}>
+                  {value}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+      <label className='flex items-center gap-3 rounded-lg border p-3 text-sm'>
+        <Switch
+          checked={mealOn}
+          onCheckedChange={onToggleMeal}
+          disabled={pending}
+          aria-label='This event serves a meal (ask veg / non-veg)'
+          data-testid='meal-switch'
+        />
+        <span>
+          <span className='font-medium'>This event serves a meal (ask veg / non-veg)</span>
+          <span className='block text-xs text-muted-foreground'>
+            When someone is Coming, the caller asks Veg or Non-veg and how many people. The RSVP form asks it too.
+          </span>
+        </span>
+      </label>
       {totals.unassigned > 0 && (
         <p className='text-sm text-muted-foreground'>
           {totals.unassigned === 1 ? '1 name still needs a caller.' : `${totals.unassigned} names still need a caller.`}
@@ -298,6 +350,7 @@ export function CallListManager({ eventId, rows, callers }: Props) {
                 eventId={eventId}
                 checked={selected.has(rowKey(r))}
                 onCheck={(on) => toggle(rowKey(r), on)}
+                mealOn={mealOn}
               />
             ))}
           </ul>
@@ -311,21 +364,28 @@ function CallRow({
   row,
   eventId,
   checked,
-  onCheck
+  onCheck,
+  mealOn
 }: {
   row: CallListRow;
   eventId: string;
   checked: boolean;
   onCheck: (on: boolean) => void;
+  mealOn: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [note, setNote] = useState(row.note ?? '');
+  const [heads, setHeads] = useState(String(row.heads ?? 1));
   const tel = telHref(row.phone);
+  const showMeal = mealOn && row.result === 'coming';
 
-  function save(result: CallResult, noteValue: string) {
+  function save(result: CallResult, noteValue: string, meal: MealChoice | null = row.meal, headsValue: string = heads) {
     startTransition(async () => {
-      const res = await recordCallResult(eventId, { kind: row.kind, id: row.id }, result, noteValue);
+      const res = await recordCallResult(eventId, { kind: row.kind, id: row.id }, result, noteValue, {
+        choice: meal,
+        heads: Number(headsValue) || 1
+      });
       if (!res.success) {
         toast.error(res.error);
         return;
@@ -354,6 +414,15 @@ function CallRow({
               <span>No phone number</span>
             )}
             {' · '}Caller: <span data-testid='row-caller'>{row.callerName ?? 'none yet'}</span>
+            {showMeal && (
+              <>
+                {' · '}
+                <span data-testid='row-meal'>
+                  {row.meal ? `${MEAL_LABELS[row.meal]} × ${row.heads ?? 1}` : 'Meal not asked'}
+                </span>
+              </>
+            )}
+            {mealOn && row.formMeal && <> · RSVP form: {row.formMeal}</>}
             {row.calledByName && row.calledAt && (
               <> · Called by {row.calledByName}, {new Date(row.calledAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</>
             )}
@@ -371,6 +440,34 @@ function CallRow({
             ))}
           </SelectContent>
         </Select>
+        {showMeal && (
+          <>
+            <Select
+              value={row.meal ?? NOT_ASKED}
+              onValueChange={(v) => save('coming', note, v === NOT_ASKED ? null : (v as MealChoice))}
+              disabled={pending}
+            >
+              <SelectTrigger className='w-32' aria-label={`Meal for ${row.name}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NOT_ASKED}>Meal?</SelectItem>
+                <SelectItem value='veg'>Veg</SelectItem>
+                <SelectItem value='non_veg'>Non-veg</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input
+              type='number'
+              min={1}
+              max={20}
+              value={heads}
+              onChange={(e) => setHeads(e.target.value)}
+              className='w-20'
+              aria-label={`People coming for ${row.name}`}
+              title='People coming, including them'
+            />
+          </>
+        )}
         <Input
           value={note}
           onChange={(e) => setNote(e.target.value)}
@@ -379,9 +476,9 @@ function CallRow({
           className='w-48'
           aria-label={`Note for ${row.name}`}
         />
-        {note !== (row.note ?? '') && (
+        {(note !== (row.note ?? '') || (showMeal && heads !== String(row.heads ?? 1))) && (
           <Button size='sm' variant='outline' disabled={pending} onClick={() => save(row.result, note)}>
-            Save note
+            Save
           </Button>
         )}
       </div>

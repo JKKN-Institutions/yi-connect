@@ -6,6 +6,7 @@
 //   NO_ORGANIZER=1 ... setup                    -> same, but the event has no organizer (like real chapter events)
 //   node tests/call-list/fixtures.cjs assign-member-caller <guestName>
 //                                               -> gives one test guest to demo-member as caller
+//   node tests/call-list/fixtures.cjs event-settings -> prints the test event's custom_fields + registration_form_fields
 //   node tests/call-list/fixtures.cjs cleanup  -> deletes exactly the rows it created (and the
 //                                                  guests / call rows hanging off the test event)
 // Shared live database: run by hand only.
@@ -97,6 +98,13 @@ async function cleanup() {
   console.log(JSON.stringify(deleted, null, 2))
 }
 
+async function eventSettings() {
+  const c = JSON.parse(fs.readFileSync(FILE, 'utf8'))
+  const { data, error } = await yc().from('events').select('custom_fields, registration_form_fields').eq('id', c.event_id).single()
+  if (error) throw error
+  console.log(JSON.stringify(data))
+}
+
 const [, , cmd, arg] = process.argv
-;({ setup, cleanup, 'assign-member-caller': () => assignMemberCaller(arg) })[cmd]()
+;({ setup, cleanup, 'assign-member-caller': () => assignMemberCaller(arg), 'event-settings': eventSettings })[cmd]()
   .catch(e => { console.error(e); process.exit(1) })

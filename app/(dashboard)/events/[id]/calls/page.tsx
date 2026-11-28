@@ -13,6 +13,7 @@ import { ArrowLeft, Lock, Phone } from 'lucide-react';
 import { requireAuth } from '@/lib/auth';
 import { getCallListAccess, getCallList, getCallerOptions } from '@/lib/data/event-call-list';
 import { CallListManager } from '@/components/events/call-list/call-list-manager';
+import { eventServesMeal } from '@/lib/event-call-list';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -72,7 +73,7 @@ export default async function EventCallListPage({ params }: PageProps) {
         </Button>
       </div>
 
-      <CallListManager eventId={id} rows={rows} callers={callers} />
+      <CallListManager eventId={id} rows={rows} callers={callers} mealOn={eventServesMeal(event.custom_fields)} />
     </div>
   );
 }

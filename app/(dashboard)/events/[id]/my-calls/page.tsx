@@ -9,7 +9,7 @@ import { format } from 'date-fns';
 import { ArrowLeft, PhoneCall } from 'lucide-react';
 import { requireAuth } from '@/lib/auth';
 import { getCallListAccess, getCallList } from '@/lib/data/event-call-list';
-import { computeCallTotals } from '@/lib/event-call-list';
+import { computeCallTotals, eventServesMeal } from '@/lib/event-call-list';
 import { MyCallsList } from '@/components/events/call-list/my-calls-list';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -63,7 +63,7 @@ export default async function MyCallsPage({ params }: PageProps) {
             <strong>{totals.called}</strong> of <strong>{totals.invited}</strong> called &middot;{' '}
             {totals.coming} coming &middot; {totals.notComing} not coming &middot; {totals.noAnswer} no answer
           </p>
-          <MyCallsList eventId={id} rows={mine} />
+          <MyCallsList eventId={id} rows={mine} mealOn={eventServesMeal(event.custom_fields)} />
         </>
       )}
     </div>

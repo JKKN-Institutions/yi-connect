@@ -28,7 +28,8 @@ import {
   FileText,
   ChevronRight,
   LayoutList,
-  Radio
+  Radio,
+  Phone
 } from 'lucide-react';
 import { getCurrentUser } from '@/lib/data/auth';
 import { createClient } from '@/lib/supabase/server';
@@ -128,6 +129,16 @@ async function EventDetailContent({ params }: PageProps) {
   const isOrganizer = event.organizer?.id === user.id;
   const isAdmin = userHierarchyLevel >= 4;
   const canEdit = isOrganizer || isAdmin;
+
+  // Call list: leaders open the full list; callers see how many names they were given.
+  // The /calls page does its own chapter-scoped access check.
+  const canOpenCallList = canEdit || userHierarchyLevel >= 3;
+  const { count: myAssignedCalls } = await supabase
+    .schema('yi_connect')
+    .from('event_call_list')
+    .select('id', { count: 'exact', head: true })
+    .eq('event_id', id)
+    .eq('assigned_caller_member_id', user.id);
 
   const userRSVP = await getMemberRSVP(event.id, user.id);
   const volunteerRoles = await getVolunteerRoles();
@@ -243,6 +254,22 @@ async function EventDetailContent({ params }: PageProps) {
                   size='sm'
                   className='shadow-sm'
                 />
+              )}
+              {canOpenCallList && (
+                <Button variant='outline' size='sm' asChild className='shadow-sm'>
+                  <Link href={`/events/${event.id}/calls`}>
+                    <Phone className='mr-2 h-4 w-4' />
+                    Call list
+                  </Link>
+                </Button>
+              )}
+              {(myAssignedCalls ?? 0) > 0 && (
+                <Button variant='outline' size='sm' asChild className='shadow-sm'>
+                  <Link href={`/events/${event.id}/my-calls`}>
+                    <Phone className='mr-2 h-4 w-4' />
+                    My calls ({myAssignedCalls})
+                  </Link>
+                </Button>
               )}
               <EventQRCode eventId={event.id} eventTitle={event.title} />
               {/* Stutzee 2C: Live big-screen dashboard — Chair+ only */}

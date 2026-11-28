@@ -44,7 +44,7 @@ export interface EoiExportSelection {
 }
 
 export function extrasText(s: EoiExportSelection): string {
-  if (s.extrasNotAsked) return 'Not asked (sent before 24 Nov)'
+  if (s.extrasNotAsked) return 'Not asked (sent before they were added)'
   return (s.extras ?? []).map(x => `${x.question}\n${x.answer}`).join('\n\n')
 }
 

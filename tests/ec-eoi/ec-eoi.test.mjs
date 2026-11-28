@@ -193,7 +193,7 @@ test('spread: needs-people tags and shuffle (Director 24 Nov)', async () => {
 test('extra questions for crowded areas (Director 24 Nov)', async () => {
   const { EOI_EXTRA_QUESTIONS } = await import('../../lib/ec-eoi/catalog.ts')
   const { extrasText } = await import('../../lib/ec-eoi/workbook.ts')
-  assert.deepEqual(Object.keys(EOI_EXTRA_QUESTIONS).map(id => EOI_ROLES.find(r => r.id === id).name), ['Thalir', 'Rural Initiatives', 'Entrepreneurship'])
+  assert.deepEqual(Object.keys(EOI_EXTRA_QUESTIONS).map(id => EOI_ROLES.find(r => r.id === id).name), ['Thalir', 'Yuva', 'Rural Initiatives', 'Entrepreneurship'])
   const thalir = (extras) => base([{ roleId: 'vertical-1', answer: two, extras }, { roleId: 'vertical-4', answer: two }], { extrasAsked: true })
   assert.equal(validateSubmission(thalir(undefined), IDS, EOI_EXTRA_QUESTIONS).ok, false, 'missing extras fail on the new form')
   assert.equal(validateSubmission(thalir([{ key: 'schools', answer: 'GHS Erode' }]), IDS, EOI_EXTRA_QUESTIONS).ok, false, 'one of two fails')
@@ -206,7 +206,7 @@ test('extra questions for crowded areas (Director 24 Nov)', async () => {
   const old = validateSubmission(base([{ roleId: 'vertical-1', answer: two }, { roleId: 'vertical-4', answer: two }]), IDS, EOI_EXTRA_QUESTIONS)
   assert.equal(old.ok, true, 'a page loaded before 24 Nov is not blocked')
   assert.deepEqual(old.value.selections[0].extras, [])
-  assert.equal(extrasText({ extrasNotAsked: true }), 'Not asked (sent before 24 Nov)')
+  assert.equal(extrasText({ extrasNotAsked: true }), 'Not asked (sent before they were added)')
   assert.equal(extrasText({ extras: [{ question: 'Q1?', answer: 'A1' }, { question: 'Q2?', answer: 'A2' }] }), 'Q1?\nA1\n\nQ2?\nA2')
   const wb = unzip(createWorkbook([{ ...A, selections: [{ ...sel('vertical-1', 'T.'), extras: [{ question: 'Q?', answer: '=1+1' }] }] }]))
   const pr = rows(wb['xl/worksheets/sheet2.xml'].toString())

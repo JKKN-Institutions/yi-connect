@@ -444,6 +444,10 @@ export const EOI_EXTRA_QUESTIONS: Readonly<Record<string, readonly EoiExtraQuest
     { key: 'schools', label: 'Which schools can you bring in, or already have links with?' },
     { key: 'visits', label: 'How many school visits a month can you give?' },
   ],
+  'vertical-2': [
+    { key: 'colleges', label: 'Which colleges can you bring in, or already have links with?' },
+    { key: 'visits', label: 'How many college visits a month can you give?' },
+  ],
   'vertical-3': [
     { key: 'villages', label: 'Which villages or self-help groups do you already work with?' },
     { key: 'travel', label: 'Can you travel outside Erode town on weekdays?' },

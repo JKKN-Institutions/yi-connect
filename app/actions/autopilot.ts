@@ -128,23 +128,18 @@ export async function updateAutopilotFeature(
 // Main pipeline
 // ============================================================================
 
-/** Highest role hierarchy_level the user holds (0 if none). Not exported. */
+/**
+ * Highest role hierarchy_level the user holds (0 if none). Same RPC that
+ * completeEvent and the event page use. Not exported.
+ */
 async function getCallerHierarchyLevel(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string
 ): Promise<number> {
-  const { data: rolesRow } = await supabase
-    .schema('yi_connect').from('user_roles')
-    .select('role:roles(hierarchy_level)')
-    .eq('user_id', userId);
-  return Math.max(
-    0,
-    ...(rolesRow ?? []).map((r: unknown) => {
-      const role = (r as { role?: unknown }).role;
-      const roleObj = Array.isArray(role) ? role[0] : role;
-      return (roleObj as { hierarchy_level?: number } | null)?.hierarchy_level ?? 0;
-    })
-  );
+  const { data } = await supabase.rpc('get_user_hierarchy_level', {
+    p_user_id: userId,
+  });
+  return data || 0;
 }
 
 /**

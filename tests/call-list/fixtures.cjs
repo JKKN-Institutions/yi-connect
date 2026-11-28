@@ -3,6 +3,7 @@
 //   node tests/call-list/fixtures.cjs setup    -> creates a TEMP inactive test chapter, a DRAFT test
 //                                                  event in it (organizer = demo-cochair), and one
 //                                                  pending RSVP for demo-member. Writes ids to .created.json
+//   NO_ORGANIZER=1 ... setup                    -> same, but the event has no organizer (like real chapter events)
 //   node tests/call-list/fixtures.cjs assign-member-caller <guestName>
 //                                               -> gives one test guest to demo-member as caller
 //   node tests/call-list/fixtures.cjs cleanup  -> deletes exactly the rows it created (and the
@@ -47,7 +48,7 @@ async function setup() {
     status: 'draft',
     start_date: '2026-12-05T11:30:00Z',
     end_date: '2026-12-05T16:30:00Z',
-    organizer_id: cochair,
+    organizer_id: process.env.NO_ORGANIZER ? null : cochair,
     allow_guests: true,
     send_reminders: false
   }).select('id').single()

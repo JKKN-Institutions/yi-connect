@@ -113,7 +113,7 @@ function MyCallCard({
             <div>
               <div className='text-base font-semibold'>{row.name}</div>
               <div className='text-sm text-muted-foreground' data-testid='my-call-phone'>
-                {row.phone || (row.phoneHidden ? 'Number shown to leaders and the assigned caller' : 'No phone number on file')}
+                {row.phone || (row.phoneHidden ? 'Number shown to EC members and the assigned caller' : 'No phone number on file')}
               </div>
               {(givenToMe || row.callerName) && (
                 <div className='text-xs text-muted-foreground' data-testid='my-call-given'>

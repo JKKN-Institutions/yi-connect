@@ -41,6 +41,12 @@ export interface CallListAccess {
    * the chapter still record their own rows (checked per row in the action).
    */
   canCall: boolean;
+  /**
+   * Sees every invitee's phone on My calls: leaders, and EC Members and above
+   * (hierarchy >= 2) who can call. Level 0-1 callers see only the phones of
+   * names given to them.
+   */
+  canSeePhones: boolean;
 }
 
 export async function getCallListAccess(
@@ -56,7 +62,7 @@ export async function getCallListAccess(
     .eq('id', eventId)
     .maybeSingle();
 
-  if (!event) return { event: null, canManage: false, isMember: false, canCall: false };
+  if (!event) return { event: null, canManage: false, isMember: false, canCall: false, canSeePhones: false };
 
   const [{ data: member }, { data: level }] = await Promise.all([
     admin
@@ -80,7 +86,15 @@ export async function getCallListAccess(
   const activeChapterMember =
     sameChapter && member?.membership_status === 'active' && member?.is_active === true;
 
-  return { event: ev, canManage, isMember: !!member, canCall: canManage || activeChapterMember };
+  const canCall = canManage || activeChapterMember;
+
+  return {
+    event: ev,
+    canManage,
+    isMember: !!member,
+    canCall,
+    canSeePhones: canManage || (canCall && hierarchy >= 2)
+  };
 }
 
 /**

@@ -5,9 +5,9 @@
  * a result; names given to them come first, and each card shows who last
  * called it. A caller from outside the chapter sees only names given to them.
  *
- * Phone numbers are shown only to leaders and to the caller a name was given
- * to: plain members have no member directory with phones, so open callers see
- * names and call status, not numbers.
+ * Phone numbers are shown to leaders, to EC Members and above (hierarchy >= 2),
+ * and to the caller a name was given to. Level 0-1 members see names and call
+ * status, not numbers (they have no member directory with phones).
  */
 
 import Link from 'next/link';
@@ -55,10 +55,10 @@ export default async function MyCallsPage({ params }: PageProps) {
   }
 
   // Chapter members see every name; outside callers only the names given to them.
-  // Numbers leave the server only for leaders and the assigned caller.
+  // Numbers leave the server only for leaders, EC Members and above, and the assigned caller.
   const visible = access.canCall ? all : assignedToMe;
   const mine = visible.map((r) =>
-    access.canManage || r.callerId === user.id ? r : { ...r, phone: null, phoneHidden: !!r.phone }
+    access.canSeePhones || r.callerId === user.id ? r : { ...r, phone: null, phoneHidden: !!r.phone }
   );
   const totals = computeCallTotals(mine);
 

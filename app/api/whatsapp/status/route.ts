@@ -12,7 +12,7 @@ import {
   getWhatsAppStatusAPI,
   connectWhatsAppAPI
 } from '@/lib/whatsapp/api-client';
-import { getCurrentUser } from '@/lib/auth';
+import { getWhatsAppAccess } from '@/lib/whatsapp/access';
 
 /**
  * Check if we're running on Vercel (serverless environment)
@@ -37,7 +37,7 @@ function isServerless(): boolean {
 /**
  * Check if we should use the API client (production) or local client (dev)
  */
-function useApiClient(): boolean {
+function shouldUseApiClient(): boolean {
   return isServiceConfigured();
 }
 
@@ -51,16 +51,17 @@ async function getLocalClient() {
 
 export async function GET() {
   try {
-    // Require authentication — anon callers must not see WhatsApp service state
-    const user = await getCurrentUser();
-    if (!user) {
+    // Require a leadership role — the status carries the QR code that links a
+    // phone to the chapter account, and POST starts the client.
+    const access = await getWhatsAppAccess();
+    if (!access.ok) {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized: Please log in' },
-        { status: 401 }
+        { success: false, error: access.error },
+        { status: access.status }
       );
     }
 
-    if (useApiClient()) {
+    if (shouldUseApiClient()) {
       // Production: Use Railway service
       const status = await getWhatsAppStatusAPI();
       return NextResponse.json({
@@ -107,16 +108,17 @@ export async function GET() {
 
 export async function POST() {
   try {
-    // Require authentication — anon callers must not initialize the WhatsApp client
-    const user = await getCurrentUser();
-    if (!user) {
+    // Require a leadership role — the status carries the QR code that links a
+    // phone to the chapter account, and POST starts the client.
+    const access = await getWhatsAppAccess();
+    if (!access.ok) {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized: Please log in' },
-        { status: 401 }
+        { success: false, error: access.error },
+        { status: access.status }
       );
     }
 
-    if (useApiClient()) {
+    if (shouldUseApiClient()) {
       // Production: Use Railway service
       const result = await connectWhatsAppAPI();
       return NextResponse.json({

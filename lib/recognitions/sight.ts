@@ -34,6 +34,7 @@
  */
 
 import type { AwardState } from "./data";
+import { MENTOR_MARKS_CLOSE_AT } from "./constants";
 import { isPast } from "./phase";
 import type { CycleRow, EvaluatorRow } from "./types";
 
@@ -76,6 +77,7 @@ export function mentorRescoreOpen(state: State): boolean {
  */
 export function mentorMarksOpen(state: State): boolean {
   return (
+    !isPast(MENTOR_MARKS_CLOSE_AT) &&
     state.completeness.rm.submitted < state.completeness.rm.required &&
     (state.phase === "stage2" || mentorRescoreOpen(state))
   );

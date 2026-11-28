@@ -35,6 +35,12 @@ export interface CallListAccess {
   canManage: boolean;
   /** The user has a yi_connect.members row (needed for caller / called_by links) */
   isMember: boolean;
+  /**
+   * May open My calls and record a result on ANY name: a leader (canManage)
+   * or an active member of the event's chapter. Assigned callers from outside
+   * the chapter still record their own rows (checked per row in the action).
+   */
+  canCall: boolean;
 }
 
 export async function getCallListAccess(
@@ -50,13 +56,13 @@ export async function getCallListAccess(
     .eq('id', eventId)
     .maybeSingle();
 
-  if (!event) return { event: null, canManage: false, isMember: false };
+  if (!event) return { event: null, canManage: false, isMember: false, canCall: false };
 
   const [{ data: member }, { data: level }] = await Promise.all([
     admin
       .schema('yi_connect')
       .from('members')
-      .select('id, chapter_id')
+      .select('id, chapter_id, membership_status, is_active')
       .eq('id', userId)
       .maybeSingle(),
     admin.schema('yi_connect').rpc('get_user_hierarchy_level', { p_user_id: userId })
@@ -71,7 +77,38 @@ export async function getCallListAccess(
   const canManage =
     isOrganizer || hierarchy >= 6 || (hierarchy >= 3 && sameChapter);
 
-  return { event: ev, canManage, isMember: !!member };
+  const activeChapterMember =
+    sameChapter && member?.membership_status === 'active' && member?.is_active === true;
+
+  return { event: ev, canManage, isMember: !!member, canCall: canManage || activeChapterMember };
+}
+
+/**
+ * True once calling has started for an event: names invited and not yet
+ * answered (pending RSVPs), guests added, or any call-list row. Used to show
+ * the "Make calls" button to chapter members on the event page.
+ */
+export async function callListHasNames(eventId: string): Promise<boolean> {
+  const admin = createAdminSupabaseClient();
+  const [pending, guests, calls] = await Promise.all([
+    admin
+      .schema('yi_connect')
+      .from('event_rsvps')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', eventId)
+      .eq('status', 'pending'),
+    admin
+      .schema('yi_connect')
+      .from('guest_rsvps')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', eventId),
+    admin
+      .schema('yi_connect')
+      .from('event_call_list')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', eventId)
+  ]);
+  return (pending.count ?? 0) + (guests.count ?? 0) + (calls.count ?? 0) > 0;
 }
 
 interface CallLogRecord {

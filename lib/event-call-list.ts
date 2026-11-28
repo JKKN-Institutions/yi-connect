@@ -49,6 +49,8 @@ export interface CallListRow {
   id: string;
   name: string;
   phone: string | null;
+  /** True when the phone was withheld from this viewer (open callers see names, not numbers) */
+  phoneHidden?: boolean;
   rsvpStatus: string;
   callerId: string | null;
   callerName: string | null;

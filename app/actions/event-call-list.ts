@@ -210,7 +210,11 @@ export async function assignCaller(
   return { success: true, data: { updated: clean.length } };
 }
 
-/** Record what happened on a call. Leaders, or the caller the name was given to. */
+/**
+ * Record what happened on a call. Leaders, any active member of the event's
+ * chapter (any name), or the caller the name was given to. The person who
+ * pressed the button is stamped as called_by.
+ */
 export async function recordCallResult(
   eventId: string,
   invitee: InviteeRef,
@@ -241,8 +245,8 @@ export async function recordCallResult(
     .maybeSingle();
 
   const isAssignedCaller = existing?.assigned_caller_member_id === user.id;
-  if (!access.canManage && !isAssignedCaller) {
-    return { success: false, error: 'This name is not on your call list.' };
+  if (!access.canCall && !isAssignedCaller) {
+    return { success: false, error: 'Only members of this event\'s chapter can record calls.' };
   }
 
   // Meal + head count only mean something when the event serves a meal and

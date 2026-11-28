@@ -1,12 +1,19 @@
 /**
- * My calls — the names a leader gave to the signed-in caller for this event,
- * each with a tap-to-call link and quick result buttons. Phone-first layout.
+ * My calls — the event's call list for callers, phone-first.
+ *
+ * Any active member of the event's chapter sees every invitee and can record
+ * a result; names given to them come first, and each card shows who last
+ * called it. A caller from outside the chapter sees only names given to them.
+ *
+ * Phone numbers are shown only to leaders and to the caller a name was given
+ * to: plain members have no member directory with phones, so open callers see
+ * names and call status, not numbers.
  */
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { format } from 'date-fns';
-import { ArrowLeft, PhoneCall } from 'lucide-react';
+import { ArrowLeft, Lock, PhoneCall } from 'lucide-react';
 import { requireAuth } from '@/lib/auth';
 import { getCallListAccess, getCallList } from '@/lib/data/event-call-list';
 import { computeCallTotals, eventServesMeal } from '@/lib/event-call-list';
@@ -26,8 +33,33 @@ export default async function MyCallsPage({ params }: PageProps) {
   if (!access.event) notFound();
   const event = access.event;
 
-  // Only this caller's rows leave the server.
-  const mine = (await getCallList(id)).filter((r) => r.callerId === user.id);
+  const all = await getCallList(id);
+  const assignedToMe = all.filter((r) => r.callerId === user.id);
+
+  if (!access.canCall && assignedToMe.length === 0) {
+    return (
+      <div className='mx-auto max-w-xl py-10'>
+        <Card data-testid='my-calls-no-access'>
+          <CardHeader>
+            <CardTitle className='flex items-center gap-2'>
+              <Lock className='h-5 w-5' /> You don&apos;t have access to this call list
+            </CardTitle>
+            <CardDescription>
+              Calls for &ldquo;{event.title}&rdquo; are open to active members of the event&apos;s chapter.
+              Contact your chapter Chair if you should be making these calls.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
+  // Chapter members see every name; outside callers only the names given to them.
+  // Numbers leave the server only for leaders and the assigned caller.
+  const visible = access.canCall ? all : assignedToMe;
+  const mine = visible.map((r) =>
+    access.canManage || r.callerId === user.id ? r : { ...r, phone: null, phoneHidden: !!r.phone }
+  );
   const totals = computeCallTotals(mine);
 
   return (
@@ -51,9 +83,9 @@ export default async function MyCallsPage({ params }: PageProps) {
       {mine.length === 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle className='text-base'>No names given to you yet</CardTitle>
+            <CardTitle className='text-base'>No names on this call list yet</CardTitle>
             <CardDescription>
-              When the Chair or an organizer gives you names to call for this event, they show up here.
+              When the Chair or an organizer invites people to this event, their names show up here for calling.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -63,7 +95,12 @@ export default async function MyCallsPage({ params }: PageProps) {
             <strong>{totals.called}</strong> of <strong>{totals.invited}</strong> called &middot;{' '}
             {totals.coming} coming &middot; {totals.notComing} not coming &middot; {totals.noAnswer} no answer
           </p>
-          <MyCallsList eventId={id} rows={mine} mealOn={eventServesMeal(event.custom_fields)} />
+          <MyCallsList
+            eventId={id}
+            rows={mine}
+            mealOn={eventServesMeal(event.custom_fields)}
+            currentUserId={user.id}
+          />
         </>
       )}
     </div>

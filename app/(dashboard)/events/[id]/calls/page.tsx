@@ -11,9 +11,10 @@ import { notFound } from 'next/navigation';
 import { format } from 'date-fns';
 import { ArrowLeft, Lock, Phone } from 'lucide-react';
 import { requireAuth } from '@/lib/auth';
-import { getCallListAccess, getCallList, getCallerOptions } from '@/lib/data/event-call-list';
+import { getCallListAccess, getCallList, getCallerOptions, getChapterMemberOptions } from '@/lib/data/event-call-list';
 import { CallListManager } from '@/components/events/call-list/call-list-manager';
-import { eventServesMeal } from '@/lib/event-call-list';
+import { CallersPanel } from '@/components/events/call-list/callers-panel';
+import { eventCallerIds, eventServesMeal } from '@/lib/event-call-list';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -49,7 +50,11 @@ export default async function EventCallListPage({ params }: PageProps) {
     );
   }
 
-  const [rows, callers] = await Promise.all([getCallList(id), getCallerOptions(event, user.id)]);
+  const [rows, callers, chapterMembers] = await Promise.all([
+    getCallList(id),
+    getCallerOptions(event, user.id),
+    getChapterMemberOptions(event)
+  ]);
 
   return (
     <div className='flex flex-col gap-6'>
@@ -72,6 +77,8 @@ export default async function EventCallListPage({ params }: PageProps) {
           <Link href={`/events/${id}/my-calls`}>My calls</Link>
         </Button>
       </div>
+
+      <CallersPanel eventId={id} members={chapterMembers} callerIds={eventCallerIds(event.custom_fields)} />
 
       <CallListManager eventId={id} rows={rows} callers={callers} mealOn={eventServesMeal(event.custom_fields)} />
     </div>

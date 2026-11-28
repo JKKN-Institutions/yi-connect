@@ -9,6 +9,7 @@
 import 'server-only';
 import { createAdminSupabaseClient } from '@/lib/supabase/server';
 import {
+  eventCallerIds,
   isCallResult,
   isMealChoice,
   MEAL_FIELD_ID,
@@ -35,6 +36,13 @@ export interface CallListAccess {
   canManage: boolean;
   /** The user has a yi_connect.members row (needed for caller / called_by links) */
   isMember: boolean;
+  /**
+   * May open My calls, see every invitee with phone numbers, and record a
+   * result on any name: a leader (canManage) or a member ticked in the event's
+   * callers list (events.custom_fields.callers). A caller given names by a
+   * leader still sees and records those names only (checked per row).
+   */
+  canCall: boolean;
 }
 
 export async function getCallListAccess(
@@ -50,7 +58,7 @@ export async function getCallListAccess(
     .eq('id', eventId)
     .maybeSingle();
 
-  if (!event) return { event: null, canManage: false, isMember: false };
+  if (!event) return { event: null, canManage: false, isMember: false, canCall: false };
 
   const [{ data: member }, { data: level }] = await Promise.all([
     admin
@@ -71,7 +79,9 @@ export async function getCallListAccess(
   const canManage =
     isOrganizer || hierarchy >= 6 || (hierarchy >= 3 && sameChapter);
 
-  return { event: ev, canManage, isMember: !!member };
+  const isCaller = eventCallerIds(ev.custom_fields).includes(userId);
+
+  return { event: ev, canManage, isMember: !!member, canCall: canManage || isCaller };
 }
 
 interface CallLogRecord {
@@ -238,6 +248,23 @@ export async function getCallerOptions(
     .in('id', [...ids]);
   const names = await memberNames((existing || []).map((m) => m.id));
 
+  return [...names.entries()]
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Active members of the event's chapter, for the leader's "Callers (EC)" tick list. */
+export async function getChapterMemberOptions(event: CallListEvent): Promise<CallerOption[]> {
+  if (!event.chapter_id) return [];
+  const admin = createAdminSupabaseClient();
+  const { data: members } = await admin
+    .schema('yi_connect')
+    .from('members')
+    .select('id')
+    .eq('chapter_id', event.chapter_id)
+    .eq('membership_status', 'active')
+    .eq('is_active', true);
+  const names = await memberNames((members || []).map((m) => m.id));
   return [...names.entries()]
     .map(([id, name]) => ({ id, name }))
     .sort((a, b) => a.name.localeCompare(b.name));

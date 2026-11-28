@@ -118,6 +118,13 @@ export function eventServesMeal(customFields: unknown): boolean {
   return !!customFields && typeof customFields === 'object' && (customFields as Record<string, unknown>).meal_choice === true;
 }
 
+/** Member ids a leader ticked as callers for this event (events.custom_fields.callers). */
+export function eventCallerIds(customFields: unknown): string[] {
+  if (!customFields || typeof customFields !== 'object') return [];
+  const v = (customFields as Record<string, unknown>).callers;
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+}
+
 /** tel: link for an Indian mobile number; 10 bare digits get +91. */
 export function telHref(phone: string | null): string | null {
   if (!phone) return null;

@@ -28,20 +28,49 @@ import { Card, CardContent } from '@/components/ui/card';
 
 const QUICK: CallResult[] = ['coming', 'not_coming', 'no_answer', 'call_back'];
 
-export function MyCallsList({ eventId, rows, mealOn }: { eventId: string; rows: CallListRow[]; mealOn: boolean }) {
-  // Not-yet-called first, then call-backs, then the rest.
+export function MyCallsList({
+  eventId,
+  rows,
+  mealOn,
+  currentUserId
+}: {
+  eventId: string;
+  rows: CallListRow[];
+  mealOn: boolean;
+  currentUserId: string;
+}) {
+  // Names given to me first; then not-yet-called, call-backs, and the rest.
   const order: Record<CallResult, number> = { not_called: 0, call_back: 1, no_answer: 2, coming: 3, not_coming: 4 };
-  const sorted = [...rows].sort((a, b) => order[a.result] - order[b.result] || a.name.localeCompare(b.name));
+  const mineFirst = (r: CallListRow) => (r.callerId === currentUserId ? 0 : 1);
+  const sorted = [...rows].sort(
+    (a, b) => mineFirst(a) - mineFirst(b) || order[a.result] - order[b.result] || a.name.localeCompare(b.name)
+  );
   return (
     <ul className='flex flex-col gap-3'>
       {sorted.map((r) => (
-        <MyCallCard key={`${r.kind}:${r.id}`} eventId={eventId} row={r} mealOn={mealOn} />
+        <MyCallCard
+          key={`${r.kind}:${r.id}`}
+          eventId={eventId}
+          row={r}
+          mealOn={mealOn}
+          givenToMe={r.callerId === currentUserId}
+        />
       ))}
     </ul>
   );
 }
 
-function MyCallCard({ eventId, row, mealOn }: { eventId: string; row: CallListRow; mealOn: boolean }) {
+function MyCallCard({
+  eventId,
+  row,
+  mealOn,
+  givenToMe
+}: {
+  eventId: string;
+  row: CallListRow;
+  mealOn: boolean;
+  givenToMe: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [note, setNote] = useState(row.note ?? '');
@@ -83,7 +112,14 @@ function MyCallCard({ eventId, row, mealOn }: { eventId: string; row: CallListRo
           <div className='flex items-start justify-between gap-2'>
             <div>
               <div className='text-base font-semibold'>{row.name}</div>
-              <div className='text-sm text-muted-foreground'>{row.phone || 'No phone number on file'}</div>
+              <div className='text-sm text-muted-foreground' data-testid='my-call-phone'>
+                {row.phone || 'No phone number on file'}
+              </div>
+              {(givenToMe || row.callerName) && (
+                <div className='text-xs text-muted-foreground' data-testid='my-call-given'>
+                  {givenToMe ? 'Given to you' : `Given to ${row.callerName}`}
+                </div>
+              )}
             </div>
             <div className='flex flex-col items-end gap-1'>
               <Badge variant={row.result === 'not_called' ? 'outline' : 'secondary'} data-testid='my-call-result'>

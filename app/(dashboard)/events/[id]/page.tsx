@@ -86,6 +86,7 @@ import {
   BreadcrumbSeparator
 } from '@/components/ui/breadcrumb';
 import { getEventStatusVariant } from '@/types/event';
+import { getCallListAccess } from '@/lib/data/event-call-list';
 import Image from 'next/image';
 
 interface PageProps {
@@ -139,6 +140,9 @@ async function EventDetailContent({ params }: PageProps) {
     .select('id', { count: 'exact', head: true })
     .eq('event_id', id)
     .eq('assigned_caller_member_id', user.id);
+  // Members the leader ticked as callers for this event.
+  const showMakeCalls =
+    !canOpenCallList && (myAssignedCalls ?? 0) === 0 && (await getCallListAccess(id, user.id)).canCall;
 
   const userRSVP = await getMemberRSVP(event.id, user.id);
   const volunteerRoles = await getVolunteerRoles();
@@ -260,6 +264,14 @@ async function EventDetailContent({ params }: PageProps) {
                   <Link href={`/events/${event.id}/calls`}>
                     <Phone className='mr-2 h-4 w-4' />
                     Call list
+                  </Link>
+                </Button>
+              )}
+              {showMakeCalls && (
+                <Button variant='outline' size='sm' asChild className='shadow-sm'>
+                  <Link href={`/events/${event.id}/my-calls`}>
+                    <Phone className='mr-2 h-4 w-4' />
+                    Make calls
                   </Link>
                 </Button>
               )}

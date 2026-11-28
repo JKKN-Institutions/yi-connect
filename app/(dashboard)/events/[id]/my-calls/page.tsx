@@ -1,12 +1,17 @@
 /**
- * My calls — the names a leader gave to the signed-in caller for this event,
- * each with a tap-to-call link and quick result buttons. Phone-first layout.
+ * My calls — the event's call list for callers, phone-first.
+ *
+ * Leaders and the members a leader ticked as callers for this event
+ * (events.custom_fields.callers) see every invitee with phone numbers and can
+ * record a result; names given to them come first, and each card shows who
+ * last saved it. A member a leader gave names to sees only those names.
+ * Everyone else gets an explicit no-access card.
  */
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { format } from 'date-fns';
-import { ArrowLeft, PhoneCall } from 'lucide-react';
+import { ArrowLeft, Lock, PhoneCall } from 'lucide-react';
 import { requireAuth } from '@/lib/auth';
 import { getCallListAccess, getCallList } from '@/lib/data/event-call-list';
 import { computeCallTotals, eventServesMeal } from '@/lib/event-call-list';
@@ -26,8 +31,29 @@ export default async function MyCallsPage({ params }: PageProps) {
   if (!access.event) notFound();
   const event = access.event;
 
-  // Only this caller's rows leave the server.
-  const mine = (await getCallList(id)).filter((r) => r.callerId === user.id);
+  const all = await getCallList(id);
+  const assignedToMe = all.filter((r) => r.callerId === user.id);
+
+  if (!access.canCall && assignedToMe.length === 0) {
+    return (
+      <div className='mx-auto max-w-xl py-10'>
+        <Card data-testid='my-calls-no-access'>
+          <CardHeader>
+            <CardTitle className='flex items-center gap-2'>
+              <Lock className='h-5 w-5' /> This call list is for the EC callers
+            </CardTitle>
+            <CardDescription>
+              The call list for &ldquo;{event.title}&rdquo; is open to the callers the Chair has chosen. Ask your
+              Chair if you should be making these calls.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
+  // Leaders and ticked callers see every name with its number; anyone else only the names given to them.
+  const mine = access.canCall ? all : assignedToMe;
   const totals = computeCallTotals(mine);
 
   return (
@@ -51,9 +77,9 @@ export default async function MyCallsPage({ params }: PageProps) {
       {mine.length === 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle className='text-base'>No names given to you yet</CardTitle>
+            <CardTitle className='text-base'>No names on this call list yet</CardTitle>
             <CardDescription>
-              When the Chair or an organizer gives you names to call for this event, they show up here.
+              When the Chair or an organizer invites people to this event, their names show up here for calling.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -63,7 +89,12 @@ export default async function MyCallsPage({ params }: PageProps) {
             <strong>{totals.called}</strong> of <strong>{totals.invited}</strong> called &middot;{' '}
             {totals.coming} coming &middot; {totals.notComing} not coming &middot; {totals.noAnswer} no answer
           </p>
-          <MyCallsList eventId={id} rows={mine} mealOn={eventServesMeal(event.custom_fields)} />
+          <MyCallsList
+            eventId={id}
+            rows={mine}
+            mealOn={eventServesMeal(event.custom_fields)}
+            currentUserId={user.id}
+          />
         </>
       )}
     </div>

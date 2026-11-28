@@ -1,13 +1,11 @@
 /**
  * My calls — the event's call list for callers, phone-first.
  *
- * Any active member of the event's chapter sees every invitee and can record
- * a result; names given to them come first, and each card shows who last
- * called it. A caller from outside the chapter sees only names given to them.
- *
- * Phone numbers are shown to leaders, to EC Members and above (hierarchy >= 2),
- * and to the caller a name was given to. Level 0-1 members see names and call
- * status, not numbers (they have no member directory with phones).
+ * Leaders and the members a leader ticked as callers for this event
+ * (events.custom_fields.callers) see every invitee with phone numbers and can
+ * record a result; names given to them come first, and each card shows who
+ * last saved it. A member a leader gave names to sees only those names.
+ * Everyone else gets an explicit no-access card.
  */
 
 import Link from 'next/link';
@@ -42,11 +40,11 @@ export default async function MyCallsPage({ params }: PageProps) {
         <Card data-testid='my-calls-no-access'>
           <CardHeader>
             <CardTitle className='flex items-center gap-2'>
-              <Lock className='h-5 w-5' /> You don&apos;t have access to this call list
+              <Lock className='h-5 w-5' /> This call list is for the EC callers
             </CardTitle>
             <CardDescription>
-              Calls for &ldquo;{event.title}&rdquo; are open to active members of the event&apos;s chapter.
-              Contact your chapter Chair if you should be making these calls.
+              The call list for &ldquo;{event.title}&rdquo; is open to the callers the Chair has chosen. Ask your
+              Chair if you should be making these calls.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -54,12 +52,8 @@ export default async function MyCallsPage({ params }: PageProps) {
     );
   }
 
-  // Chapter members see every name; outside callers only the names given to them.
-  // Numbers leave the server only for leaders, EC Members and above, and the assigned caller.
-  const visible = access.canCall ? all : assignedToMe;
-  const mine = visible.map((r) =>
-    access.canSeePhones || r.callerId === user.id ? r : { ...r, phone: null, phoneHidden: !!r.phone }
-  );
+  // Leaders and ticked callers see every name with its number; anyone else only the names given to them.
+  const mine = access.canCall ? all : assignedToMe;
   const totals = computeCallTotals(mine);
 
   return (

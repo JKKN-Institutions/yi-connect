@@ -19,6 +19,7 @@ import { getCurrentUser } from '@/lib/data/auth';
 import { createAdminSupabaseClient } from '@/lib/supabase/server';
 import { getCallListAccess } from '@/lib/data/event-call-list';
 import {
+  eventCallerIds,
   eventServesMeal,
   isCallResult,
   isMealChoice,
@@ -211,8 +212,8 @@ export async function assignCaller(
 }
 
 /**
- * Record what happened on a call. Leaders, any active member of the event's
- * chapter (any name), or the caller the name was given to. The person who
+ * Record what happened on a call. Leaders, members ticked as callers for the
+ * event (any name), or the caller the name was given to. The person who
  * pressed the button is stamped as called_by.
  */
 export async function recordCallResult(
@@ -246,7 +247,7 @@ export async function recordCallResult(
 
   const isAssignedCaller = existing?.assigned_caller_member_id === user.id;
   if (!access.canCall && !isAssignedCaller) {
-    return { success: false, error: 'Only members of this event\'s chapter can record calls.' };
+    return { success: false, error: 'This call list is for the EC callers. Ask your Chair.' };
   }
 
   // Meal + head count only mean something when the event serves a meal and
@@ -382,6 +383,47 @@ export async function setEventMealChoice(eventId: string, on: boolean): Promise<
   if (error) {
     console.error('[setEventMealChoice]', error);
     return { success: false, error: 'Could not save the meal setting.' };
+  }
+
+  revalidateCallPages(eventId);
+  return { success: true };
+}
+
+/**
+ * Tick or untick a member as a caller for this event. Callers (plus leaders)
+ * open My calls, see every invitee with phone numbers and record results.
+ * Stored in events.custom_fields.callers, like the meal switch.
+ */
+export async function setEventCaller(eventId: string, memberId: string, on: boolean): Promise<Result> {
+  const user = await getCurrentUser();
+  if (!user) return { success: false, error: 'Please sign in again.' };
+  if (typeof memberId !== 'string' || typeof on !== 'boolean') return { success: false, error: 'Invalid value.' };
+
+  const access = await getCallListAccess(eventId, user.id);
+  if (!access.event) return { success: false, error: 'Event not found.' };
+  if (!access.canManage) return { success: false, error: 'Only the chapter leaders of this event can change this.' };
+
+  const admin = createAdminSupabaseClient();
+  if (on) {
+    const { data: member } = await admin
+      .schema('yi_connect')
+      .from('members')
+      .select('id, chapter_id')
+      .eq('id', memberId)
+      .maybeSingle();
+    if (!member || member.chapter_id !== access.event.chapter_id) {
+      return { success: false, error: 'Only members of this event\'s chapter can be callers.' };
+    }
+  }
+
+  const current = eventCallerIds(access.event.custom_fields);
+  const callers = on ? [...new Set([...current, memberId])] : current.filter((id) => id !== memberId);
+  const customFields = { ...(access.event.custom_fields ?? {}), callers };
+
+  const { error } = await admin.schema('yi_connect').from('events').update({ custom_fields: customFields }).eq('id', eventId);
+  if (error) {
+    console.error('[setEventCaller]', error);
+    return { success: false, error: 'Could not save the callers list.' };
   }
 
   revalidateCallPages(eventId);

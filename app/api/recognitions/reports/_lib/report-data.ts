@@ -14,7 +14,7 @@ import {
   effectiveText,
 } from "@/lib/recognitions/data";
 import { CATEGORIES, CATEGORY_LABEL, LAYER_LABEL, MAX_LAYER_TOTAL, RANK_LABEL, verticalLabel, type Category } from "@/lib/recognitions/constants";
-import { computeMatrix, paramsTotal } from "@/lib/recognitions/scoring";
+import { computeMatrix, paramsTotal, type Completeness } from "@/lib/recognitions/scoring";
 import { PHASE_LABEL } from "@/lib/recognitions/phase";
 import { ADDED_BY_LABEL, isAddedForChapter } from "@/lib/recognitions/check-rules";
 import type { CycleRow } from "@/lib/recognitions/types";
@@ -137,6 +137,16 @@ export type VerticalSheet = {
 
 const pct = (f: number | null) => (f === null ? null : Math.round(f * 1000) / 10);
 const round2 = (n: number | null) => (n === null ? null : Math.round(n * 100) / 100);
+/**
+ * "Scoring progress" line, counted the way the Overview counts it: a mark
+ * that counts is a submitted sheet or an earlier mark standing in for a
+ * reopened draft not re-scored yet (completeness `counted`, not `submitted`).
+ */
+function progressLine(c: Completeness): string {
+  const earlier = c.rm.counted - c.rm.submitted;
+  const rm = `${LAYER_LABEL.rm}: ${c.rm.counted}/${c.rm.required}${earlier > 0 ? ` (${earlier} of them earlier marks, sent back and not re-scored)` : ""}`;
+  return `${rm} · NMT: ${c.nmt.counted}/${c.nmt.required}`;
+}
 const MISSING_COL: Record<"partA" | "layer2" | "layer3", string> = {
   partA: "Part A (Health Card marks)",
   layer2: "RM scores",
@@ -189,7 +199,8 @@ export async function verticalReport(): Promise<{ cycle: CycleRow; sheets: Verti
       ["Weights", `Part A · Health Card (RM+NMT) ${cycle.weight_layer1}% · RM ${cycle.weight_layer2}% · NMT ${cycle.weight_layer3}%`],
       ["Layer 2 counted as", cycle.layer2_mode === "percentile" ? "Percentile within the region" : `Raw score out of ${MAX_LAYER_TOTAL}`],
       ["Final rank from", version ? `Moderation version ${version.version} (submitted)` : "No submitted moderation yet"],
-      ["Scoring progress", `${LAYER_LABEL.rm}: ${state.completeness.rm.submitted}/${state.completeness.rm.required} · NMT: ${state.completeness.nmt.submitted}/${state.completeness.nmt.required}`],
+      // Same count as the Overview (21 Nov): earlier marks standing in for reopened drafts count.
+      ["Scoring progress", progressLine(state.completeness)],
       [],
       [
         "Category",

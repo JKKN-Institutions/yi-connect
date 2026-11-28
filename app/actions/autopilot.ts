@@ -25,6 +25,7 @@ import {
   eventSummaryEmail,
 } from '@/lib/email/templates';
 import { formatFeedbackReminder } from '@/lib/whatsapp/format-message';
+import { getWhatsAppAccess } from '@/lib/whatsapp/access';
 import { awardPointsBulk } from '@/lib/gamification/award-points';
 import { getAutopilotSettings, isAutopilotEnabled } from '@/lib/data/autopilot';
 import {
@@ -127,6 +128,25 @@ export async function updateAutopilotFeature(
 // Main pipeline
 // ============================================================================
 
+/** Highest role hierarchy_level the user holds (0 if none). Not exported. */
+async function getCallerHierarchyLevel(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): Promise<number> {
+  const { data: rolesRow } = await supabase
+    .schema('yi_connect').from('user_roles')
+    .select('role:roles(hierarchy_level)')
+    .eq('user_id', userId);
+  return Math.max(
+    0,
+    ...(rolesRow ?? []).map((r: unknown) => {
+      const role = (r as { role?: unknown }).role;
+      const roleObj = Array.isArray(role) ? role[0] : role;
+      return (roleObj as { hierarchy_level?: number } | null)?.hierarchy_level ?? 0;
+    })
+  );
+}
+
 /**
  * The 6-step post-event pipeline. Safe to call multiple times — each step is
  * idempotent and will no-op if already done.
@@ -145,6 +165,11 @@ export async function triggerEventAutoPilot(
     const validated = triggerAutopilotSchema.parse({ event_id: eventId });
     const supabase = await createClient();
     const user = await getCurrentUser();
+    // This is a browser-callable server action: check the caller here, not
+    // only in completeEvent / completeEventAndTriggerAutopilot.
+    if (!user) {
+      return { success: false, error: 'Unauthorized: Please log in' };
+    }
 
     // Load event with chapter, organizer, vertical
     const { data: event, error: eventError } = await supabase
@@ -161,6 +186,19 @@ export async function triggerEventAutoPilot(
 
     if (!event.chapter_id) {
       return { success: false, error: 'Event has no chapter assigned' };
+    }
+
+    // Same rule as completeEvent and the event page's Auto-Pilot panel:
+    // the event organizer or Chair+ (hierarchy_level >= 4).
+    if (
+      event.organizer_id !== user.id &&
+      (await getCallerHierarchyLevel(supabase, user.id)) < 4
+    ) {
+      return {
+        success: false,
+        error:
+          "You don't have access to run Auto-Pilot for this event. Contact your Chapter Chair.",
+      };
     }
 
     // Feature flag gate — no-op if disabled
@@ -185,7 +223,7 @@ export async function triggerEventAutoPilot(
         event_id: event.id,
         chapter_id: event.chapter_id,
         triggered_at: triggeredAt,
-        triggered_by: user?.id ?? null,
+        triggered_by: user.id,
         status: 'running',
         steps_completed: {},
       })
@@ -265,7 +303,15 @@ export async function triggerEventAutoPilot(
 
       // WhatsApp (optional, non-blocking)
       let whatsappSent = 0;
-      if (settings.whatsapp_reminder) {
+      // Chapter WhatsApp: EC Member and above only (same check as
+      // /api/whatsapp/send). Without it, skip WhatsApp; email still goes.
+      const whatsappAllowed =
+        settings.whatsapp_reminder && (await getWhatsAppAccess()).ok;
+      if (settings.whatsapp_reminder && !whatsappAllowed) {
+        steps.notes!.whatsapp =
+          'WhatsApp skipped: sending from the chapter WhatsApp needs EC Member or above (email sent)';
+      }
+      if (whatsappAllowed) {
         try {
           const { sendMessageAPI } = await import('@/lib/whatsapp/api-client');
           for (const r of rsvps ?? []) {
